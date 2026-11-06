@@ -1,7 +1,7 @@
 # Voidrise Fighters — Design (visione generale + Tappa 1 "Basi del combattimento")
 
 Data: 6/11/2026 · Approvato a voce da Denis in chat, da rileggere qui.
-Immagine di riferimento: `docs/ref/riferimento-stile.png`.
+Immagini di riferimento in `docs/ref/`: `riferimento-stile.png` (stile generale, menu, interfaccia), `sfondo-cascata.png` (arena della Tappa 1), `sfondo-rovine.png` (seconda arena, per dopo), `personaggi/ren.png` e `personaggi/kael.png` (i primi 2 lottatori per Meshy).
 
 ## 1. Visione
 
@@ -10,14 +10,15 @@ Picchiaduro anime 2.5D **originale**, ispirato al genere dei picchiaduro a squad
 - **Obiettivo**: gioco da vendere su **Steam** e negli **store dei telefoni** (Google Play, App Store).
 - **Modalità**: contro il computer (arcade, allenamento) e **2 giocatori in locale**. L'**online** arriva dopo: per questo la logica è deterministica fin dal primo giorno.
 - **Roster "multiverso"**: combattenti anime, dark fantasy e cyber, con **personaggi sbloccabili**. Tutti resi con lo stesso stile (contorno nero, ombre a fasce, aure luminose) così il gioco resta coerente.
-- **Personaggi**: modelli **Meshy** con scheletro e animazioni Meshy. Denis manda le immagini dei primi 2 (Ren e Kael, vedi riferimento). Prima di spendere crediti: saldo + costo stimato + ok di Denis.
+- **Personaggi**: modelli **Meshy** con scheletro e animazioni Meshy. Primi 2: **Ren** (capelli neri, gilet verde acqua, fascia arancione, braccia bendate) e **Kael** (capelli bianchi, abiti viola e neri, mezzi guanti). Immagini in `docs/ref/personaggi/`. Da controllare per prime in Meshy: pantaloni larghi e fasce lunghe durante i calci. Prima di spendere crediti: saldo + costo stimato + ok di Denis.
 - **Formato scontri**: si parte **1 contro 1**, il codice è pronto per le **squadre 3v3** (cambio personaggio e assist) da aggiungere dopo.
 - **Tecnologia**: **Three.js r128**, JavaScript vanilla, moduli in `src/` uniti in un solo HTML (come Stormblade). Poi pacchetti con **Electron** (Steam) e **Capacitor** (telefoni).
 
 ## 2. Stile (dal riferimento)
 
 - Anime brillante: colori saturi, contorno nero, cel-shading a 2-3 fasce, effetti energetici azzurri (Ren) e viola (Kael).
-- **Arena 1 "Rovine dell'acquedotto"**: archi in rovina, cascate, castello sulla rupe, pavimento di pietra, stendardi rossi. Fondale dipinto dietro, pavimento e rovine vicine in 3D.
+- **Arena 1 "La Grande Cascata"** (`docs/ref/sfondo-cascata.png`): una sola grande cascata al centro tra due rupi verdi, cielo azzurro, a sinistra colonna con stendardo rosso, a destra lanterna di pietra, pavimento di lastre di pietra largo e piatto. Scelta perché il centro è pulito e i lottatori si leggono bene.
+- **Arena 2 "Rovine dell'acquedotto"** (`docs/ref/sfondo-rovine.png`): per dopo.
 - **Interfaccia di combattimento**: ritratto + nome agli angoli alti, barre della vita gialle oblique, timer al centro in un riquadro a punta, contatore combo grande ("4 COLPI"), in basso barra dell'energia a segmenti azzurri con il livello accanto.
 - **Menu principale**: logo "VOIDRISE FIGHTERS", voci Gioca / Personaggi / Allenamento / Impostazioni su pulsanti obliqui (attivo arancione, gli altri scuri).
 - Limite onesto: il riferimento è un'illustrazione 2D; il gioco in 3D cel-shading gli somiglierà in colori, contorni, effetti e interfaccia, non sarà identico al disegno.
@@ -76,7 +77,11 @@ Dopo ogni tappa: versione giocabile pubblicata come pagina Claude.
 
 ## 6. Tappa 1 — Schermo e comandi
 
-- **Arena**: le Rovine dell'acquedotto (versione semplificata ma fedele ai colori del riferimento). Telecamera di lato che segue il centro dei due e si allontana quando si separano.
+- **Arena "La Grande Cascata"**: l'immagine usata come **fondale dipinto** (compressa in JPG, ~300-500 KB), leggermente schiarita e con meno contrasto perché i lottatori risaltino. La linea del pavimento dell'immagine è la linea dei piedi.
+  - **L'acqua scorre**: sulla zona della cascata (maschera) uno shader fa scorrere la texture verso il basso con un leggero tremolio e schiuma alla base. Costo minimo (un solo piano).
+  - **Foglie** che volano davanti (poche particelle) e leggero spostamento del fondale quando la telecamera si muove, per dare profondità.
+  - Il colpo energetico di Ren è più bianco e luminoso dell'acqua, così non si confonde con la cascata.
+- **Telecamera** di lato che segue il centro dei due lottatori e si allontana un poco quando si separano (zoom limitato perché il fondale resti credibile).
 - **Lottatori provvisori**: costruiti in codice, stile cel-shading con contorno, uno verde acqua/arancione (richiama Ren) e uno viola/bianco (richiama Kael).
 - **Interfaccia**: come al punto 2, con ritratti provvisori.
 - **Schermata iniziale** essenziale nello stile del menu del riferimento: "1 Giocatore (allenamento)" e "2 Giocatori". In allenamento l'avversario è fermo o si muove a caso (scelta nel menu di pausa).
