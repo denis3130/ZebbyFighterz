@@ -16,7 +16,7 @@ Rispondi sempre a Denis **in italiano**, con messaggi brevi e chiari (spesso usa
 - Leggi per primo `docs/HANDOFF.md`: stato, decisioni e prossimo passo.
 
 ## Pubblicare
-- Pagina giocabile: (link dopo la pubblicazione)
+- Pagina giocabile (pagina Claude "Voidrise Fighters"): https://claude.ai/artifact/RdQfJDspYWN6SFx5BoMhCY — si continua a pubblicare lì
 - Lancia `bash mk.sh`, poi pubblica `index.html` con lo strumento Artifact (un solo file, icona `game`) su quell'URL.
 - Prima di pubblicare: tutti i test verdi e nessun errore nella console.
 - Il ramo `tappa1-basi` si unisce a `main` solo dopo la prova di Denis.
