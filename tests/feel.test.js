@@ -20,3 +20,5 @@ T.test('KO gives a full-screen white flash for 120 ms and a big shake', () => { 
   T.ok(S.ev.some(e=>e.t==='ko'),'no ko'); t-=16; __VF.fxUpdate(t); const el=document.querySelector('#hud div'); T.ok(parseFloat(el.style.opacity)>.9); T.near(__VF.FX.shake.amp,.12,.001);
   __VF.fxUpdate(t+130); T.eq(parseFloat(el.style.opacity),0); });
 function CFG0() { return __VF.CFG; }
+T.test('a heavy spark is much bigger than a light one on the spawn frame', () => { const sz=()=>{ let m=0; __VF.FX.sparks.forEach(s=>{ m=Math.max(m,s.sp.scale.x); }); return m; };
+  hitOnce('p1'); const l=sz(); hitOnce('hp'); const h=sz(); T.ok(l>.35&&h>.8&&h>l*1.8,'light '+l+' heavy '+h); });

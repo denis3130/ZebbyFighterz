@@ -60,6 +60,7 @@ const CFG={
   anim:{blend:5},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
-  // duration ms], spark = size m of the hit spark (light, heavy, block).
-  fx:{on:true, flashMs:60, squashMs:110, squash:[1.1,.9], shakeHeavy:[.06,180], shakeKO:[.12,400], spark:{light:.35, heavy:.6, block:.3}},
+  // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
+  // of the projectile's white core, halo and coloured rim.
+  fx:{on:true, flashMs:60, squashMs:110, squash:[1.1,.9], shakeHeavy:[.06,180], shakeKO:[.12,400], spark:{light:.45, heavy:.95, block:.6, hold:.4}, proj:{core:.36, halo:.8, rim:.95}},
 };

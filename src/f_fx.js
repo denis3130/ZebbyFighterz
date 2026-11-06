@@ -7,10 +7,10 @@
 
 // Sprite sizes in metres (the spark sizes are CFG.fx.spark), lives in ms, colours.
 const FX_K = {pool: 16, life: {light: 170, heavy: 250, block: 150}, burst: 1.3, ko: 120, trail: 5, trailGap: .14,
-  core: .24, halo: .62, glow: [.25, .7], z: .2, pz: .1};
+  glow: [.25, .7], z: .2, pz: .1};
 const FX_COL = {hit: 0xffe066, heavy: 0xffc233, block: 0xa6dcff, clash: 0xffffff, glow: 0xffc874, glowFull: 0xfff2d0};
-// Projectile colours per character: core (white) and halo.
-const FX_PROJ = {ren: {core: 0xffffff, halo: 0xbff3ff}, kael: {core: 0xffffff, halo: 0xc9a2ff}};
+// Projectile colours per character: core (white), halo and the saturated rim (and trail) that separates it from the foam.
+const FX_PROJ = {ren: {core: 0xffffff, halo: 0xbff3ff, rim: 0x0a8fe0}, kael: {core: 0xffffff, halo: 0xc9a2ff, rim: 0x7a2cf0}};
 for (const k in FX_PROJ) FX_PROJ[k].coreC = new THREE.Color(FX_PROJ[k].core);
 
 // sparks = the active hit sparks, pool = the free ones; side[i] = flash/squash state of the fighter on side i
@@ -26,15 +26,18 @@ function fxRand() {   // mulberry32 on FX.seed
   return ((t ^ t >>> 14) >>> 0) / 4294967296;
 }
 
-// A soft round glow (kind 0) or a spark: a glow with a four-pointed star (kind 1).
-// Sparks are drawn normally, not added, so their colour stays visible over a white-flashed fighter.
+// A soft round glow (kind 0), a spark: a glow with a four-pointed star (kind 1) or the projectile's rim: a ring (kind 2).
+// Sparks, rims and trails are drawn normally, not added, so their colour stays visible over white (flash, foam).
 function fxTex(kind) {
   return rdCanvasTexture(64, (g, n) => {
     const c = n / 2, gr = g.createRadialGradient(c, c, 0, c, c, c);
-    if (kind) { gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.3, 'rgba(255,255,255,.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); }
+    if (kind === 2) {   // the rim: a transparent middle, a solid ring, a soft outer edge
+      gr.addColorStop(0, 'rgba(255,255,255,.35)'); gr.addColorStop(.5, 'rgba(255,255,255,.55)'); gr.addColorStop(.72, 'rgba(255,255,255,1)');
+      gr.addColorStop(.9, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    } else if (kind) { gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.3, 'rgba(255,255,255,.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); }
     else { gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.45, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); }
     g.fillStyle = gr; g.fillRect(0, 0, n, n);
-    if (!kind) return;
+    if (kind !== 1) return;
     g.fillStyle = '#fff';
     for (let a = 0; a < 4; a++) {
       g.save(); g.translate(c, c); g.rotate(a * Math.PI / 2); g.beginPath();
@@ -53,13 +56,13 @@ function fxSprite(tex, hex, add) {
 function fxBuild() {
   if (FX.built || F3D.length < 2) return;
   FX.built = true;
-  const star = fxTex(1), soft = fxTex(0);
+  const star = fxTex(1), soft = fxTex(0), ring = fxTex(2);
   for (let i = 0; i < FX_K.pool; i++) FX.pool.push({sp: fxSprite(star, 0xffffff, false), t0: 0, life: 1, size: 1});
   for (let i = 0; i < 2; i++) {
     FX.side.push({f: [0, 0], s: [0, 0], fon: false, son: false, em0: Object.values(F3D[i].mats).map(m => m.emissive.clone())});
     FX.glow.push([fxSprite(soft, FX_COL.glow), fxSprite(soft, FX_COL.glow)]);
-    const p = {core: fxSprite(soft, 0xffffff), halo: fxSprite(soft, 0xffffff), trail: [], char: ''};
-    for (let k = 0; k < FX_K.trail; k++) p.trail.push(fxSprite(soft, 0xffffff));
+    const p = {core: fxSprite(soft, 0xffffff), halo: fxSprite(soft, 0xffffff), rim: fxSprite(ring, 0xffffff, false), trail: [], char: ''};
+    for (let k = 0; k < FX_K.trail; k++) p.trail.push(fxSprite(soft, 0xffffff, false));
     FX.pc.push(p);
   }
   const el = FX.el = document.createElement('div');
@@ -126,7 +129,8 @@ function fxUpdate(nowMs, S) {
       continue;
     }
     const u = age / s.life, e = 1 - (1 - u) * (1 - u);
-    s.sp.scale.setScalar(s.size * (.75 + .6 * e)); s.sp.material.opacity = 1 - u * u;
+    const h = CFG.fx.spark.hold, f = u < h ? 0 : (u - h) / (1 - h);   // full size and opacity for the first share of its life
+    s.sp.scale.setScalar(s.size * (.8 + .2 * Math.min(1, u / .15) - .3 * f * f)); s.sp.material.opacity = 1 - f * f;
   }
   for (let i = 0; i < 2; i++) fxHurtStep(i, nowMs);
   const sh = FX.shake;
@@ -170,19 +174,21 @@ function fxProjStep(now, S) {
     const pc = FX.pc[i];
     let p = null;
     if (S && CFG.fx.on) for (const q of S.proj) if (q.side === i && q.live) p = q;
-    pc.core.visible = pc.halo.visible = !!p;
+    pc.core.visible = pc.halo.visible = pc.rim.visible = !!p;
     for (const t of pc.trail) t.visible = !!p;
     if (!p) continue;
     const col = FX_PROJ[fighterOf(S, i).char], dir = p.vx < 0 ? -1 : 1, x = p.x / 1000, y = p.y / 1000, pulse = 1 + .1 * Math.sin(now * .04 + i);
     if (pc.char !== col) {
-      pc.char = col; pc.core.material.color.setHex(col.core); pc.halo.material.color.setHex(col.halo);
-      for (const t of pc.trail) t.material.color.setHex(col.halo);
+      pc.char = col; pc.core.material.color.setHex(col.core); pc.halo.material.color.setHex(col.halo); pc.rim.material.color.setHex(col.rim);
+      for (const t of pc.trail) t.material.color.setHex(col.rim);
     }
-    pc.halo.position.set(x, y, FX_K.pz); pc.halo.scale.setScalar(FX_K.halo * pulse); pc.halo.material.opacity = .8;
-    pc.core.position.set(x, y, FX_K.pz + .01); pc.core.scale.setScalar(FX_K.core * pulse);
+    const pk = CFG.fx.proj;
+    pc.rim.position.set(x, y, FX_K.pz - .005); pc.rim.scale.setScalar(pk.rim * pulse); pc.rim.material.opacity = .95;
+    pc.halo.position.set(x, y, FX_K.pz); pc.halo.scale.setScalar(pk.halo * pulse); pc.halo.material.opacity = .8;
+    pc.core.position.set(x, y, FX_K.pz + .01); pc.core.scale.setScalar(pk.core * pulse);
     pc.trail.forEach((t, k) => {
       t.position.set(x - dir * (k + 1) * FX_K.trailGap, y + .03 * Math.sin(now * .02 + k * 1.7), FX_K.pz - .01);
-      t.scale.setScalar(FX_K.halo * (1 - (k + 1) / (FX_K.trail + 1) * .7)); t.material.opacity = .55 * (1 - k / FX_K.trail);
+      t.scale.setScalar(pk.halo * (1 - (k + 1) / (FX_K.trail + 1) * .7)); t.material.opacity = .6 * (1 - k / FX_K.trail);
     });
   }
 }
