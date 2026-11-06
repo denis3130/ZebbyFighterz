@@ -84,6 +84,13 @@ function fire(id, type, x, y, pointerId) {
 function pd(id, x, y, pointerId) { fire(id, 'pointerdown', x, y, pointerId); }
 function pm(id, x, y, pointerId) { fire(id, 'pointermove', x, y, pointerId); }
 function pu(id, x, y, pointerId) { fire(id, 'pointerup', x, y, pointerId); }
+// Final fix wave. ptr(el, type, pointerId, dx, dy) = a touch PointerEvent on element el at its centre (+dx, +dy px);
+// tapEl(el, pointerId) = a touch tap (down + up at the centre) on el, with no click (as Chrome does while another
+// finger is down); mid(el) = el's centre [x, y].
+function mid(el) { const r = el.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }
+function ptr(el, type, pointerId, dx, dy) { const [x, y] = mid(el);
+  el.dispatchEvent(new PointerEvent(type, {pointerId, clientX: x + (dx || 0), clientY: y + (dy || 0), bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: false})); }
+function tapEl(el, pointerId) { ptr(el, 'pointerdown', pointerId); ptr(el, 'pointerup', pointerId); }
 // skipIntro = play the 100-frame intro of __VF.G.S; nearG = the two fighters of __VF.G.S at -350 / +350.
 function skipIntro() { __VF.frame(__VF.CFG.round.intro); }
 function nearG() { const S = __VF.G.S; __VF.fighterOf(S, 0).x = -350; __VF.fighterOf(S, 1).x = 350; }
@@ -177,6 +184,13 @@ function endMatch(winner) {
   const S = __VF.G.S;
   S.phase = 'end'; S.winner = winner;
   __VF.tick(performance.now());
+}
+
+// padsAt(list) = navigator.getGamepads returns list as it is (null entries = empty slots), each pad in fakePads' compact form.
+function padsAt(list) {
+  const pads = list.map(p => p && {connected: true, axes: [0, 0, 0, 0].map((v, i) => (p.axes && p.axes[i]) || 0),
+    buttons: Array.from({length: 17}, (_, i) => ({pressed: !!(p.buttons && p.buttons[i]), value: p.buttons && p.buttons[i] ? 1 : 0}))});
+  Object.defineProperty(navigator, 'getGamepads', {value: () => pads, configurable: true});
 }
 
 // later(ms, fn) = run fn with performance.now() ms ahead (tests are synchronous: this stands in for waiting).

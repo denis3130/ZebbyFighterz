@@ -5,14 +5,17 @@ const IN_KEYS=[   // keyboard set 0 = G1 (WASD), set 1 = G2 (arrows + numpad)
   {KeyW:BTN.U,KeyS:BTN.D,KeyA:BTN.L,KeyD:BTN.R,KeyJ:BTN.P,KeyK:BTN.K,KeyL:BTN.S,KeyU:BTN.DASH,KeyI:BTN.GUARD},
   {ArrowUp:BTN.U,ArrowDown:BTN.D,ArrowLeft:BTN.L,ArrowRight:BTN.R,Numpad1:BTN.P,Numpad2:BTN.K,Numpad3:BTN.S,Numpad4:BTN.DASH,Numpad5:BTN.GUARD}];
 const IN_PAD_BTN=[[2,BTN.P],[0,BTN.K],[1,BTN.S],[5,BTN.DASH],[4,BTN.GUARD],[12,BTN.U],[13,BTN.D],[14,BTN.L],[15,BTN.R]];   // standard mapping
-const IN_DEAD=.45, IN_STICK_R=56;
+const IN_DEAD=.45, IN_STICK_R=56, IN_SLIDE=16;   // IN_SLIDE = px past a touch button's edge where a held finger lets it go
 const IN_TOUCH_BTN={tP:BTN.P,tK:BTN.K,tS:BTN.S,tDash:BTN.DASH,tGuard:BTN.GUARD};
 const inTouch={btn:new Map(),stick:null,stickBits:0};   // btn: pointerId -> button id; stick: {id, ox, oy}
 
+// The Gamepad API's list: [] without the API, or when the page may not use it (the Permissions Policy of the frame the
+// page is shown in makes getGamepads throw a SecurityError). Every controller read (inputs and menus) goes through here.
+function inputPadList(){ try{ return (navigator.getGamepads&&navigator.getGamepads())||[]; }catch(_){ return []; } }
 function inputPoll(){
-  const l=navigator.getGamepads?navigator.getGamepads():[];
+  const l=inputPadList();
   IN.pads=[];
-  for(let i=0;l&&i<l.length;i++) IN.pads[i]=l[i]&&l[i].connected!==false?l[i]:null;
+  for(let i=0;i<l.length;i++) IN.pads[i]=l[i]&&l[i].connected!==false?l[i]:null;
 }
 function inputPadBits(g){
   let b=0;
@@ -35,13 +38,17 @@ function inputRead(p){
   if(a.touch) b|=IN.touchBits;
   return b;
 }
-// mode 'training' | 'versus'; chooser 'kb' | 'touch' | {pad:i} = the device that confirmed "2 Giocatori" (becomes G1).
+// mode 'training' | 'versus'; chooser 'kb' | 'touch' | {pad:i} = the device that confirmed the mode (it becomes G1).
+// Training: G1 reads both keyboard sets, touch and one controller: the one that confirmed, else the first connected one
+// (index 0 if none is connected yet, so a controller plugged in later at index 0 still plays). Versus: see below.
 function inputAssign(mode,chooser){
-  if(mode==='training'){
-    IN.assign=[{kb:[0,1],pad:0,touch:true},{kb:[],pad:null,touch:false}]; return;
-  }
   inputPoll();
   const own=chooser&&typeof chooser==='object'?chooser.pad:null;
+  if(mode==='training'){
+    let pad=own;
+    for(let i=0;i<IN.pads.length&&pad===null;i++) if(IN.pads[i]) pad=i;
+    IN.assign=[{kb:[0,1],pad:pad===null?0:pad,touch:true},{kb:[],pad:null,touch:false}]; return;
+  }
   let free=null;
   for(let i=0;i<IN.pads.length&&free===null;i++) if(IN.pads[i]&&i!==own) free=i;
   IN.assign=[{kb:[0],pad:own,touch:true},{kb:[1],pad:free,touch:false}];
@@ -106,6 +113,13 @@ function inputInitTouch(){
     el.addEventListener('pointerdown',e=>{ e.preventDefault(); inputCapture(el,e.pointerId); inTouch.btn.set(e.pointerId,id); inputTouchSync(); });
     const end=e=>{ if(inTouch.btn.get(e.pointerId)===id){ inTouch.btn.delete(e.pointerId); inputTouchSync(); } };
     for(const t of ['pointerup','pointercancel','lostpointercapture']) el.addEventListener(t,end);
+    // The finger is captured, so its moves still come here once it slides off: more than IN_SLIDE px past the edge
+    // the button lets go (no heavy left held); sliding onto another button does not press that one.
+    el.addEventListener('pointermove',e=>{
+      if(inTouch.btn.get(e.pointerId)!==id) return;
+      const r=el.getBoundingClientRect(), m=IN_SLIDE;
+      if(e.clientX<r.left-m||e.clientX>r.right+m||e.clientY<r.top-m||e.clientY>r.bottom+m) end(e);
+    });
     el.addEventListener('contextmenu',e=>e.preventDefault());
   }
 }

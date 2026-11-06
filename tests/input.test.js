@@ -23,3 +23,14 @@ T.test('override wins and game keys are default-prevented', () => {
   const e = new KeyboardEvent('keydown', {code:'Space', cancelable:true}); window.dispatchEvent(e); T.ok(!e.defaultPrevented, 'Space is not a game key');
   const a = new KeyboardEvent('keydown', {code:'ArrowUp', cancelable:true}); window.dispatchEvent(a); T.ok(a.defaultPrevented, 'arrows are prevented'); keyUp('ArrowUp'); });
 T.test('touch UI is hidden on a mouse-only desktop', () => { T.ok(!vis('tP'), 'tP visible'); });
+
+// Final fix wave: one guarded reader for the Gamepad API, and training reads the controller that confirmed.
+T.test('a blocked Gamepad API (SecurityError) reads as no pads', () => {
+  Object.defineProperty(navigator,'getGamepads',{value:()=>{ throw new DOMException('blocked by the permissions policy','SecurityError'); },configurable:true});
+  try { __VF.inputAssign('training','kb'); __VF.inputAssign('versus',{pad:0}); key('KeyD'); T.eq(__VF.inputRead(0), B.R); keyUpAll(); }
+  finally { fakePads([]); } });
+T.test('training: the controller that confirmed drives G1, even at index 1', () => {
+  padsAt([null,{buttons:{2:1}}]); __VF.inputAssign('training',{pad:1}); T.eq(__VF.IN.assign[0].pad,1); T.eq(__VF.inputRead(0)&B.P, B.P, 'pad 1 X');
+  __VF.inputAssign('training','kb'); T.eq(__VF.IN.assign[0].pad,1,'keyboard confirm: the first connected pad'); T.eq(__VF.inputRead(0)&B.P, B.P);
+  padsAt([]); __VF.inputAssign('training','kb'); T.eq(__VF.IN.assign[0].pad,0,'no pad yet: index 0, as before');
+  fakePads([]); });

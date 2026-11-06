@@ -24,3 +24,33 @@ T.test('buttons fit inside a 390 px tall screen and do not overlap', () => {
   ids.forEach((id,i)=>{ const r=rs[i]; T.ok(r.bottom<=390&&r.right<=844&&r.left>=0&&r.top>=0&&r.width>=48&&r.height>=44, id+' '+JSON.stringify(r)); });
   for(let i=0;i<5;i++)for(let j=i+1;j<5;j++){ const a=rs[i],b=rs[j]; T.ok(a.right<=b.left||b.right<=a.left||a.bottom<=b.top||b.bottom<=a.top, ids[i]+' overlaps '+ids[j]); } });
 T.test('captions are Italian', () => { T.ok(/PUGNO/.test(txt('tP'))); T.ok(/CALCIO/.test(txt('tK'))); T.ok(/SPEC/.test(txt('tS'))); T.ok(/SCATTO/.test(txt('tDash'))); T.ok(/GUARDIA/.test(txt('tGuard'))); });
+
+// Final fix wave. Taps while another finger is down (Chrome then makes no click): the title, the pause button with the
+// thumb on the stick, the pause menu; the click a tap may still produce does not fire it twice.
+T.test('menus and the pause button take taps while another finger is held', () => {
+  const V=__VF, btn=(scr,act)=>document.querySelector('#'+scr+' .mb[data-act="'+act+'"]');
+  V.menu.toTitle(); ptr($('title'),'pointerdown',80,-200,100);   // a finger resting on the title
+  tapEl(btn('title','train'),81); T.eq(V.G.state,'fight','title tap'); T.eq(V.G.mode,'training');
+  skipIntro(); pd('stickZone',100,300,82); pm('stickZone',170,300,82); T.eq(V.inputRead(0)&B.R,B.R,'thumb on the stick');
+  tapEl($('tPause'),83); T.eq(V.G.state,'pause','pause tap with the thumb on the stick');
+  const opp=btn('pause','opp'); tapEl(opp,84); T.eq(V.G.S.dummy,'casuale','opponent tap');
+  opp.dispatchEvent(new PointerEvent('click',{bubbles:true,cancelable:true,pointerType:'touch'})); T.eq(V.G.S.dummy,'casuale','the tap\'s own click (touch) does not toggle it back');
+  tapEl(opp,840); T.eq(V.G.S.dummy,'fermo','second tap'); opp.click(); T.eq(V.G.S.dummy,'fermo','the tap\'s own click (no pointer type) does not toggle it back');
+  ptr(opp,'pointerdown',85); ptr(opp,'pointerup',85,0,160); T.eq(V.G.S.dummy,'fermo','lifted far off the button: no tap');
+  ptr(opp,'pointerdown',86); fire('bOpp','pointercancel',0,0,86); ptr(opp,'pointerup',86); T.eq(V.G.S.dummy,'fermo','cancelled: no tap');
+  ptr(opp,'pointerdown',87); ptr(btn('pause','resume'),'pointerup',87); T.eq(V.G.state,'pause','a press that began on another button: no tap');
+  tapEl(btn('pause','resume'),88); T.eq(V.G.state,'fight','resume tap');
+  pu('stickZone',170,300,82); ptr($('title'),'pointerup',80,-200,100); T.eq(V.G.state,'fight','lifting the other fingers does nothing'); });
+T.test('a tap that changes the screen: its click on the new screen does nothing', () => { const V=__VF; V.menu.pause();
+  tapEl(document.querySelector('#pause .mb[data-act="menu"]'),89); T.eq(V.G.state,'title');
+  document.querySelector('#title .mb[data-act="train"]').click(); T.eq(V.G.state,'title','a click with no pointer type, under the finger: no match'); });
+T.test('the mouse still clicks the menu once', () => later(1000, () => { const V=__VF; V.startMatch('training',{seed:1,dummy:'fermo'}); V.menu.pause(); const opp=$('bOpp'), d=V.G.S.dummy;
+  for(const t of ['pointerdown','pointerup']) opp.dispatchEvent(new PointerEvent(t,{pointerId:1,bubbles:true,cancelable:true,pointerType:'mouse'}));
+  opp.click(); T.ok(V.G.S.dummy!==d,'toggled once'); opp.click(); T.eq(V.G.S.dummy,d,'and back'); V.menu.resume(); }));
+// Review Focus 2: a thumb sliding off a held button lets it go, so no heavy fires.
+T.test('a thumb sliding off a held button releases it: no heavy', () => { const V=__VF; V.startMatch('training',{seed:1,dummy:'fermo'}); skipIntro(); const S=V.G.S, el=$('tP');
+  ptr(el,'pointerdown',90); V.frame(3); T.eq(V.inputRead(0)&B.P,B.P,'held');
+  ptr(el,'pointermove',90,-200,0); T.eq(V.inputRead(0)&B.P,0,'slid 200 px off: released'); T.ok(!el.classList.contains('down'),'drawn released');
+  let heavy=false; for(let i=0;i<20;i++){ V.frame(1); heavy=heavy||S.ev.some(e=>e.t==='heavyFire')||F(S,0).act==='hp'; } T.ok(!heavy,'no heavy');
+  ptr(el,'pointerup',90,-200,0);
+  const w=el.getBoundingClientRect().width; ptr(el,'pointerdown',91); ptr(el,'pointermove',91,w/2+6,0); T.eq(V.inputRead(0)&B.P,B.P,'a wobble just past the edge keeps it'); ptr(el,'pointerup',91); });

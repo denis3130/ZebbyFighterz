@@ -50,3 +50,32 @@ T.test('end screen ignores confirm and back for a moment', () => {
   const V=__VF; V.startMatch('versus',{seed:1}); endMatch(1); T.eq(V.G.state,'end');
   clickText('RIVINCITA'); V.menuPress('kb'); V.menuBack(); key('Space'); keyUp('Space'); T.eq(V.G.state,'end','guarded');
   later(V.CFG.menu.endGuardMs+50,()=>V.menuBack()); T.eq(V.G.state,'title','back works after the guard'); });
+
+// Final fix wave.
+T.test('a blocked Gamepad API (SecurityError) breaks neither the title, a match start nor the loop', () => {
+  const V=__VF, err=console.error; let errors=0; console.error=(...a)=>{ errors++; err.apply(console,a); };
+  Object.defineProperty(navigator,'getGamepads',{value:()=>{ throw new DOMException('blocked by the permissions policy','SecurityError'); },configurable:true});
+  try {
+    V.menu.toTitle(); const t=performance.now()+20000; V.tick(t); T.eq(V.G.state,'title');
+    key('Enter'); keyUp('Enter'); T.eq(V.G.state,'fight','training started'); const S=V.G.S;
+    for(let i=1;i<=10;i++) V.tick(t+i*1000/60+1); T.ok(S.frame>0,'the loop steps: frame '+S.frame);
+    key('Escape'); keyUp('Escape'); T.eq(V.G.state,'pause'); V.menu.resume(); T.eq(errors,0,'console errors');
+  } finally { console.error=err; fakePads([]); } });
+T.test('training chosen with the second controller: that controller plays G1', () => {
+  const V=__VF; V.menu.toTitle(); padsAt([{},{}]); padTick();
+  padsAt([{},{buttons:{0:1}}]); padTick(); T.eq(V.G.state,'fight'); T.eq(V.G.mode,'training'); T.eq(V.IN.assign[0].pad,1);
+  padsAt([{},{}]); V.inputRead(0);   // A let go (it was masked at the confirm)
+  padsAt([{},{axes:[.9,0]}]); T.eq(V.inputRead(0)&B.R, B.R, 'pad 1 stick right');
+  padsAt([{},{buttons:{2:1}}]); T.eq(V.inputRead(0)&B.P, B.P, 'pad 1 X'); fakePads([]); padTick(); });
+T.test('pause menu: FPS SÌ / NO shows the counter and is remembered on this device', () => {
+  const V=__VF, K='voidrise.prefs', saved=()=>JSON.parse(localStorage.getItem(K)); V.startMatch('training',{seed:1}); V.menu.pause();
+  localStorage.removeItem(K); V.menuFpsInit(); T.ok(!vis('fps'),'off by default'); T.eq(txt('fpsTx'),'FPS: NO');
+  clickText('FPS'); T.ok(vis('fps'),'counter shown'); T.eq(txt('fpsTx'),'FPS: SÌ'); T.eq(saved().fps,true,'saved'); T.eq(saved().v,1,'versioned');
+  V.menuFpsInit(); T.ok(vis('fps'),'still on after a reload');
+  clickText('FPS'); T.ok(!vis('fps'),'hidden again'); T.eq(txt('fpsTx'),'FPS: NO'); T.eq(saved().fps,false); V.menuFpsInit(); T.ok(!vis('fps'),'still off after a reload');
+  localStorage.setItem(K,'{broken'); V.menuFpsInit(); T.ok(!vis('fps'),'unreadable data: off');
+  const own=Object.getOwnPropertyDescriptor(window,'localStorage');   // storage that throws (a sandboxed frame): the toggle still works
+  Object.defineProperty(window,'localStorage',{get(){ throw new DOMException('denied','SecurityError'); },configurable:true});
+  try { clickText('FPS'); T.ok(vis('fps'),'toggled without storage'); clickText('FPS'); T.ok(!vis('fps')); }
+  finally { if(own) Object.defineProperty(window,'localStorage',own); else delete window.localStorage; }
+  localStorage.removeItem(K); V.menu.resume(); });
