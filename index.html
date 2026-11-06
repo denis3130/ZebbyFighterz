@@ -32,6 +32,12 @@ const CFG={
   stop:{light:6, mid:8, heavy:11, spec:8, thr:10, ko:40, blockLight:5, blockHeavy:8},
   meter:{hit:1, block:.5, taken:.5},
   knock:{ground:36, getup:16, roll:22, rollDist:1300},
+  // Throw: s/a = startup/active frames, range = max centre distance, whiff = recovery of a miss, anim = frames of a
+  // grab, hitF = the grab's frame of the damage, then the opponent is knocked down (vx away, vy up). No height: no block.
+  thr:{range:900, s:4, a:2, whiff:24, anim:40, hitF:30, dmg:120, vx:60, vy:60, stop:'thr', knock:true},
+  // Special (energy shot): spawn = frame the projectile appears, rec = frames after it; speed in mm/frame; box = half-size;
+  // x, y = spawn point (forward of the fighter, from the ground); hs/bs/chip as a move's (chip = damage on a block).
+  spec:{spawn:14, rec:30, speed:120, box:150, dmg:70, hs:20, bs:16, chip:8, x:500, y:1100, h:'mid', push:0, stop:'spec'},
   // The plan's move table. s/a/r = startup/active/recovery frames (r 'land' = until landing, then jump.landAtk);
   // hs/bs = hitstun/blockstun; h = height; box = [x0,x1,y0,y1] mm, x forward from the centre, y from the feet;
   // push = pushback speed of the one hit; stop = hitstop class. Chains, once the move has touched: tapP/tapK = move
@@ -68,11 +74,12 @@ const BTN={U:1, D:2, L:4, R:8, P:16, K:32, S:64, DASH:128, GUARD:256};   // dire
 // prev = last frame's clean buttons; tap = last horizontal press {dir: BTN.L|BTN.R, f: frame}, dir 0 = none;
 // land = recovery frames of the current landing; hit = the move in progress has touched (1 hit, 2 blocked);
 // stun = hitstun frames left; inv = invulnerable frames left; juggle = hits taken in this juggle;
-// buf = the command waiting for the fighter to be free ({cmd, left} frames); sj = this jump is a super jump.
+// buf = the command waiting for the fighter to be free ({cmd, left} frames); sj = this jump is a super jump;
+// mute = P/K bits whose release (and heavy) is ignored until released, after a throw command (see readCommand).
 function newFighter(side, char) {
   return {side, char, x: side ? CFG.stage.startX : -CFG.stage.startX, y: 0, vx: 0, vy: 0, face: side ? -1 : 1,
     hp: CFG.body.hp, meter: 0, act: 'idle', af: 0, air: false, stun: 0, combo: 0, comboDmg: 0, juggle: 0,
-    hit: 0, inv: 0, hold: [0, 0], prev: 0, tap: {dir: 0, f: 0}, buf: {cmd: null, left: 0}, sj: false, land: 0};
+    hit: 0, inv: 0, hold: [0, 0], prev: 0, tap: {dir: 0, f: 0}, buf: {cmd: null, left: 0}, sj: false, land: 0, mute: 0};
 }
 
 // opts = {seed, mode: 'versus'|'training', chars: [c0, c1], dummy: 'fermo'|'casuale'}.
@@ -132,9 +139,10 @@ function doubleTapDir(S, F, bits) {
   return h && h === F.tap.dir && S.frame - F.tap.f <= CFG.dash.tap ? h : 0;
 }
 
-// Input history, once the command has read it: this frame's buttons and the last horizontal tap
-// (a double tap uses the tap up, so a third press starts a new pair).
+// Input history, once the command has read it: this frame's buttons, the muted buttons still held and the last
+// horizontal tap (a double tap uses the tap up, so a third press starts a new pair).
 function rememberInput(S, F, bits) {
+  F.mute &= bits;
   const h = bits & ~F.prev & (BTN.L | BTN.R);
   if (h) { F.tap.dir = doubleTapDir(S, F, bits) ? 0 : h; F.tap.f = S.frame; }
   F.prev = bits;
@@ -186,8 +194,8 @@ const KNOCKED = {knock: 1, getup: 1, rollF: 1, rollB: 1};
 // Actions with the crouching hurtbox height.
 const CROUCHED = {crouch: 1, guardC: 1, cp: 1, ck: 1, chp: 1, chk: 1};
 
-// A hit can touch F: not invulnerable, not knocked down or getting up, and a juggle still under combo.juggleMax hits.
-function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
+// A hit can touch F: not invulnerable, not knocked down, getting up or held in a throw, and a juggle still under combo.juggleMax hits.
+function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && F.act !== 'thrown' && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
 
 // Hurtboxes in absolute mm, [body, head]: the body is ±body.hurt from the feet to the height minus body.headH,
 // the head ±body.head from there to the height (body.h standing, hCrouch crouching, hAir in the air).
@@ -216,34 +224,113 @@ function touchPoint(A, D) {
   return null;
 }
 
-// End of the step: both fighters are checked before either hit lands, so two moves can trade on the same frame.
-function contactPhase(S, fs) {
-  const id0 = fs[0].act, id1 = fs[1].act, p0 = touchPoint(fs[0], fs[1]), p1 = touchPoint(fs[1], fs[0]);
-  if (p0) resolveHit(S, fs[0], fs[1], id0, p0);
-  if (p1) resolveHit(S, fs[1], fs[0], id1, p1);
+// States that can guard (with GUARD or back held at the moment of contact).
+const GUARDING = {idle: 1, walkB: 1, crouch: 1, guard: 1, guardC: 1, block: 1};
+
+// F blocks an attack of this height now: on the ground in a guarding state, holding GUARD or back, and for the
+// height: mid either way, low only crouching (D held), high only standing. The held buttons are F.prev (this frame's).
+function isBlocking(F, height) {
+  if (!GUARDING[F.act] || F.air || !(F.prev & (BTN.GUARD | backBit(F)))) return false;
+  const crouching = (F.prev & BTN.D) !== 0;
+  return height === 'low' ? crouching : height === 'high' ? !crouching : true;
 }
 
-// Move id of A touches D (Task 4 adds the block check here): damage scaled by the hit's number in the combo, meter
-// to both, the hitstop of the move's class, the 'hit' event at the contact point, then D's reaction.
-function resolveHit(S, A, D, id, pt) {
-  const m = CFG.moves[id], n = D.combo + 1, dmg = Math.floor(m.dmg * scaleFor(n) / 100), max = CFG.body.meterMax;
-  A.hit = 1;
+// End of the step: both fighters are checked before either hit lands, so two moves can trade on the same frame.
+// Then the throws and the projectiles.
+function contactPhase(S, fs) {
+  const id0 = fs[0].act, id1 = fs[1].act, p0 = touchPoint(fs[0], fs[1]), p1 = touchPoint(fs[1], fs[0]);
+  if (p0) fs[0].hit = resolveHit(S, fs[0], fs[1], CFG.moves[id0], id0, p0, fs[0].face);
+  if (p1) fs[1].hit = resolveHit(S, fs[1], fs[0], CFG.moves[id1], id1, p1, fs[1].face);
+  throwPhase(S, fs);
+  projectilePhase(S, fs);
+}
+
+// Move m (id in the events: a move, 'spec' or 'thr') of A touches D, pushing the way dir points. Returns 1 for a
+// hit, 2 for a block (what A.hit holds). A blocked move (m.h set, see isBlocking) costs D m.chip, gives A
+// meter.block of its damage, hitstops for the block class and leaves D in 'block' for m.bs frames. A hit: damage
+// scaled by its number in the combo, meter to both, the hitstop of the move's class, the event at the contact
+// point, then D's reaction. The projectile ('spec') has its own events and never sets A.hit (the caller does).
+function resolveHit(S, A, D, m, id, pt, dir) {
+  const proj = id === 'spec', max = CFG.body.meterMax;
+  if (m.h && isBlocking(D, m.h)) {
+    const chip = Math.min(D.hp, m.chip || 0);
+    D.hp -= chip;
+    A.meter = Math.min(max, A.meter + Math.floor(m.dmg * CFG.meter.block));
+    S.stop = Math.max(S.stop, CFG.stop[m.stop === 'light' ? 'blockLight' : 'blockHeavy']);
+    simEmit(S, proj ? 'projBlock' : 'block', A, {x: pt.x, y: pt.y, move: id, dmg: chip, heavy: m.stop === 'heavy'});
+    setAct(D, 'block'); D.stun = m.bs;
+    if (dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
+    else D.vx = dir * m.push;
+    return 2;
+  }
+  const n = D.combo + 1, dmg = Math.floor(m.dmg * scaleFor(n) / 100);
   D.hp = Math.max(0, D.hp - dmg); D.combo = n; D.comboDmg += dmg;
   A.meter = Math.min(max, A.meter + Math.floor(dmg * CFG.meter.hit));
   D.meter = Math.min(max, D.meter + Math.floor(dmg * CFG.meter.taken));
   S.stop = Math.max(S.stop, CFG.stop[m.stop]);
-  simEmit(S, 'hit', A, {x: pt.x, y: pt.y, move: id, dmg, heavy: m.stop === 'heavy'});
-  hitReaction(A, D, m, n);
+  simEmit(S, proj ? 'projHit' : 'hit', A, {x: pt.x, y: pt.y, move: id, dmg, heavy: m.stop === 'heavy'});
+  hitReaction(A, D, m, n, dir);
+  return 1;
 }
 
-// D's reaction to the n-th hit of a combo, pushed the way the attacker faces:
+// A throw (act 'thr', see c2_moves.js) of fighter A: in its active frames it grabs D if the centres are within
+// thr.range and D stands on the ground free of stun, not invulnerable and not already held ('thr' event: A plays
+// the grab from af 1, D is 'thrown'); at af thr.hitF of the grab the throw hits through resolveHit (it has no height,
+// so no block) and D is knocked down. Side 0 goes first, so it wins a grab on the same frame.
+function throwPhase(S, fs) {
+  const t = CFG.thr;
+  for (const A of fs) {
+    const D = fs[1 - A.side];
+    if (A.act !== 'thr') continue;
+    if (!A.hit) {
+      if (A.af <= t.s || A.af > t.s + t.a || Math.abs(A.x - D.x) > t.range) continue;
+      if (D.air || D.y > 0 || D.stun > 0 || !canBeHit(D)) continue;
+      A.hit = 1; A.af = 1; A.vx = 0; D.vx = 0;
+      setAct(D, 'thrown'); D.stun = 0;
+      simEmit(S, 'thr', A, {x: D.x, y: D.y + CFG.spec.y});
+    } else if (A.af === t.hitF) {
+      resolveHit(S, A, D, t, 'thr', {x: D.x, y: D.y + CFG.spec.y}, A.face);
+    }
+  }
+}
+
+// Projectiles move at the start of a free step. Here, after the fighters' contacts: two that touch vanish together
+// ('projClash'); one that touches the other side's fighter (hurtbox, one that can be hit) hits or is blocked through
+// resolveHit and vanishes, and one beyond stage.half + 1000 vanishes too.
+function projectilePhase(S, fs) {
+  const k = CFG.spec, P = S.proj;
+  if (P.length === 2 && Math.abs(P[0].x - P[1].x) <= 2 * k.box && Math.abs(P[0].y - P[1].y) <= 2 * k.box) {
+    simEmit(S, 'projClash', fs[P[0].side], {x: (P[0].x + P[1].x) >> 1, y: P[0].y});
+    P.length = 0;
+    return;
+  }
+  const keep = [];
+  for (const p of P) {
+    const D = fs[1 - p.side], pt = canBeHit(D) ? projTouch(p, D) : null;
+    if (pt) resolveHit(S, fs[p.side], D, k, 'spec', pt, p.vx > 0 ? 1 : -1);
+    else if (Math.abs(p.x) <= CFG.stage.half + 1000) keep.push(p);
+  }
+  P.length = 0; for (const p of keep) P.push(p);
+}
+
+// Centre of the overlap of projectile p (a square of half-size spec.box) with D's first hurtbox it overlaps, or null.
+function projTouch(p, D) {
+  const b = CFG.spec.box;
+  for (const h of hurtBoxes(D)) {
+    const x0 = Math.max(p.x - b, h.x0), x1 = Math.min(p.x + b, h.x1), y0 = Math.max(p.y - b, h.y0), y1 = Math.min(p.y + b, h.y1);
+    if (x0 < x1 && y0 < y1) return {x: (x0 + x1) >> 1, y: (y0 + y1) >> 1};
+  }
+  return null;
+}
+
+// D's reaction to the n-th hit of a combo, pushed toward dir (the way the attack or projectile goes):
 // - knocked down (knock, or airKnock / spike on an airborne D): flies with the move's vx, vy, invulnerable;
 // - launched (launch) or hit in the air: juggle, rising at least at the move's vy (else combo.lift), with the
 //   move's vx (else its push); one more juggle hit;
 // - else hitstun (hitstunFor) and a pushback of push that slides (groundSpeed); at the wall D stays and an
-//   attacker on the ground slides back instead.
-function hitReaction(A, D, m, n) {
-  const dir = A.face, down = m.knock ? m : D.air ? m.airKnock || (m.spike ? m : null) : null;
+//   attacker on the ground slides back instead (a move without push, like the projectile, moves nobody).
+function hitReaction(A, D, m, n, dir) {
+  const down = m.knock ? m : D.air ? m.airKnock || (m.spike ? m : null) : null;
   D.stun = 0;
   if (down) {
     setAct(D, 'knock'); D.air = true; D.vx = down.vx ? dir * down.vx : 0; D.vy = down.vy; D.inv = CFG.knock.ground;
@@ -253,7 +340,7 @@ function hitReaction(A, D, m, n) {
     D.vy = Math.max(D.vy, m.vy !== undefined ? m.vy : CFG.combo.lift);
   } else {
     setAct(D, 'hitStun'); D.stun = hitstunFor(m.hs, n);
-    if (dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
+    if (m.push && dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
     else D.vx = dir * m.push;
   }
 }
@@ -283,6 +370,7 @@ function simStep(S, in0, in1) {
     S.stop--;
     for (let i = 0; i < 2; i++) { bufferCommand(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
   } else {
+    for (const p of S.proj) p.x += p.vx;
     for (let i = 0; i < 2; i++) { actionStep(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
     const x0 = [fs[0].x, fs[1].x];
     for (const f of fs) fighterPhysics(S, f);
@@ -312,15 +400,19 @@ function fwdBit(F) { return F.face > 0 ? BTN.R : BTN.L; }
 function backBit(F) { return F.face > 0 ? BTN.L : BTN.R; }
 
 // The command this frame's buttons give, or null. Commands are events, so they can wait in the buffer (F.buf).
-// By priority (Task 4 puts throw and special in front): 'P'/'K' = released after a tap (held less than input.hold),
-// 'HP'/'HK' = held to input.hold (a heavy; its release does nothing), 'dashF'/'dashB' = DASH press (back + DASH =
+// By priority: 'thr' = P and K pressed within input.both frames of each other (the two releases afterwards, and a
+// heavy, are muted: F.mute), 'spec' = S press (not while this side has a projectile alive), 'P'/'K' = released after
+// a tap (held less than input.hold), 'HP'/'HK' = held to input.hold (a heavy; its release does nothing), 'dashF'/'dashB' = DASH press (back + DASH =
 // back dash) or a double tap forward, 'jump' = U press.
 function readCommand(S, F, bits) {
-  const hold = CFG.input.hold;
-  if (F.prev & BTN.P && !(bits & BTN.P) && F.hold[0] < hold) return 'P';
-  if (F.prev & BTN.K && !(bits & BTN.K) && F.hold[1] < hold) return 'K';
-  if (bits & BTN.P && F.hold[0] === hold) return 'HP';
-  if (bits & BTN.K && F.hold[1] === hold) return 'HK';
+  const hold = CFG.input.hold, mP = F.mute & BTN.P, mK = F.mute & BTN.K;
+  if ((bits & (BTN.P | BTN.K)) === (BTN.P | BTN.K) && !mP && !mK && (F.hold[0] === 1 || F.hold[1] === 1) &&
+      Math.abs(F.hold[0] - F.hold[1]) <= CFG.input.both) return 'thr';
+  if (bits & ~F.prev & BTN.S && !S.proj.some(p => p.side === F.side)) return 'spec';
+  if (F.prev & BTN.P && !(bits & BTN.P) && F.hold[0] < hold && !mP) return 'P';
+  if (F.prev & BTN.K && !(bits & BTN.K) && F.hold[1] < hold && !mK) return 'K';
+  if (bits & BTN.P && F.hold[0] === hold && !mP) return 'HP';
+  if (bits & BTN.K && F.hold[1] === hold && !mK) return 'HK';
   if (bits & ~F.prev & BTN.DASH) return bits & backBit(F) ? 'dashB' : 'dashF';
   if (doubleTapDir(S, F, bits) === fwdBit(F)) return 'dashF';
   if (bits & ~F.prev & BTN.U) return 'jump';
@@ -343,14 +435,15 @@ function normalFor(F, cmd, bits) { return NORMALS[cmd][F.air ? 2 : bits & BTN.D 
 
 // What a command starts in the fighter's state now, or null (it waits in the buffer). A free ground state takes
 // any command, a jump ('air') its air normals. A move takes only its cancels, from the frame it touched to the end
-// of its recovery: tapP/tapK, a heavy (heavy: true = the posture's heavy, or a list of moves) and, after a hit
-// (not a block), the super jump of a jc move.
+// of its recovery: tapP/tapK, a heavy (heavy: true = the posture's heavy, or a list of moves), the Special (spec)
+// and, after a hit (not a block), the super jump of a jc move. A throw never cancels.
 function commandAct(F, cmd, bits) {
   const m = CFG.moves[F.act], normal = NORMALS[cmd] ? normalFor(F, cmd, bits) : null;
   if (m) {
     if (!F.hit) return null;
     if (cmd === 'P') return m.tapP || null;
     if (cmd === 'K') return m.tapK || null;
+    if (cmd === 'spec') return m.spec ? 'spec' : null;
     if (cmd === 'jump') return m.jc && F.hit === 1 ? 'superJump' : null;
     return normal && (m.heavy === true || (m.heavy && m.heavy.indexOf(normal) >= 0)) ? normal : null;
   }
@@ -373,6 +466,7 @@ function startCommand(S, F, cmd) {
 function bufferCommand(S, F, bits) {
   const cmd = readCommand(S, F, bits);
   if (cmd) { F.buf.cmd = cmd; F.buf.left = CFG.input.buffer; }
+  if (cmd === 'thr') F.mute = BTN.P | BTN.K;
   return cmd;
 }
 
@@ -389,6 +483,9 @@ function actLength(F) {
   if (m) return m.r === 'land' ? Infinity : m.s + m.a + m.r;
   switch (F.act) {
     case 'jumpSquat': return CFG.jump.squat;
+    case 'thr': return F.hit ? CFG.thr.anim : CFG.thr.s + CFG.thr.a;
+    case 'thrWhiff': return CFG.thr.whiff;
+    case 'spec': return CFG.spec.spawn + CFG.spec.rec;
     case 'landing': return F.land;
     case 'dashF': return CFG.dash.f.n;
     case 'dashB': return CFG.dash.b.n;
@@ -399,12 +496,13 @@ function actLength(F) {
   }
 }
 
-// A finished action ends: the squat takes off; a knockdown ends in a getup or a roll, and hitstun in idle, both
+// A finished action ends: the squat takes off; a throw that grabbed ends idle and one that missed in a whiff; a knockdown ends in a getup or a roll, and hitstun in idle, both
 // ending the combo (recoverFrom); anything else returns to idle.
 function endAction(S, F, bits) {
   if (F.act === 'jumpSquat') takeoff(S, F, bits);
   else if (F.act === 'knock') recoverFrom(F, wakeAct(F, bits));
   else if (F.act === 'hitStun') recoverFrom(F, 'idle');
+  else if (F.act === 'thr' && !F.hit) setAct(F, 'thrWhiff');
   else setAct(F, 'idle');
 }
 
@@ -445,13 +543,20 @@ function touchdown(S, F) {
   simEmit(S, 'land', F);
 }
 
+// The Special's frame spawn: a projectile at spec.x ahead of F, heading the way F faces.
+function spawnProjectile(S, F) {
+  const k = CFG.spec, p = {side: F.side, x: F.x + F.face * k.x, y: k.y, vx: F.face * k.speed, live: 1};
+  S.proj.push(p);
+  simEmit(S, 'proj', F, {x: p.x, y: p.y});
+}
+
 // One frame of a fighter's action (hitstop skips it): this frame's command enters the buffer; a finished action
 // ends; the buffered command starts if the state takes it ('heavyFire' for a heavy), else a free state follows
 // the held buttons and a waiting command loses a frame. Then af, stun and inv advance, 'whiff' marks a move whose
 // active frames ended without contact, and the ground speed is set (in the air the takeoff or hit speed is kept).
 function actionStep(S, F, bits) {
   const cmd = bufferCommand(S, F, bits);
-  if (F.act === 'hitStun' ? F.stun <= 0 : F.af >= actLength(F)) endAction(S, F, bits);
+  if (F.act === 'hitStun' || F.act === 'block' ? F.stun <= 0 : F.af >= actLength(F)) endAction(S, F, bits);
   const act = F.buf.cmd && commandAct(F, F.buf.cmd, bits);
   if (act) {
     if (F.buf.cmd === 'HP' || F.buf.cmd === 'HK') simEmit(S, 'heavyFire', F, {move: act, heavy: true});
@@ -462,6 +567,7 @@ function actionStep(S, F, bits) {
     if (F.buf.cmd && !cmd && --F.buf.left <= 0) F.buf.cmd = null;
   }
   F.af++;
+  if (F.act === 'spec' && F.af === CFG.spec.spawn) spawnProjectile(S, F);
   if (F.stun > 0) F.stun--;
   F.inv = KNOCKED[F.act] ? knockLeft(F) : Math.max(0, F.inv - 1);
   const m = CFG.moves[F.act];

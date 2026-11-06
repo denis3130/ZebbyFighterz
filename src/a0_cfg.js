@@ -13,6 +13,12 @@ const CFG={
   stop:{light:6, mid:8, heavy:11, spec:8, thr:10, ko:40, blockLight:5, blockHeavy:8},
   meter:{hit:1, block:.5, taken:.5},
   knock:{ground:36, getup:16, roll:22, rollDist:1300},
+  // Throw: s/a = startup/active frames, range = max centre distance, whiff = recovery of a miss, anim = frames of a
+  // grab, hitF = the grab's frame of the damage, then the opponent is knocked down (vx away, vy up). No height: no block.
+  thr:{range:900, s:4, a:2, whiff:24, anim:40, hitF:30, dmg:120, vx:60, vy:60, stop:'thr', knock:true},
+  // Special (energy shot): spawn = frame the projectile appears, rec = frames after it; speed in mm/frame; box = half-size;
+  // x, y = spawn point (forward of the fighter, from the ground); hs/bs/chip as a move's (chip = damage on a block).
+  spec:{spawn:14, rec:30, speed:120, box:150, dmg:70, hs:20, bs:16, chip:8, x:500, y:1100, h:'mid', push:0, stop:'spec'},
   // The plan's move table. s/a/r = startup/active/recovery frames (r 'land' = until landing, then jump.landAtk);
   // hs/bs = hitstun/blockstun; h = height; box = [x0,x1,y0,y1] mm, x forward from the centre, y from the feet;
   // push = pushback speed of the one hit; stop = hitstop class. Chains, once the move has touched: tapP/tapK = move

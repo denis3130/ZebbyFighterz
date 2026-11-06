@@ -17,15 +17,19 @@ function fwdBit(F) { return F.face > 0 ? BTN.R : BTN.L; }
 function backBit(F) { return F.face > 0 ? BTN.L : BTN.R; }
 
 // The command this frame's buttons give, or null. Commands are events, so they can wait in the buffer (F.buf).
-// By priority (Task 4 puts throw and special in front): 'P'/'K' = released after a tap (held less than input.hold),
-// 'HP'/'HK' = held to input.hold (a heavy; its release does nothing), 'dashF'/'dashB' = DASH press (back + DASH =
+// By priority: 'thr' = P and K pressed within input.both frames of each other (the two releases afterwards, and a
+// heavy, are muted: F.mute), 'spec' = S press (not while this side has a projectile alive), 'P'/'K' = released after
+// a tap (held less than input.hold), 'HP'/'HK' = held to input.hold (a heavy; its release does nothing), 'dashF'/'dashB' = DASH press (back + DASH =
 // back dash) or a double tap forward, 'jump' = U press.
 function readCommand(S, F, bits) {
-  const hold = CFG.input.hold;
-  if (F.prev & BTN.P && !(bits & BTN.P) && F.hold[0] < hold) return 'P';
-  if (F.prev & BTN.K && !(bits & BTN.K) && F.hold[1] < hold) return 'K';
-  if (bits & BTN.P && F.hold[0] === hold) return 'HP';
-  if (bits & BTN.K && F.hold[1] === hold) return 'HK';
+  const hold = CFG.input.hold, mP = F.mute & BTN.P, mK = F.mute & BTN.K;
+  if ((bits & (BTN.P | BTN.K)) === (BTN.P | BTN.K) && !mP && !mK && (F.hold[0] === 1 || F.hold[1] === 1) &&
+      Math.abs(F.hold[0] - F.hold[1]) <= CFG.input.both) return 'thr';
+  if (bits & ~F.prev & BTN.S && !S.proj.some(p => p.side === F.side)) return 'spec';
+  if (F.prev & BTN.P && !(bits & BTN.P) && F.hold[0] < hold && !mP) return 'P';
+  if (F.prev & BTN.K && !(bits & BTN.K) && F.hold[1] < hold && !mK) return 'K';
+  if (bits & BTN.P && F.hold[0] === hold && !mP) return 'HP';
+  if (bits & BTN.K && F.hold[1] === hold && !mK) return 'HK';
   if (bits & ~F.prev & BTN.DASH) return bits & backBit(F) ? 'dashB' : 'dashF';
   if (doubleTapDir(S, F, bits) === fwdBit(F)) return 'dashF';
   if (bits & ~F.prev & BTN.U) return 'jump';
@@ -48,14 +52,15 @@ function normalFor(F, cmd, bits) { return NORMALS[cmd][F.air ? 2 : bits & BTN.D 
 
 // What a command starts in the fighter's state now, or null (it waits in the buffer). A free ground state takes
 // any command, a jump ('air') its air normals. A move takes only its cancels, from the frame it touched to the end
-// of its recovery: tapP/tapK, a heavy (heavy: true = the posture's heavy, or a list of moves) and, after a hit
-// (not a block), the super jump of a jc move.
+// of its recovery: tapP/tapK, a heavy (heavy: true = the posture's heavy, or a list of moves), the Special (spec)
+// and, after a hit (not a block), the super jump of a jc move. A throw never cancels.
 function commandAct(F, cmd, bits) {
   const m = CFG.moves[F.act], normal = NORMALS[cmd] ? normalFor(F, cmd, bits) : null;
   if (m) {
     if (!F.hit) return null;
     if (cmd === 'P') return m.tapP || null;
     if (cmd === 'K') return m.tapK || null;
+    if (cmd === 'spec') return m.spec ? 'spec' : null;
     if (cmd === 'jump') return m.jc && F.hit === 1 ? 'superJump' : null;
     return normal && (m.heavy === true || (m.heavy && m.heavy.indexOf(normal) >= 0)) ? normal : null;
   }
@@ -78,6 +83,7 @@ function startCommand(S, F, cmd) {
 function bufferCommand(S, F, bits) {
   const cmd = readCommand(S, F, bits);
   if (cmd) { F.buf.cmd = cmd; F.buf.left = CFG.input.buffer; }
+  if (cmd === 'thr') F.mute = BTN.P | BTN.K;
   return cmd;
 }
 
@@ -94,6 +100,9 @@ function actLength(F) {
   if (m) return m.r === 'land' ? Infinity : m.s + m.a + m.r;
   switch (F.act) {
     case 'jumpSquat': return CFG.jump.squat;
+    case 'thr': return F.hit ? CFG.thr.anim : CFG.thr.s + CFG.thr.a;
+    case 'thrWhiff': return CFG.thr.whiff;
+    case 'spec': return CFG.spec.spawn + CFG.spec.rec;
     case 'landing': return F.land;
     case 'dashF': return CFG.dash.f.n;
     case 'dashB': return CFG.dash.b.n;
@@ -104,12 +113,13 @@ function actLength(F) {
   }
 }
 
-// A finished action ends: the squat takes off; a knockdown ends in a getup or a roll, and hitstun in idle, both
+// A finished action ends: the squat takes off; a throw that grabbed ends idle and one that missed in a whiff; a knockdown ends in a getup or a roll, and hitstun in idle, both
 // ending the combo (recoverFrom); anything else returns to idle.
 function endAction(S, F, bits) {
   if (F.act === 'jumpSquat') takeoff(S, F, bits);
   else if (F.act === 'knock') recoverFrom(F, wakeAct(F, bits));
   else if (F.act === 'hitStun') recoverFrom(F, 'idle');
+  else if (F.act === 'thr' && !F.hit) setAct(F, 'thrWhiff');
   else setAct(F, 'idle');
 }
 
@@ -150,13 +160,20 @@ function touchdown(S, F) {
   simEmit(S, 'land', F);
 }
 
+// The Special's frame spawn: a projectile at spec.x ahead of F, heading the way F faces.
+function spawnProjectile(S, F) {
+  const k = CFG.spec, p = {side: F.side, x: F.x + F.face * k.x, y: k.y, vx: F.face * k.speed, live: 1};
+  S.proj.push(p);
+  simEmit(S, 'proj', F, {x: p.x, y: p.y});
+}
+
 // One frame of a fighter's action (hitstop skips it): this frame's command enters the buffer; a finished action
 // ends; the buffered command starts if the state takes it ('heavyFire' for a heavy), else a free state follows
 // the held buttons and a waiting command loses a frame. Then af, stun and inv advance, 'whiff' marks a move whose
 // active frames ended without contact, and the ground speed is set (in the air the takeoff or hit speed is kept).
 function actionStep(S, F, bits) {
   const cmd = bufferCommand(S, F, bits);
-  if (F.act === 'hitStun' ? F.stun <= 0 : F.af >= actLength(F)) endAction(S, F, bits);
+  if (F.act === 'hitStun' || F.act === 'block' ? F.stun <= 0 : F.af >= actLength(F)) endAction(S, F, bits);
   const act = F.buf.cmd && commandAct(F, F.buf.cmd, bits);
   if (act) {
     if (F.buf.cmd === 'HP' || F.buf.cmd === 'HK') simEmit(S, 'heavyFire', F, {move: act, heavy: true});
@@ -167,6 +184,7 @@ function actionStep(S, F, bits) {
     if (F.buf.cmd && !cmd && --F.buf.left <= 0) F.buf.cmd = null;
   }
   F.af++;
+  if (F.act === 'spec' && F.af === CFG.spec.spawn) spawnProjectile(S, F);
   if (F.stun > 0) F.stun--;
   F.inv = KNOCKED[F.act] ? knockLeft(F) : Math.max(0, F.inv - 1);
   const m = CFG.moves[F.act];
