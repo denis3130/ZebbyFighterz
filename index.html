@@ -106,8 +106,9 @@ const CFG={
   // Painted backdrop: footRow = image row (share of its height) where the feet stand; cover = times the smallest scale
   // that fills the screen; parX = image widths of shift per metre of camera x; zoomPar = exponent of the zoom with
   // the camera distance; contrast/lift = colour grade; flow/streak/wobble = the waterfall's flow speed, streak
-  // strength and shimmer; leaves = number of drifting leaves.
-  arena:{footRow:.86, cover:1.25, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
+  // strength and shimmer; leaves = number of drifting leaves. footRow and cover keep the waterfall's crest and the
+  // temple on top (image rows 213-255) in view, with some sky, on 20:9 phones; footRow stays on the painted floor.
+  arena:{footRow:.83, cover:1.1, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
 };
 
 // Fight simulation core: buttons, state, seeded generator, the fixed step, physics, pushboxes, facing, and hits
