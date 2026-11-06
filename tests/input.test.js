@@ -1,4 +1,4 @@
-T.test('keyboard G1 and G2 at the same time (versus)', () => { __VF.inputAssign('versus','kb'); key('KeyD'); key('KeyJ'); key('ArrowLeft'); key('Numpad2');
+T.test('keyboard G1 and G2 at the same time (versus)', () => { __VF.startMatch('versus',{seed:1}); __VF.inputAssign('versus','kb'); key('KeyD'); key('KeyJ'); key('ArrowLeft'); key('Numpad2');
   T.eq(__VF.inputRead(0), B.R|B.P); T.eq(__VF.inputRead(1), B.L|B.K); keyUpAll(); });
 T.test('training: arrows also drive G1', () => { __VF.inputAssign('training','kb'); key('ArrowUp'); T.eq(__VF.inputRead(0)&B.U, B.U); keyUpAll(); });
 T.test('gamepad mapping', () => { fakePads([{buttons:{2:1,5:1}, axes:[-.9,0]}]); __VF.inputAssign('training','kb'); T.eq(__VF.inputRead(0), B.P|B.DASH|B.L); fakePads([]); });

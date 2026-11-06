@@ -178,3 +178,10 @@ function endMatch(winner) {
   S.phase = 'end'; S.winner = winner;
   __VF.tick(performance.now());
 }
+
+// later(ms, fn) = run fn with performance.now() ms ahead (tests are synchronous: this stands in for waiting).
+function later(ms, fn) {
+  const real = performance.now.bind(performance);
+  performance.now = () => real() + ms;
+  try { fn(); } finally { performance.now = real; }
+}

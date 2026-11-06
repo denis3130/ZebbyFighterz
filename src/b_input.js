@@ -1,6 +1,6 @@
 // Input layer: two keyboard sets, up to two gamepads and the on-screen touch controls, each reduced to one integer of
 // BTN bits per player. Devices are OR-ed together; opposite directions (SOCD) are left to the sim.
-const IN={override:[null,null],keys:new Set(),pads:[],touchBits:0,assign:null};
+const IN={override:[null,null],keys:new Set(),pads:[],touchBits:0,assign:null,mask:{keys:new Set(),pad:[]}};
 const IN_KEYS=[   // keyboard set 0 = G1 (WASD), set 1 = G2 (arrows + numpad)
   {KeyW:BTN.U,KeyS:BTN.D,KeyA:BTN.L,KeyD:BTN.R,KeyJ:BTN.P,KeyK:BTN.K,KeyL:BTN.S,KeyU:BTN.DASH,KeyI:BTN.GUARD},
   {ArrowUp:BTN.U,ArrowDown:BTN.D,ArrowLeft:BTN.L,ArrowRight:BTN.R,Numpad1:BTN.P,Numpad2:BTN.K,Numpad3:BTN.S,Numpad4:BTN.DASH,Numpad5:BTN.GUARD}];
@@ -24,9 +24,14 @@ function inputPadBits(g){
 function inputRead(p){
   if(IN.override[p]!==null&&IN.override[p]!==undefined) return IN.override[p];
   const a=IN.assign[p]; let b=0;
-  for(const set of a.kb) for(const c of IN.keys) b|=IN_KEYS[set][c]||0;
+  for(const c of [...IN.mask.keys]) if(!IN.keys.has(c)) IN.mask.keys.delete(c);   // released: no longer masked
+  for(const set of a.kb) for(const c of IN.keys) if(!IN.mask.keys.has(c)) b|=IN_KEYS[set][c]||0;
   inputPoll();
-  if(a.pad!==null&&IN.pads[a.pad]) b|=inputPadBits(IN.pads[a.pad]);
+  if(a.pad!==null&&IN.pads[a.pad]){
+    let pb=inputPadBits(IN.pads[a.pad]); const m=IN.mask.pad[a.pad]||0;
+    if(m){ IN.mask.pad[a.pad]=m&pb; pb&=~m; }
+    b|=pb;
+  }
   if(a.touch) b|=IN.touchBits;
   return b;
 }
@@ -40,6 +45,14 @@ function inputAssign(mode,chooser){
   let free=null;
   for(let i=0;i<IN.pads.length&&free===null;i++) if(IN.pads[i]&&i!==own) free=i;
   IN.assign=[{kb:[0],pad:own,touch:true},{kb:[1],pad:free,touch:false}];
+}
+// A menu confirm that closes into a fight: the attack/dash/guard keys and pad buttons held right now read as released until
+// they really are released (a held J or pad A would otherwise punch or kick on frame 1, and its release would count as a tap).
+function inputMaskHeld(){
+  const dirs=BTN.U|BTN.D|BTN.L|BTN.R;
+  IN.mask.keys=new Set([...IN.keys].filter(c=>((IN_KEYS[0][c]||IN_KEYS[1][c]||0)&~dirs)!==0));
+  inputPoll(); IN.mask.pad=[];
+  IN.pads.forEach((g,i)=>{ if(g) IN.mask.pad[i]=inputPadBits(g)&~dirs; });
 }
 function inputReleaseAll(){
   IN.keys.clear(); inTouch.btn.clear(); inTouch.stick=null; inTouch.stickBits=0; inputTouchSync(); inputStickDraw(null,0,0);

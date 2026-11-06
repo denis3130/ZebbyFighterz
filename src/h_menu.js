@@ -1,13 +1,14 @@
 // Menus and the game cycle around the fight: title, pause, end screen, navigation (keyboard, controller, touch, mouse),
 // "gira il telefono", full screen, auto-pause and the ?fps=1 counter. Reads the sim, never changes it.
 // One screen at a time inside #ui; one focused button per screen (class 'f', orange like the reference).
-const MN = {scr: null, focus: {}, rot: false, ptype: 'mouse', pad: [], fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
+const MN = {scr: null, focus: {}, rot: false, endAt: 0, ptype: 'mouse', pad: [], fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
 const MN_SCREENS = ['title', 'pause', 'end'];
 const MN_REPEAT = [350, 130];   // controller direction held: ms before the first repeat, ms between repeats
 
 function mnEl(id) { return document.getElementById(id); }
 function mnTouchDevice() { return (window.matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0; }
 function mnButtons(id) { return [...mnEl(id).querySelectorAll('.mb')].filter(b => !b.hidden); }
+function mnEndGuard() { return MN.scr === 'end' && performance.now() - MN.endAt < CFG.menu.endGuardMs; }
 function mnSeed() { return (Math.random() * 1e9) | 0; }
 
 // The pause screen's opponent button exists only in training; its label shows the current dummy.
@@ -38,15 +39,15 @@ function menuSync() {
 }
 const menu = {
   pause() { if (G.state !== 'fight') return; G.state = 'pause'; menuSync(); },
-  resume() { if (G.state !== 'pause' || MN.rot) return; G.state = 'fight'; G.last = null; menuSync(); },
-  restart() { if (!G.S) return; startMatch(G.mode, {seed: mnSeed(), dummy: G.S.dummy}); },
+  resume() { if (G.state !== 'pause' || MN.rot) return; inputMaskHeld(); G.state = 'fight'; G.last = null; menuSync(); },
+  restart() { if (!G.S) return; inputMaskHeld(); startMatch(G.mode, {seed: mnSeed(), dummy: G.S.dummy}); },
   toTitle() { G.state = 'title'; G.S = null; menuSync(); },
 };
 // The match is over (the sim reached phase 'end'): the end screen with the winner.
 function menuCheckEnd() {
   const S = G.S; if (G.state !== 'fight' || !S || S.phase !== 'end') return;
   mnEl('endTitle').textContent = S.winner === 2 ? 'PAREGGIO' : 'VINCE ' + fighterOf(S, S.winner).char.toUpperCase() + '!';
-  G.state = 'end'; menuSync();
+  G.state = 'end'; MN.endAt = performance.now(); menuSync();
 }
 function menuMove(dir) {
   if (!MN.scr || MN.rot) return;
@@ -60,11 +61,12 @@ function mnFullscreen() {
 }
 function mnStart(mode, dev) {
   inputAssign(mode, dev);   // whoever confirms is G1
+  inputMaskHeld();
   startMatch(mode, {seed: mnSeed(), dummy: 'fermo'});
 }
 // dev = the device that confirmed: 'kb' (keyboard and mouse), 'touch' or {pad:i}.
 function menuPress(dev) {
-  if (!MN.scr || MN.rot) return;
+  if (!MN.scr || MN.rot || mnEndGuard()) return;
   const b = mnButtons(MN.scr)[MN.focus[MN.scr]]; if (!b) return;
   dev = dev || 'kb';
   const act = b.dataset.act;
@@ -78,7 +80,7 @@ function menuPress(dev) {
 }
 // Esc / B: fight -> pause, pause -> resume, end -> title.
 function menuBack() {
-  if (MN.rot) return;
+  if (MN.rot || mnEndGuard()) return;
   if (G.state === 'fight') menu.pause(); else if (G.state === 'pause') menu.resume(); else if (G.state === 'end') menu.toTitle();
 }
 // Controller, once per frame: Start pauses; in the menus the d-pad or left stick moves (one step per press, repeating

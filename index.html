@@ -244,6 +244,7 @@ const CFG={
   // HUD (frames): chipDelay = wait before the red lost part of a bar drains, chipRate = bars drained per second,
   // comboHide = how long the combo counter stays after its combo ends.
   hud:{chipDelay:30, chipRate:.8, comboHide:60},
+  menu:{endGuardMs:600},   // the end screen ignores confirm/back this long, so a mashing player does not skip the result
   loop:{maxSteps:4},   // real-time loop: at most this many fixed steps per drawn frame
 };
 
@@ -839,7 +840,7 @@ function dummyInput(S, side) {
 
 // Input layer: two keyboard sets, up to two gamepads and the on-screen touch controls, each reduced to one integer of
 // BTN bits per player. Devices are OR-ed together; opposite directions (SOCD) are left to the sim.
-const IN={override:[null,null],keys:new Set(),pads:[],touchBits:0,assign:null};
+const IN={override:[null,null],keys:new Set(),pads:[],touchBits:0,assign:null,mask:{keys:new Set(),pad:[]}};
 const IN_KEYS=[   // keyboard set 0 = G1 (WASD), set 1 = G2 (arrows + numpad)
   {KeyW:BTN.U,KeyS:BTN.D,KeyA:BTN.L,KeyD:BTN.R,KeyJ:BTN.P,KeyK:BTN.K,KeyL:BTN.S,KeyU:BTN.DASH,KeyI:BTN.GUARD},
   {ArrowUp:BTN.U,ArrowDown:BTN.D,ArrowLeft:BTN.L,ArrowRight:BTN.R,Numpad1:BTN.P,Numpad2:BTN.K,Numpad3:BTN.S,Numpad4:BTN.DASH,Numpad5:BTN.GUARD}];
@@ -863,9 +864,14 @@ function inputPadBits(g){
 function inputRead(p){
   if(IN.override[p]!==null&&IN.override[p]!==undefined) return IN.override[p];
   const a=IN.assign[p]; let b=0;
-  for(const set of a.kb) for(const c of IN.keys) b|=IN_KEYS[set][c]||0;
+  for(const c of [...IN.mask.keys]) if(!IN.keys.has(c)) IN.mask.keys.delete(c);   // released: no longer masked
+  for(const set of a.kb) for(const c of IN.keys) if(!IN.mask.keys.has(c)) b|=IN_KEYS[set][c]||0;
   inputPoll();
-  if(a.pad!==null&&IN.pads[a.pad]) b|=inputPadBits(IN.pads[a.pad]);
+  if(a.pad!==null&&IN.pads[a.pad]){
+    let pb=inputPadBits(IN.pads[a.pad]); const m=IN.mask.pad[a.pad]||0;
+    if(m){ IN.mask.pad[a.pad]=m&pb; pb&=~m; }
+    b|=pb;
+  }
   if(a.touch) b|=IN.touchBits;
   return b;
 }
@@ -879,6 +885,14 @@ function inputAssign(mode,chooser){
   let free=null;
   for(let i=0;i<IN.pads.length&&free===null;i++) if(IN.pads[i]&&i!==own) free=i;
   IN.assign=[{kb:[0],pad:own,touch:true},{kb:[1],pad:free,touch:false}];
+}
+// A menu confirm that closes into a fight: the attack/dash/guard keys and pad buttons held right now read as released until
+// they really are released (a held J or pad A would otherwise punch or kick on frame 1, and its release would count as a tap).
+function inputMaskHeld(){
+  const dirs=BTN.U|BTN.D|BTN.L|BTN.R;
+  IN.mask.keys=new Set([...IN.keys].filter(c=>((IN_KEYS[0][c]||IN_KEYS[1][c]||0)&~dirs)!==0));
+  inputPoll(); IN.mask.pad=[];
+  IN.pads.forEach((g,i)=>{ if(g) IN.mask.pad[i]=inputPadBits(g)&~dirs; });
 }
 function inputReleaseAll(){
   IN.keys.clear(); inTouch.btn.clear(); inTouch.stick=null; inTouch.stickBits=0; inputTouchSync(); inputStickDraw(null,0,0);
@@ -1980,13 +1994,14 @@ function hudUpdate(S) {
 // Menus and the game cycle around the fight: title, pause, end screen, navigation (keyboard, controller, touch, mouse),
 // "gira il telefono", full screen, auto-pause and the ?fps=1 counter. Reads the sim, never changes it.
 // One screen at a time inside #ui; one focused button per screen (class 'f', orange like the reference).
-const MN = {scr: null, focus: {}, rot: false, ptype: 'mouse', pad: [], fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
+const MN = {scr: null, focus: {}, rot: false, endAt: 0, ptype: 'mouse', pad: [], fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
 const MN_SCREENS = ['title', 'pause', 'end'];
 const MN_REPEAT = [350, 130];   // controller direction held: ms before the first repeat, ms between repeats
 
 function mnEl(id) { return document.getElementById(id); }
 function mnTouchDevice() { return (window.matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0; }
 function mnButtons(id) { return [...mnEl(id).querySelectorAll('.mb')].filter(b => !b.hidden); }
+function mnEndGuard() { return MN.scr === 'end' && performance.now() - MN.endAt < CFG.menu.endGuardMs; }
 function mnSeed() { return (Math.random() * 1e9) | 0; }
 
 // The pause screen's opponent button exists only in training; its label shows the current dummy.
@@ -2017,15 +2032,15 @@ function menuSync() {
 }
 const menu = {
   pause() { if (G.state !== 'fight') return; G.state = 'pause'; menuSync(); },
-  resume() { if (G.state !== 'pause' || MN.rot) return; G.state = 'fight'; G.last = null; menuSync(); },
-  restart() { if (!G.S) return; startMatch(G.mode, {seed: mnSeed(), dummy: G.S.dummy}); },
+  resume() { if (G.state !== 'pause' || MN.rot) return; inputMaskHeld(); G.state = 'fight'; G.last = null; menuSync(); },
+  restart() { if (!G.S) return; inputMaskHeld(); startMatch(G.mode, {seed: mnSeed(), dummy: G.S.dummy}); },
   toTitle() { G.state = 'title'; G.S = null; menuSync(); },
 };
 // The match is over (the sim reached phase 'end'): the end screen with the winner.
 function menuCheckEnd() {
   const S = G.S; if (G.state !== 'fight' || !S || S.phase !== 'end') return;
   mnEl('endTitle').textContent = S.winner === 2 ? 'PAREGGIO' : 'VINCE ' + fighterOf(S, S.winner).char.toUpperCase() + '!';
-  G.state = 'end'; menuSync();
+  G.state = 'end'; MN.endAt = performance.now(); menuSync();
 }
 function menuMove(dir) {
   if (!MN.scr || MN.rot) return;
@@ -2039,11 +2054,12 @@ function mnFullscreen() {
 }
 function mnStart(mode, dev) {
   inputAssign(mode, dev);   // whoever confirms is G1
+  inputMaskHeld();
   startMatch(mode, {seed: mnSeed(), dummy: 'fermo'});
 }
 // dev = the device that confirmed: 'kb' (keyboard and mouse), 'touch' or {pad:i}.
 function menuPress(dev) {
-  if (!MN.scr || MN.rot) return;
+  if (!MN.scr || MN.rot || mnEndGuard()) return;
   const b = mnButtons(MN.scr)[MN.focus[MN.scr]]; if (!b) return;
   dev = dev || 'kb';
   const act = b.dataset.act;
@@ -2057,7 +2073,7 @@ function menuPress(dev) {
 }
 // Esc / B: fight -> pause, pause -> resume, end -> title.
 function menuBack() {
-  if (MN.rot) return;
+  if (MN.rot || mnEndGuard()) return;
   if (G.state === 'fight') menu.pause(); else if (G.state === 'pause') menu.resume(); else if (G.state === 'end') menu.toTitle();
 }
 // Controller, once per frame: Start pauses; in the menus the d-pad or left stick moves (one step per press, repeating
