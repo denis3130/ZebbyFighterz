@@ -169,13 +169,17 @@ function spawnProjectile(S, F) {
 }
 
 // One frame of a fighter's action (hitstop skips it): this frame's command enters the buffer; a finished action
-// ends; the buffered command starts if the state takes it ('heavyFire' for a heavy), else a free state follows
+// ends, and a fighter it leaves free turns to the opponent (after a cross-up its next move must not start backwards);
+// the buffered command starts if the state takes it ('heavyFire' for a heavy), else a free state follows
 // the held buttons and a waiting command loses a frame. Then af, stun and inv advance, 'whiff' marks a move whose
 // active frames ended without contact, and the ground speed is set (in the air the takeoff or hit speed is kept).
+// Commands are read, and the Special's projectile appears, only in the 'fight' phase: after a KO or time-up the
+// actions under way run out, but nothing new starts (the forced release of a held P/K is no tap).
 function actionStep(S, F, bits) {
-  const cmd = bufferCommand(S, F, bits);
+  const live = S.phase === 'fight', cmd = live ? bufferCommand(S, F, bits) : null;
   if (F.act === 'hitStun' || F.act === 'block' ? F.stun <= 0 : F.af >= actLength(F)) endAction(S, F, bits);
-  const act = F.buf.cmd && commandAct(F, F.buf.cmd, bits);
+  faceOpponent(F, fighterOf(S, 1 - F.side));
+  const act = live && F.buf.cmd && commandAct(F, F.buf.cmd, bits);
   if (act) {
     if (F.buf.cmd === 'HP' || F.buf.cmd === 'HK') simEmit(S, 'heavyFire', F, {move: act, heavy: true});
     F.buf.cmd = null; F.buf.left = 0;
@@ -185,7 +189,7 @@ function actionStep(S, F, bits) {
     if (F.buf.cmd && !cmd && --F.buf.left <= 0) F.buf.cmd = null;
   }
   F.af++;
-  if (F.act === 'spec' && F.af === CFG.spec.spawn) spawnProjectile(S, F);
+  if (live && F.act === 'spec' && F.af === CFG.spec.spawn) spawnProjectile(S, F);
   if (F.stun > 0) F.stun--;
   F.inv = KNOCKED[F.act] ? knockLeft(F) : Math.max(0, F.inv - 1);
   const m = CFG.moves[F.act];

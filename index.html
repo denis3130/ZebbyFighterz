@@ -207,10 +207,12 @@ const CFG={
   // for a P/K tap, heavy = true (any heavy of the posture) or a list, spec = into the Special, jc = super jump (hit only).
   // limb = model part that must sit in the box (Task 8). Effects: knock (knocked down with vx, vy), launch (juggle with
   // vx, vy), airKnock (knocked down, airborne opponent only), spike (slammed down with vx, vy, airborne opponent only).
+  // p3 pushes like p1 and p2 (24, not the plan's 35), so P,P,P then the held P lands all 4 hits from the walk-up range
+  // (up to ~790 mm apart; with 35 the defender slid out of hp's reach from beyond point blank).
   moves:{
     p1:{s:4, a:2, r:7, dmg:30, hs:14, bs:10, h:'mid', box:[200,700,900,1550], push:24, stop:'light', tapP:'p2', tapK:'k1', heavy:true, spec:true, limb:'handL'},
     p2:{s:5, a:3, r:9, dmg:35, hs:15, bs:11, h:'mid', box:[200,760,900,1550], push:24, stop:'light', tapP:'p3', tapK:'k1', heavy:true, spec:true, limb:'handR'},
-    p3:{s:7, a:3, r:14, dmg:50, hs:18, bs:12, h:'mid', box:[200,780,900,1500], push:35, stop:'mid', heavy:true, spec:true, limb:'handL'},
+    p3:{s:7, a:3, r:14, dmg:50, hs:18, bs:12, h:'mid', box:[200,780,900,1500], push:24, stop:'mid', heavy:true, spec:true, limb:'handL'},
     k1:{s:6, a:3, r:10, dmg:40, hs:15, bs:11, h:'mid', box:[200,820,700,1100], push:24, stop:'light', tapP:'p2', tapK:'k2', heavy:true, spec:true, limb:'footL'},
     k2:{s:8, a:3, r:15, dmg:55, hs:18, bs:12, h:'mid', box:[250,900,1100,1500], push:30, stop:'mid', heavy:true, spec:true, limb:'footR'},
     hp:{s:12, a:4, r:18, dmg:90, hs:22, bs:15, h:'mid', box:[250,900,900,1550], push:40, stop:'heavy', heavy:['chk'], spec:true, limb:'handR'},
@@ -365,8 +367,9 @@ function pushApart(a, b, x0) {
   }
 }
 
-// Only fighters in a free ground state turn to face the opponent (a jump or a dash keeps its facing).
-function faceOpponent(F, O) { if (FREE[F.act] && O.x !== F.x) F.face = O.x > F.x ? 1 : -1; }
+// Fighters in a free ground state or landing turn to face the opponent (a jump, a dash, a move and a stun keep their
+// facing). The landing turns so that back, forward and a dash pressed in it already count for the side it landed on.
+function faceOpponent(F, O) { if ((FREE[F.act] || F.act === 'landing') && O.x !== F.x) F.face = O.x > F.x ? 1 : -1; }
 
 // --- Hits ---
 
@@ -425,13 +428,17 @@ function isBlocking(F, height) {
 }
 
 // End of the step: both fighters are checked before either hit lands, so two moves can trade on the same frame.
-// Then the throws and the projectiles. A held fighter whose thrower got hit meanwhile (a projectile can) is released.
+// Then the throws and the projectiles. Contacts resolve only in the 'fight' phase: after a KO or time-up the hp stays
+// as it was when the round ended (a grab under way plays out without its damage). A held fighter whose thrower got
+// hit meanwhile (a projectile can), or whose grab ended, is released.
 function contactPhase(S, fs) {
-  const id0 = fs[0].act, id1 = fs[1].act, p0 = touchPoint(fs[0], fs[1]), p1 = touchPoint(fs[1], fs[0]);
-  if (p0) fs[0].hit = resolveHit(S, fs[0], fs[1], CFG.moves[id0], id0, p0, fs[0].face);
-  if (p1) fs[1].hit = resolveHit(S, fs[1], fs[0], CFG.moves[id1], id1, p1, fs[1].face);
-  throwPhase(S, fs);
-  projectilePhase(S, fs);
+  if (S.phase === 'fight') {
+    const id0 = fs[0].act, id1 = fs[1].act, p0 = touchPoint(fs[0], fs[1]), p1 = touchPoint(fs[1], fs[0]);
+    if (p0) fs[0].hit = resolveHit(S, fs[0], fs[1], CFG.moves[id0], id0, p0, fs[0].face);
+    if (p1) fs[1].hit = resolveHit(S, fs[1], fs[0], CFG.moves[id1], id1, p1, fs[1].face);
+    throwPhase(S, fs);
+    projectilePhase(S, fs);
+  }
   for (const D of fs) if (D.act === 'thrown' && !(fs[1 - D.side].act === 'thr' && fs[1 - D.side].hit)) setAct(D, 'idle');
 }
 
@@ -551,7 +558,8 @@ function rollSpeed(af) { const k = CFG.knock; return Math.floor(k.rollDist * af 
 // --- Rounds ---
 
 // Round phases: 'intro' (round.intro frames, inputs ignored) -> 'fight' -> 'ko' | 'timeup' (inputs ignored, physics
-// runs on) -> round.end frames later the round is scored -> next 'intro' or 'end'. In training there is no timer
+// runs on and the actions under way run out, but no command, contact or projectile: the hp is the one of the frame
+// the round ended) -> round.end frames later the round is scored -> next 'intro' or 'end'. In training there is no timer
 // and no KO: hp stays at 1 or more and refills, once, when the fighter has been out of a combo (and not blocking)
 // for training.refill frames.
 function roundStep(S, fs) {
@@ -607,14 +615,16 @@ function scoreRound(S, fs) {
 // else moves: only the buffer takes this frame's command (without expiring) and the input history updates.
 // Otherwise: per fighter command and action (c2_moves.js), then the input history -> physics -> pushboxes, walls,
 // max separation -> facing -> contacts (a hit sets the next hitstop). Then the round flow. frame++ either way.
+// Commands are read only in the 'fight' phase (see actionStep).
 function simStep(S, in0, in1) {
   S.ev.length = 0;
-  if (S.phase !== 'fight') { in0 = 0; in1 = 0; }   // intro, KO, time up and the end ignore the buttons
+  const live = S.phase === 'fight';
+  if (!live) { in0 = 0; in1 = 0; }   // intro, KO, time up and the end ignore the buttons
   const fs = [fighterOf(S, 0), fighterOf(S, 1)], bits = [inputPhase(fs[0], in0), inputPhase(fs[1], in1)];
   for (let i = 0; i < 2; i++) chargeEvent(S, fs[i], bits[i]);
   if (S.stop > 0) {
     S.stop--;
-    for (let i = 0; i < 2; i++) { bufferCommand(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
+    for (let i = 0; i < 2; i++) { if (live) bufferCommand(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
   } else {
     for (const p of S.proj) p.x += p.vx;
     for (let i = 0; i < 2; i++) { actionStep(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
@@ -799,13 +809,17 @@ function spawnProjectile(S, F) {
 }
 
 // One frame of a fighter's action (hitstop skips it): this frame's command enters the buffer; a finished action
-// ends; the buffered command starts if the state takes it ('heavyFire' for a heavy), else a free state follows
+// ends, and a fighter it leaves free turns to the opponent (after a cross-up its next move must not start backwards);
+// the buffered command starts if the state takes it ('heavyFire' for a heavy), else a free state follows
 // the held buttons and a waiting command loses a frame. Then af, stun and inv advance, 'whiff' marks a move whose
 // active frames ended without contact, and the ground speed is set (in the air the takeoff or hit speed is kept).
+// Commands are read, and the Special's projectile appears, only in the 'fight' phase: after a KO or time-up the
+// actions under way run out, but nothing new starts (the forced release of a held P/K is no tap).
 function actionStep(S, F, bits) {
-  const cmd = bufferCommand(S, F, bits);
+  const live = S.phase === 'fight', cmd = live ? bufferCommand(S, F, bits) : null;
   if (F.act === 'hitStun' || F.act === 'block' ? F.stun <= 0 : F.af >= actLength(F)) endAction(S, F, bits);
-  const act = F.buf.cmd && commandAct(F, F.buf.cmd, bits);
+  faceOpponent(F, fighterOf(S, 1 - F.side));
+  const act = live && F.buf.cmd && commandAct(F, F.buf.cmd, bits);
   if (act) {
     if (F.buf.cmd === 'HP' || F.buf.cmd === 'HK') simEmit(S, 'heavyFire', F, {move: act, heavy: true});
     F.buf.cmd = null; F.buf.left = 0;
@@ -815,7 +829,7 @@ function actionStep(S, F, bits) {
     if (F.buf.cmd && !cmd && --F.buf.left <= 0) F.buf.cmd = null;
   }
   F.af++;
-  if (F.act === 'spec' && F.af === CFG.spec.spawn) spawnProjectile(S, F);
+  if (live && F.act === 'spec' && F.af === CFG.spec.spawn) spawnProjectile(S, F);
   if (F.stun > 0) F.stun--;
   F.inv = KNOCKED[F.act] ? knockLeft(F) : Math.max(0, F.inv - 1);
   const m = CFG.moves[F.act];

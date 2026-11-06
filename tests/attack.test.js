@@ -6,9 +6,11 @@ T.test('crouch versions and air versions', () => { const S=N(); T.feed(S,2,B.D|B
 T.test('p1 hits: damage, hitstun, hitstop', () => { const S=N(); near(S); T.feed(S,1,B.P,0); T.feed(S,1,0,0); T.feed(S,4,0,0); const h=S.ev.find(e=>e.t==='hit'); T.ok(h,'no hit on frame 5'); T.eq(F(S,1).hp,970); T.eq(S.stop,6); T.eq(F(S,1).act,'hitStun'); });
 T.test('P,P,P chain is p1 p2 p3', () => { const S=N(); near(S); const seq=[]; for(let i=0;i<60;i++){ T.feed(S,1,(i%6===0)?B.P:0,0); const a=F(S,0).act; if(seq[seq.length-1]!==a&&/^p\d$/.test(a))seq.push(a);} T.eq(seq.slice(0,3).join(),'p1,p2,p3'); });
 T.test('chain only on contact', () => { const S=N(); let saw=false; for(let i=0;i<40;i++){ T.feed(S,1,(i%3===0)?B.P:0,0); if(F(S,0).act==='p2')saw=true; } T.ok(!saw, 'whiffed p1 must not chain'); });
-// Fixed from the plan: the combo starts at point blank (520 mm, pushboxes touching). From near()'s 700 mm the
-// pushback of p1+p2+p3 carries the defender out of hp's reach (body edge 610 mm, hp reaches 550) for any hold timing.
+// The same combo at point blank (520 mm, pushboxes touching) and, below, from near()'s 700 mm (the final fix wave tuned
+// p3's push so the held P still reaches after p1+p2+p3).
 T.test('damage scaling from the 3rd hit, floor 30%', () => { const S=N(); near(S); F(S,1).x=170; comboPPPH(S); T.eq(1000-F(S,1).hp, 30+35+45+72); T.eq(__VF.scaleFor(12),30); });
+T.test('P,P,P then held P connects all 4 hits from 700 mm', () => { const S=N(); near(S); const moves=[]; const t=T.feed; T.feed=(S2,n,a,b)=>{ for(let i=0;i<n;i++){ t(S2,1,a,b); for(const e of S2.ev) if(e.t==='hit') moves.push(e.move+'#'+F(S2,1).combo); } };
+  try { comboPPPH(S); } finally { T.feed=t; } T.eq(moves.join(),'p1#1,p2#2,p3#3,hp#4'); T.eq(1000-F(S,1).hp, 30+35+45+72); });
 T.test('hitstun decays from the 6th hit', () => { T.eq(__VF.hitstunFor(14,6),13); T.eq(__VF.hitstunFor(14,5),14); T.eq(__VF.hitstunFor(14,40),6); });
 T.test('no infinite: mashing P and K in the corner ends before 20 hits', () => { const S=N(); F(S,1).x=5700; F(S,0).x=5000; let max=0; for(let i=0;i<600;i++){ T.feed(S,1,[B.P,0,B.K,0,B.D|B.P,0][i%6],0); max=Math.max(max,F(S,1).combo);} T.ok(max<20,'combo '+max); });
 T.test('launcher then super jump chase and air hit', () => { const S=N(); near(S); T.feed(S,12,B.D|B.K,0); let n=0; while(!S.ev.some(e=>e.t==='hit')&&n<20){T.feed(S,1,B.D,0);n++;}

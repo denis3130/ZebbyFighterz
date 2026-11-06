@@ -43,3 +43,15 @@ T.test('hash is FNV-1a hex of the state without ev, and follows the state', () =
 T.test('seeded generator is mulberry32 on S.rng', () => { const take=S=>[0,1,2,3,4].map(()=>__VF.simRand(S,4294967296)); const a=N({seed:42}), x=take(a);
   T.eq(x.join(),'2581720956,1925393290,3661312704,2876485805,750819978'); T.eq(take(N({seed:42})).join(),x.join()); T.ok(take(N({seed:43})).join()!==x.join());
   for(let i=0;i<50;i++){ const v=__VF.simRand(a,6); T.ok(v>=0&&v<6&&v%1===0,'out of range '+v); } });
+
+// Final fix wave: after a cross-up the fighter faces the opponent before its next action starts. crossUp() = side 0 jumps
+// forward over side 1 and lands against the right wall, still facing the wall: back on its landing.
+function crossUp() { const S=N(); F(S,0).x=3400; F(S,1).x=5200; T.feed(S,5,B.U|B.R,0); let n=0; while(F(S,0).act!=='landing'&&n<100){ T.feed(S,1,0,0); n++; }
+  T.ok(F(S,0).x>F(S,1).x,'crossed over'); T.eq(F(S,0).act,'landing'); return S; }
+T.test('after a cross-up, a P tapped during the landing comes out facing the opponent and hits', () => { const S=crossUp();
+  T.feed(S,1,B.P,0); T.feed(S,1,0,0); let box=null, hit=false;
+  for(let i=0;i<12;i++){ T.feed(S,1,0,0); box=box||__VF.moveBox(F(S,0),'p1'); hit=hit||S.ev.some(e=>e.t==='hit'&&e.side===0); }
+  T.ok(box&&box.x1<=F(S,0).x,'p1 box faces the opponent: '+JSON.stringify(box)+' at '+F(S,0).x); T.ok(hit,'p1 hits'); T.eq(F(S,0).face,-1); });
+T.test('after a cross-up, a dash pressed during the landing is toward or away from the opponent as pressed', () => { const S=crossUp(), x=F(S,0).x;
+  T.feed(S,1,B.L|B.DASH,0); T.feed(S,4,0,0); T.eq(F(S,0).act,'dashF','left = toward the opponent = forward'); T.ok(F(S,0).x<x,'it dashes toward the opponent');
+  const A=crossUp(); T.feed(A,1,B.R|B.DASH,0); T.feed(A,4,0,0); T.eq(F(A,0).act,'dashB','right = away from the opponent = back'); });

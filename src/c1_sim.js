@@ -115,8 +115,9 @@ function pushApart(a, b, x0) {
   }
 }
 
-// Only fighters in a free ground state turn to face the opponent (a jump or a dash keeps its facing).
-function faceOpponent(F, O) { if (FREE[F.act] && O.x !== F.x) F.face = O.x > F.x ? 1 : -1; }
+// Fighters in a free ground state or landing turn to face the opponent (a jump, a dash, a move and a stun keep their
+// facing). The landing turns so that back, forward and a dash pressed in it already count for the side it landed on.
+function faceOpponent(F, O) { if ((FREE[F.act] || F.act === 'landing') && O.x !== F.x) F.face = O.x > F.x ? 1 : -1; }
 
 // --- Hits ---
 
@@ -175,13 +176,17 @@ function isBlocking(F, height) {
 }
 
 // End of the step: both fighters are checked before either hit lands, so two moves can trade on the same frame.
-// Then the throws and the projectiles. A held fighter whose thrower got hit meanwhile (a projectile can) is released.
+// Then the throws and the projectiles. Contacts resolve only in the 'fight' phase: after a KO or time-up the hp stays
+// as it was when the round ended (a grab under way plays out without its damage). A held fighter whose thrower got
+// hit meanwhile (a projectile can), or whose grab ended, is released.
 function contactPhase(S, fs) {
-  const id0 = fs[0].act, id1 = fs[1].act, p0 = touchPoint(fs[0], fs[1]), p1 = touchPoint(fs[1], fs[0]);
-  if (p0) fs[0].hit = resolveHit(S, fs[0], fs[1], CFG.moves[id0], id0, p0, fs[0].face);
-  if (p1) fs[1].hit = resolveHit(S, fs[1], fs[0], CFG.moves[id1], id1, p1, fs[1].face);
-  throwPhase(S, fs);
-  projectilePhase(S, fs);
+  if (S.phase === 'fight') {
+    const id0 = fs[0].act, id1 = fs[1].act, p0 = touchPoint(fs[0], fs[1]), p1 = touchPoint(fs[1], fs[0]);
+    if (p0) fs[0].hit = resolveHit(S, fs[0], fs[1], CFG.moves[id0], id0, p0, fs[0].face);
+    if (p1) fs[1].hit = resolveHit(S, fs[1], fs[0], CFG.moves[id1], id1, p1, fs[1].face);
+    throwPhase(S, fs);
+    projectilePhase(S, fs);
+  }
   for (const D of fs) if (D.act === 'thrown' && !(fs[1 - D.side].act === 'thr' && fs[1 - D.side].hit)) setAct(D, 'idle');
 }
 
@@ -301,7 +306,8 @@ function rollSpeed(af) { const k = CFG.knock; return Math.floor(k.rollDist * af 
 // --- Rounds ---
 
 // Round phases: 'intro' (round.intro frames, inputs ignored) -> 'fight' -> 'ko' | 'timeup' (inputs ignored, physics
-// runs on) -> round.end frames later the round is scored -> next 'intro' or 'end'. In training there is no timer
+// runs on and the actions under way run out, but no command, contact or projectile: the hp is the one of the frame
+// the round ended) -> round.end frames later the round is scored -> next 'intro' or 'end'. In training there is no timer
 // and no KO: hp stays at 1 or more and refills, once, when the fighter has been out of a combo (and not blocking)
 // for training.refill frames.
 function roundStep(S, fs) {
@@ -357,14 +363,16 @@ function scoreRound(S, fs) {
 // else moves: only the buffer takes this frame's command (without expiring) and the input history updates.
 // Otherwise: per fighter command and action (c2_moves.js), then the input history -> physics -> pushboxes, walls,
 // max separation -> facing -> contacts (a hit sets the next hitstop). Then the round flow. frame++ either way.
+// Commands are read only in the 'fight' phase (see actionStep).
 function simStep(S, in0, in1) {
   S.ev.length = 0;
-  if (S.phase !== 'fight') { in0 = 0; in1 = 0; }   // intro, KO, time up and the end ignore the buttons
+  const live = S.phase === 'fight';
+  if (!live) { in0 = 0; in1 = 0; }   // intro, KO, time up and the end ignore the buttons
   const fs = [fighterOf(S, 0), fighterOf(S, 1)], bits = [inputPhase(fs[0], in0), inputPhase(fs[1], in1)];
   for (let i = 0; i < 2; i++) chargeEvent(S, fs[i], bits[i]);
   if (S.stop > 0) {
     S.stop--;
-    for (let i = 0; i < 2; i++) { bufferCommand(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
+    for (let i = 0; i < 2; i++) { if (live) bufferCommand(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
   } else {
     for (const p of S.proj) p.x += p.vx;
     for (let i = 0; i < 2; i++) { actionStep(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }

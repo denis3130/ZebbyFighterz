@@ -29,10 +29,12 @@ const CFG={
   // for a P/K tap, heavy = true (any heavy of the posture) or a list, spec = into the Special, jc = super jump (hit only).
   // limb = model part that must sit in the box (Task 8). Effects: knock (knocked down with vx, vy), launch (juggle with
   // vx, vy), airKnock (knocked down, airborne opponent only), spike (slammed down with vx, vy, airborne opponent only).
+  // p3 pushes like p1 and p2 (24, not the plan's 35), so P,P,P then the held P lands all 4 hits from the walk-up range
+  // (up to ~790 mm apart; with 35 the defender slid out of hp's reach from beyond point blank).
   moves:{
     p1:{s:4, a:2, r:7, dmg:30, hs:14, bs:10, h:'mid', box:[200,700,900,1550], push:24, stop:'light', tapP:'p2', tapK:'k1', heavy:true, spec:true, limb:'handL'},
     p2:{s:5, a:3, r:9, dmg:35, hs:15, bs:11, h:'mid', box:[200,760,900,1550], push:24, stop:'light', tapP:'p3', tapK:'k1', heavy:true, spec:true, limb:'handR'},
-    p3:{s:7, a:3, r:14, dmg:50, hs:18, bs:12, h:'mid', box:[200,780,900,1500], push:35, stop:'mid', heavy:true, spec:true, limb:'handL'},
+    p3:{s:7, a:3, r:14, dmg:50, hs:18, bs:12, h:'mid', box:[200,780,900,1500], push:24, stop:'mid', heavy:true, spec:true, limb:'handL'},
     k1:{s:6, a:3, r:10, dmg:40, hs:15, bs:11, h:'mid', box:[200,820,700,1100], push:24, stop:'light', tapP:'p2', tapK:'k2', heavy:true, spec:true, limb:'footL'},
     k2:{s:8, a:3, r:15, dmg:55, hs:18, bs:12, h:'mid', box:[250,900,1100,1500], push:30, stop:'mid', heavy:true, spec:true, limb:'footR'},
     hp:{s:12, a:4, r:18, dmg:90, hs:22, bs:15, h:'mid', box:[250,900,900,1550], push:40, stop:'heavy', heavy:['chk'], spec:true, limb:'handR'},
