@@ -1,7 +1,7 @@
 // HUD (DOM, reads the sim state, never changes it). hudEvents(S) runs once per sim step and counts in frames: the red
 // "chip" part of a health bar and the combo counter's lifetime. hudUpdate(S) runs once per drawn frame and only writes the
 // DOM when a value changed.
-const HUD = {S: null, chip: [1, 1], hold: [0, 0], hp: [1, 1], combo: [], el: {}, dom: {}};
+const HUD = {S: null, round: 0, chip: [1, 1], hold: [0, 0], hp: [1, 1], combo: [], el: {}, dom: {}};
 function hudInit() {
   const e = HUD.el;
   for (const id of ['face0', 'face1', 'name0', 'name1', 'hpFill0', 'hpFill1', 'hpChip0', 'hpChip1', 'timer', 'wins0', 'wins1',
@@ -14,12 +14,15 @@ function hudInit() {
 }
 // A new match (a new S) starts from full bars and no counters.
 function hudReset(S) {
-  HUD.S = S; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
+  HUD.S = S; HUD.round = S ? S.round : 0; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
   HUD.combo = [{n: 0, last: 0, left: 0, seq: 0}, {n: 0, last: 0, left: 0, seq: 0}];
 }
-// One sim step. combo[a] = the combo side a is landing on side 1-a: shown from the 2nd hit, hidden hud.comboHide frames after it ends.
+// One sim step. combo[a] = the combo side a is landing on side 1-a: shown from the 2nd hit, hidden hud.comboHide frames after it
+// ends, and at once when a new round starts (a combo that ended the round stays shown through the K.O., not into the next
+// round's banner). seq keeps counting, so the next counter still bumps.
 function hudEvents(S) {
   if (HUD.S !== S) hudReset(S);
+  if (HUD.round !== S.round) { HUD.round = S.round; for (const k of HUD.combo) { k.n = 0; k.last = 0; k.left = 0; } }
   const H = CFG.hud;
   for (let d = 0; d < 2; d++) {
     const D = fighterOf(S, d), fill = D.hp / CFG.body.hp, k = HUD.combo[1 - d], c = D.combo;

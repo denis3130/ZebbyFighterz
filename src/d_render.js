@@ -107,15 +107,20 @@ function renderResize() {
 }
 
 // Draws S (null = no match: the empty arena) at nowMs: camera, backdrop, leaves, shadows, fighters, effects, then the 3D scene.
+// A shake (fxShakeApply) moves the camera for this draw only, and the backdrop by the same screen offset of the ground
+// under the camera, so the whole picture trembles together (the fighters do not slide on the painted floor);
+// afterwards cam, toScreen and the backdrop placement are as computed.
 function renderFrame(S, nowMs) {
   ARENA.mat.uniforms.uTime.value = nowMs / 1000;
   rdCamStep(S); rdPlace(); rdLeavesStep(nowMs); rdShadowsStep(S); f3Sync(S);
   fxUpdate(nowMs, S);
   renderer.clear();
+  const p = ARENA.mat.uniforms.uPlace.value, px = p.x, py = p.y, g = RD.v.set(cam.x, 0, 0).project(camera), gx = g.x, gy = g.y;
+  const shaken = fxShakeApply();
+  if (shaken) { RD.v.set(cam.x, 0, 0).project(camera); rdShift((RD.v.x - gx) / 2 * RD.W, (gy - RD.v.y) / 2 * RD.H); }
   renderer.render(RD.bgScene, RD.bgCam);
-  const shaken = fxShakeApply();   // the camera moves for this draw only: cam and toScreen stay as computed
   renderer.render(scene, camera);
-  if (shaken) rdCamApply();
+  if (shaken) { rdCamApply(); p.x = px; p.y = py; }
 }
 
 // World point (metres) -> screen px {x, y} from the top left, through the camera as last placed.
@@ -162,6 +167,16 @@ function rdPlace() {
     W / (iw * (1 - 2 * Math.abs(par))), gy / (a.footRow * ih), (H - gy) / ((1 - a.footRow) * ih));
   const su = W / (iw * s), sv = H / (ih * s);   // image uv per screen uv
   ARENA.mat.uniforms.uPlace.value.set(.5 + par - su / 2, 1 - a.footRow - (H - gy) / (ih * s), su, sv);
+}
+
+// Moves the placed backdrop by (sx, sy) screen px (y down), but never further than the image reaches past the screen
+// edge on that side, so its border never shows (where the margin is short, the backdrop shakes a little less).
+function rdShift(sx, sy) {
+  const p = ARENA.mat.uniforms.uPlace.value, W = RD.W, H = RD.H;
+  const mL = Math.max(0, p.x / p.z * W), mR = Math.max(0, (1 - p.x - p.z) / p.z * W);   // px of image past the left / right edge
+  const mB = Math.max(0, p.y / p.w * H), mT = Math.max(0, (1 - p.y - p.w) / p.w * H);   // ... past the bottom / top edge
+  p.x -= Math.max(-mR, Math.min(mL, sx)) / W * p.z;
+  p.y += Math.max(-mB, Math.min(mT, sy)) / H * p.w;
 }
 
 // The screen y (px from the top) where the placed backdrop shows its foot row: the shader's mapping, inverted.

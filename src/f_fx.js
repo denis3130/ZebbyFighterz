@@ -193,8 +193,8 @@ function fxProjStep(now, S) {
   }
 }
 
-// Moves the camera by the shake's decaying random offset for the scene draw; true if it did (the caller then puts the
-// camera back with rdCamApply, so cam and toScreen stay as computed). Render clock only.
+// Moves the camera by the shake's decaying random offset for the scene draw; true if it did (renderFrame then moves the
+// backdrop by the same screen offset, and afterwards puts both back, so cam and toScreen stay as computed). Render clock only.
 function fxShakeApply() {
   const sh = FX.shake;
   if (!sh.amp) return false;

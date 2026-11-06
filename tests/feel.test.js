@@ -22,3 +22,12 @@ T.test('KO gives a full-screen white flash for 120 ms and a big shake', () => { 
 function CFG0() { return __VF.CFG; }
 T.test('a heavy spark is much bigger than a light one on the spawn frame', () => { const sz=()=>{ let m=0; __VF.FX.sparks.forEach(s=>{ m=Math.max(m,s.sp.scale.x); }); return m; };
   hitOnce('p1'); const l=sz(); hitOnce('hp'); const h=sz(); T.ok(l>.3&&h>.7&&h>l*1.8,'light '+l+' heavy '+h); });
+// Final fix wave: the shake moves the painted backdrop by the same screen offset as the 3D scene, so the fighters and
+// their shadows do not jitter against the painted floor. Per drawn frame of a heavy hit's shake: the ground point under
+// the camera and the backdrop's foot row move together, and the painted column under the ground point stays the same.
+T.test('the shake moves the painted floor with the fighters (the whole screen trembles)', () => { const V=__VF, t=hitOnce('hp'), S=V.G.S, r=V.renderer, real=r.render, p=V.ARENA.mat.uniforms.uPlace.value, W=innerWidth, seen=[];
+  let cap=null; r.render=function(sc){ if(sc===V.scene){ const g=V.toScreen(V.cam.x,0,0); cap={g, foot:V.ARENA.footRowY(), u:p.x+g.x/W*p.z}; } return real.apply(this,arguments); };
+  try { for(let i=1;i<=8;i++){ cap=null; V.renderFrame(S,t+i*12); const g=V.toScreen(V.cam.x,0,0); if(cap) seen.push({dx:cap.g.x-g.x, dy:cap.g.y-g.y, foot:cap.foot-V.ARENA.footRowY(), col:(cap.u-(p.x+g.x/W*p.z))*W/p.z}); } } finally { r.render=real; }
+  T.eq(seen.length,8); T.ok(seen.some(s=>Math.abs(s.dx)>1||Math.abs(s.dy)>1),'the shake moved the view: '+JSON.stringify(seen.map(s=>[s.dx.toFixed(1),s.dy.toFixed(1)])));
+  for(const s of seen){ T.near(s.foot,s.dy,1,'foot row vs ground point'); T.near(s.col,0,1,'painted column under the ground point'); }
+  T.near(V.ARENA.footRowY(),V.toScreen(V.cam.x,0,0).y,1e-6,'placement as computed after the draw'); });

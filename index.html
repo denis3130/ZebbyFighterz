@@ -1103,15 +1103,20 @@ function renderResize() {
 }
 
 // Draws S (null = no match: the empty arena) at nowMs: camera, backdrop, leaves, shadows, fighters, effects, then the 3D scene.
+// A shake (fxShakeApply) moves the camera for this draw only, and the backdrop by the same screen offset of the ground
+// under the camera, so the whole picture trembles together (the fighters do not slide on the painted floor);
+// afterwards cam, toScreen and the backdrop placement are as computed.
 function renderFrame(S, nowMs) {
   ARENA.mat.uniforms.uTime.value = nowMs / 1000;
   rdCamStep(S); rdPlace(); rdLeavesStep(nowMs); rdShadowsStep(S); f3Sync(S);
   fxUpdate(nowMs, S);
   renderer.clear();
+  const p = ARENA.mat.uniforms.uPlace.value, px = p.x, py = p.y, g = RD.v.set(cam.x, 0, 0).project(camera), gx = g.x, gy = g.y;
+  const shaken = fxShakeApply();
+  if (shaken) { RD.v.set(cam.x, 0, 0).project(camera); rdShift((RD.v.x - gx) / 2 * RD.W, (gy - RD.v.y) / 2 * RD.H); }
   renderer.render(RD.bgScene, RD.bgCam);
-  const shaken = fxShakeApply();   // the camera moves for this draw only: cam and toScreen stay as computed
   renderer.render(scene, camera);
-  if (shaken) rdCamApply();
+  if (shaken) { rdCamApply(); p.x = px; p.y = py; }
 }
 
 // World point (metres) -> screen px {x, y} from the top left, through the camera as last placed.
@@ -1158,6 +1163,16 @@ function rdPlace() {
     W / (iw * (1 - 2 * Math.abs(par))), gy / (a.footRow * ih), (H - gy) / ((1 - a.footRow) * ih));
   const su = W / (iw * s), sv = H / (ih * s);   // image uv per screen uv
   ARENA.mat.uniforms.uPlace.value.set(.5 + par - su / 2, 1 - a.footRow - (H - gy) / (ih * s), su, sv);
+}
+
+// Moves the placed backdrop by (sx, sy) screen px (y down), but never further than the image reaches past the screen
+// edge on that side, so its border never shows (where the margin is short, the backdrop shakes a little less).
+function rdShift(sx, sy) {
+  const p = ARENA.mat.uniforms.uPlace.value, W = RD.W, H = RD.H;
+  const mL = Math.max(0, p.x / p.z * W), mR = Math.max(0, (1 - p.x - p.z) / p.z * W);   // px of image past the left / right edge
+  const mB = Math.max(0, p.y / p.w * H), mT = Math.max(0, (1 - p.y - p.w) / p.w * H);   // ... past the bottom / top edge
+  p.x -= Math.max(-mR, Math.min(mL, sx)) / W * p.z;
+  p.y += Math.max(-mB, Math.min(mT, sy)) / H * p.w;
 }
 
 // The screen y (px from the top) where the placed backdrop shows its foot row: the shader's mapping, inverted.
@@ -1926,8 +1941,8 @@ function fxProjStep(now, S) {
   }
 }
 
-// Moves the camera by the shake's decaying random offset for the scene draw; true if it did (the caller then puts the
-// camera back with rdCamApply, so cam and toScreen stay as computed). Render clock only.
+// Moves the camera by the shake's decaying random offset for the scene draw; true if it did (renderFrame then moves the
+// backdrop by the same screen offset, and afterwards puts both back, so cam and toScreen stay as computed). Render clock only.
 function fxShakeApply() {
   const sh = FX.shake;
   if (!sh.amp) return false;
@@ -1940,7 +1955,7 @@ function fxShakeApply() {
 // HUD (DOM, reads the sim state, never changes it). hudEvents(S) runs once per sim step and counts in frames: the red
 // "chip" part of a health bar and the combo counter's lifetime. hudUpdate(S) runs once per drawn frame and only writes the
 // DOM when a value changed.
-const HUD = {S: null, chip: [1, 1], hold: [0, 0], hp: [1, 1], combo: [], el: {}, dom: {}};
+const HUD = {S: null, round: 0, chip: [1, 1], hold: [0, 0], hp: [1, 1], combo: [], el: {}, dom: {}};
 function hudInit() {
   const e = HUD.el;
   for (const id of ['face0', 'face1', 'name0', 'name1', 'hpFill0', 'hpFill1', 'hpChip0', 'hpChip1', 'timer', 'wins0', 'wins1',
@@ -1953,12 +1968,15 @@ function hudInit() {
 }
 // A new match (a new S) starts from full bars and no counters.
 function hudReset(S) {
-  HUD.S = S; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
+  HUD.S = S; HUD.round = S ? S.round : 0; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
   HUD.combo = [{n: 0, last: 0, left: 0, seq: 0}, {n: 0, last: 0, left: 0, seq: 0}];
 }
-// One sim step. combo[a] = the combo side a is landing on side 1-a: shown from the 2nd hit, hidden hud.comboHide frames after it ends.
+// One sim step. combo[a] = the combo side a is landing on side 1-a: shown from the 2nd hit, hidden hud.comboHide frames after it
+// ends, and at once when a new round starts (a combo that ended the round stays shown through the K.O., not into the next
+// round's banner). seq keeps counting, so the next counter still bumps.
 function hudEvents(S) {
   if (HUD.S !== S) hudReset(S);
+  if (HUD.round !== S.round) { HUD.round = S.round; for (const k of HUD.combo) { k.n = 0; k.last = 0; k.left = 0; } }
   const H = CFG.hud;
   for (let d = 0; d < 2; d++) {
     const D = fighterOf(S, d), fill = D.hp / CFG.body.hp, k = HUD.combo[1 - d], c = D.combo;

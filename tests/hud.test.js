@@ -17,3 +17,12 @@ T.test('round pips light up with the rounds won', () => { startFight(); const S=
 T.test('banners: K.O., TEMPO!, winner', () => { startFight(); const S=__VF.G.S; F(S,1).hp=1; F(S,0).hp=1000; nearG(); __VF.IN.override[0]=B.P; for(let i=0;i<60&&S.phase==='fight';i++) __VF.frame(1); __VF.IN.override[0]=null; T.eq(S.phase,'ko'); T.eq(txt('banner'),'K.O.');
   startFight(); const S2=__VF.G.S; S2.timer=2; __VF.frame(3); T.eq(txt('banner'),'TEMPO!');
   startFight(); const S3=__VF.G.S; S3.phase='end'; S3.winner=1; __VF.hudUpdate(S3); T.eq(txt('banner'),'VINCE KAEL!'); S3.winner=2; __VF.hudUpdate(S3); T.eq(txt('banner'),'PAREGGIO'); });
+
+// Final fix wave: a combo that ends the round does not leave its counter under the next round's banner.
+T.test('the combo counter is cleared when the next round starts', () => { startFight(); nearG(); const S=__VF.G.S, IN=__VF.IN; F(S,1).hp=60;   // p1 (30) + p2 (35) = KO
+  const tap=()=>{ IN.override[0]=B.P; __VF.frame(1); IN.override[0]=0; __VF.frame(1); };
+  try { tap(); for(let i=0;i<30&&F(S,1).combo<1;i++) __VF.frame(1); tap(); for(let i=0;i<30&&S.phase==='fight';i++) __VF.frame(1); } finally { IN.override[0]=null; }
+  T.eq(S.phase,'ko'); T.eq(F(S,1).combo,2); T.ok(vis('combo0'),'2 COLPI at the KO');
+  for(let i=0;i<300&&S.round===1;i++) __VF.frame(1); T.eq(S.round,2); __VF.frame(1);
+  T.eq(txt('banner'),'ROUND 2'); T.ok(!vis('combo0'),'counter left over into round 2');
+  for(let i=0;i<8;i++) __VF.frame(1); T.ok(!vis('combo0'),'and it stays hidden'); });
