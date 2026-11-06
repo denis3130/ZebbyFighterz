@@ -14,7 +14,7 @@ function hudInit() {
 }
 // A new match (a new S) starts from full bars and no counters.
 function hudReset(S) {
-  HUD.S = S; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
+  HUD.S = S; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
   HUD.combo = [{n: 0, last: 0, left: 0, seq: 0}, {n: 0, last: 0, left: 0, seq: 0}];
 }
 // One sim step. combo[a] = the combo side a is landing on side 1-a: shown from the 2nd hit, hidden hud.comboHide frames after it ends.
