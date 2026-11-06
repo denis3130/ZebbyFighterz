@@ -137,3 +137,26 @@ function hitOnce(move) {
   }
   throw new Error('no hit from ' + move);
 }
+
+// HUD helpers (Task 10). startFight = a versus match (seed 1) past the intro; comboG(n) (n <= 4) = side 0 lands an n-hit combo
+// on side 1 in __VF.G.S, tapping through __VF.frame (the input override) until the defender's combo counter reaches n, then
+// lets go (the defender is still in hitstun); barScale(id) = the element's current scaleX from its transform.
+function startFight() { __VF.startMatch('versus', {seed: 1}); skipIntro(); }
+function comboG(n) {
+  startFight(); nearG();
+  const S = __VF.G.S, IN = __VF.IN, taps = [B.P, B.K, B.P, B.P];   // chain p1 k1 p2 p3 (taps only, no heavy)
+  // one tap per hit still to come, each tapped as soon as the one before has landed (it waits in the input buffer and
+  // chains), so no buffered tap lands an extra hit after the n-th
+  let t = 0;
+  for (let i = 0; i < 400 && F(S, 1).combo < n; i++) {
+    let p = 0;
+    if (t === 0 || (F(S, 1).combo === t && t < n)) { p = taps[t++]; nearG(); }   // pushback would otherwise carry the defender out of reach
+    IN.override[0] = p; __VF.frame(1);
+  }
+  IN.override[0] = null;
+  if (F(S, 1).combo < n) throw new Error('combo of ' + n + ' not reached');
+}
+function barScale(id) {
+  const m = new DOMMatrix(getComputedStyle($(id)).transform);
+  return m.a;
+}

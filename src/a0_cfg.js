@@ -63,4 +63,7 @@ const CFG={
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
   // of the projectile's white core, halo and coloured rim.
   fx:{on:true, flashMs:60, squashMs:110, squash:[1.1,.9], shakeHeavy:[.06,180], shakeKO:[.12,400], spark:{light:.45, heavy:.95, block:.6, hold:.4}, proj:{core:.36, halo:.8, rim:.95}},
+  // HUD (frames): chipDelay = wait before the red lost part of a bar drains, chipRate = bars drained per second,
+  // comboHide = how long the combo counter stays after its combo ends.
+  hud:{chipDelay:30, chipRate:.8, comboHide:60},
 };

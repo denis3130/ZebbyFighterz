@@ -31,8 +31,67 @@ html,body{margin:0;height:100%;background:var(--dark);color:var(--ink);overflow:
 #tS{background:rgba(255,122,26,.55);border-color:var(--yellow)}
 #tK{margin-bottom:14px}
 .tBtn.down{transform:scale(.9);filter:brightness(1.5)}
+/* HUD: one block per side (0 = Ren left, 1 = Kael right, mirrored), timer in the middle, energy at the bottom corners
+   (under the health bar on short screens, so it stays clear of the touch controls), combo counter and banner on top of the fight */
+#hud{visibility:hidden;--ptr:polygon(0 0,100% 0,100% 62%,82% 100%,0 100%);--ptr1:polygon(0 0,100% 0,100% 100%,18% 100%,0 62%)}
+#hud.on{visibility:visible}
+#hudTop{position:absolute;left:calc(env(safe-area-inset-left) + 10px);right:calc(env(safe-area-inset-right) + 10px);top:calc(env(safe-area-inset-top) + 6px);display:flex;align-items:flex-start;gap:4px}
+.hs{flex:1;min-width:0;display:flex;gap:6px;align-items:flex-start}
+.hs.r{flex-direction:row-reverse}
+.face{flex:none;width:58px;height:50px;background:var(--ink);clip-path:var(--ptr);padding:2px}
+.hs.r .face{clip-path:var(--ptr1)}
+.face i{display:block;width:100%;height:100%;background:var(--dark) center/cover no-repeat;clip-path:var(--ptr)}
+.hs.r .face i{clip-path:var(--ptr1);transform:scaleX(-1)}
+.hmid{flex:1;min-width:0}
+.nm{font-size:15px;letter-spacing:.06em;line-height:1;margin:1px 8px 2px;text-shadow:0 1px 3px #000}
+.hs.r .nm{text-align:right}
+.bar{position:relative;height:18px;background:rgba(20,18,28,.7);border:2px solid var(--ink);transform:skewX(-20deg);overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.hs.r .bar{transform:skewX(20deg)}
+.bar i{position:absolute;inset:0;transform-origin:100% 50%}
+.hs.r .bar i{transform-origin:0 50%}
+.chip{background:#e23a2a}
+.fill{background:linear-gradient(180deg,#ffe27a,var(--yellow) 45%,#ff9f1a)}
+.pips{display:flex;gap:4px;margin:3px 10px 0;height:7px}
+.hs.r .pips{justify-content:flex-end}
+.pips i{width:16px;height:7px;background:rgba(20,18,28,.7);border:1px solid var(--ink);transform:skewX(-20deg)}
+.pips i.on{background:var(--orange);border-color:var(--yellow)}
+.mw{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 10px);display:flex;align-items:center;gap:8px}
+.mw.l{left:calc(env(safe-area-inset-left) + 14px)}
+.mw.r{right:calc(env(safe-area-inset-right) + 14px);flex-direction:row-reverse}
+.lvl{font-family:'Bebas Neue',sans-serif;font-style:italic;font-size:44px;line-height:1;min-width:26px;text-align:center;text-shadow:0 2px 4px #000,0 0 8px rgba(53,216,255,.5)}
+.mt{display:flex;gap:4px;transform:skewX(-20deg)}
+.mw.r .mt{transform:skewX(20deg)}
+.mt i{position:relative;display:block;width:48px;height:12px;background:rgba(20,18,28,.7);border:2px solid var(--ink);overflow:hidden}
+.mt b{position:absolute;inset:0;background:linear-gradient(180deg,#9cf0ff,var(--cyan));transform-origin:0 50%}
+.mw.r .mt b{transform-origin:100% 50%}
+#timerBox{flex:none;position:relative;width:76px;height:50px;margin-top:-2px;display:flex;align-items:center;justify-content:center;background:var(--orange);clip-path:polygon(50% 0,64% 10%,100% 0,90% 50%,100% 100%,64% 90%,50% 100%,36% 90%,0 100%,10% 50%,0 0,36% 10%)}
+#timerBox::before{content:'';position:absolute;inset:4px;background:var(--dark);clip-path:polygon(50% 0,64% 10%,92% 8%,86% 50%,92% 92%,64% 90%,50% 100%,36% 90%,8% 92%,14% 50%,8% 8%,36% 10%)}
+#timer{position:relative;font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:1;letter-spacing:.02em}
+.combo{position:absolute;top:calc(env(safe-area-inset-top) + 92px);left:calc(env(safe-area-inset-left) + 14px);display:none;align-items:flex-end;gap:6px;text-shadow:0 2px 5px #000}
+.combo.r{left:auto;right:calc(env(safe-area-inset-right) + 14px);flex-direction:row-reverse}
+.combo.on{display:flex}
+.combo b{font-family:'Bebas Neue',sans-serif;font-size:64px;line-height:.85;color:var(--orange);-webkit-text-stroke:2px #fff2d0;paint-order:stroke fill;transform-origin:50% 80%}
+.combo i{font-size:22px;line-height:1;margin-bottom:4px;letter-spacing:.04em}
+.combo.bump b{animation:hudBump .22s ease-out}
+@keyframes hudBump{0%{transform:scale(1.7) skewX(-8deg)}100%{transform:scale(1) skewX(-8deg)}}
+#banner{position:absolute;left:0;right:0;top:34%;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:84px;line-height:1;letter-spacing:.05em;color:var(--ink);text-shadow:0 0 18px rgba(255,122,26,.8),0 4px 0 var(--orange),0 6px 14px #000;transform:skewX(-8deg);display:none}
+#banner.on{display:block;animation:hudBanner .35s cubic-bezier(.2,1.3,.4,1) backwards}
+@keyframes hudBanner{0%{opacity:0;transform:skewX(-8deg) scale(1.9)}100%{opacity:1;transform:skewX(-8deg) scale(1)}}
+@media (max-height:480px){
+.face{width:48px;height:42px}.bar{height:14px}.nm{font-size:13px}.lvl{font-size:22px;min-width:14px}
+#timerBox{width:64px;height:42px}#timer{font-size:32px}
+.hmid{position:relative}.mw{position:static;margin:3px 8px 0}.mt i{width:34px;height:8px}.pips{position:absolute;right:10px;bottom:3px;margin:0}.hs.r .pips{right:auto;left:10px}
+.combo{top:calc(env(safe-area-inset-top) + 66px)}.combo b{font-size:48px}.combo i{font-size:18px}
+#banner{font-size:60px}
+}
 </style>
-<div id="app"><canvas id="game"></canvas><div id="hud"></div><div id="ui"><div id="touch">
+<div id="app"><canvas id="game"></canvas><div id="hud"><div id="hudTop">
+<div class="hs" id="hs0"><div class="face"><i id="face0"></i></div><div class="hmid"><div class="nm" id="name0"></div><div class="bar"><i class="chip" id="hpChip0"></i><i class="fill" id="hpFill0"></i></div><div class="pips" id="wins0"><i></i><i></i></div><div class="mw l"><div class="lvl" id="lvl0">0</div><div class="mt" id="meter0"><i><b></b></i><i><b></b></i><i><b></b></i></div></div></div></div>
+<div id="timerBox"><div id="timer"></div></div>
+<div class="hs r" id="hs1"><div class="face"><i id="face1"></i></div><div class="hmid"><div class="nm" id="name1"></div><div class="bar"><i class="chip" id="hpChip1"></i><i class="fill" id="hpFill1"></i></div><div class="pips" id="wins1"><i></i><i></i></div><div class="mw r"><div class="lvl" id="lvl1">0</div><div class="mt" id="meter1"><i><b></b></i><i><b></b></i><i><b></b></i></div></div></div></div>
+</div>
+<div class="combo" id="combo0"><b></b><i>COLPI</i></div><div class="combo r" id="combo1"><b></b><i>COLPI</i></div>
+<div id="banner"></div></div><div id="ui"><div id="touch">
 <div id="stickZone"><div id="stickBase" class="idle"><div id="stickKnob"></div></div></div>
 <div id="cluster">
 <div class="tRow">
@@ -116,6 +175,9 @@ const CFG={
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
   // of the projectile's white core, halo and coloured rim.
   fx:{on:true, flashMs:60, squashMs:110, squash:[1.1,.9], shakeHeavy:[.06,180], shakeKO:[.12,400], spark:{light:.45, heavy:.95, block:.6, hold:.4}, proj:{core:.36, halo:.8, rim:.95}},
+  // HUD (frames): chipDelay = wait before the red lost part of a bar drains, chipRate = bars drained per second,
+  // comboHide = how long the combo counter stays after its combo ends.
+  hud:{chipDelay:30, chipRate:.8, comboHide:60},
 };
 
 // Fight simulation core: buttons, state, seeded generator, the fixed step, physics, pushboxes, facing, and hits
@@ -1763,12 +1825,98 @@ function fxShakeApply() {
   return true;
 }
 
+// HUD (DOM, reads the sim state, never changes it). hudEvents(S) runs once per sim step and counts in frames: the red
+// "chip" part of a health bar and the combo counter's lifetime. hudUpdate(S) runs once per drawn frame and only writes the
+// DOM when a value changed.
+const HUD = {S: null, chip: [1, 1], hold: [0, 0], hp: [1, 1], combo: [], el: {}, dom: {}};
+function hudInit() {
+  const e = HUD.el;
+  for (const id of ['face0', 'face1', 'name0', 'name1', 'hpFill0', 'hpFill1', 'hpChip0', 'hpChip1', 'timer', 'wins0', 'wins1',
+    'combo0', 'combo1', 'meter0', 'meter1', 'lvl0', 'lvl1', 'banner', 'hud']) e[id] = document.getElementById(id);
+  e.face0.style.backgroundImage = 'url(' + ASSETS['ui/ren_face.jpg'] + ')';
+  e.face1.style.backgroundImage = 'url(' + ASSETS['ui/kael_face.jpg'] + ')';
+  HUD.seg = [0, 1].map(i => [...e['meter' + i].querySelectorAll('b')]);
+  HUD.pip = [0, 1].map(i => [...e['wins' + i].children]);
+  hudReset(null);
+}
+// A new match (a new S) starts from full bars and no counters.
+function hudReset(S) {
+  HUD.S = S; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
+  HUD.combo = [{n: 0, last: 0, left: 0, seq: 0}, {n: 0, last: 0, left: 0, seq: 0}];
+}
+// One sim step. combo[a] = the combo side a is landing on side 1-a: shown from the 2nd hit, hidden hud.comboHide frames after it ends.
+function hudEvents(S) {
+  if (HUD.S !== S) hudReset(S);
+  const H = CFG.hud;
+  for (let d = 0; d < 2; d++) {
+    const D = fighterOf(S, d), fill = D.hp / CFG.body.hp, k = HUD.combo[1 - d], c = D.combo;
+    if (fill < HUD.hp[d]) HUD.hold[d] = H.chipDelay;          // hp lost (hit or chip damage): the red part waits
+    HUD.hp[d] = fill;
+    if (c > 0) HUD.hold[d] = H.chipDelay;                     // ...and keeps waiting while the combo goes on
+    if (HUD.chip[d] < fill) HUD.chip[d] = fill;               // healed or refilled: no red part
+    else if (HUD.hold[d] > 0) HUD.hold[d]--;
+    else HUD.chip[d] = Math.max(fill, HUD.chip[d] - H.chipRate / 60);
+    if (c > 0 && c < k.n) k.n = 0;                            // a new combo while the old counter lingers
+    if (c >= 2 && c !== k.n) { k.n = c; k.seq++; }
+    if (c === 0 && k.last > 0) k.left = H.comboHide;
+    else if (c === 0 && k.left > 0 && --k.left === 0) k.n = 0;
+    k.last = c;
+  }
+}
+function hudSet(id, prop, v) {   // write the DOM only when the value changed
+  const key = id + prop;
+  if (HUD.dom[key] === v) return;
+  HUD.dom[key] = v;
+  if (prop === 't') HUD.el[id].textContent = v;
+  else if (prop === 'x') HUD.el[id].style.transform = 'scaleX(' + v + ')';
+  else if (prop === 'on') HUD.el[id].classList.toggle('on', v);
+}
+function hudBanner(S) {
+  if (S.phase === 'intro') return 'ROUND ' + S.round;
+  if (S.phase === 'fight') return S.pf < 40 ? 'COMBATTI!' : '';
+  if (S.phase === 'ko') return 'K.O.';
+  if (S.phase === 'timeup') return 'TEMPO!';
+  if (S.phase === 'end') return S.winner === 2 ? 'PAREGGIO' : 'VINCE ' + fighterOf(S, S.winner).char.toUpperCase() + '!';
+  return '';
+}
+function hudUpdate(S) {
+  if (!S) return;
+  if (HUD.S !== S) hudReset(S);
+  hudSet('hud', 'on', true);
+  const e = HUD.el, M = CFG.body.meterMax / 3;
+  for (let i = 0; i < 2; i++) {
+    const F = fighterOf(S, i), k = HUD.combo[i];
+    hudSet('name' + i, 't', F.char.toUpperCase());
+    hudSet('hpFill' + i, 'x', Math.max(0, Math.min(1, F.hp / CFG.body.hp)).toFixed(3));
+    hudSet('hpChip' + i, 'x', Math.max(0, Math.min(1, HUD.chip[i])).toFixed(3));
+    HUD.pip[i].forEach((p, j) => { const on = S.wins[i] > j; if (HUD.dom['p' + i + j] !== on) { HUD.dom['p' + i + j] = on; p.classList.toggle('on', on); } });
+    hudSet('lvl' + i, 't', String(Math.min(3, Math.floor(F.meter / M))));
+    HUD.seg[i].forEach((b, j) => { const v = Math.max(0, Math.min(1, (F.meter - j * M) / M)).toFixed(2); if (HUD.dom['s' + i + j] !== v) { HUD.dom['s' + i + j] = v; b.style.transform = 'scaleX(' + v + ')'; } });
+    const f = fighterOf(S, 1 - i), shown = k.n >= 2 && (f.combo > 0 || k.left > 0);
+    hudSet('combo' + i, 'on', shown);
+    if (shown && HUD.dom['cs' + i] !== k.seq) {      // one bump per hit: restart the CSS animation with a reflow
+      HUD.dom['cs' + i] = k.seq;
+      const c = e['combo' + i];
+      c.firstChild.textContent = k.n;
+      c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump');
+    }
+  }
+  hudSet('timer', 't', S.timer < 0 ? '∞' : String(Math.ceil(S.timer / 60)));
+  const b = hudBanner(S), key = b + S.round + S.phase;
+  if (b === '') hudSet('banner', 'on', false);
+  else {
+    if (HUD.dom.bk !== key) { HUD.dom.bk = key; e.banner.textContent = b; e.banner.classList.remove('on'); void e.banner.offsetWidth; e.banner.classList.add('on'); HUD.dom.banneron = true; }
+    hudSet('banner', 'on', true);
+  }
+}
+
 // Entry point: game state, the fixed step and boot. Later tasks add the full real-time loop (tick) and the menus.
 const G={state:'boot',mode:null,S:null,acc:0,last:0};
 // Input first, then the renderer: the title comes only once the arena's textures are decoded.
-function boot(){inputInit();renderInit().then(()=>{G.state='title';requestAnimationFrame(drawLoop);});}
+function boot(){inputInit();hudInit();renderInit().then(()=>{G.state='title';requestAnimationFrame(drawLoop);});}
 // Until the full loop (tick) exists: every animation frame redraws the title or the fight; the sim does not step here.
-function drawLoop(now){if(G.state==='fight'||G.state==='title') renderFrame(G.S,now);requestAnimationFrame(drawLoop);}
+function drawLoop(now){if(G.state==='fight'||G.state==='title') renderFrame(G.S,now);
+  if(G.state==='fight') hudUpdate(G.S);requestAnimationFrame(drawLoop);}
 // One game step: read the inputs (player 1 is the dummy in training), advance the sim, hand its events to the effects and the HUD.
 function stepGame(now){
   const S=G.S;
@@ -1783,6 +1931,7 @@ function frame(n){
   const now=performance.now();
   for(let i=0;i<n;i++) stepGame(now);
   if(typeof renderFrame==='function') renderFrame(G.S,now);
+  if(typeof hudUpdate==='function') hudUpdate(G.S);
 }
 function startMatch(mode,o){
   o=o||{};

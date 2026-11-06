@@ -17,7 +17,7 @@ T.test('charge glow shows from chargeShow and grows', () => { __VF.startMatch('v
   T.feed(S,2,B.P,0); __VF.renderFrame(S,1000); T.eq(glow()[0],0); T.feed(S,2,B.P,0); __VF.renderFrame(S,1016); const a=glow(); T.eq(a[0],1); T.feed(S,5,B.P,0); __VF.renderFrame(S,1032); T.ok(glow()[1]>a[1]*.9); T.feed(S,30,0,0); __VF.renderFrame(S,1100); T.eq(glow()[0],0); });
 T.test('KO gives a full-screen white flash for 120 ms and a big shake', () => { __VF.fxUpdate(__VF.FX.now+1000); __VF.startMatch('versus',{seed:1}); skipIntro(); nearG(); const S=__VF.G.S; __VF.fighterOf(S,1).hp=1; let t=50000;
   for(let i=0;i<60&&!S.ev.some(e=>e.t==='ko');i++){ __VF.simStep(S,i===0?B.P:0,0); __VF.fxEvents(S,t); t+=16; }
-  T.ok(S.ev.some(e=>e.t==='ko'),'no ko'); t-=16; __VF.fxUpdate(t); const el=document.querySelector('#hud div'); T.ok(parseFloat(el.style.opacity)>.9); T.near(__VF.FX.shake.amp,.12,.001);
+  T.ok(S.ev.some(e=>e.t==='ko'),'no ko'); t-=16; __VF.fxUpdate(t); const el=__VF.FX.el; T.ok(parseFloat(el.style.opacity)>.9); T.near(__VF.FX.shake.amp,.12,.001);
   __VF.fxUpdate(t+130); T.eq(parseFloat(el.style.opacity),0); });
 function CFG0() { return __VF.CFG; }
 T.test('a heavy spark is much bigger than a light one on the spawn frame', () => { const sz=()=>{ let m=0; __VF.FX.sparks.forEach(s=>{ m=Math.max(m,s.sp.scale.x); }); return m; };
