@@ -29,3 +29,9 @@ window.T = (() => {
     },
   };
 })();
+
+// Shared helpers of the fight-logic suites (sim, attack, guard, round): B = buttons,
+// N(opts) = new versus sim (seed 1, Ren vs Kael, opts override), F(S, i) = active fighter of side i.
+const B = __VF.BTN;
+function N(opts) { return __VF.simCreate(Object.assign({seed: 1, mode: 'versus', chars: ['ren', 'kael']}, opts)); }
+function F(S, i) { return __VF.fighterOf(S, i); }
