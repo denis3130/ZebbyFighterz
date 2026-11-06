@@ -7,6 +7,20 @@ Rispondi sempre a Denis **in italiano**, con messaggi brevi e chiari (spesso usa
 - Logica di combattimento deterministica a 60 passi fissi (serve per l'online futuro); la grafica legge lo stato e non lo cambia.
 - Tutti i numeri di bilanciamento in `src/a0_cfg.js` (oggetto `CFG`).
 
+## Struttura, build e test
+- `src/` contiene i moduli, uniti da `mk.sh` (ordine dei file in `FILES`) tramite `build.py` in `game_w.html` (versione di test, con `window.__VF`) e in `index.html` (versione giocabile, un solo file con le immagini incorporate).
+- Build: `bash mk.sh` (deve stampare `SYNTAX_OK`).
+- Test: `python3 tests/run.py tests/<file>.test.js [--viewport WxH] [--touch] [--mobile] [--seed N]`. File: smoke sim attack guard round input touch render fighter3d feel hud menu orient perf. L'elenco completo dei comandi è in `docs/HANDOFF.md`, "Build e test".
+  - Servono `pip install playwright` e un browser Chromium (il runner usa Chrome o Chromium di sistema se c'è).
+  - `three.min.js` (r128) è nel repository: i test lo usano al posto del CDN.
+- Leggi per primo `docs/HANDOFF.md`: stato, decisioni e prossimo passo.
+
+## Pubblicare
+- Pagina giocabile: (link dopo la pubblicazione)
+- Lancia `bash mk.sh`, poi pubblica `index.html` con lo strumento Artifact (un solo file, icona `game`) su quell'URL.
+- Prima di pubblicare: tutti i test verdi e nessun errore nella console.
+- Il ramo `tappa1-basi` si unisce a `main` solo dopo la prova di Denis.
+
 ## Regole di lavoro di Denis
 - Giochi completi e curati: niente emoji al posto della grafica, niente combattimenti fatti solo di numeri.
 - Tappe piccole e verificabili: dopo ogni tappa una versione giocabile.
