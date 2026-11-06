@@ -19,7 +19,7 @@ function frame(n){
 function startMatch(mode,o){
   o=o||{};
   G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
-  G.mode=mode; G.state='fight';
+  G.mode=mode; G.state='fight'; touchShow(true);
 }
-window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,inputInit,inputRead,inputAssign,IN};
+window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,inputInit,inputRead,inputAssign,IN,touchShow};
 boot();

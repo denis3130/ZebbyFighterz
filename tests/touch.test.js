@@ -1,4 +1,8 @@
-T.test('touch controls are shown', () => { for(const id of ['tP','tK','tS','tDash','tGuard','stickZone']) T.ok(vis(id), id); });
+T.test('touch controls are hidden before a match and after touchShow(false), which releases held buttons', () => {
+  T.ok(!vis('tP'), 'hidden at start');
+  __VF.touchShow(true); T.ok(vis('tP'), 'shown'); pd('tP',0,0,30); T.eq(__VF.inputRead(0)&B.P, B.P);
+  __VF.touchShow(false); T.ok(!vis('tP') && !vis('stickZone'), 'hidden again'); T.eq(__VF.inputRead(0), 0); T.ok(!$('tP').classList.contains('down')); });
+T.test('touch controls are shown', () => { __VF.startMatch('training',{seed:1,dummy:'fermo'}); for(const id of ['tP','tK','tS','tDash','tGuard','stickZone']) T.ok(vis(id), id); });
 T.test('stick right and up', () => { pd('stickZone',100,250,1); pm('stickZone',160,200,1); T.eq(__VF.inputRead(0)&(B.R|B.U), B.R|B.U); pu('stickZone',160,200,1); T.eq(__VF.inputRead(0),0); });
 T.test('stick thresholds and knob clamp', () => {
   pd('stickZone',100,250,1); pm('stickZone',100+20,250,1); T.eq(__VF.inputRead(0), 0, 'inside dead zone');

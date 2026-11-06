@@ -69,10 +69,16 @@ function inputStickMove(e){
   inTouch.stickBits=b; inputTouchSync(); inputStickDraw({x:s.ox,y:s.oy},dx,dy);
 }
 function inputCapture(el,id){ try{ el.setPointerCapture(id); }catch(_){} }
+// The touch overlay is shown only on touch devices and only while touchShow(true) (a fight); hiding releases everything held.
+let inTouchOn=false;
+function touchShow(on){
+  const coarse=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||navigator.maxTouchPoints>0;
+  inTouchOn=!!on;
+  const root=document.getElementById('touch'); if(root) root.classList.toggle('on',inTouchOn&&!!coarse);
+  if(!inTouchOn) inputReleaseAll();
+}
 function inputInitTouch(){
   const root=document.getElementById('touch'); if(!root) return;
-  const coarse=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||navigator.maxTouchPoints>0;
-  root.classList.toggle('on',!!coarse);
   const zone=document.getElementById('stickZone');
   zone.addEventListener('pointerdown',e=>{
     if(inTouch.stick) return;
