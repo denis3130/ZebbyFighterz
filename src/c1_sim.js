@@ -171,13 +171,14 @@ function isBlocking(F, height) {
 }
 
 // End of the step: both fighters are checked before either hit lands, so two moves can trade on the same frame.
-// Then the throws and the projectiles.
+// Then the throws and the projectiles. A held fighter whose thrower got hit meanwhile (a projectile can) is released.
 function contactPhase(S, fs) {
   const id0 = fs[0].act, id1 = fs[1].act, p0 = touchPoint(fs[0], fs[1]), p1 = touchPoint(fs[1], fs[0]);
   if (p0) fs[0].hit = resolveHit(S, fs[0], fs[1], CFG.moves[id0], id0, p0, fs[0].face);
   if (p1) fs[1].hit = resolveHit(S, fs[1], fs[0], CFG.moves[id1], id1, p1, fs[1].face);
   throwPhase(S, fs);
   projectilePhase(S, fs);
+  for (const D of fs) if (D.act === 'thrown' && !(fs[1 - D.side].act === 'thr' && fs[1 - D.side].hit)) setAct(D, 'idle');
 }
 
 // Move m (id in the events: a move, 'spec' or 'thr') of A touches D, pushing the way dir points. Returns 1 for a
