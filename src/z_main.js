@@ -1,6 +1,6 @@
 // Entry point: game state, the fixed step and boot. Later tasks add the real-time loop, input and rendering.
 const G={state:'boot',mode:null,S:null,acc:0,last:0};
-function boot(){G.state='title';}
+function boot(){inputInit();G.state='title';}
 // One game step: read the inputs (player 1 is the dummy in training), advance the sim, hand its events to the effects and the HUD.
 function stepGame(now){
   const S=G.S;
@@ -21,5 +21,5 @@ function startMatch(mode,o){
   G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
   G.mode=mode; G.state='fight';
 }
-window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame};
+window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,inputInit,inputRead,inputAssign,IN};
 boot();

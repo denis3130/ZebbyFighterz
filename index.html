@@ -9,9 +9,42 @@ html,body{margin:0;height:100%;background:var(--dark);color:var(--ink);overflow:
 #app{position:fixed;inset:0;background:var(--dark)}
 #game{position:absolute;inset:0;width:100%;height:100%;display:block}
 #hud,#ui{position:absolute;inset:0;pointer-events:none}
-#ui{pointer-events:auto}
+#ui{pointer-events:none}
+/* touch controls: stick bottom-left (floating), attack buttons bottom-right, as in docs/ref/riferimento-stile.png */
+#touch{position:absolute;inset:0;display:none;pointer-events:none}
+#touch.on{display:block}
+#stickZone{position:absolute;left:0;bottom:0;width:40%;height:70%;pointer-events:auto;touch-action:none}
+#stickBase{position:absolute;width:112px;height:112px;border-radius:50%;background:rgba(20,18,28,.45);border:2px solid rgba(244,241,234,.55);pointer-events:none}
+#stickBase.idle{left:calc(env(safe-area-inset-left) + 44px);bottom:26px;opacity:.55}
+#stickKnob{position:absolute;left:26px;top:26px;width:56px;height:56px;border-radius:50%;background:rgba(244,241,234,.5);border:2px solid rgba(244,241,234,.85)}
+#cluster{position:absolute;right:calc(env(safe-area-inset-right) + 14px);bottom:calc(env(safe-area-inset-bottom) + 12px);display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.tRow{display:flex;gap:10px;align-items:flex-end}
+.tBtn{pointer-events:auto;touch-action:none;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--ink);
+  background:rgba(20,18,28,.55);border:2px solid rgba(244,241,234,.7);box-shadow:0 2px 8px rgba(0,0,0,.4);
+  font-size:13px;letter-spacing:.04em;line-height:1;transition:transform .06s,filter .06s}
+.tBtn svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.tBtn span{pointer-events:none}
+.tRound{width:76px;height:76px;border-radius:50%;gap:3px}
+.tPill{width:118px;height:44px;border-radius:22px;flex-direction:row;gap:6px}
+.tPill svg{width:22px;height:22px}
+#tS{background:rgba(255,122,26,.55);border-color:var(--yellow)}
+#tK{margin-bottom:14px}
+.tBtn.down{transform:scale(.9);filter:brightness(1.5)}
 </style>
-<div id="app"><canvas id="game"></canvas><div id="hud"></div><div id="ui"></div></div>
+<div id="app"><canvas id="game"></canvas><div id="hud"></div><div id="ui"><div id="touch">
+<div id="stickZone"><div id="stickBase" class="idle"><div id="stickKnob"></div></div></div>
+<div id="cluster">
+<div class="tRow">
+<div id="tP" class="tBtn tRound"><svg viewBox="0 0 24 24"><path d="M7 11V7a1.6 1.6 0 0 1 3.2 0v1.5M10.2 8.5V6a1.6 1.6 0 0 1 3.2 0v2.5M13.4 8.5V6.5a1.6 1.6 0 0 1 3.2 0V10M16.6 10V9a1.6 1.6 0 0 1 3.2 0v4.5c0 4-2.6 6.5-6.3 6.5H12c-3 0-5-2-5.6-4.5L5 12.5a1.5 1.5 0 0 1 2.4-1.5z"/></svg><span>PUGNO</span></div>
+<div id="tK" class="tBtn tRound"><svg viewBox="0 0 24 24"><path d="M9 3h5l.5 8 5 3.5c1.2.9 1 3-.5 3H6.5C5.5 17.5 5 16.5 5 15.5L7 11z"/><path d="M5 20.5h14"/></svg><span>CALCIO</span></div>
+<div id="tS" class="tBtn tRound"><svg viewBox="0 0 24 24"><path d="M12 2.5c.5 3.5 5.5 6 5.5 11a5.5 5.5 0 0 1-11 0c0-2 1-3.5 2-4.5.2 1.5 1 2.3 2 2.5C10 8 11 5 12 2.5z"/></svg><span>SPEC</span></div>
+</div>
+<div class="tRow">
+<div id="tDash" class="tBtn tPill"><svg viewBox="0 0 24 24"><circle cx="14.5" cy="4.5" r="2"/><path d="M13 8l-3 4 3 2.5-1.5 5.5M10 12l-4 1M13 8l4 2.5 3-.5M13 14.5l4 2"/><path d="M2 8h3M1 12h3"/></svg><span>SCATTO</span></div>
+<div id="tGuard" class="tBtn tPill"><svg viewBox="0 0 24 24"><path d="M12 2.5l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10v-6z"/></svg><span>GUARDIA</span></div>
+</div>
+</div>
+</div></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -655,9 +688,115 @@ function dummyInput(S, side) {
   return DUMMY_ACTS[d.act](fighterOf(S, side));
 }
 
+// Input layer: two keyboard sets, up to two gamepads and the on-screen touch controls, each reduced to one integer of
+// BTN bits per player. Devices are OR-ed together; opposite directions (SOCD) are left to the sim.
+const IN={override:[null,null],keys:new Set(),pads:[],touchBits:0,assign:null};
+const IN_KEYS=[   // keyboard set 0 = G1 (WASD), set 1 = G2 (arrows + numpad)
+  {KeyW:BTN.U,KeyS:BTN.D,KeyA:BTN.L,KeyD:BTN.R,KeyJ:BTN.P,KeyK:BTN.K,KeyL:BTN.S,KeyU:BTN.DASH,KeyI:BTN.GUARD},
+  {ArrowUp:BTN.U,ArrowDown:BTN.D,ArrowLeft:BTN.L,ArrowRight:BTN.R,Numpad1:BTN.P,Numpad2:BTN.K,Numpad3:BTN.S,Numpad4:BTN.DASH,Numpad5:BTN.GUARD}];
+const IN_PAD_BTN=[[2,BTN.P],[0,BTN.K],[1,BTN.S],[5,BTN.DASH],[4,BTN.GUARD],[12,BTN.U],[13,BTN.D],[14,BTN.L],[15,BTN.R]];   // standard mapping
+const IN_DEAD=.45, IN_STICK_R=56;
+const IN_TOUCH_BTN={tP:BTN.P,tK:BTN.K,tS:BTN.S,tDash:BTN.DASH,tGuard:BTN.GUARD};
+const inTouch={btn:new Map(),stick:null,stickBits:0};   // btn: pointerId -> button id; stick: {id, ox, oy}
+
+function inputPoll(){
+  const l=navigator.getGamepads?navigator.getGamepads():[];
+  IN.pads=[];
+  for(let i=0;l&&i<l.length;i++) IN.pads[i]=l[i]&&l[i].connected!==false?l[i]:null;
+}
+function inputPadBits(g){
+  let b=0;
+  for(const [i,bit] of IN_PAD_BTN) if(g.buttons[i]&&(g.buttons[i].pressed||g.buttons[i].value>.5)) b|=bit;
+  const x=g.axes[0]||0, y=g.axes[1]||0;
+  if(x<-IN_DEAD) b|=BTN.L; if(x>IN_DEAD) b|=BTN.R; if(y<-IN_DEAD) b|=BTN.U; if(y>IN_DEAD) b|=BTN.D;
+  return b;
+}
+function inputRead(p){
+  if(IN.override[p]!==null&&IN.override[p]!==undefined) return IN.override[p];
+  const a=IN.assign[p]; let b=0;
+  for(const set of a.kb) for(const c of IN.keys) b|=IN_KEYS[set][c]||0;
+  inputPoll();
+  if(a.pad!==null&&IN.pads[a.pad]) b|=inputPadBits(IN.pads[a.pad]);
+  if(a.touch) b|=IN.touchBits;
+  return b;
+}
+// mode 'training' | 'versus'; chooser 'kb' | 'touch' | {pad:i} = the device that confirmed "2 Giocatori" (becomes G1).
+function inputAssign(mode,chooser){
+  if(mode==='training'){
+    IN.assign=[{kb:[0,1],pad:0,touch:true},{kb:[],pad:null,touch:false}]; return;
+  }
+  inputPoll();
+  const own=chooser&&typeof chooser==='object'?chooser.pad:null;
+  let free=null;
+  for(let i=0;i<IN.pads.length&&free===null;i++) if(IN.pads[i]&&i!==own) free=i;
+  IN.assign=[{kb:[0],pad:own,touch:true},{kb:[1],pad:free,touch:false}];
+}
+function inputReleaseAll(){
+  IN.keys.clear(); inTouch.btn.clear(); inTouch.stick=null; inTouch.stickBits=0; inputTouchSync(); inputStickDraw(null,0,0);
+}
+function inputTouchSync(){
+  let b=inTouch.stickBits; const held=new Set(inTouch.btn.values());
+  for(const id in IN_TOUCH_BTN){
+    if(held.has(id)) b|=IN_TOUCH_BTN[id];
+    const e=document.getElementById(id); if(e) e.classList.toggle('down',held.has(id));
+  }
+  IN.touchBits=b;
+}
+// Draws the stick: o = {x,y} origin in the zone (null = idle spot), (dx,dy) = knob offset in px.
+function inputStickDraw(o,dx,dy){
+  const base=document.getElementById('stickBase'), knob=document.getElementById('stickKnob'), zone=document.getElementById('stickZone');
+  if(!base) return;
+  base.classList.toggle('idle',!o);
+  if(o){ const r=zone.getBoundingClientRect(); base.style.left=(o.x-r.left-IN_STICK_R)+'px'; base.style.top=(o.y-r.top-IN_STICK_R)+'px'; }
+  else { base.style.left=''; base.style.top=''; }
+  knob.style.transform='translate('+dx+'px,'+dy+'px)';
+}
+function inputStickMove(e){
+  const s=inTouch.stick; let dx=e.clientX-s.ox, dy=e.clientY-s.oy;
+  const d=Math.hypot(dx,dy); if(d>IN_STICK_R){ dx*=IN_STICK_R/d; dy*=IN_STICK_R/d; }
+  const nx=dx/IN_STICK_R, ny=dy/IN_STICK_R; let b=0;
+  if(ny<-IN_DEAD) b|=BTN.U; if(ny>IN_DEAD) b|=BTN.D; if(nx<-IN_DEAD) b|=BTN.L; if(nx>IN_DEAD) b|=BTN.R;
+  inTouch.stickBits=b; inputTouchSync(); inputStickDraw({x:s.ox,y:s.oy},dx,dy);
+}
+function inputCapture(el,id){ try{ el.setPointerCapture(id); }catch(_){} }
+function inputInitTouch(){
+  const root=document.getElementById('touch'); if(!root) return;
+  const coarse=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||navigator.maxTouchPoints>0;
+  root.classList.toggle('on',!!coarse);
+  const zone=document.getElementById('stickZone');
+  zone.addEventListener('pointerdown',e=>{
+    if(inTouch.stick) return;
+    e.preventDefault(); inputCapture(zone,e.pointerId);
+    inTouch.stick={id:e.pointerId,ox:e.clientX,oy:e.clientY}; inputStickMove(e);
+  });
+  zone.addEventListener('pointermove',e=>{ if(inTouch.stick&&inTouch.stick.id===e.pointerId){ e.preventDefault(); inputStickMove(e); } });
+  const stickEnd=e=>{ if(inTouch.stick&&inTouch.stick.id===e.pointerId){ inTouch.stick=null; inTouch.stickBits=0; inputTouchSync(); inputStickDraw(null,0,0); } };
+  for(const t of ['pointerup','pointercancel','lostpointercapture']) zone.addEventListener(t,stickEnd);
+  for(const id in IN_TOUCH_BTN){
+    const el=document.getElementById(id);
+    el.addEventListener('pointerdown',e=>{ e.preventDefault(); inputCapture(el,e.pointerId); inTouch.btn.set(e.pointerId,id); inputTouchSync(); });
+    const end=e=>{ if(inTouch.btn.get(e.pointerId)===id){ inTouch.btn.delete(e.pointerId); inputTouchSync(); } };
+    for(const t of ['pointerup','pointercancel','lostpointercapture']) el.addEventListener(t,end);
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+  }
+}
+function inputInit(){
+  inputAssign('training');
+  window.addEventListener('keydown',e=>{
+    if(!IN_KEYS[0][e.code]&&!IN_KEYS[1][e.code]) return;
+    e.preventDefault(); IN.keys.add(e.code);
+  });
+  window.addEventListener('keyup',e=>{
+    if(!IN_KEYS[0][e.code]&&!IN_KEYS[1][e.code]) return;
+    e.preventDefault(); IN.keys.delete(e.code);
+  });
+  window.addEventListener('blur',inputReleaseAll);
+  inputInitTouch();
+}
+
 // Entry point: game state, the fixed step and boot. Later tasks add the real-time loop, input and rendering.
 const G={state:'boot',mode:null,S:null,acc:0,last:0};
-function boot(){G.state='title';}
+function boot(){inputInit();G.state='title';}
 // One game step: read the inputs (player 1 is the dummy in training), advance the sim, hand its events to the effects and the HUD.
 function stepGame(now){
   const S=G.S;

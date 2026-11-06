@@ -53,3 +53,37 @@ function comboPPPH(S) {
   }
   T.feed(S, 12, B.P, 0); T.feed(S, 40, 0, 0);
 }
+
+// Input helpers (Task 6). key/keyUp/keyUpAll = keyboard events on window; fakePads(list) replaces navigator.getGamepads
+// (each entry in the compact form {buttons:{2:1}, axes:[-.9,0]}; [] = no pads); pd/pm/pu/fire = PointerEvents on an element.
+const _held = new Set();
+function key(code) { _held.add(code); window.dispatchEvent(new KeyboardEvent('keydown', {code, bubbles: true, cancelable: true})); }
+function keyUp(code) { _held.delete(code); window.dispatchEvent(new KeyboardEvent('keyup', {code, bubbles: true, cancelable: true})); }
+function keyUpAll() { for (const c of [..._held]) keyUp(c); }
+const _realPads = navigator.getGamepads ? navigator.getGamepads.bind(navigator) : null;
+function fakePads(list) {
+  if (!list.length) { Object.defineProperty(navigator, 'getGamepads', {value: () => [], configurable: true}); return; }
+  const pads = list.map(p => {
+    const buttons = Array.from({length: 17}, (_, i) => ({pressed: !!(p.buttons && p.buttons[i]), value: p.buttons && p.buttons[i] ? 1 : 0}));
+    const a = p.axes || [], axes = [a[0] || 0, a[1] || 0, a[2] || 0, a[3] || 0];
+    return {connected: true, buttons, axes};
+  });
+  Object.defineProperty(navigator, 'getGamepads', {value: () => pads, configurable: true});
+}
+function $(id) { return document.getElementById(id); }
+function vis(id) {
+  const e = $(id); if (!e) return false;
+  const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+  return r.width > 0 && r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden';
+}
+function txt(id) { return $(id) ? $(id).textContent.trim() : ''; }
+function fire(id, type, x, y, pointerId) {
+  $(id).dispatchEvent(new PointerEvent(type, {pointerId: pointerId === undefined ? 1 : pointerId, clientX: x, clientY: y,
+    bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true}));
+}
+function pd(id, x, y, pointerId) { fire(id, 'pointerdown', x, y, pointerId); }
+function pm(id, x, y, pointerId) { fire(id, 'pointermove', x, y, pointerId); }
+function pu(id, x, y, pointerId) { fire(id, 'pointerup', x, y, pointerId); }
+// skipIntro = play the 100-frame intro of __VF.G.S; nearG = the two fighters of __VF.G.S at -350 / +350.
+function skipIntro() { __VF.frame(__VF.CFG.round.intro); }
+function nearG() { const S = __VF.G.S; __VF.fighterOf(S, 0).x = -350; __VF.fighterOf(S, 1).x = 350; }
