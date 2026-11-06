@@ -1,5 +1,5 @@
 // Renderer: the WebGL canvas, the side camera, the painted backdrop with the flowing waterfall, drifting leaves, the
-// fighters' blob shadows and toScreen. Graphics only: it reads the sim state and never writes it.
+// fighters (e_fighter3d.js), their blob shadows and toScreen. Graphics only: it reads the sim state and never writes it.
 // The 3D world is in metres: x = F.x/1000, y = F.y/1000, z = 0 (side 0 at +0.05, side 1 at -0.05); the camera looks
 // along -z without pitch. The backdrop is a full-screen quad drawn first, with its own camera, so the 3D scene
 // (fighters, leaves, shadows) draws over it.
@@ -89,8 +89,9 @@ function renderInit() {
         uStreak: {value: a.streak}, uWobble: {value: a.wobble}}});
     const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ARENA.mat);
     bg.frustumCulled = false; RD.bgScene.add(bg);
-    rdLeavesBuild(); rdShadowsBuild();
+    rdLeavesBuild(); rdShadowsBuild(); rdFightersBuild();
     renderer.initTexture(map); renderer.initTexture(mask);
+    renderer.compile(scene, camera);   // the fighters' shaders now, not on the first frame of a fight
     window.addEventListener('resize', renderResize);
     renderResize();
   });
@@ -105,10 +106,10 @@ function renderResize() {
   rdCamApply(); rdPlace();
 }
 
-// Draws S (null = no match: the empty arena) at nowMs: camera, backdrop, leaves, shadows, then the 3D scene.
+// Draws S (null = no match: the empty arena) at nowMs: camera, backdrop, leaves, shadows, fighters, then the 3D scene.
 function renderFrame(S, nowMs) {
   ARENA.mat.uniforms.uTime.value = nowMs / 1000;
-  rdCamStep(S); rdPlace(); rdLeavesStep(nowMs); rdShadowsStep(S);
+  rdCamStep(S); rdPlace(); rdLeavesStep(nowMs); rdShadowsStep(S); f3Sync(S);
   renderer.clear();
   renderer.render(RD.bgScene, RD.bgCam);
   renderer.render(scene, camera);
@@ -222,4 +223,11 @@ function rdShadowsStep(S) {
     m.position.set(F.x / 1000, .005, i ? -.05 : .05);
     m.scale.set(RD_SHADOW.w * k, 1, RD_SHADOW.d * k);
   }
+}
+
+// --- Fighters ---
+// The two placeholder fighters (side 0 Ren, side 1 Kael; F3D) and the light they are shaded by.
+function rdFightersBuild() {
+  scene.add(...f3Lights());
+  for (const c of ['ren', 'kael']) { const it = fighterBuild(c); F3D.push(it); scene.add(it.root); }
 }
