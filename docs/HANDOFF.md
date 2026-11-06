@@ -41,7 +41,7 @@ python3 tests/run.py tests/orient.test.js --viewport 390x844 --touch --mobile
 ## Valori misurati (6/11/2026, Chromium headless con SwiftShader, `tests/perf.test.js`)
 - Logica: **0,0022 ms per fotogramma** (limite del test 0,3 ms).
 - Disegno + logica: **1,96 ms per fotogramma** in headless (solo di riferimento: non è un telefono).
-- Durata del round con la sequenza di prova: **709 fotogrammi con hitstop, 709 senza** (fotogrammi congelati 141 contro 0). Il KO cade sullo stesso fotogramma perché la sequenza è fissa e il tempo guadagnato dal congelamento coincide con il ritmo delle catene; l'hitstop non allunga il round.
+- Durata del round (sonda `tests/perf.test.js`: attaccante solo corpo a corpo, senza speciale né presa, contro un avversario fermo; 5 sfasamenti della sequenza, ognuno con e senza hitstop): **KO in media dopo 1070 fotogrammi con hitstop (734-1280) contro 988 senza (734-1143)**, cioè circa 82 fotogrammi (1,4 s) in più. L'hitstop congela in media il 14% dei fotogrammi. Il KO arriva in tutte e 10 le prove. Attenzione: è una sequenza a tempi fissi, non una partita vera, e con soli 5 sfasamenti la differenza varia molto da una prova all'altra; mostra l'ordine di grandezza, non una misura precisa. Una prima sonda con lo speciale dava 709 contro 709 solo perché il colpo finale era il proiettile lanciato a un fotogramma fisso: un caso fortuito, da non usare.
 - **FPS sul telefono: ancora da misurare** con `?fps=1` (mostra `#fps`). Obiettivo 60 su un telefono di fascia media.
 
 ## Prova a mano (6/11/2026, Playwright)
