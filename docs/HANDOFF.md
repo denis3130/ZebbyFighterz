@@ -1,5 +1,7 @@
 # Passaggio di consegne — aggiornato il 6 novembre 2026
 
+- **Registro dell'esecuzione**: `docs/superpowers/plans/2026-11-06-voidrise-tappa1-basi.ledger.md` (ogni decisione presa, con il suo costo, e i punti minori rimandati).
+
 ## Dove siamo
 - **Tappa 1 "Basi del combattimento" finita** (Task 1-12 del piano `docs/superpowers/plans/2026-11-06-voidrise-tappa1-basi.md`), sul ramo `tappa1-basi`, più le correzioni della revisione finale (vedi sotto). **Non è ancora unita a `main`**: si unisce solo dopo la prova di Denis.
 - Che cosa c'è: allenamento contro un manichino (fermo o casuale), 2 giocatori in locale, arena "La Grande Cascata", due lottatori provvisori (Ren e Kael, cel-shading) con la stessa tabella di mosse, comandi su touch, tastiera (2 set) e controller, HUD, menu, pausa, fine partita, "gira il telefono".
