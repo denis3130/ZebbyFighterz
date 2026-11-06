@@ -9,4 +9,31 @@ const CFG={
   dash:{f:{n:18, v0:170, v1:40}, b:{n:20, v0:150, v1:30}, tap:10},   // speed eases from v0 to v1 over n frames; tap = double-tap window
   input:{hold:12, chargeShow:4, both:3, buffer:8},
   phys:{pushFric:2},
+  combo:{scaleFrom:3, scaleStep:10, minScale:30, decayFrom:6, decay:1, minStun:6, juggleMax:6, lift:60},
+  stop:{light:6, mid:8, heavy:11, spec:8, thr:10, ko:40, blockLight:5, blockHeavy:8},
+  meter:{hit:1, block:.5, taken:.5},
+  knock:{ground:36, getup:16, roll:22, rollDist:1300},
+  // The plan's move table. s/a/r = startup/active/recovery frames (r 'land' = until landing, then jump.landAtk);
+  // hs/bs = hitstun/blockstun; h = height; box = [x0,x1,y0,y1] mm, x forward from the centre, y from the feet;
+  // push = pushback speed of the one hit; stop = hitstop class. Chains, once the move has touched: tapP/tapK = move
+  // for a P/K tap, heavy = true (any heavy of the posture) or a list, spec = into the Special, jc = super jump (hit only).
+  // limb = model part that must sit in the box (Task 8). Effects: knock (knocked down with vx, vy), launch (juggle with
+  // vx, vy), airKnock (knocked down, airborne opponent only), spike (slammed down with vx, vy, airborne opponent only).
+  moves:{
+    p1:{s:4, a:2, r:7, dmg:30, hs:14, bs:10, h:'mid', box:[200,700,900,1550], push:24, stop:'light', tapP:'p2', tapK:'k1', heavy:true, spec:true, limb:'handL'},
+    p2:{s:5, a:3, r:9, dmg:35, hs:15, bs:11, h:'mid', box:[200,760,900,1550], push:24, stop:'light', tapP:'p3', tapK:'k1', heavy:true, spec:true, limb:'handR'},
+    p3:{s:7, a:3, r:14, dmg:50, hs:18, bs:12, h:'mid', box:[200,780,900,1500], push:35, stop:'mid', heavy:true, spec:true, limb:'handL'},
+    k1:{s:6, a:3, r:10, dmg:40, hs:15, bs:11, h:'mid', box:[200,820,700,1100], push:24, stop:'light', tapP:'p2', tapK:'k2', heavy:true, spec:true, limb:'footL'},
+    k2:{s:8, a:3, r:15, dmg:55, hs:18, bs:12, h:'mid', box:[250,900,1100,1500], push:30, stop:'mid', heavy:true, spec:true, limb:'footR'},
+    hp:{s:12, a:4, r:18, dmg:90, hs:22, bs:15, h:'mid', box:[250,900,900,1550], push:40, stop:'heavy', heavy:['chk'], spec:true, limb:'handR'},
+    hk:{s:14, a:4, r:20, dmg:100, bs:16, h:'mid', box:[300,1000,1000,1600], stop:'heavy', spec:true, limb:'footR', knock:true, vx:70, vy:70},
+    cp:{s:5, a:2, r:8, dmg:25, hs:13, bs:10, h:'mid', box:[200,700,700,1000], push:22, stop:'light', tapP:'p2', tapK:'ck', heavy:true, spec:true, limb:'handR'},
+    ck:{s:6, a:3, r:10, dmg:30, hs:14, bs:10, h:'low', box:[250,900,0,300], push:24, stop:'light', heavy:true, spec:true, limb:'footL'},
+    chp:{s:9, a:4, r:20, dmg:80, hs:20, bs:14, h:'mid', box:[150,650,1300,2100], push:30, stop:'heavy', spec:true, limb:'handR', airKnock:{vx:30, vy:50}},
+    chk:{s:11, a:4, r:22, dmg:70, bs:14, h:'mid', box:[200,700,800,1900], stop:'heavy', spec:true, jc:true, limb:'footR', launch:true, vx:10, vy:160},
+    jp:{s:5, a:4, r:'land', dmg:40, hs:15, bs:10, h:'high', box:[150,600,300,900], push:20, stop:'light', tapK:'jk', heavy:true, limb:'handR'},
+    jk:{s:6, a:5, r:'land', dmg:45, hs:16, bs:11, h:'high', box:[150,700,-300,500], push:20, stop:'light', heavy:true, limb:'footR'},
+    jhp:{s:10, a:4, r:'land', dmg:75, hs:20, bs:13, h:'high', box:[150,700,0,800], push:20, stop:'heavy', limb:'handR', spike:true, vx:0, vy:-120},
+    jhk:{s:11, a:5, r:'land', dmg:80, hs:21, bs:14, h:'high', box:[150,800,-400,400], push:20, stop:'heavy', limb:'footR'},
+  },
 };

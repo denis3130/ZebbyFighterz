@@ -35,3 +35,14 @@ window.T = (() => {
 const B = __VF.BTN;
 function N(opts) { return __VF.simCreate(Object.assign({seed: 1, mode: 'versus', chars: ['ren', 'kael']}, opts)); }
 function F(S, i) { return __VF.fighterOf(S, i); }
+// near(S) = the fighters 700 mm apart (x -350 / +350), in range of the light attacks.
+function near(S) { F(S, 0).x = -350; F(S, 1).x = 350; }
+// comboPPPH(S) = P tapped three times, each tap in the chain window of the move before (it lands during that move's
+// hitstop and waits in the buffer), then P held 12 frames for the heavy: p1 p2 p3 hp, damage 30+35+45+72.
+function comboPPPH(S) {
+  for (let i = 0; i < 3; i++) {
+    T.feed(S, 1, B.P, 0); T.feed(S, 1, 0, 0);
+    for (let j = 0; j < 30 && !S.ev.some(e => e.t === 'hit'); j++) T.feed(S, 1, 0, 0);
+  }
+  T.feed(S, 12, B.P, 0); T.feed(S, 40, 0, 0);
+}
