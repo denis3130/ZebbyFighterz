@@ -160,3 +160,21 @@ function barScale(id) {
   const m = new DOMMatrix(getComputedStyle($(id)).transform);
   return m.a;
 }
+
+// Menu helpers (Task 11). clickText(text) = click the visible menu button (or button) whose text contains `text`;
+// padTick() = run the menu's controller polling once (the real loop does it every frame); endMatch(winner) = drive the
+// running match to phase 'end' with that winner (0, 1 or 2 = draw) and let the loop react once.
+function clickText(text) {
+  const els = [...document.querySelectorAll('.mb,button')].filter(e => {
+    const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+    return r.width > 0 && r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && e.textContent.includes(text);
+  });
+  if (!els.length) throw new Error('no visible button with "' + text + '"');
+  els[0].click();
+}
+function padTick() { __VF.menuPad(); }
+function endMatch(winner) {
+  const S = __VF.G.S;
+  S.phase = 'end'; S.winner = winner;
+  __VF.tick(performance.now());
+}

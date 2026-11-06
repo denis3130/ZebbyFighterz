@@ -87,6 +87,44 @@ html,body{margin:0;height:100%;background:var(--dark);color:var(--ink);overflow:
 .combo{top:calc(env(safe-area-inset-top) + 66px)}.combo b{font-size:48px}.combo i{font-size:18px}
 #banner{font-size:60px}
 }
+/* menus: one screen at a time inside #ui (title, pause, end), slanted buttons as in docs/ref/riferimento-stile.png */
+.scr{position:absolute;inset:0;display:none;pointer-events:auto;touch-action:none;flex-direction:column;justify-content:center;padding:calc(env(safe-area-inset-top) + 14px) calc(env(safe-area-inset-right) + 28px) calc(env(safe-area-inset-bottom) + 14px) calc(env(safe-area-inset-left) + 36px)}
+.scr.on{display:flex}
+#title{align-items:flex-start;background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.72) 46%,rgba(14,12,22,.08) 100%);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+#pause,#end{align-items:center;background:rgba(14,12,22,.62)}
+#end{background:radial-gradient(ellipse at 50% 55%,rgba(14,12,22,.78),rgba(14,12,22,.4))}
+.logo{position:relative;margin-bottom:22px;line-height:.9}
+.l1{position:relative;display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:104px;letter-spacing:.03em;transform:skewX(-10deg);text-shadow:0 4px 0 var(--orange),0 8px 18px rgba(0,0,0,.7);padding-right:30px}
+.l1::after{content:'';position:absolute;right:0;top:-6%;width:12px;height:112%;background:var(--orange);transform:skewX(-14deg);box-shadow:0 0 14px rgba(255,122,26,.8)}
+.l2{font-family:'Bebas Neue',sans-serif;font-size:46px;letter-spacing:.42em;color:var(--orange);transform:skewX(-10deg);margin-top:2px;text-shadow:0 2px 8px rgba(0,0,0,.7)}
+.mcol{display:flex;flex-direction:column;gap:10px;width:min(470px,64vw)}
+.mh{font-family:'Bebas Neue',sans-serif;font-size:64px;line-height:1;letter-spacing:.08em;margin:0 0 14px;text-shadow:0 0 18px rgba(255,122,26,.8),0 4px 0 var(--orange),0 6px 14px #000;transform:skewX(-8deg)}
+#endTitle{font-size:92px;margin-bottom:22px}
+.mb{position:relative;display:flex;align-items:center;gap:14px;height:52px;padding:0 24px;border:2px solid rgba(244,241,234,.38);background:rgba(20,18,28,.8);color:var(--ink);font-size:24px;letter-spacing:.06em;line-height:1;white-space:nowrap;cursor:pointer;transform:skewX(-14deg);transition:transform .08s,filter .08s,background .08s}
+.mb>*{transform:skewX(14deg)}
+.mb[hidden]{display:none}
+.mb.f{background:linear-gradient(180deg,#ffa347,var(--orange));border-color:#ffe2b8;color:#1a1008;box-shadow:0 0 0 3px rgba(255,122,26,.35),0 4px 16px rgba(0,0,0,.55);transform:skewX(-14deg) translateX(10px)}
+.mb:active{transform:skewX(-14deg) scale(.95);filter:brightness(1.15)}
+.ic{display:flex;width:30px;height:30px;flex:none}
+.ic svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic .t{display:none;fill:currentColor;stroke:none}
+.mb.f .ic .a{display:none}
+.mb.f .ic .t{display:block}
+#rotate{position:absolute;inset:0;z-index:9;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:var(--dark);pointer-events:auto;touch-action:none;text-align:center;padding:24px}
+#rotate.on{display:flex}
+#rotate svg{width:120px;height:120px;fill:none;stroke:var(--orange);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;animation:mnTurn 2.4s ease-in-out infinite}
+#rotate p{margin:0;font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:.06em}
+@keyframes mnTurn{0%,15%{transform:rotate(0)}55%,100%{transform:rotate(-90deg)}}
+#tPause{position:absolute;left:50%;margin-left:-21px;top:calc(env(safe-area-inset-top) + 58px);width:42px;height:34px;display:none;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;cursor:pointer;color:var(--ink);background:rgba(20,18,28,.6);border:2px solid rgba(244,241,234,.7);transform:skewX(-14deg);transition:transform .06s,filter .06s}
+#tPause.on{display:flex}
+#tPause:active{transform:skewX(-14deg) scale(.9);filter:brightness(1.5)}
+#tPause svg{width:18px;height:18px;fill:currentColor;transform:skewX(14deg);pointer-events:none}
+#fps{position:absolute;left:4px;top:2px;display:none;font:11px/1.2 monospace;font-style:normal;font-weight:400;color:#9cf0ff;text-shadow:0 1px 2px #000;pointer-events:none}
+#fps.on{display:block}
+@media (max-height:480px){
+.logo{margin-bottom:14px}.l1{font-size:72px}.l2{font-size:30px}.mb{height:44px;font-size:21px}.mh{font-size:48px;margin-bottom:8px}#endTitle{font-size:68px;margin-bottom:14px}
+#tPause{top:calc(env(safe-area-inset-top) + 50px);height:30px}
+}
 </style>
 <div id="app"><canvas id="game"></canvas><div id="hud"><div id="hudTop">
 <div class="hs" id="hs0"><div class="face"><i id="face0"></i></div><div class="hmid"><div class="nm" id="name0"></div><div class="bar"><i class="chip" id="hpChip0"></i><i class="fill" id="hpFill0"></i></div><div class="pips" id="wins0"><i></i><i></i></div><div class="mw l"><div class="lvl" id="lvl0">0</div><div class="mt" id="meter0"><i><b></b></i><i><b></b></i><i><b></b></i></div></div></div></div>
@@ -94,7 +132,32 @@ html,body{margin:0;height:100%;background:var(--dark);color:var(--ink);overflow:
 <div class="hs r" id="hs1"><div class="face"><i id="face1"></i></div><div class="hmid"><div class="nm" id="name1"></div><div class="bar"><i class="chip" id="hpChip1"></i><i class="fill" id="hpFill1"></i></div><div class="pips" id="wins1"><i></i><i></i></div><div class="mw r"><div class="lvl" id="lvl1">0</div><div class="mt" id="meter1"><i><b></b></i><i><b></b></i><i><b></b></i></div></div></div></div>
 </div>
 <div class="combo" id="combo0"><b></b><i>COLPI</i></div><div class="combo r" id="combo1"><b></b><i>COLPI</i></div>
-<div id="banner"></div></div><div id="ui"><div id="touch">
+<div id="banner"></div></div><div id="ui"><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3.5v17l14-8.5z"/></symbol>
+<symbol id="i-one" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.6"/><path d="M5 21c0-4.4 3.1-7.2 7-7.2s7 2.8 7 7.2"/></symbol>
+<symbol id="i-two" viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><path d="M2 20c0-3.6 2.6-6 6-6s6 2.4 6 6"/><circle cx="17" cy="8.5" r="2.6"/><path d="M15.5 14.4c.5-.1 1-.2 1.5-.2 3 0 5 2 5 5.8"/></symbol>
+<symbol id="i-redo" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 3v5h-5"/></symbol>
+<symbol id="i-dummy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></symbol>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></symbol>
+</defs></svg>
+<div id="title" class="scr"><div class="logo"><div class="l1">VOIDRISE</div><div class="l2">FIGHTERS</div></div><div class="mcol">
+<div class="mb" role="button" data-act="train"><span class="ic"><svg class="a"><use href="#i-one"/></svg><svg class="t"><use href="#i-play"/></svg></span><span>1 GIOCATORE · ALLENAMENTO</span></div>
+<div class="mb" role="button" data-act="vs"><span class="ic"><svg class="a"><use href="#i-two"/></svg><svg class="t"><use href="#i-play"/></svg></span><span>2 GIOCATORI</span></div>
+</div></div>
+<div id="pause" class="scr"><div class="mh">PAUSA</div><div class="mcol">
+<div class="mb" role="button" data-act="resume"><span class="ic"><svg class="a"><use href="#i-play"/></svg><svg class="t"><use href="#i-play"/></svg></span><span>RIPRENDI</span></div>
+<div class="mb" role="button" data-act="restart"><span class="ic"><svg class="a"><use href="#i-redo"/></svg><svg class="t"><use href="#i-play"/></svg></span><span>RICOMINCIA</span></div>
+<div class="mb" role="button" data-act="opp" id="bOpp"><span class="ic"><svg class="a"><use href="#i-dummy"/></svg><svg class="t"><use href="#i-play"/></svg></span><span id="oppTx">AVVERSARIO: FERMO</span></div>
+<div class="mb" role="button" data-act="menu"><span class="ic"><svg class="a"><use href="#i-home"/></svg><svg class="t"><use href="#i-play"/></svg></span><span>TORNA AL MENU</span></div>
+</div></div>
+<div id="end" class="scr"><div class="mh" id="endTitle"></div><div class="mcol">
+<div class="mb" role="button" data-act="rematch"><span class="ic"><svg class="a"><use href="#i-redo"/></svg><svg class="t"><use href="#i-play"/></svg></span><span>RIVINCITA</span></div>
+<div class="mb" role="button" data-act="menu"><span class="ic"><svg class="a"><use href="#i-home"/></svg><svg class="t"><use href="#i-play"/></svg></span><span>MENU</span></div>
+</div></div>
+<div id="tPause" role="button" aria-label="Pausa"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></div>
+<div id="rotate"><svg viewBox="0 0 48 48"><rect x="14" y="5" width="20" height="38" rx="4"/><path d="M21 38h6"/><path d="M40 14c3 2.6 4 6 4 10M44 24l-3-3M44 24l3-3" transform="translate(-4 0)"/></svg><p>Gira il telefono in orizzontale</p></div>
+<div id="fps"></div>
+<div id="touch">
 <div id="stickZone"><div id="stickBase" class="idle"><div id="stickKnob"></div></div></div>
 <div id="cluster">
 <div class="tRow">
@@ -181,6 +244,7 @@ const CFG={
   // HUD (frames): chipDelay = wait before the red lost part of a bar drains, chipRate = bars drained per second,
   // comboHide = how long the combo counter stays after its combo ends.
   hud:{chipDelay:30, chipRate:.8, comboHide:60},
+  loop:{maxSteps:4},   // real-time loop: at most this many fixed steps per drawn frame
 };
 
 // Fight simulation core: buttons, state, seeded generator, the fixed step, physics, pushboxes, facing, and hits
@@ -1913,13 +1977,179 @@ function hudUpdate(S) {
   }
 }
 
+// Menus and the game cycle around the fight: title, pause, end screen, navigation (keyboard, controller, touch, mouse),
+// "gira il telefono", full screen, auto-pause and the ?fps=1 counter. Reads the sim, never changes it.
+// One screen at a time inside #ui; one focused button per screen (class 'f', orange like the reference).
+const MN = {scr: null, focus: {}, rot: false, ptype: 'mouse', pad: [], fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
+const MN_SCREENS = ['title', 'pause', 'end'];
+const MN_REPEAT = [350, 130];   // controller direction held: ms before the first repeat, ms between repeats
+
+function mnEl(id) { return document.getElementById(id); }
+function mnTouchDevice() { return (window.matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0; }
+function mnButtons(id) { return [...mnEl(id).querySelectorAll('.mb')].filter(b => !b.hidden); }
+function mnSeed() { return (Math.random() * 1e9) | 0; }
+
+// The pause screen's opponent button exists only in training; its label shows the current dummy.
+function mnPauseRefresh() {
+  mnEl('bOpp').hidden = G.mode !== 'training';
+  mnEl('oppTx').textContent = 'AVVERSARIO: ' + (G.S && G.S.dummy === 'casuale' ? 'CASUALE' : 'FERMO');
+}
+function mnFocus(i) {
+  const bs = mnButtons(MN.scr); if (!bs.length) return;
+  i = Math.max(0, Math.min(bs.length - 1, i)); MN.focus[MN.scr] = i;
+  mnEl(MN.scr).querySelectorAll('.mb').forEach(b => b.classList.toggle('f', b === bs[i]));
+}
+// id = 'title' | 'pause' | 'end' | null (no screen). A newly shown screen focuses its first button.
+function showScreen(id) {
+  MN.scr = id;
+  for (const s of MN_SCREENS) mnEl(s).classList.toggle('on', s === id);
+  if (id === 'pause') mnPauseRefresh();
+  if (id) mnFocus(0);
+}
+// Puts everything on screen in line with G.state: the screen, the HUD (hidden on title and end), the pause button, the touch controls.
+function menuSync() {
+  const st = G.state, want = MN_SCREENS.includes(st) ? st : null;
+  if (want !== MN.scr) showScreen(want);
+  mnEl('hud').style.visibility = st === 'title' || st === 'end' ? 'hidden' : '';
+  mnEl('tPause').classList.toggle('on', st === 'fight' && !MN.rot);
+  mnEl('rotate').classList.toggle('on', MN.rot);
+  touchShow(st === 'fight' && !MN.rot);
+}
+const menu = {
+  pause() { if (G.state !== 'fight') return; G.state = 'pause'; menuSync(); },
+  resume() { if (G.state !== 'pause' || MN.rot) return; G.state = 'fight'; G.last = null; menuSync(); },
+  restart() { if (!G.S) return; startMatch(G.mode, {seed: mnSeed(), dummy: G.S.dummy}); },
+  toTitle() { G.state = 'title'; G.S = null; menuSync(); },
+};
+// The match is over (the sim reached phase 'end'): the end screen with the winner.
+function menuCheckEnd() {
+  const S = G.S; if (G.state !== 'fight' || !S || S.phase !== 'end') return;
+  mnEl('endTitle').textContent = S.winner === 2 ? 'PAREGGIO' : 'VINCE ' + fighterOf(S, S.winner).char.toUpperCase() + '!';
+  G.state = 'end'; menuSync();
+}
+function menuMove(dir) {
+  if (!MN.scr || MN.rot) return;
+  const bs = mnButtons(MN.scr), d = dir === 'up' || dir === 'left' || dir < 0 ? -1 : 1;
+  mnFocus((MN.focus[MN.scr] + d + bs.length) % bs.length);
+}
+// Phones: full screen and landscape lock on the first tap of a title button (unsupported on iOS: ignored).
+function mnFullscreen() {
+  const lock = () => { try { const p = screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'); if (p && p.catch) p.catch(() => {}); } catch (_) {} };
+  try { const el = document.documentElement, r = el.requestFullscreen && el.requestFullscreen(); if (r && r.then) r.then(lock, lock); else lock(); } catch (_) { lock(); }
+}
+function mnStart(mode, dev) {
+  inputAssign(mode, dev);   // whoever confirms is G1
+  startMatch(mode, {seed: mnSeed(), dummy: 'fermo'});
+}
+// dev = the device that confirmed: 'kb' (keyboard and mouse), 'touch' or {pad:i}.
+function menuPress(dev) {
+  if (!MN.scr || MN.rot) return;
+  const b = mnButtons(MN.scr)[MN.focus[MN.scr]]; if (!b) return;
+  dev = dev || 'kb';
+  const act = b.dataset.act;
+  if (MN.scr === 'title' && dev === 'touch') mnFullscreen();
+  if (act === 'train') mnStart('training', dev);
+  else if (act === 'vs') mnStart('versus', dev);
+  else if (act === 'resume') menu.resume();
+  else if (act === 'restart' || act === 'rematch') menu.restart();
+  else if (act === 'opp') { G.S.dummy = G.S.dummy === 'casuale' ? 'fermo' : 'casuale'; mnPauseRefresh(); }
+  else if (act === 'menu') menu.toTitle();
+}
+// Esc / B: fight -> pause, pause -> resume, end -> title.
+function menuBack() {
+  if (MN.rot) return;
+  if (G.state === 'fight') menu.pause(); else if (G.state === 'pause') menu.resume(); else if (G.state === 'end') menu.toTitle();
+}
+// Controller, once per frame: Start pauses; in the menus the d-pad or left stick moves (one step per press, repeating
+// while held), A confirms, B goes back. Presses are edges against the previous poll.
+function menuPad() {
+  const l = navigator.getGamepads ? navigator.getGamepads() : [], now = performance.now();
+  for (let i = 0; i < Math.max(l ? l.length : 0, MN.pad.length); i++) {
+    const g = l && l[i];
+    if (!g || g.connected === false) { MN.pad[i] = null; continue; }
+    const p = MN.pad[i] || (MN.pad[i] = {b: {}, dir: 0, at: 0}), down = n => !!(g.buttons[n] && (g.buttons[n].pressed || g.buttons[n].value > .5));
+    const edge = n => { const d = down(n), e = d && !p.b[n]; p.b[n] = d; return e; };
+    const a = edge(0), b = edge(1), start = edge(9), ax = g.axes[0] || 0, ay = g.axes[1] || 0;
+    const dir = down(12) || down(14) || ay < -.5 || ax < -.5 ? -1 : down(13) || down(15) || ay > .5 || ax > .5 ? 1 : 0;
+    if (start) { if (G.state === 'fight') menu.pause(); else if (G.state === 'pause') menu.resume(); continue; }
+    if (G.state === 'fight' || !MN.scr) { p.dir = dir; continue; }
+    if (dir && (dir !== p.dir || now >= p.at)) { menuMove(dir); p.at = now + MN_REPEAT[dir === p.dir ? 1 : 0]; }
+    p.dir = dir;
+    if (a) menuPress({pad: i}); else if (b) menuBack();
+  }
+}
+// "Gira il telefono": touch device held upright. A fight pauses; the menus are covered.
+function menuOrient() {
+  MN.rot = mnTouchDevice() && window.innerHeight > window.innerWidth;
+  if (MN.rot && G.state === 'fight') G.state = 'pause';
+  menuSync();
+}
+// ?fps=1: FPS, average sim ms per step and render ms per frame, refreshed every 500 ms.
+function menuFps(now, simMs, steps, drawMs) {
+  const f = MN.fps; if (!f.on) return;
+  f.frames++; f.sim += simMs; f.steps += steps; f.draw += drawMs;
+  if (!f.t) f.t = now;
+  if (now - f.t < 500) return;
+  mnEl('fps').textContent = 'FPS ' + Math.round(f.frames * 1000 / (now - f.t)) + ' · sim ' + (f.steps ? f.sim / f.steps : 0).toFixed(2) + ' ms · disegno ' + (f.draw / f.frames).toFixed(1) + ' ms';
+  f.t = now; f.frames = f.sim = f.steps = f.draw = 0;
+}
+function menuInit() {
+  const scr = document.querySelectorAll('.scr .mb');
+  window.addEventListener('pointerdown', e => { MN.ptype = e.pointerType === 'touch' ? 'touch' : 'kb'; }, true);
+  scr.forEach(b => {
+    b.addEventListener('click', e => {
+      e.preventDefault(); if (!MN.scr || MN.rot) return;
+      mnFocus(mnButtons(MN.scr).indexOf(b)); menuPress(MN.ptype);
+    });
+    b.addEventListener('pointermove', e => { if (e.pointerType !== 'touch' && MN.scr) mnFocus(mnButtons(MN.scr).indexOf(b)); });
+  });
+  mnEl('tPause').addEventListener('click', menu.pause);
+  window.addEventListener('keydown', e => {
+    const c = e.code;
+    if (c === 'Escape') { if (!e.repeat) menuBack(); e.preventDefault(); return; }
+    if (G.state === 'fight' || !MN.scr) return;
+    const mv = {ArrowUp: 'up', KeyW: 'up', ArrowLeft: 'left', KeyA: 'left', ArrowDown: 'down', KeyS: 'down', ArrowRight: 'right', KeyD: 'right'}[c];
+    if (mv) { menuMove(mv); e.preventDefault(); }
+    else if (c === 'Enter' || c === 'Space' || c === 'KeyJ') { if (!e.repeat) menuPress('kb'); e.preventDefault(); }
+  });
+  window.addEventListener('resize', menuOrient);
+  window.addEventListener('orientationchange', menuOrient);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { menu.pause(); G.last = null; } });
+  window.addEventListener('gamepaddisconnected', e => {
+    const i = e && e.gamepad ? e.gamepad.index : undefined;
+    if (G.state === 'fight' && IN.assign && IN.assign.some(a => a.pad !== null && (i === undefined || a.pad === i))) menu.pause();
+  });
+  MN.fps.on = /[?&]fps=1\b/.test(location.search);
+  mnEl('fps').classList.toggle('on', MN.fps.on);
+}
+
 // Entry point: game state, the fixed step and boot. Later tasks add the full real-time loop (tick) and the menus.
-const G={state:'boot',mode:null,S:null,acc:0,last:0};
+const G={state:'boot',mode:null,S:null,acc:0,last:null};
 // Input first, then the renderer: the title comes only once the arena's textures are decoded.
-function boot(){inputInit();hudInit();renderInit().then(()=>{G.state='title';requestAnimationFrame(drawLoop);});}
-// Until the full loop (tick) exists: every animation frame redraws the title or the fight; the sim does not step here.
-function drawLoop(now){if(G.state==='fight'||G.state==='title') renderFrame(G.S,now);
-  if(G.state==='fight') hudUpdate(G.S);requestAnimationFrame(drawLoop);}
+function boot(){inputInit();hudInit();menuInit();renderInit().then(()=>{G.state='title';menuOrient();requestAnimationFrame(loop);});}
+// The animation-frame callback: the next frame is scheduled first, and an exception in one frame is reported, not fatal.
+function loop(now){requestAnimationFrame(loop);try{tick(now);}catch(e){console.error(e);}}
+// The real-time cycle: an accumulator of 1000/60 ms feeds stepGame (at most CFG.loop.maxSteps per tick, the rest of a
+// long stall is dropped), then one render and one HUD update. Steps only in a fight, and only with a known last time
+// (the first tick after a start or a resume just records it, so a pause is never caught up).
+function tick(now){
+  const dt=1000/60; let simMs=0,n=0;
+  menuPad();
+  if(G.state==='fight'&&G.S){
+    if(G.last===null){G.last=now;G.acc=0;}
+    else{
+      G.acc+=Math.min(now-G.last,250);G.last=now;
+      while(G.acc>=dt&&n<CFG.loop.maxSteps&&G.state==='fight'){
+        const t0=performance.now();stepGame(now);simMs+=performance.now()-t0;G.acc-=dt;n++;
+      }
+      if(G.acc>dt)G.acc=dt;
+    }
+  }
+  menuCheckEnd();
+  const t1=performance.now();
+  if(G.state!=='boot'){renderFrame(G.S,now);hudUpdate(G.S);}
+  menuFps(now,simMs,n,performance.now()-t1);
+}
 // One game step: read the inputs (player 1 is the dummy in training), advance the sim, hand its events to the effects and the HUD.
 function stepGame(now){
   const S=G.S;
@@ -1939,7 +2169,7 @@ function frame(n){
 function startMatch(mode,o){
   o=o||{};
   G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
-  G.mode=mode; G.state='fight'; touchShow(true);
+  G.mode=mode; G.state='fight'; G.acc=0; G.last=null; menuSync();
 }
 boot();
 

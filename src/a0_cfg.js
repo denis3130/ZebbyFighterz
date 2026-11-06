@@ -66,4 +66,5 @@ const CFG={
   // HUD (frames): chipDelay = wait before the red lost part of a bar drains, chipRate = bars drained per second,
   // comboHide = how long the combo counter stays after its combo ends.
   hud:{chipDelay:30, chipRate:.8, comboHide:60},
+  loop:{maxSteps:4},   // real-time loop: at most this many fixed steps per drawn frame
 };
