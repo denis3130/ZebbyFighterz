@@ -58,4 +58,8 @@ const CFG={
   arena:{footRow:.83, cover:1.1, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
   // Fighter animation (graphics only): blend = frames over which the pose eases into a new free or movement action.
   anim:{blend:5},
+  // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
+  // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
+  // duration ms], spark = size m of the hit spark (light, heavy, block).
+  fx:{on:true, flashMs:60, squashMs:110, squash:[1.1,.9], shakeHeavy:[.06,180], shakeKO:[.12,400], spark:{light:.35, heavy:.6, block:.3}},
 };

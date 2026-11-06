@@ -89,7 +89,7 @@ function renderInit() {
         uStreak: {value: a.streak}, uWobble: {value: a.wobble}}});
     const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ARENA.mat);
     bg.frustumCulled = false; RD.bgScene.add(bg);
-    rdLeavesBuild(); rdShadowsBuild(); rdFightersBuild();
+    rdLeavesBuild(); rdShadowsBuild(); rdFightersBuild(); fxBuild();
     renderer.initTexture(map); renderer.initTexture(mask);
     renderer.compile(scene, camera);   // the fighters' shaders now, not on the first frame of a fight
     window.addEventListener('resize', renderResize);
@@ -106,13 +106,16 @@ function renderResize() {
   rdCamApply(); rdPlace();
 }
 
-// Draws S (null = no match: the empty arena) at nowMs: camera, backdrop, leaves, shadows, fighters, then the 3D scene.
+// Draws S (null = no match: the empty arena) at nowMs: camera, backdrop, leaves, shadows, fighters, effects, then the 3D scene.
 function renderFrame(S, nowMs) {
   ARENA.mat.uniforms.uTime.value = nowMs / 1000;
   rdCamStep(S); rdPlace(); rdLeavesStep(nowMs); rdShadowsStep(S); f3Sync(S);
+  fxUpdate(nowMs, S);
   renderer.clear();
   renderer.render(RD.bgScene, RD.bgCam);
+  const shaken = fxShakeApply();   // the camera moves for this draw only: cam and toScreen stay as computed
   renderer.render(scene, camera);
+  if (shaken) rdCamApply();
 }
 
 // World point (metres) -> screen px {x, y} from the top left, through the camera as last placed.

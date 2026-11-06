@@ -104,3 +104,36 @@ function setViewport(w, h) {
   Object.defineProperty(window, 'innerWidth', {value: w, configurable: true});
   Object.defineProperty(window, 'innerHeight', {value: h, configurable: true});
 }
+
+// Feel helpers (Task 9). scripted(i) = a fixed, deterministic input for frame i (player 0): walks in, taps a chain, holds
+// P for a heavy, throws the Special, jumps and kicks, backs off; repeats every 200 frames.
+function scripted(i) {
+  const k = i % 200;
+  if (k < 20) return B.R;
+  if (k === 20 || k === 30 || k === 40) return B.P;
+  if (k >= 55 && k < 70) return B.P;
+  if (k === 90) return B.S;
+  if (k >= 110 && k < 114) return B.U | B.R;
+  if (k === 125 || k === 130) return B.K;
+  if (k >= 150 && k < 160) return B.L;
+  return 0;
+}
+// hitOnce(move) = one hit of `move` (default 'p1'; 'hp' = P held) through the real sim: the earlier effects expire first
+// (the fx clock jumps 1 s ahead), then a fresh versus match, the fighters close, P tapped or held until the hit event.
+// Every sim step gets fxEvents; the frame is drawn at the hit's time. Returns that time (ms of the fx clock).
+function hitOnce(move) {
+  move = move || 'p1';
+  const V = __VF, S0 = V.FX.now;
+  V.fxUpdate(S0 + 1000);
+  V.startMatch('versus', {seed: 1}); skipIntro(); nearG();
+  const S = V.G.S;
+  let t = V.FX.now + 100;
+  for (let i = 0; i < 60; i++) {
+    const held = move === 'hp' ? i < 12 : i === 0;
+    V.simStep(S, held ? B.P : 0, 0);
+    V.fxEvents(S, t);
+    if (S.ev.some(e => e.t === 'hit')) { V.renderFrame(S, t); return t; }
+    t += 16;
+  }
+  throw new Error('no hit from ' + move);
+}
