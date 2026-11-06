@@ -46,4 +46,13 @@ const CFG={
     jhp:{s:10, a:4, r:'land', dmg:75, hs:20, bs:13, h:'high', box:[150,700,0,800], push:20, stop:'heavy', limb:'handR', spike:true, vx:0, vy:-120},
     jhk:{s:11, a:5, r:'land', dmg:80, hs:21, bs:14, h:'high', box:[150,800,-400,400], push:20, stop:'heavy', limb:'footR'},
   },
+  // Side camera (graphics only, metres): fov = vertical degrees; dist from dist0 out to distMax so that both fighters
+  // fit with marginX each side and the highest head with marginTop above it; the ground always sits at footScreen of
+  // the screen height; smooth = share of the gap closed per drawn frame; xMax = limit of the camera's x.
+  cam:{fov:30, dist0:6.5, distMax:9.6, footScreen:.86, marginX:1.0, marginTop:.35, smooth:.15, xMax:3.0},
+  // Painted backdrop: footRow = image row (share of its height) where the feet stand; cover = times the smallest scale
+  // that fills the screen; parX = image widths of shift per metre of camera x; zoomPar = exponent of the zoom with
+  // the camera distance; contrast/lift = colour grade; flow/streak/wobble = the waterfall's flow speed, streak
+  // strength and shimmer; leaves = number of drifting leaves.
+  arena:{footRow:.86, cover:1.25, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
 };

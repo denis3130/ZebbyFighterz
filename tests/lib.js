@@ -87,3 +87,20 @@ function pu(id, x, y, pointerId) { fire(id, 'pointerup', x, y, pointerId); }
 // skipIntro = play the 100-frame intro of __VF.G.S; nearG = the two fighters of __VF.G.S at -350 / +350.
 function skipIntro() { __VF.frame(__VF.CFG.round.intro); }
 function nearG() { const S = __VF.G.S; __VF.fighterOf(S, 0).x = -350; __VF.fighterOf(S, 1).x = 350; }
+
+// Render helpers (Task 7). pxAt(t, u, v) = draw __VF.G.S at time t ms, then read at once (same JS turn, before the
+// browser presents the frame) the pixel at u, v (0..1, v from the top) -> [r, g, b, a]; diff/sum = over RGB;
+// setViewport(w, h) = fake innerWidth/innerHeight (dispatch 'resize' after it).
+function pxAt(t, u, v) {
+  __VF.renderFrame(__VF.G.S, t);
+  const gl = __VF.renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+  const x = Math.min(w - 1, Math.floor(u * w)), y = Math.min(h - 1, Math.floor(v * h)), p = new Uint8Array(4);
+  gl.readPixels(x, h - 1 - y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, p);
+  return [p[0], p[1], p[2], p[3]];
+}
+function diff(a, b) { return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]); }
+function sum(p) { return p[0] + p[1] + p[2]; }
+function setViewport(w, h) {
+  Object.defineProperty(window, 'innerWidth', {value: w, configurable: true});
+  Object.defineProperty(window, 'innerHeight', {value: h, configurable: true});
+}

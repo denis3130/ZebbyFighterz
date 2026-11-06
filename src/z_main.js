@@ -1,6 +1,9 @@
-// Entry point: game state, the fixed step and boot. Later tasks add the real-time loop, input and rendering.
+// Entry point: game state, the fixed step and boot. Later tasks add the full real-time loop (tick) and the menus.
 const G={state:'boot',mode:null,S:null,acc:0,last:0};
-function boot(){inputInit();G.state='title';}
+// Input first, then the renderer: the title comes only once the arena's textures are decoded.
+function boot(){inputInit();renderInit().then(()=>{G.state='title';requestAnimationFrame(drawLoop);});}
+// Until the full loop (tick) exists: every animation frame redraws the title or the fight; the sim does not step here.
+function drawLoop(now){if(G.state==='fight'||G.state==='title') renderFrame(G.S,now);requestAnimationFrame(drawLoop);}
 // One game step: read the inputs (player 1 is the dummy in training), advance the sim, hand its events to the effects and the HUD.
 function stepGame(now){
   const S=G.S;
@@ -21,5 +24,5 @@ function startMatch(mode,o){
   G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
   G.mode=mode; G.state='fight'; touchShow(true);
 }
-window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,inputInit,inputRead,inputAssign,IN,touchShow};
+window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer};
 boot();
