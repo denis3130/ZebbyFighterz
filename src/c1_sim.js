@@ -128,16 +128,18 @@ function hitstunFor(base, n) { const c = CFG.combo; return Math.max(c.minStun, b
 
 // Knocked down or getting up: always invulnerable (inv counts the frames left, see knockLeft).
 const KNOCKED = {knock: 1, getup: 1, rollF: 1, rollB: 1};
-// Actions with the crouching hurtbox height.
+// Actions with the crouching hurtbox height (and block while down is held: a crouching block, see isBlocking).
 const CROUCHED = {crouch: 1, guardC: 1, cp: 1, ck: 1, chp: 1, chk: 1};
 
 // A hit can touch F: not invulnerable, not knocked down, not KO'd, getting up or held in a throw, and a juggle still under combo.juggleMax hits.
 function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && F.act !== 'ko' && F.act !== 'thrown' && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
 
 // Hurtboxes in absolute mm, [body, head]: the body is ±body.hurt from the feet to the height minus body.headH,
-// the head ±body.head from there to the height (body.h standing, hCrouch crouching, hAir in the air).
+// the head ±body.head from there to the height (body.h standing, hCrouch crouching or blocking with down held,
+// hAir in the air).
 function hurtBoxes(F) {
-  const b = CFG.body, top = F.y + (F.air ? b.hAir : CROUCHED[F.act] ? b.hCrouch : b.h), neck = top - b.headH;
+  const b = CFG.body, low = CROUCHED[F.act] || (F.act === 'block' && (F.prev & BTN.D));
+  const top = F.y + (F.air ? b.hAir : low ? b.hCrouch : b.h), neck = top - b.headH;
   return [{x0: F.x - b.hurt, x1: F.x + b.hurt, y0: F.y, y1: neck}, {x0: F.x - b.head, x1: F.x + b.head, y0: neck, y1: top}];
 }
 

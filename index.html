@@ -109,6 +109,8 @@ const CFG={
   // strength and shimmer; leaves = number of drifting leaves. footRow and cover keep the waterfall's crest and the
   // temple on top (image rows 213-255) in view, with some sky, on 20:9 phones; footRow stays on the painted floor.
   arena:{footRow:.83, cover:1.1, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
+  // Fighter animation (graphics only): blend = frames over which the pose eases into a new free or movement action.
+  anim:{blend:5},
 };
 
 // Fight simulation core: buttons, state, seeded generator, the fixed step, physics, pushboxes, facing, and hits
@@ -241,16 +243,18 @@ function hitstunFor(base, n) { const c = CFG.combo; return Math.max(c.minStun, b
 
 // Knocked down or getting up: always invulnerable (inv counts the frames left, see knockLeft).
 const KNOCKED = {knock: 1, getup: 1, rollF: 1, rollB: 1};
-// Actions with the crouching hurtbox height.
+// Actions with the crouching hurtbox height (and block while down is held: a crouching block, see isBlocking).
 const CROUCHED = {crouch: 1, guardC: 1, cp: 1, ck: 1, chp: 1, chk: 1};
 
 // A hit can touch F: not invulnerable, not knocked down, not KO'd, getting up or held in a throw, and a juggle still under combo.juggleMax hits.
 function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && F.act !== 'ko' && F.act !== 'thrown' && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
 
 // Hurtboxes in absolute mm, [body, head]: the body is ±body.hurt from the feet to the height minus body.headH,
-// the head ±body.head from there to the height (body.h standing, hCrouch crouching, hAir in the air).
+// the head ±body.head from there to the height (body.h standing, hCrouch crouching or blocking with down held,
+// hAir in the air).
 function hurtBoxes(F) {
-  const b = CFG.body, top = F.y + (F.air ? b.hAir : CROUCHED[F.act] ? b.hCrouch : b.h), neck = top - b.headH;
+  const b = CFG.body, low = CROUCHED[F.act] || (F.act === 'block' && (F.prev & BTN.D));
+  const top = F.y + (F.air ? b.hAir : low ? b.hCrouch : b.h), neck = top - b.headH;
   return [{x0: F.x - b.hurt, x1: F.x + b.hurt, y0: F.y, y1: neck}, {x0: F.x - b.head, x1: F.x + b.head, y0: neck, y1: top}];
 }
 
@@ -1045,6 +1049,120 @@ function rdFightersBuild() {
   for (const c of ['ren', 'kael']) { const it = fighterBuild(c); F3D.push(it); scene.add(it.root); }
 }
 
+// Key poses of the placeholder fighters (data for e_fighter3d.js, which resolves, blends and solves them).
+// A pose: {joint: [x, y, z] degrees (Euler XYZ in the parent joint's frame), pos: [x, y, z] pelvis offset (m)}, and
+// optionally fL / fR: an ankle target (model space, m; 0.08 up = standing) that the leg reaches by IK. Signs:
+// pelvis/spine/chest/neck/head x+ = bend forward, y+ = turn the right shoulder forward, z+ = lean right; shoulder x- =
+// arm forward, shL z+ / shR z- = arm out; elbow x- = bend; hip x- = leg forward, knee x+ = bend; ankle x+ = toes down.
+// Key poses (b = based on another key; a key that sets a leg's angles drops the inherited target of that leg).
+const F3_KEY = {
+  // Fighting stance, left side forward: lead fist high, rear fist at the chin, knees soft.
+  stance: {pos: [0, -.07, 0], fL: [.11, .08, .21], fR: [-.13, .08, -.2], pelvis: [0, -4, 0], spine: [6, -2, 0], chest: [4, -4, 0],
+    neck: [0, 6, 0], head: [-8, 10, 0], shL: [-55, -10, 15], elL: [-105, 0, 0], shR: [-30, 10, -20], elR: [-130, 0, 0]},
+  // Walks sit a little lower than the stance, so every step stays within the legs' reach (the feet never slide).
+  walkF: {b: 'stance', pos: [0, -.1, 0]},
+  walkB: {b: 'stance', pos: [0, -.1, 0], pelvis: [-4, -4, 0], spine: [2, -2, 0], head: [-4, 10, 0], shL: [-62, -14, 14], elL: [-112, 0, 0]},
+  // Guard: lower, forearms up in front of the face.
+  guard: {b: 'stance', pos: [0, -.14, -.03], spine: [14, -4, 0], chest: [10, -6, 0], head: [-6, 8, 0],
+    shL: [-88, -10, -4], elL: [-128, 0, 0], shR: [-80, 10, 6], elR: [-132, 0, 0]},
+  // Block: the guard pushed back; blockHitC is the crouching block (down held).
+  blockHit: {b: 'guard', pos: [0, -.13, -.09], pelvis: [-6, -8, 0], spine: [2, -4, 0], head: [-20, 8, 0]},
+  blockHitC: {b: 'guardC', pos: [0, -.62, -.05], pelvis: [13, -8, 0], spine: [14, -4, 0], head: [-24, 8, 0]},
+  // Crouch: low (the crouching hurtbox is 1.05 m), leaning in, the head up to watch the opponent.
+  crouch: {pos: [0, -.6, .02], fL: [.13, .08, .34], fR: [-.15, .08, -.13], pelvis: [15, -8, 0], spine: [16, -4, 0], chest: [12, -8, 0],
+    neck: [-10, 6, 0], head: [-26, 10, 0], shL: [-90, -10, 15], elL: [-100, 0, 0], shR: [-70, 10, -20], elR: [-125, 0, 0]},
+  guardC: {b: 'crouch', head: [-16, 8, 0], shL: [-112, -10, -4], elL: [-128, 0, 0], shR: [-104, 10, 6], elR: [-132, 0, 0]},
+  squat: {b: 'stance', pos: [0, -.26, .03], spine: [16, -4, 0], shL: [-40, -10, 22], shR: [-20, 10, -26]},
+  // In the air the feet stay at the root (F.y) or above it and the body spans about 1.6 m (the airborne hurtbox is 1.5).
+  airUp: {pos: [0, -.3, 0], pelvis: [-10, 0, 0], spine: [12, 0, 0], head: [-10, 0, 0], hipL: [-95, 0, 8], knL: [110, 0, 0],
+    anL: [20, 0, 0], hipR: [-60, 0, -8], knR: [120, 0, 0], anR: [30, 0, 0], shL: [-80, 0, 30], elL: [-80, 0, 0], shR: [-50, 0, -30], elR: [-100, 0, 0]},
+  airDown: {b: 'airUp', pos: [0, -.26, 0], fL: [.1, .1, .14], fR: [-.12, .1, -.1]},
+  // Dashes skim off the floor: forward low with the arms trailing, back in a hop.
+  dashF: {pos: [0, -.12, .05], fL: [.11, .26, .32], fR: [-.13, .2, -.5], pelvis: [15, -5, 0], spine: [20, 0, 0], chest: [10, -5, 0],
+    head: [-25, 5, 0], shL: [40, 0, 20], elL: [-30, 0, 0], shR: [45, 0, -20], elR: [-30, 0, 0]},
+  dashB: {b: 'stance', pos: [0, -.1, -.05], fL: [.11, .2, .18], fR: [-.13, .16, -.18], pelvis: [-8, -8, 0], spine: [-5, -4, 0]},
+  // Hit: head and chest thrown back, arms flung.
+  hurt: {pos: [0, -.1, -.08], fL: [.12, .08, .2], fR: [-.14, .08, -.22], pelvis: [-8, 5, 0], spine: [-12, 5, 0], chest: [-10, 5, 0],
+    neck: [-10, 0, 0], head: [-25, -10, 0], shL: [-20, 0, 40], elL: [-40, 0, 0], shR: [-10, 0, -45], elR: [-35, 0, 0]},
+  // Knocked into the air (tilting back as it falls), lying on the back, getting up (sitting, then on one knee),
+  // rolling as a ball. The feet on the floor are IK targets, so the blends between these never sink into it.
+  flyUp: {pos: [0, -.35, 0], pelvis: [-35, 0, 0], spine: [-15, 0, 0], chest: [-10, 0, 0], head: [-20, 0, 0], shL: [-150, 0, 40],
+    elL: [-30, 0, 0], shR: [-140, 0, -40], elR: [-40, 0, 0], hipL: [-40, 0, 10], knL: [60, 0, 0], hipR: [-20, 0, -10], knR: [40, 0, 0]},
+  flyDown: {b: 'flyUp', pos: [0, -.8, 0], pelvis: [-85, 0, 0], spine: [-5, 0, 0], chest: [0, 0, 0], head: [10, 0, 0],
+    hipL: [-30, 0, 10], knL: [70, 0, 0], hipR: [-15, 0, -10], knR: [50, 0, 0]},
+  down: {pos: [0, -.81, 0], fL: [.12, .09, .8], fR: [-.12, .08, .86], pelvis: [-90, 0, 0], spine: [-3, 0, 0], neck: [25, 0, 0],
+    head: [10, 50, 0], shL: [-10, 0, 25], elL: [-20, 0, 0], shR: [-10, 0, -25], elR: [-20, 0, 0]},
+  koDown: {b: 'down', fL: [.26, .08, .8], fR: [-.2, .08, .84], head: [10, 65, 0], shL: [-60, 0, 70], elL: [-10, 0, 0], shR: [-70, 0, -60], elR: [-15, 0, 0]},
+  sit: {pos: [0, -.8, -.08], fL: [.12, .08, .45], fR: [-.13, .08, .36], pelvis: [-40, 0, 0], spine: [25, 0, 0], chest: [15, 0, 0], head: [-5, 0, 0],
+    shL: [22, 0, 30], elL: [-20, 0, 0], shR: [22, 0, -30], elR: [-20, 0, 0]},
+  kneel: {pos: [0, -.45, -.08], fL: [.12, .08, .3], fR: [-.13, .08, -.35], pelvis: [8, -5, 0], spine: [12, 0, 0], chest: [6, -5, 0], head: [-14, 8, 0],
+    shL: [-40, 0, 10], elL: [-60, 0, 0], shR: [-30, 0, -15], elR: [-100, 0, 0]},
+  tuck: {spine: [55, 0, 0], chest: [55, 0, 0], neck: [45, 0, 0], head: [30, 0, 0], shL: [-75, 0, 12], elL: [-95, 0, 0],
+    shR: [-75, 0, -12], elR: [-95, 0, 0], hipL: [-120, 0, 10], knL: [150, 0, 0], anL: [30, 0, 0], hipR: [-120, 0, -10], knR: [150, 0, 0], anR: [30, 0, 0]},
+  // Throw: reach with both hands, hold, pull back, shove; the one thrown doubles over.
+  reach: {b: 'stance', pos: [0, -.1, .06], fL: [.11, .08, .3], spine: [12, 0, 0], chest: [6, 0, 0], head: [-14, 0, 0],
+    shL: [-80, 0, 10], elL: [-15, 0, 0], shR: [-80, 0, -10], elR: [-15, 0, 0]},
+  clinch: {b: 'reach', spine: [15, 0, 0], shL: [-75, 0, 18], elL: [-55, 0, 0], shR: [-75, 0, -18], elR: [-55, 0, 0]},
+  tossW: {b: 'clinch', pos: [0, -.12, -.02], pelvis: [0, 20, 0], spine: [6, 15, 0], chest: [0, 20, 0], shL: [-50, 0, 10], elL: [-90, 0, 0], shR: [-30, 0, -25], elR: [-110, 0, 0]},
+  toss: {b: 'reach', pos: [0, -.14, .1], fL: [.11, .08, .36], pelvis: [0, -10, 0], spine: [16, -5, 0], shL: [-85, 0, 0], elL: [-5, 0, 0], shR: [-85, 0, 0], elR: [-5, 0, 0]},
+  held: {pos: [0, -.15, .05], fL: [.12, .08, .18], fR: [-.14, .08, -.18], pelvis: [15, 0, 0], spine: [20, 0, 0], chest: [15, 0, 0], head: [10, 0, 0],
+    shL: [-30, 0, 10], elL: [-20, 0, 0], shR: [-30, 0, -10], elR: [-20, 0, 0]},
+  // Special: both palms drawn back to the right hip, then thrust forward where the shot appears.
+  specW: {b: 'stance', pos: [0, -.14, -.04], pelvis: [0, 20, 0], spine: [8, 15, 0], chest: [0, 20, 0], shL: [-20, 0, -25], elL: [-100, 0, 0],
+    shR: [10, 0, -15], elR: [-90, 0, 0]},
+  specH: {b: 'stance', pos: [0, -.14, .06], fL: [.11, .08, .3], fR: [-.13, .08, -.25], pelvis: [0, 0, 0], spine: [10, 0, 0], chest: [4, 0, 0],
+    head: [-10, 0, 0], shL: [-85, 0, -8], elL: [-10, 0, 0], wrL: [60, 0, 0], shR: [-85, 0, 8], elR: [-10, 0, 0], wrR: [60, 0, 0]},
+  win: {pos: [0, -.02, 0], fL: [.13, .08, .05], fR: [-.13, .08, -.05], chest: [-5, 0, 0], head: [-10, 0, 0], shL: [10, 0, 35], elL: [-80, 0, 0],
+    shR: [-170, 0, -10], elR: [-20, 0, 0]},
+  intro: {pos: [0, -.01, 0], fL: [.1, .08, .02], fR: [-.1, .08, -.02], head: [5, 0, 0], shL: [-45, 0, -20], elL: [-95, 0, 0], shR: [-45, 0, 20], elR: [-95, 0, 0]},
+  // Moves: <id>W = wind-up (end of startup), <id>H = the strike (active frames). Limb in its box (see CFG.moves).
+  // Air punches let the legs hang back, so the fist shows in front of the body.
+  p1W: {b: 'stance', chest: [4, -4, 0], shL: [-50, -10, 18], elL: [-120, 0, 0]},
+  p1H: {b: 'stance', spine: [8, -8, 0], chest: [6, -11, 0], head: [-8, 22, 0], shL: [-90, -8, 9], elL: [-12, 0, 0]},
+  p2W: {b: 'stance', chest: [4, -14, 0], shR: [-40, 10, -18], elR: [-135, 0, 0]},
+  p2H: {b: 'stance', pos: [0, -.09, .04], fL: [.11, .08, .24], pelvis: [0, 15, 0], spine: [8, 10, 0], chest: [6, 4, 0], head: [-8, -20, 0],
+    shR: [-91, 8, -11], elR: [-8, 0, 0], shL: [-45, -10, 25], elL: [-125, 0, 0]},
+  p3W: {b: 'stance', pos: [0, -.1, -.02], chest: [4, 10, 0], shL: [-40, -10, 30], elL: [-110, 0, 0]},
+  p3H: {b: 'stance', pos: [0, -.12, .08], fL: [.11, .08, .32], pelvis: [0, -25, 0], spine: [10, -15, 0], chest: [6, 4, 0], head: [-8, 30, 0],
+    shL: [-81, -10, 21], elL: [-22, 0, 0]},
+  k1W: {b: 'stance', fL: [.1, .4, .2], fR: [-.1, .08, -.08], pelvis: [-5, -5, 0]},
+  k1H: {b: 'stance', pos: [0, -.06, -.06], fR: [-.1, .08, -.08], pelvis: [-10, -5, 0], spine: [-4, 0, 0], hipL: [-88, 0, -2], knL: [17, 0, 0], anL: [35, 0, 0]},
+  k2W: {b: 'stance', fL: [.1, .08, .05], fR: [-.3, .5, .05], pelvis: [0, 30, -5]},
+  k2H: {b: 'stance', fL: [.1, .08, .05], pelvis: [0, 92, -18], spine: [0, -10, 10], chest: [0, -15, 0], head: [0, -25, -10],
+    hipR: [-3, 0, -101], knR: [10, 0, 0], anR: [40, 0, 0]},
+  hpW: {b: 'stance', pos: [0, -.12, -.04], pelvis: [0, -20, 0], chest: [4, -25, 0], shR: [-20, 10, -30], elR: [-130, 0, 0]},
+  hpH: {b: 'stance', pos: [0, -.12, .12], fL: [.12, .08, .42], fR: [-.14, .08, -.28], pelvis: [0, 25, 0], spine: [12, 0, 0], chest: [8, 4, 0],
+    head: [-12, -30, 0], shR: [-97, 0, -13], elR: [-9, 0, 0], shL: [-40, 0, 40], elL: [-110, 0, 0]},
+  hkW: {b: 'stance', fL: [.1, .08, .05], fR: [-.25, .55, .12], pelvis: [-5, 25, -5]},
+  hkH: {b: 'stance', fL: [.1, .08, .02], pelvis: [-10, 75, -31], spine: [-5, -10, 10], chest: [0, -15, 0], head: [0, -25, -10],
+    hipR: [-50, 0, -71], knR: [5, 0, 0], anR: [40, 0, 0]},
+  cpW: {b: 'crouch', chest: [10, -18, 0], shR: [-40, 10, -18], elR: [-130, 0, 0]},
+  cpH: {b: 'crouch', spine: [13.5, 10, 0], chest: [8, -4.5, 0], head: [-26, -15, 0], shR: [-110.5, 5, 24.5], elR: [-45, 0, 0]},
+  ckW: {b: 'crouch', fL: [.12, .14, .32]},
+  ckH: {b: 'crouch', fL: [.08, .1, .66], fR: [-.15, .08, -.3], pelvis: [12, -25, 0], spine: [14, 4, 0], chest: [8, 8, 0], head: [-30, 15, 0]},
+  chpW: {b: 'crouch', pos: [0, -.6, 0], chest: [10, -15, 0], shR: [-20, 10, -20], elR: [-120, 0, 0]},
+  chpH: {b: 'crouch', pos: [0, -.58, .04], fL: [.12, .08, .3], fR: [-.15, .16, -.08], pelvis: [10, 5, 0], spine: [7, 15, 0], chest: [2, 25, 0],
+    head: [-35, -20, 0], shR: [-172, 0, 8], elR: [-6.5, 0, 0], shL: [-40, -10, 25], elL: [-120, 0, 0]},
+  chkW: {b: 'crouch', pos: [0, -.58, 0], fL: [.1, .08, .14], fR: [-.12, .42, .2], pelvis: [5, 10, 0]},
+  chkH: {b: 'crouch', pos: [0, -.55, -.02], fL: [.1, .08, .14], fR: [-.08, 1, .5], pelvis: [-28, 15, 0], spine: [-8, 0, 0], chest: [-6, 0, 0],
+    head: [12, -10, 0]},
+  jpW: {b: 'airUp', chest: [10, -20, 0], shR: [-30, 10, -20], elR: [-130, 0, 0]},
+  jpH: {b: 'airUp', pos: [0, -.22, 0], spine: [25, 20, 0], chest: [15, 15, 0], head: [-10, -20, 0], shR: [-55, 10, -15], elR: [-12, 0, 0], hipL: [-35, 0, 8], knL: [105, 0, 0], hipR: [-5, 0, -8], knR: [95, 0, 0]},
+  jkW: {b: 'airUp', hipR: [-90, 0, -8], knR: [120, 0, 0]},
+  jkH: {b: 'airUp', pelvis: [-15, 13, 0], hipR: [-36, 0, -1], knR: [9, 0, 0], anR: [35, 0, 0]},
+  jhpW: {b: 'airUp', spine: [0, -10, 0], chest: [-10, -15, 0], shR: [-170, 0, -15], elR: [-60, 0, 0]},
+  jhpH: {b: 'airUp', pos: [0, -.22, 0], spine: [40, 20, 0], chest: [20, 15, 0], head: [-20, -15, 0], shR: [-63, 0, -18], elR: [-18, 0, 0], hipL: [-35, 0, 8], knL: [105, 0, 0], hipR: [-5, 0, -8], knR: [95, 0, 0]},
+  jhkW: {b: 'airUp', pelvis: [-5, 10, 0], hipR: [-100, 0, -8], knR: [130, 0, 0]},
+  jhkH: {b: 'airUp', pelvis: [-7, 19, 0], hipR: [-38, 0, -6], knR: [0, 0, 0], anR: [30, 0, 0]},
+};
+// Cosmetic timings: walk stride (two steps, m), foot lift and fade-in frames; breathing rate (rad/frame) and depth.
+const F3_WALK = {stride: .72, lift: .07, fade: 4}, F3_BREATH = {rate: .08, chest: 1.5, rise: .008};
+// The posture each move starts from and returns to (the others: the stance, or the air pose for air moves).
+const F3_FROM = {cp: 'crouch', ck: 'crouch', chp: 'crouch', chk: 'crouch'};
+// The roll's ball: centre (y, z in the pelvis frame) and radius of the tuck pose, measured on the meshes: measure again
+// if the tuck or the shapes change.
+const F3_TUCK = {y: -.037, z: .238, r: .4};
+
 // Placeholder fighters (Tappa 1; the Meshy models replace them in Tappa 2): a rig of THREE.Group joints carrying
 // toon-shaded parts, each with a black outline shell, posed on every drawn frame from the sim state. Graphics only:
 // it reads the state and never writes it. d_render.js builds them (fighterBuild) and calls f3Sync(S) per frame.
@@ -1203,16 +1321,24 @@ function fighterBuild(char) {
 }
 
 // Every drawn frame: each side's fighter at its sim position (feet at F.x, F.y; side 0 in front), facing and pose.
-// S null (no match): hidden.
+// S null (no match): hidden. Render-side smoothing: when the action changes to a free or movement one (F3_EASE), the
+// pose eases from the last drawn one into the new action's over its first CFG.anim.blend frames (by F.af, so it
+// follows the sim). Strikes, hits and throws snap: a strike shows exactly on its first active frame.
+const F3_EASE = {idle: 1, walkF: 1, walkB: 1, crouch: 1, guard: 1, guardC: 1, jumpSquat: 1, air: 1, dashF: 1, dashB: 1, win: 1};
 function f3Sync(S) {
   for (let i = 0; i < F3D.length; i++) {
     const it = F3D[i];
     it.root.visible = !!S;
-    if (!S) continue;
-    const F = fighterOf(S, i);
+    if (!S) { it.F = null; continue; }
+    const F = fighterOf(S, i), n = CFG.anim.blend;
     it.root.position.set(F.x / 1000, F.y / 1000, i ? -.05 : .05);
     it.root.rotation.y = F.face * F3_YAW;
-    f3Apply(it, poseOf(F, S));
+    let p = f3Raw(F, S);
+    if (F !== it.F) it.from = null;   // a new fighter (new match or round): nothing to ease from
+    else if (F.act !== it.act) it.from = F3_EASE[F.act] ? it.pose : null;
+    if (it.from && F.af < n) p = f3Mix(it.from, p, Math.max(0, F.af) / n);
+    it.F = F; it.act = F.act; it.pose = p;   // the drawn pose, legs solved below, ankle targets kept for the next ease
+    f3Apply(it, f3Solve(p));
   }
 }
 
@@ -1225,113 +1351,7 @@ function f3Apply(it, p) {
 // World position (metres) of a limb point of side's fighter, as last posed.
 function limbWorld(side, limb) { return F3D[side].limbs[limb].getWorldPosition(new THREE.Vector3()); }
 
-// --- Poses ---
-// A pose: {joint: [x, y, z] degrees (Euler XYZ in the parent joint's frame), pos: [x, y, z] pelvis offset (m)}, and
-// optionally fL / fR: an ankle target (model space, m; 0.08 up = standing) that the leg reaches by IK. Signs:
-// pelvis/spine/chest/neck/head x+ = bend forward, y+ = turn the right shoulder forward, z+ = lean right; shoulder x- =
-// arm forward, shL z+ / shR z- = arm out; elbow x- = bend; hip x- = leg forward, knee x+ = bend; ankle x+ = toes down.
-// Key poses (b = based on another key; a key that sets a leg's angles drops the inherited target of that leg).
-const F3_KEY = {
-  // Fighting stance, left side forward: lead fist high, rear fist at the chin, knees soft.
-  stance: {pos: [0, -.07, 0], fL: [.11, .08, .21], fR: [-.13, .08, -.2], pelvis: [0, -4, 0], spine: [6, -2, 0], chest: [4, -4, 0],
-    neck: [0, 6, 0], head: [-8, 10, 0], shL: [-55, -10, 15], elL: [-105, 0, 0], shR: [-30, 10, -20], elR: [-130, 0, 0]},
-  // Walks sit a little lower than the stance, so every step stays within the legs' reach (the feet never slide).
-  walkF: {b: 'stance', pos: [0, -.1, 0]},
-  walkB: {b: 'stance', pos: [0, -.1, 0], pelvis: [-4, -4, 0], spine: [2, -2, 0], head: [-4, 10, 0], shL: [-62, -14, 14], elL: [-112, 0, 0]},
-  // Guard: lower, forearms up in front of the face.
-  guard: {b: 'stance', pos: [0, -.14, -.03], spine: [14, -4, 0], chest: [10, -6, 0], head: [-6, 8, 0],
-    shL: [-88, -10, -4], elL: [-128, 0, 0], shR: [-80, 10, 6], elR: [-132, 0, 0]},
-  blockHit: {b: 'guard', pos: [0, -.13, -.09], pelvis: [-6, -8, 0], spine: [2, -4, 0], head: [-20, 8, 0]},
-  // Crouch: low (the crouching hurtbox is 1.05 m), leaning in, the head up to watch the opponent.
-  crouch: {pos: [0, -.6, .02], fL: [.13, .08, .34], fR: [-.15, .08, -.13], pelvis: [15, -8, 0], spine: [16, -4, 0], chest: [12, -8, 0],
-    neck: [-10, 6, 0], head: [-26, 10, 0], shL: [-90, -10, 15], elL: [-100, 0, 0], shR: [-70, 10, -20], elR: [-125, 0, 0]},
-  guardC: {b: 'crouch', head: [-16, 8, 0], shL: [-112, -10, -4], elL: [-128, 0, 0], shR: [-104, 10, 6], elR: [-132, 0, 0]},
-  squat: {b: 'stance', pos: [0, -.26, .03], spine: [16, -4, 0], shL: [-40, -10, 22], shR: [-20, 10, -26]},
-  // In the air the feet stay at the root (F.y) or above it and the body spans about 1.6 m (the airborne hurtbox is 1.5).
-  airUp: {pos: [0, -.3, 0], pelvis: [-10, 0, 0], spine: [12, 0, 0], head: [-10, 0, 0], hipL: [-95, 0, 8], knL: [110, 0, 0],
-    anL: [20, 0, 0], hipR: [-60, 0, -8], knR: [120, 0, 0], anR: [30, 0, 0], shL: [-80, 0, 30], elL: [-80, 0, 0], shR: [-50, 0, -30], elR: [-100, 0, 0]},
-  airDown: {b: 'airUp', pos: [0, -.26, 0], fL: [.1, .1, .14], fR: [-.12, .1, -.1]},
-  // Dashes skim off the floor: forward low with the arms trailing, back in a hop.
-  dashF: {pos: [0, -.12, .05], fL: [.11, .26, .32], fR: [-.13, .2, -.5], pelvis: [15, -5, 0], spine: [20, 0, 0], chest: [10, -5, 0],
-    head: [-25, 5, 0], shL: [40, 0, 20], elL: [-30, 0, 0], shR: [45, 0, -20], elR: [-30, 0, 0]},
-  dashB: {b: 'stance', pos: [0, -.1, -.05], fL: [.11, .2, .18], fR: [-.13, .16, -.18], pelvis: [-8, -8, 0], spine: [-5, -4, 0]},
-  // Hit: head and chest thrown back, arms flung.
-  hurt: {pos: [0, -.1, -.08], fL: [.12, .08, .2], fR: [-.14, .08, -.22], pelvis: [-8, 5, 0], spine: [-12, 5, 0], chest: [-10, 5, 0],
-    neck: [-10, 0, 0], head: [-25, -10, 0], shL: [-20, 0, 40], elL: [-40, 0, 0], shR: [-10, 0, -45], elR: [-35, 0, 0]},
-  // Knocked into the air (tilting back as it falls), lying on the back, getting up (sitting, then on one knee),
-  // rolling as a ball. The feet on the floor are IK targets, so the blends between these never sink into it.
-  flyUp: {pos: [0, -.35, 0], pelvis: [-35, 0, 0], spine: [-15, 0, 0], chest: [-10, 0, 0], head: [-20, 0, 0], shL: [-150, 0, 40],
-    elL: [-30, 0, 0], shR: [-140, 0, -40], elR: [-40, 0, 0], hipL: [-40, 0, 10], knL: [60, 0, 0], hipR: [-20, 0, -10], knR: [40, 0, 0]},
-  flyDown: {b: 'flyUp', pos: [0, -.8, 0], pelvis: [-85, 0, 0], spine: [-5, 0, 0], chest: [0, 0, 0], head: [10, 0, 0],
-    hipL: [-30, 0, 10], knL: [70, 0, 0], hipR: [-15, 0, -10], knR: [50, 0, 0]},
-  down: {pos: [0, -.81, 0], fL: [.12, .09, .8], fR: [-.12, .08, .86], pelvis: [-90, 0, 0], spine: [-3, 0, 0], neck: [25, 0, 0],
-    head: [10, 50, 0], shL: [-10, 0, 25], elL: [-20, 0, 0], shR: [-10, 0, -25], elR: [-20, 0, 0]},
-  koDown: {b: 'down', fL: [.26, .08, .8], fR: [-.2, .08, .84], head: [10, 65, 0], shL: [-60, 0, 70], elL: [-10, 0, 0], shR: [-70, 0, -60], elR: [-15, 0, 0]},
-  sit: {pos: [0, -.8, -.08], fL: [.12, .08, .45], fR: [-.13, .08, .36], pelvis: [-40, 0, 0], spine: [25, 0, 0], chest: [15, 0, 0], head: [-5, 0, 0],
-    shL: [22, 0, 30], elL: [-20, 0, 0], shR: [22, 0, -30], elR: [-20, 0, 0]},
-  kneel: {pos: [0, -.45, -.08], fL: [.12, .08, .3], fR: [-.13, .08, -.35], pelvis: [8, -5, 0], spine: [12, 0, 0], chest: [6, -5, 0], head: [-14, 8, 0],
-    shL: [-40, 0, 10], elL: [-60, 0, 0], shR: [-30, 0, -15], elR: [-100, 0, 0]},
-  tuck: {spine: [55, 0, 0], chest: [55, 0, 0], neck: [45, 0, 0], head: [30, 0, 0], shL: [-75, 0, 12], elL: [-95, 0, 0],
-    shR: [-75, 0, -12], elR: [-95, 0, 0], hipL: [-120, 0, 10], knL: [150, 0, 0], anL: [30, 0, 0], hipR: [-120, 0, -10], knR: [150, 0, 0], anR: [30, 0, 0]},
-  // Throw: reach with both hands, hold, pull back, shove; the one thrown doubles over.
-  reach: {b: 'stance', pos: [0, -.1, .06], fL: [.11, .08, .3], spine: [12, 0, 0], chest: [6, 0, 0], head: [-14, 0, 0],
-    shL: [-80, 0, 10], elL: [-15, 0, 0], shR: [-80, 0, -10], elR: [-15, 0, 0]},
-  clinch: {b: 'reach', spine: [15, 0, 0], shL: [-75, 0, 18], elL: [-55, 0, 0], shR: [-75, 0, -18], elR: [-55, 0, 0]},
-  tossW: {b: 'clinch', pos: [0, -.12, -.02], pelvis: [0, 20, 0], spine: [6, 15, 0], chest: [0, 20, 0], shL: [-50, 0, 10], elL: [-90, 0, 0], shR: [-30, 0, -25], elR: [-110, 0, 0]},
-  toss: {b: 'reach', pos: [0, -.14, .1], fL: [.11, .08, .36], pelvis: [0, -10, 0], spine: [16, -5, 0], shL: [-85, 0, 0], elL: [-5, 0, 0], shR: [-85, 0, 0], elR: [-5, 0, 0]},
-  held: {pos: [0, -.15, .05], fL: [.12, .08, .18], fR: [-.14, .08, -.18], pelvis: [15, 0, 0], spine: [20, 0, 0], chest: [15, 0, 0], head: [10, 0, 0],
-    shL: [-30, 0, 10], elL: [-20, 0, 0], shR: [-30, 0, -10], elR: [-20, 0, 0]},
-  // Special: both palms drawn back to the right hip, then thrust forward where the shot appears.
-  specW: {b: 'stance', pos: [0, -.14, -.04], pelvis: [0, 20, 0], spine: [8, 15, 0], chest: [0, 20, 0], shL: [-20, 0, -25], elL: [-100, 0, 0],
-    shR: [10, 0, -15], elR: [-90, 0, 0]},
-  specH: {b: 'stance', pos: [0, -.14, .06], fL: [.11, .08, .3], fR: [-.13, .08, -.25], pelvis: [0, 0, 0], spine: [10, 0, 0], chest: [4, 0, 0],
-    head: [-10, 0, 0], shL: [-85, 0, -8], elL: [-10, 0, 0], wrL: [60, 0, 0], shR: [-85, 0, 8], elR: [-10, 0, 0], wrR: [60, 0, 0]},
-  win: {pos: [0, -.02, 0], fL: [.13, .08, .05], fR: [-.13, .08, -.05], chest: [-5, 0, 0], head: [-10, 0, 0], shL: [10, 0, 35], elL: [-80, 0, 0],
-    shR: [-170, 0, -10], elR: [-20, 0, 0]},
-  intro: {pos: [0, -.01, 0], fL: [.1, .08, .02], fR: [-.1, .08, -.02], head: [5, 0, 0], shL: [-45, 0, -20], elL: [-95, 0, 0], shR: [-45, 0, 20], elR: [-95, 0, 0]},
-  // Moves: <id>W = wind-up (end of startup), <id>H = the strike (active frames). Limb in its box (see CFG.moves).
-  // Air punches let the legs hang back, so the fist shows in front of the body.
-  p1W: {b: 'stance', chest: [4, -4, 0], shL: [-50, -10, 18], elL: [-120, 0, 0]},
-  p1H: {b: 'stance', spine: [8, -8, 0], chest: [6, -11, 0], head: [-8, 22, 0], shL: [-90, -8, 9], elL: [-12, 0, 0]},
-  p2W: {b: 'stance', chest: [4, -14, 0], shR: [-40, 10, -18], elR: [-135, 0, 0]},
-  p2H: {b: 'stance', pos: [0, -.09, .04], fL: [.11, .08, .24], pelvis: [0, 15, 0], spine: [8, 10, 0], chest: [6, 4, 0], head: [-8, -20, 0],
-    shR: [-91, 8, -11], elR: [-8, 0, 0], shL: [-45, -10, 25], elL: [-125, 0, 0]},
-  p3W: {b: 'stance', pos: [0, -.1, -.02], chest: [4, 10, 0], shL: [-40, -10, 30], elL: [-110, 0, 0]},
-  p3H: {b: 'stance', pos: [0, -.12, .08], fL: [.11, .08, .32], pelvis: [0, -25, 0], spine: [10, -15, 0], chest: [6, 4, 0], head: [-8, 30, 0],
-    shL: [-81, -10, 21], elL: [-22, 0, 0]},
-  k1W: {b: 'stance', fL: [.1, .4, .2], fR: [-.1, .08, -.08], pelvis: [-5, -5, 0]},
-  k1H: {b: 'stance', pos: [0, -.06, -.06], fR: [-.1, .08, -.08], pelvis: [-10, -5, 0], spine: [-4, 0, 0], hipL: [-88, 0, -2], knL: [17, 0, 0], anL: [35, 0, 0]},
-  k2W: {b: 'stance', fL: [.1, .08, .05], fR: [-.3, .5, .05], pelvis: [0, 30, -5]},
-  k2H: {b: 'stance', fL: [.1, .08, .05], pelvis: [0, 92, -18], spine: [0, -10, 10], chest: [0, -15, 0], head: [0, -25, -10],
-    hipR: [-3, 0, -101], knR: [10, 0, 0], anR: [40, 0, 0]},
-  hpW: {b: 'stance', pos: [0, -.12, -.04], pelvis: [0, -20, 0], chest: [4, -25, 0], shR: [-20, 10, -30], elR: [-130, 0, 0]},
-  hpH: {b: 'stance', pos: [0, -.12, .12], fL: [.12, .08, .42], fR: [-.14, .08, -.28], pelvis: [0, 25, 0], spine: [12, 0, 0], chest: [8, 4, 0],
-    head: [-12, -30, 0], shR: [-97, 0, -13], elR: [-9, 0, 0], shL: [-40, 0, 40], elL: [-110, 0, 0]},
-  hkW: {b: 'stance', fL: [.1, .08, .05], fR: [-.25, .55, .12], pelvis: [-5, 25, -5]},
-  hkH: {b: 'stance', fL: [.1, .08, .02], pelvis: [-10, 75, -31], spine: [-5, -10, 10], chest: [0, -15, 0], head: [0, -25, -10],
-    hipR: [-50, 0, -71], knR: [5, 0, 0], anR: [40, 0, 0]},
-  cpW: {b: 'crouch', chest: [10, -18, 0], shR: [-40, 10, -18], elR: [-130, 0, 0]},
-  cpH: {b: 'crouch', spine: [-11, 10, 0], chest: [8, 15, 0], head: [-18, -15, 0], shR: [-94, 5, 2], elR: [-15, 0, 0]},
-  ckW: {b: 'crouch', fL: [.12, .14, .32]},
-  ckH: {b: 'crouch', fL: [.08, .1, .66], fR: [-.15, .08, -.3], pelvis: [4, -25, 0], spine: [8, 4, 0], chest: [6, 8, 0]},
-  chpW: {b: 'crouch', pos: [0, -.56, 0], chest: [10, -15, 0], shR: [-20, 10, -20], elR: [-120, 0, 0]},
-  chpH: {b: 'crouch', pos: [0, -.22, .05], fL: [.12, .08, .28], fR: [-.14, .08, -.22], pelvis: [0, 10, 0], spine: [5, 15, 0], chest: [-5, 30, 0],
-    head: [-20, -20, 0], shR: [-145, 0, -12], elR: [-22, 0, 0], shL: [-40, -10, 25], elL: [-120, 0, 0]},
-  chkW: {b: 'crouch', pos: [0, -.4, 0], fL: [.1, .08, .14], fR: [-.12, .42, .2], pelvis: [-10, 10, 0]},
-  chkH: {b: 'crouch', pos: [0, -.2, 0], fL: [.1, .08, .12], pelvis: [-24, 15, 0], spine: [-5, 0, 0], chest: [-5, 0, 0], head: [-5, -10, 0],
-    hipR: [-116, 0, -7], knR: [6, 0, 0], anR: [30, 0, 0]},
-  jpW: {b: 'airUp', chest: [10, -20, 0], shR: [-30, 10, -20], elR: [-130, 0, 0]},
-  jpH: {b: 'airUp', pos: [0, -.22, 0], spine: [25, 20, 0], chest: [15, 15, 0], head: [-10, -20, 0], shR: [-55, 10, -15], elR: [-12, 0, 0], hipL: [-35, 0, 8], knL: [105, 0, 0], hipR: [-5, 0, -8], knR: [95, 0, 0]},
-  jkW: {b: 'airUp', hipR: [-90, 0, -8], knR: [120, 0, 0]},
-  jkH: {b: 'airUp', pelvis: [-15, 13, 0], hipR: [-36, 0, -1], knR: [9, 0, 0], anR: [35, 0, 0]},
-  jhpW: {b: 'airUp', spine: [0, -10, 0], chest: [-10, -15, 0], shR: [-170, 0, -15], elR: [-60, 0, 0]},
-  jhpH: {b: 'airUp', pos: [0, -.22, 0], spine: [40, 20, 0], chest: [20, 15, 0], head: [-20, -15, 0], shR: [-63, 0, -18], elR: [-18, 0, 0], hipL: [-35, 0, 8], knL: [105, 0, 0], hipR: [-5, 0, -8], knR: [95, 0, 0]},
-  jhkW: {b: 'airUp', pelvis: [-5, 10, 0], hipR: [-100, 0, -8], knR: [130, 0, 0]},
-  jhkH: {b: 'airUp', pelvis: [-7, 19, 0], hipR: [-38, 0, -6], knR: [0, 0, 0], anR: [30, 0, 0]},
-};
-// Cosmetic timings: walk stride (two steps, m), foot lift and fade-in frames; breathing rate (rad/frame) and depth.
-const F3_WALK = {stride: .72, lift: .07, fade: 4}, F3_BREATH = {rate: .08, chest: 1.5, rise: .008};
-
+// --- Poses --- (the key-pose table F3_KEY and the cosmetic timings are in e_poses.js)
 function f3Lerp3(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 function f3Smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
 
@@ -1391,16 +1411,26 @@ function f3Solve(p) {
 }
 
 // The pose of fighter F now: a pure function of F.act, F.af, F.x and F.face (walk), F.air, F.vy, F.hit (throw),
-// F.land (landing) and S.frame (breathing).
-function poseOf(F, S) {
-  const m = CFG.moves[F.act];
-  return f3Solve(m ? f3Move(F, m) : f3Act(F, S));
+// F.stun (hit and block recovery), F.prev (a block with down held is crouched), F.land (landing) and S.frame (breathing).
+function poseOf(F, S) { return f3Solve(f3Raw(F, S)); }
+// The same before the legs are solved (ankle targets kept, for blending). Crouched on the ground (the sim's crouching
+// hurtbox: crouch, guardC, the crouching moves, a block with down held) the head stays within F3_HEADROOM of the
+// hurtbox's top: if a pose would raise it higher, the pelvis drops by the difference (the planted feet follow by IK).
+const F3_HEADROOM = .1;
+function f3Raw(F, S) {
+  const m = CFG.moves[F.act], p = m ? f3Move(F, m) : f3Act(F, S);
+  if (F.air) return p;
+  const top = (hurtBoxes(F)[1].y1 - F.y) / 1000;
+  if (top < CFG.body.h / 1000) {
+    const over = f3Point(p, F3_HEAD, 0, .11, .01)[1] + F3_HEAD_R - top - F3_HEADROOM;
+    if (over > 0) p.pos = [p.pos[0], p.pos[1] - over, p.pos[2]];
+  }
+  return p;
 }
 
 // Moves follow their frame data: from the posture to the wind-up by the end of startup, the strike held through the
 // active frames, back to the posture by the end of recovery; kicks fold back through the wind-up (the chamber) first.
 // Air moves hold a recovery pose until landing: kicks the chamber, punches most of the way back to the air pose.
-const F3_FROM = {cp: 'crouch', ck: 'crouch', chp: 'crouch', chk: 'crouch'};
 function f3Move(F, m) {
   const id = F.act, af = F.af, air = m.r === 'land', from = air ? f3Air(F) : f3Key(F3_FROM[id] || 'stance');
   const W = F3_KEY[id + 'W'] ? f3Key(id + 'W') : from, H = F3_KEY[id + 'H'] ? f3Key(id + 'H') : from;
@@ -1420,17 +1450,18 @@ function f3Act(F, S) {
   const K = f3Key, af = F.af, st = K('stance');
   switch (F.act) {
     case 'walkF': case 'walkB': return f3Walk(F);
-    case 'crouch': return f3Breathe(f3Mix(st, K('crouch'), f3Smooth(af / 4)), S);
-    case 'guard': return f3Breathe(f3Mix(st, K('guard'), f3Smooth(af / 3)), S);
-    case 'guardC': return f3Breathe(f3Mix(st, K('guardC'), f3Smooth(af / 4)), S);
-    case 'jumpSquat': return f3Mix(st, K('squat'), f3Smooth(af / 3));
+    case 'crouch': case 'guard': case 'guardC': return f3Breathe(f3Mix(K(F.act), K(F.act), 0), S);
+    case 'jumpSquat': return f3Mix(K('squat'), K('squat'), 0);
     case 'landing': return f3Mix(K('squat'), st, f3Smooth(af / Math.max(1, F.land)));
     case 'air': return f3Air(F);
-    case 'dashF': return f3Mix(st, K('dashF'), f3InOut(af, CFG.dash.f.n));
-    case 'dashB': return f3Mix(st, K('dashB'), f3InOut(af, CFG.dash.b.n));
-    // Block and hit snap into their recoil on the contact frame (af 0 through the hitstop), then ease back.
-    case 'block': return f3Mix(K('blockHit'), K('guard'), f3Smooth((af - 2) / 10));
-    case 'hitStun': return f3Mix(K('hurt'), st, .5 * f3Smooth((af - 6) / 14));
+    case 'dashF': case 'dashB': return f3Mix(K(F.act), K(F.act), 0);
+    // Block and hit snap into their recoil on the contact frame (it holds through the hitstop), then ease back to the
+    // guard / the stance as the stun runs out. A block with down held is the crouching block (as in the sim).
+    case 'block': {
+      const low = F.prev & BTN.D;
+      return f3Mix(K(low ? 'guardC' : 'guard'), K(low ? 'blockHitC' : 'blockHit'), f3Smooth(F.stun / 6));
+    }
+    case 'hitStun': return f3Mix(st, K('hurt'), f3Smooth(F.stun / 8));
     case 'juggle': case 'knock': case 'ko': {   // flying (tilting back as it falls), then lying on the floor
       if (F.air) return f3Mix(K('flyUp'), K('flyDown'), f3Smooth((60 - F.vy) / 140));
       const down = K(F.act === 'ko' ? 'koDown' : 'down');
@@ -1441,16 +1472,13 @@ function f3Act(F, S) {
     case 'rollF': case 'rollB': return f3Roll(F);
     case 'thr': return f3Throw(F);
     case 'thrWhiff': return f3Mix(K('reach'), st, f3Smooth((af - 4) / 18));
-    case 'thrown': return f3Mix(st, K('held'), f3Smooth(af / 4));
+    case 'thrown': return f3Mix(K('held'), K('held'), 0);
     case 'spec': return f3Spec(af);
-    case 'win': return f3Breathe(f3Mix(st, K('win'), f3Smooth(af / 12)), S);
+    case 'win': return f3Breathe(f3Mix(K('win'), K('win'), 0), S);
     case 'intro': return f3Breathe(f3Mix(K('intro'), K('intro'), 0), S);
     default: return f3Breathe(f3Mix(st, st, 0), S);   // idle
   }
 }
-
-// 1 for a timed action's middle, easing in over its first 3 frames and out over its last 5.
-function f3InOut(af, n) { return Math.min(f3Smooth(af / 3), f3Smooth((n - af) / 5)); }
 
 // Breathing on the free stances: the chest and shoulders rise and fall (the IK keeps the feet planted).
 function f3Breathe(p, S) {
@@ -1474,9 +1502,7 @@ function f3Walk(F) {
 
 // Rolls: lying on the back the body tucks into a ball, which then tumbles (450° forward, 270° back: both end upright)
 // about its own centre, opens into the crouch (the feet go straight down to the floor: IK from where the ball's feet
-// are) and rises into the stance. F3_TUCK = the ball's centre (y, z in the pelvis frame) and radius, measured on the
-// meshes in the tuck pose: measure again if the tuck or the shapes change.
-const F3_TUCK = {y: -.037, z: .238, r: .4};
+// are) and rises into the stance; F3_TUCK (e_poses.js) is the ball's centre and radius.
 function f3Roll(F) {
   const t = F.af / CFG.knock.roll, spin = F.act === 'rollF' ? 450 : -270, cr = f3Key('crouch');
   if (t >= .8) return f3Mix(cr, f3Key('stance'), f3Smooth((t - .8) / .2));
@@ -1490,14 +1516,20 @@ function f3Roll(F) {
   return f3Mix(p, end, f3Smooth((t - .65) / .15));
 }
 
-// Model-space ankle of a leg of pose p (forward kinematics, as the rig computes it).
-function f3Ankle(p, side) {
-  const B = F3_BONE, D = F3_DEG, h = side ? B.hipR : B.hipL, H = p[side ? 'hipR' : 'hipL'], K = p[side ? 'knR' : 'knL'], P = p.pelvis;
-  const v = F3.v.set(0, B.anL[2], 0).applyMatrix4(F3.m.makeRotationFromEuler(F3.e.set(K[0] * D, K[1] * D, K[2] * D)));
-  v.y += B.knL[2]; v.applyMatrix4(F3.m.makeRotationFromEuler(F3.e.set(H[0] * D, H[1] * D, H[2] * D)));
-  v.set(v.x + h[1], v.y + h[2], v.z + h[3]).applyMatrix4(F3.m.makeRotationFromEuler(F3.e.set(P[0] * D, P[1] * D, P[2] * D)));
-  return [v.x + B.pelvis[1] + p.pos[0], v.y + B.pelvis[2] + p.pos[1], v.z + B.pelvis[3] + p.pos[2]];
+// Model-space position of point (x, y, z) of the last joint of chain (root first) in pose p: forward kinematics, as
+// the rig computes it. F3_HEAD = the chain to the head; F3_HEAD_R = the head sphere's largest radius (its centre is at
+// (0, .11, .01) in the head frame, see the head shape).
+const F3_HEAD = ['pelvis', 'spine', 'chest', 'neck', 'head'], F3_HEAD_R = .1155;
+function f3Point(p, chain, x, y, z) {
+  const v = F3.v.set(x, y, z), D = F3_DEG;
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const j = chain[i], r = p[j], b = F3_BONE[j], o = j === 'pelvis' ? p.pos : [0, 0, 0];
+    v.applyMatrix4(F3.m.makeRotationFromEuler(F3.e.set(r[0] * D, r[1] * D, r[2] * D)));
+    v.set(v.x + b[1] + o[0], v.y + b[2] + o[1], v.z + b[3] + o[2]);
+  }
+  return [v.x, v.y, v.z];
 }
+function f3Ankle(p, side) { return f3Point(p, side ? ['pelvis', 'hipR', 'knR', 'anR'] : ['pelvis', 'hipL', 'knL', 'anL'], 0, 0, 0); }
 
 // Throw: the reach on the attempt (a miss goes on in thrWhiff); after a grab (F.hit, af from 1 again) hold, pull back
 // and shove at thr.hitF, the frame the throw hits, then back to the stance.

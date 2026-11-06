@@ -56,4 +56,6 @@ const CFG={
   // strength and shimmer; leaves = number of drifting leaves. footRow and cover keep the waterfall's crest and the
   // temple on top (image rows 213-255) in view, with some sky, on 20:9 phones; footRow stays on the painted floor.
   arena:{footRow:.83, cover:1.1, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
+  // Fighter animation (graphics only): blend = frames over which the pose eases into a new free or movement action.
+  anim:{blend:5},
 };

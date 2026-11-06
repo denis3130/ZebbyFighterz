@@ -22,3 +22,8 @@ T.test('throw damage lands exactly at thr.hitF of the grab', () => { const S=N()
 T.test('mutual throw on the same frame: side 0 grabs, side 1 is thrown', () => { const S=N(); near(S); T.feed(S,5,B.P|B.K,B.P|B.K); T.eq(F(S,1).act,'thrown'); T.eq(F(S,0).act,'thr'); T.feed(S,40,0,0); T.eq(F(S,1).hp,880); T.eq(F(S,0).hp,1000); });
 T.test('a thrown fighter is released when the thrower is hit on the grab frame', () => { const S=N(); near(S); T.feed(S,9,0,B.S); T.feed(S,1,B.P|B.K,0); T.feed(S,4,0,0); T.ok(S.ev.some(e=>e.t==='projHit')); T.eq(F(S,0).act,'hitStun'); T.ok(F(S,1).act!=='thrown'); T.feed(S,60,0,0); T.ok(F(S,1).act!=='thrown'); });
 T.test('projectile passes through an invulnerable target and is culled beyond the stage', () => { const S=N(); F(S,1).inv=1000; T.feed(S,1,B.S,0); T.feed(S,60,0,0); T.eq(S.proj.length,1); T.eq(F(S,1).hp,1000); T.feed(S,60,0,0); T.eq(S.proj.length,0); T.eq(F(S,1).hp,1000); });
+// A block with down held is a crouching block: the crouching hurtbox all through the blockstun; a standing block keeps the standing one.
+T.test('a crouch-blocker keeps the crouching hurtbox in blockstun', () => { for(const [atk,hold,def,h] of [[B.D|B.K,B.D,B.D|B.GUARD,__VF.CFG.body.hCrouch],[B.D|B.K,B.D,B.D|B.R,__VF.CFG.body.hCrouch],[B.P,0,B.GUARD,__VF.CFG.body.h]]){
+  const S=N(); near(S); T.feed(S,1,atk,def); let seen=0;
+  for(let i=0;i<24;i++){ T.feed(S,1,hold,def); const d=F(S,1); if(d.act==='block'){ seen++; T.eq(__VF.hurtBoxes(d)[1].y1, d.y+h, 'frame '+i); } }
+  T.ok(seen>8, 'blockstun frames '+seen); } });
