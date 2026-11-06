@@ -152,6 +152,7 @@ function takeoff(S, F, bits) {
 // A knockdown (knock in flight, or a juggle) stays down and its ground time starts ('knock' event);
 // an air attack lands into jump.landAtk frames of landing, a jump into jump.land ('land' event).
 function touchdown(S, F) {
+  if (F.act === 'ko') { F.af = 1; return; }   // a KO'd fighter stays down
   const down = F.act === 'knock' || F.act === 'juggle', m = CFG.moves[F.act];
   F.sj = false;
   setAct(F, down ? 'knock' : 'landing'); F.af = 1;

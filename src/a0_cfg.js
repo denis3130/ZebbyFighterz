@@ -19,6 +19,10 @@ const CFG={
   // Special (energy shot): spawn = frame the projectile appears, rec = frames after it; speed in mm/frame; box = half-size;
   // x, y = spawn point (forward of the fighter, from the ground); hs/bs/chip as a move's (chip = damage on a block).
   spec:{spawn:14, rec:30, speed:120, box:150, dmg:70, hs:20, bs:16, chip:8, x:500, y:1100, h:'mid', push:0, stop:'spec'},
+  // Rounds: intro/end in frames, timerS in seconds, wins to take the match; ko = the fall of a fighter KO'd on the ground.
+  round:{intro:100, timerS:99, end:150, wins:2, ko:{vx:50, vy:50}},
+  training:{refill:60},   // frames out of a combo before health refills
+  dummy:{min:30, max:60},   // the random dummy changes what it does every min..max frames
   // The plan's move table. s/a/r = startup/active/recovery frames (r 'land' = until landing, then jump.landAtk);
   // hs/bs = hitstun/blockstun; h = height; box = [x0,x1,y0,y1] mm, x forward from the centre, y from the feet;
   // push = pushback speed of the one hit; stop = hitstop class. Chains, once the move has touched: tapP/tapK = move

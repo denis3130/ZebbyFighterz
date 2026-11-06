@@ -31,9 +31,16 @@ window.T = (() => {
 })();
 
 // Shared helpers of the fight-logic suites (sim, attack, guard, round): B = buttons,
-// N(opts) = new versus sim (seed 1, Ren vs Kael, opts override), F(S, i) = active fighter of side i.
+// N(opts) = new versus sim (seed 1, Ren vs Kael, opts override) with the 100-frame intro already played (no input) and
+// the frame counter back at 0, so a test counts its own frames; F(S, i) = active fighter of side i.
 const B = __VF.BTN;
-function N(opts) { return __VF.simCreate(Object.assign({seed: 1, mode: 'versus', chars: ['ren', 'kael']}, opts)); }
+function N(opts) {
+  const S = __VF.simCreate(Object.assign({seed: 1, mode: 'versus', chars: ['ren', 'kael']}, opts));
+  T.feed(S, __VF.CFG.round.intro, 0, 0); S.frame = 0;
+  return S;
+}
+function fight(opts) { return N(opts); }
+function trainingFight() { return N({mode: 'training', dummy: 'fermo'}); }
 function F(S, i) { return __VF.fighterOf(S, i); }
 // near(S) = the fighters 700 mm apart (x -350 / +350), in range of the light attacks.
 function near(S) { F(S, 0).x = -350; F(S, 1).x = 350; }

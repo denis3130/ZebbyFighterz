@@ -18,10 +18,12 @@ function newFighter(side, char) {
 }
 
 // opts = {seed, mode: 'versus'|'training', chars: [c0, c1], dummy: 'fermo'|'casuale'}.
-// Starts in 'fight': round phases, timer (-1 = none), pf (frames in the phase) and dum (dummy state) are Task 5's.
+// Starts in the round-1 'intro'. timer = frames left in the round (-1 = none, in training); pf = frames in the
+// phase; dum = the training dummy's state (c3_dummy.js); rf = frames each fighter has been out of a combo (training refill).
 function simCreate(o) {
-  const chars = o.chars || ['ren', 'kael'];
-  return {frame: 0, rng: o.seed | 0, mode: o.mode || 'versus', phase: 'fight', pf: 0, round: 1, timer: -1,
+  const chars = o.chars || ['ren', 'kael'], training = o.mode === 'training';
+  return {frame: 0, rng: o.seed | 0, mode: o.mode || 'versus', phase: 'intro', pf: 0, round: 1,
+    timer: training ? -1 : CFG.round.timerS * 60, rf: [0, 0],
     wins: [0, 0], winner: -1, stop: 0, sides: [0, 1].map(i => ({team: [newFighter(i, chars[i])], cur: 0})),
     proj: [], ev: [], dummy: o.dummy || 'fermo', dum: [{act: null, left: 0}, {act: null, left: 0}]};
 }
@@ -129,8 +131,8 @@ const KNOCKED = {knock: 1, getup: 1, rollF: 1, rollB: 1};
 // Actions with the crouching hurtbox height.
 const CROUCHED = {crouch: 1, guardC: 1, cp: 1, ck: 1, chp: 1, chk: 1};
 
-// A hit can touch F: not invulnerable, not knocked down, getting up or held in a throw, and a juggle still under combo.juggleMax hits.
-function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && F.act !== 'thrown' && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
+// A hit can touch F: not invulnerable, not knocked down, not KO'd, getting up or held in a throw, and a juggle still under combo.juggleMax hits.
+function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && F.act !== 'ko' && F.act !== 'thrown' && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
 
 // Hurtboxes in absolute mm, [body, head]: the body is ±body.hurt from the feet to the height minus body.headH,
 // the head ±body.head from there to the height (body.h standing, hCrouch crouching, hAir in the air).
@@ -294,12 +296,68 @@ function knockLeft(F) { return F.act === 'knock' && F.air ? CFG.knock.ground : a
 // Roll speed on frame af (1..knock.roll): integer steps that add up to knock.rollDist.
 function rollSpeed(af) { const k = CFG.knock; return Math.floor(k.rollDist * af / k.roll) - Math.floor(k.rollDist * (af - 1) / k.roll); }
 
+// --- Rounds ---
+
+// Round phases: 'intro' (round.intro frames, inputs ignored) -> 'fight' -> 'ko' | 'timeup' (inputs ignored, physics
+// runs on) -> round.end frames later the round is scored -> next 'intro' or 'end'. In training there is no timer
+// and no KO: hp stays at 1 or more and refills, once, when the fighter has been out of a combo (and not blocking)
+// for training.refill frames.
+function roundStep(S, fs) {
+  const R = CFG.round, training = S.mode === 'training';
+  if (training) trainingStep(S, fs);
+  if (S.phase === 'intro') {
+    if (S.pf === 0) simEmit(S, 'round', fs[0]);   // the HUD reads S.round
+    if (++S.pf >= R.intro) { S.phase = 'fight'; S.pf = 0; simEmit(S, 'fight', fs[0]); }
+  } else if (S.phase === 'fight') {
+    S.pf++;
+    if (fs[0].hp <= 0 || fs[1].hp <= 0) endRound(S, fs, 'ko');   // whatever the source (chip damage too)
+    else if (S.timer > 0 && --S.timer === 0) endRound(S, fs, 'timeup');
+  } else if (S.phase === 'end') {
+    S.pf++;
+  } else if (++S.pf >= R.end) scoreRound(S, fs);   // 'ko' or 'timeup'
+}
+
+function trainingStep(S, fs) {
+  for (const F of fs) {
+    F.hp = Math.max(1, F.hp);
+    S.rf[F.side] = F.combo > 0 || F.act === 'block' ? 0 : Math.min(CFG.training.refill + 1, S.rf[F.side] + 1);
+    if (S.rf[F.side] === CFG.training.refill) F.hp = CFG.body.hp;   // once, so a hp set by hand is not undone
+  }
+}
+
+// The round is over: 'ko' (the fighters at 0 hp fall, the KO hitstop) or 'timeup'. Projectiles in flight vanish.
+function endRound(S, fs, kind) {
+  S.phase = kind; S.pf = 0; S.proj.length = 0;
+  if (kind === 'timeup') { simEmit(S, 'timeup', fs[0]); return; }
+  S.stop = CFG.stop.ko;
+  for (const F of fs) {
+    if (F.hp > 0) continue;
+    setAct(F, 'ko'); F.stun = 0;
+    if (!F.air) { F.air = true; F.vy = CFG.round.ko.vy; F.vx = (F.x < fs[1 - F.side].x ? -1 : 1) * CFG.round.ko.vx; }
+    simEmit(S, 'ko', F);
+  }
+}
+
+// More hp takes the round; equal hp gives it to both. Then the match ends (winner 0, 1 or 2 = both) or the next round starts.
+function scoreRound(S, fs) {
+  const d = fs[0].hp - fs[1].hp;
+  if (d) { const w = d > 0 ? 0 : 1; S.wins[w]++; simEmit(S, 'win', fs[w]); }
+  else { S.wins[0]++; S.wins[1]++; simEmit(S, 'draw', fs[0]); }
+  const w0 = S.wins[0] >= CFG.round.wins, w1 = S.wins[1] >= CFG.round.wins;
+  S.pf = 0;
+  if (w0 || w1) { S.phase = 'end'; S.winner = w0 && w1 ? 2 : w0 ? 0 : 1; return; }
+  for (const side of S.sides) { const old = side.team[side.cur]; side.team[side.cur] = Object.assign(newFighter(old.side, old.char), {meter: old.meter}); }
+  S.round++; S.phase = 'intro'; S.stop = 0;
+  S.timer = S.mode === 'training' ? -1 : CFG.round.timerS * 60;
+}
+
 // One frame. Input first: clean buttons and hold counters, then the 'charge' event. In hitstop (S.stop > 0) nothing
 // else moves: only the buffer takes this frame's command (without expiring) and the input history updates.
 // Otherwise: per fighter command and action (c2_moves.js), then the input history -> physics -> pushboxes, walls,
-// max separation -> facing -> contacts (a hit sets the next hitstop). frame++ either way.
+// max separation -> facing -> contacts (a hit sets the next hitstop). Then the round flow. frame++ either way.
 function simStep(S, in0, in1) {
   S.ev.length = 0;
+  if (S.phase !== 'fight') { in0 = 0; in1 = 0; }   // intro, KO, time up and the end ignore the buttons
   const fs = [fighterOf(S, 0), fighterOf(S, 1)], bits = [inputPhase(fs[0], in0), inputPhase(fs[1], in1)];
   for (let i = 0; i < 2; i++) chargeEvent(S, fs[i], bits[i]);
   if (S.stop > 0) {
@@ -314,5 +372,6 @@ function simStep(S, in0, in1) {
     faceOpponent(fs[0], fs[1]); faceOpponent(fs[1], fs[0]);
     contactPhase(S, fs);
   }
+  roundStep(S, fs);
   S.frame++;
 }

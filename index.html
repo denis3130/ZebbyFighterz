@@ -38,6 +38,10 @@ const CFG={
   // Special (energy shot): spawn = frame the projectile appears, rec = frames after it; speed in mm/frame; box = half-size;
   // x, y = spawn point (forward of the fighter, from the ground); hs/bs/chip as a move's (chip = damage on a block).
   spec:{spawn:14, rec:30, speed:120, box:150, dmg:70, hs:20, bs:16, chip:8, x:500, y:1100, h:'mid', push:0, stop:'spec'},
+  // Rounds: intro/end in frames, timerS in seconds, wins to take the match; ko = the fall of a fighter KO'd on the ground.
+  round:{intro:100, timerS:99, end:150, wins:2, ko:{vx:50, vy:50}},
+  training:{refill:60},   // frames out of a combo before health refills
+  dummy:{min:30, max:60},   // the random dummy changes what it does every min..max frames
   // The plan's move table. s/a/r = startup/active/recovery frames (r 'land' = until landing, then jump.landAtk);
   // hs/bs = hitstun/blockstun; h = height; box = [x0,x1,y0,y1] mm, x forward from the centre, y from the feet;
   // push = pushback speed of the one hit; stop = hitstop class. Chains, once the move has touched: tapP/tapK = move
@@ -83,10 +87,12 @@ function newFighter(side, char) {
 }
 
 // opts = {seed, mode: 'versus'|'training', chars: [c0, c1], dummy: 'fermo'|'casuale'}.
-// Starts in 'fight': round phases, timer (-1 = none), pf (frames in the phase) and dum (dummy state) are Task 5's.
+// Starts in the round-1 'intro'. timer = frames left in the round (-1 = none, in training); pf = frames in the
+// phase; dum = the training dummy's state (c3_dummy.js); rf = frames each fighter has been out of a combo (training refill).
 function simCreate(o) {
-  const chars = o.chars || ['ren', 'kael'];
-  return {frame: 0, rng: o.seed | 0, mode: o.mode || 'versus', phase: 'fight', pf: 0, round: 1, timer: -1,
+  const chars = o.chars || ['ren', 'kael'], training = o.mode === 'training';
+  return {frame: 0, rng: o.seed | 0, mode: o.mode || 'versus', phase: 'intro', pf: 0, round: 1,
+    timer: training ? -1 : CFG.round.timerS * 60, rf: [0, 0],
     wins: [0, 0], winner: -1, stop: 0, sides: [0, 1].map(i => ({team: [newFighter(i, chars[i])], cur: 0})),
     proj: [], ev: [], dummy: o.dummy || 'fermo', dum: [{act: null, left: 0}, {act: null, left: 0}]};
 }
@@ -194,8 +200,8 @@ const KNOCKED = {knock: 1, getup: 1, rollF: 1, rollB: 1};
 // Actions with the crouching hurtbox height.
 const CROUCHED = {crouch: 1, guardC: 1, cp: 1, ck: 1, chp: 1, chk: 1};
 
-// A hit can touch F: not invulnerable, not knocked down, getting up or held in a throw, and a juggle still under combo.juggleMax hits.
-function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && F.act !== 'thrown' && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
+// A hit can touch F: not invulnerable, not knocked down, not KO'd, getting up or held in a throw, and a juggle still under combo.juggleMax hits.
+function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && F.act !== 'ko' && F.act !== 'thrown' && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
 
 // Hurtboxes in absolute mm, [body, head]: the body is ±body.hurt from the feet to the height minus body.headH,
 // the head ±body.head from there to the height (body.h standing, hCrouch crouching, hAir in the air).
@@ -359,12 +365,68 @@ function knockLeft(F) { return F.act === 'knock' && F.air ? CFG.knock.ground : a
 // Roll speed on frame af (1..knock.roll): integer steps that add up to knock.rollDist.
 function rollSpeed(af) { const k = CFG.knock; return Math.floor(k.rollDist * af / k.roll) - Math.floor(k.rollDist * (af - 1) / k.roll); }
 
+// --- Rounds ---
+
+// Round phases: 'intro' (round.intro frames, inputs ignored) -> 'fight' -> 'ko' | 'timeup' (inputs ignored, physics
+// runs on) -> round.end frames later the round is scored -> next 'intro' or 'end'. In training there is no timer
+// and no KO: hp stays at 1 or more and refills, once, when the fighter has been out of a combo (and not blocking)
+// for training.refill frames.
+function roundStep(S, fs) {
+  const R = CFG.round, training = S.mode === 'training';
+  if (training) trainingStep(S, fs);
+  if (S.phase === 'intro') {
+    if (S.pf === 0) simEmit(S, 'round', fs[0]);   // the HUD reads S.round
+    if (++S.pf >= R.intro) { S.phase = 'fight'; S.pf = 0; simEmit(S, 'fight', fs[0]); }
+  } else if (S.phase === 'fight') {
+    S.pf++;
+    if (fs[0].hp <= 0 || fs[1].hp <= 0) endRound(S, fs, 'ko');   // whatever the source (chip damage too)
+    else if (S.timer > 0 && --S.timer === 0) endRound(S, fs, 'timeup');
+  } else if (S.phase === 'end') {
+    S.pf++;
+  } else if (++S.pf >= R.end) scoreRound(S, fs);   // 'ko' or 'timeup'
+}
+
+function trainingStep(S, fs) {
+  for (const F of fs) {
+    F.hp = Math.max(1, F.hp);
+    S.rf[F.side] = F.combo > 0 || F.act === 'block' ? 0 : Math.min(CFG.training.refill + 1, S.rf[F.side] + 1);
+    if (S.rf[F.side] === CFG.training.refill) F.hp = CFG.body.hp;   // once, so a hp set by hand is not undone
+  }
+}
+
+// The round is over: 'ko' (the fighters at 0 hp fall, the KO hitstop) or 'timeup'. Projectiles in flight vanish.
+function endRound(S, fs, kind) {
+  S.phase = kind; S.pf = 0; S.proj.length = 0;
+  if (kind === 'timeup') { simEmit(S, 'timeup', fs[0]); return; }
+  S.stop = CFG.stop.ko;
+  for (const F of fs) {
+    if (F.hp > 0) continue;
+    setAct(F, 'ko'); F.stun = 0;
+    if (!F.air) { F.air = true; F.vy = CFG.round.ko.vy; F.vx = (F.x < fs[1 - F.side].x ? -1 : 1) * CFG.round.ko.vx; }
+    simEmit(S, 'ko', F);
+  }
+}
+
+// More hp takes the round; equal hp gives it to both. Then the match ends (winner 0, 1 or 2 = both) or the next round starts.
+function scoreRound(S, fs) {
+  const d = fs[0].hp - fs[1].hp;
+  if (d) { const w = d > 0 ? 0 : 1; S.wins[w]++; simEmit(S, 'win', fs[w]); }
+  else { S.wins[0]++; S.wins[1]++; simEmit(S, 'draw', fs[0]); }
+  const w0 = S.wins[0] >= CFG.round.wins, w1 = S.wins[1] >= CFG.round.wins;
+  S.pf = 0;
+  if (w0 || w1) { S.phase = 'end'; S.winner = w0 && w1 ? 2 : w0 ? 0 : 1; return; }
+  for (const side of S.sides) { const old = side.team[side.cur]; side.team[side.cur] = Object.assign(newFighter(old.side, old.char), {meter: old.meter}); }
+  S.round++; S.phase = 'intro'; S.stop = 0;
+  S.timer = S.mode === 'training' ? -1 : CFG.round.timerS * 60;
+}
+
 // One frame. Input first: clean buttons and hold counters, then the 'charge' event. In hitstop (S.stop > 0) nothing
 // else moves: only the buffer takes this frame's command (without expiring) and the input history updates.
 // Otherwise: per fighter command and action (c2_moves.js), then the input history -> physics -> pushboxes, walls,
-// max separation -> facing -> contacts (a hit sets the next hitstop). frame++ either way.
+// max separation -> facing -> contacts (a hit sets the next hitstop). Then the round flow. frame++ either way.
 function simStep(S, in0, in1) {
   S.ev.length = 0;
+  if (S.phase !== 'fight') { in0 = 0; in1 = 0; }   // intro, KO, time up and the end ignore the buttons
   const fs = [fighterOf(S, 0), fighterOf(S, 1)], bits = [inputPhase(fs[0], in0), inputPhase(fs[1], in1)];
   for (let i = 0; i < 2; i++) chargeEvent(S, fs[i], bits[i]);
   if (S.stop > 0) {
@@ -379,6 +441,7 @@ function simStep(S, in0, in1) {
     faceOpponent(fs[0], fs[1]); faceOpponent(fs[1], fs[0]);
     contactPhase(S, fs);
   }
+  roundStep(S, fs);
   S.frame++;
 }
 
@@ -536,6 +599,7 @@ function takeoff(S, F, bits) {
 // A knockdown (knock in flight, or a juggle) stays down and its ground time starts ('knock' event);
 // an air attack lands into jump.landAtk frames of landing, a jump into jump.land ('land' event).
 function touchdown(S, F) {
+  if (F.act === 'ko') { F.af = 1; return; }   // a KO'd fighter stays down
   const down = F.act === 'knock' || F.act === 'juggle', m = CFG.moves[F.act];
   F.sj = false;
   setAct(F, down ? 'knock' : 'landing'); F.af = 1;
@@ -576,9 +640,44 @@ function actionStep(S, F, bits) {
   if (!F.air) F.vx = groundSpeed(F);
 }
 
-// Entry point: game state and boot. Later tasks add the fixed-step loop, input and rendering.
+// Training dummy: what the 'casuale' dummy presses. Pure and deterministic like the sim: it reads and advances only S
+// (S.dum[side] and the seeded S.rng).
+
+// The six things it picks from, with equal weight: stand still, walk forward, walk back, crouch, jump, guard (hold back).
+const DUMMY_ACTS = [F => 0, F => fwdBit(F), F => backBit(F), F => BTN.D, F => BTN.U, F => backBit(F)];
+
+// The buttons for side this frame (an integer of BTN bits): 0 for 'fermo'.
+function dummyInput(S, side) {
+  if (S.dummy !== 'casuale') return 0;
+  const d = S.dum[side], k = CFG.dummy;
+  if (d.left <= 0) { d.act = simRand(S, DUMMY_ACTS.length); d.left = k.min + simRand(S, k.max - k.min + 1); }
+  d.left--;
+  return DUMMY_ACTS[d.act](fighterOf(S, side));
+}
+
+// Entry point: game state, the fixed step and boot. Later tasks add the real-time loop, input and rendering.
 const G={state:'boot',mode:null,S:null,acc:0,last:0};
 function boot(){G.state='title';}
+// One game step: read the inputs (player 1 is the dummy in training), advance the sim, hand its events to the effects and the HUD.
+function stepGame(now){
+  const S=G.S;
+  const in0=typeof inputRead==='function'?inputRead(0):0;
+  const in1=S.mode==='training'?dummyInput(S,1):typeof inputRead==='function'?inputRead(1):0;
+  simStep(S,in0,in1);
+  if(typeof fxEvents==='function') fxEvents(S,now);
+  if(typeof hudEvents==='function') hudEvents(S);
+}
+// n game steps, then one render if there is a renderer.
+function frame(n){
+  const now=performance.now();
+  for(let i=0;i<n;i++) stepGame(now);
+  if(typeof renderFrame==='function') renderFrame(G.S,now);
+}
+function startMatch(mode,o){
+  o=o||{};
+  G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
+  G.mode=mode; G.state='fight';
+}
 boot();
 
 })();
