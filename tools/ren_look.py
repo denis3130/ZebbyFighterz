@@ -45,7 +45,6 @@ LINE_THUMB = (.08, .92)   # none where the thumb's skin turns into the hand's (t
 LINE_PALM = .2       # nor on the hand's inner side (its normal this far toward the palm's): curled into the fist, it
                      # faces itself, its shell showed as black wedges in the gaps between the fingers (Denis: "lo spigolo")
 FLAT_BODY = 1.       # flat light on the front of the body (the drawing), as on the face
-FLAT_HAND = .75      # and on the hands: the toon light's bands followed the facets of the fingers (Denis: "pugni a blocchi")
 PERSIST = .015       # a finger stands out at least this far (geodesic, m) from where it joins the hand
 FINGER_SEG = (.45, .30, .25)    # proximal, middle and distal phalanx: shares of a finger's length
 FREE = .80           # the free part of a finger (from the web between the fingers to the tip): share of its length
@@ -633,9 +632,7 @@ def main(pkg, out, drawing):
     for w, pn in palms: inner |= (w + on > .5) & (N @ pn > LINE_PALM)
     line[inner] = 0
     print('outline thinned on', int(face.sum()), 'face and', int((on > 0).sum()), 'finger vertices; none on', int(web.sum()), 'of the thumbs\' roots and', int(inner.sum()), 'of the hands\' inner side')
-    hw = ((J == idx['LeftHand']) * W).sum(1) + ((J == idx['RightHand']) * W).sum(1)
-    flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2]))
-    flat = np.maximum(flat, FLAT_HAND * smooth(.3, .7, hw)).astype(np.float32)
+    flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2])).astype(np.float32)
     print('flat light on', int((flat > .5).sum()), 'vertices (head', int(((flat > .5) & (wh > .5)).sum()), ')')
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
     of = len(blob); blob += flat.tobytes(); op = len(blob); blob += P[moved].astype(np.float32).tobytes(); on = len(blob); blob += N[moved].astype(np.float32).tobytes()

@@ -1819,9 +1819,6 @@ function mdData(key) {
   return MD[key] = {meta, nb: meta.bones.length, bones: meta.bones, index, geo, clips};
 }
 
-// The look's light at most this many times the texture's colour: the drawing's colours are its lit ones, the toon light
-// only shades them (in full it washed the vest's collar and shoulders out to white streaks, like gloss).
-const MD_LIT = 1.0;
 // One Meshy fighter (an F3D item), or null without its package: bones in the rest pose, the toon mesh and its outline
 // (same geometry, same skeleton), the limb points and one material (mats.main: the hit flash). Not yet in the scene.
 // Where CFG.looks[key] asks for them, the look data's parts: finger bones (fists), hair spikes, the face's thin outline,
@@ -1866,7 +1863,7 @@ function modelBuild(key) {
     main.onBeforeCompile = sh => {
       sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
       sh.fragmentShader = 'varying float vFlat;\n' + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-        '$&\n\toutgoingLight = min(outgoingLight, diffuseColor.rgb * ' + MD_LIT.toFixed(2) + ' + totalEmissiveRadiance);\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, vFlat);');
+        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, vFlat);');
     };
     main.customProgramCacheKey = () => 'flat';
   }
@@ -1959,7 +1956,7 @@ function mdRibbon(md, r, at, skel, ol, s, body) {
   const mat = new THREE.MeshToonMaterial({color: new THREE.Color(r.c[0] / 255, r.c[1] / 255, r.c[2] / 255), gradientMap: F3.grad, skinning: true, vertexColors: true});
   mat.onBeforeCompile = sh => {   // mostly flat light (the hit flash's emissive kept)
     sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-      '$&\n\toutgoingLight = min(outgoingLight, diffuseColor.rgb * ' + MD_LIT.toFixed(2) + ' + totalEmissiveRadiance);\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_RIB.flat.toFixed(2) + ');');
+      '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_RIB.flat.toFixed(2) + ');');
   };
   mat.customProgramCacheKey = () => 'ribbon';
   const mesh = new THREE.SkinnedMesh(g, mat);
