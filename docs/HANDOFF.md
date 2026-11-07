@@ -1,8 +1,11 @@
-# Passaggio di consegne — aggiornato il 6 novembre 2026
+# Passaggio di consegne — aggiornato il 7 novembre 2026
 
 - **Registro dell'esecuzione**: `docs/superpowers/plans/2026-11-06-voidrise-tappa1-basi.ledger.md` (ogni decisione presa, con il suo costo, e i punti minori rimandati).
 
 ## Dove siamo
+- **Tappa 2a "Ren di Meshy in gioco" (7/11/2026)**, ramo `tappa2-ren-meshy` (parte da `tappa1-basi`): il lato 0 (Ren) è il modello Meshy con scheletro e 25 animazioni Meshy; Kael resta il lottatore provvisorio. Piano: `docs/superpowers/plans/2026-11-07-voidrise-tappa2a-ren-meshy.md`, registro con tutte le decisioni: `...-ren-meshy.ledger.md`. Task Meshy, crediti (135 spesi, saldo 1225) e come rifare il pacchetto: `docs/meshy/REN.md`.
+  - Come funziona: `tools/meshy_pack.py` → `assets/ren/` (json + bin + jpg, dentro `index.html`, che ora pesa 4,5 MB); `src/e_model.js` disegna lo `SkinnedMesh` toon con contorno e calcola la posa con `mdPoseOf(F, S)`, funzione pura dello stato; la tabella azione → clip è `CFG.clips`. Il colpo cade nel fotogramma attivo della logica (tempo trovato al caricamento); camminate sulla distanza del piede a terra (niente scivolate); calcio basso con IK.
+  - Denis non è contento della faccia (capelli meno a punte del disegno): "teniamolo così per ora".
 - **Tappa 1 "Basi del combattimento" finita** (Task 1-12 del piano `docs/superpowers/plans/2026-11-06-voidrise-tappa1-basi.md`), sul ramo `tappa1-basi`, più le correzioni della revisione finale (vedi sotto). **Non è ancora unita a `main`**: si unisce solo dopo la prova di Denis.
 - Che cosa c'è: allenamento contro un manichino (fermo o casuale), 2 giocatori in locale, arena "La Grande Cascata", due lottatori provvisori (Ren e Kael, cel-shading) con la stessa tabella di mosse, comandi su touch, tastiera (2 set) e controller, HUD, menu, pausa, fine partita, "gira il telefono".
 - Pagina giocabile: vedi `CLAUDE.md` ("Pubblicare").
@@ -11,12 +14,14 @@
 ## Build e test
 ```
 bash mk.sh                      # scrive game_w.html (test, con window.__VF) e index.html (pubblicata); stampa SYNTAX_OK
-for f in smoke sim attack guard round input render fighter3d feel hud menu perf; do python3 tests/run.py tests/$f.test.js || break; done
+for f in smoke sim attack guard round input render fighter3d feel hud menu perf model; do python3 tests/run.py tests/$f.test.js || break; done
 python3 tests/run.py tests/render.test.js --viewport 844x390
 python3 tests/run.py tests/hud.test.js --viewport 844x390
 python3 tests/run.py tests/hud.test.js --viewport 1280x720
 python3 tests/run.py tests/touch.test.js --viewport 844x390 --touch --mobile
 python3 tests/run.py tests/orient.test.js --viewport 390x844 --touch --mobile
+python3 tests/run.py tests/model.test.js --viewport 844x390 --touch --mobile
+python3 tests/play_check.py
 ```
 - Opzioni di `run.py`: `--viewport WxH`, `--touch`, `--mobile`, `--seed N` (un fallimento si ripete con lo stesso seme).
 - Servono `pip install playwright` e Chromium (il runner usa Chrome/Chromium di sistema se c'è). `three.min.js` (r128) è nel repository e i test lo usano al posto del CDN.
@@ -67,7 +72,13 @@ python3 tests/run.py tests/orient.test.js --viewport 390x844 --touch --mobile
 - Su iPhone: Safari → Condividi → "Aggiungi alla schermata Home". La pagina Claude invece resta dentro il sito di Claude (barra in alto) e da File l'html non gira.
 - Prova: `python3 tests/play_check.py` (servita in http, senza CDN: manifest, service worker attivo, ricarica offline fino alla lotta).
 
+## Misure Tappa 2a (7/11/2026, Chromium headless con SwiftShader, 844x390)
+- Logica e durata del round invariate: KO dopo 1040,2 fotogrammi con hitstop, 988,0 senza (come prima).
+- Disegno con sincronizzazione della GPU (`readPixels` a ogni fotogramma, 120 fotogrammi, allenamento con manichino casuale): **da circa 10 ms a circa 27 ms per fotogramma** (prima: commit 74128db, Ren provvisorio). Il Ren Meshy costa circa 9 ms per passaggio (modello e contorno, 30k triangoli con scheletro ciascuno) **nella grafica software**: su un telefono con GPU il costo dei vertici è molto minore, ma va misurato da Denis con "FPS: SÌ". Se scende sotto 60: alleggerire a ~20k triangoli (con i pesi copiati dal vertice più vicino) o un contorno più leggero.
+- `tests/perf.test.js` (senza sincronizzazione) resta sui 0,6 ms per fotogramma: misura solo la CPU.
+
 ## Note per Denis / per dopo
+- Tappa 2a: capelli più a punte come nel disegno (Denis: "non mi piace ma teniamolo così"); rotolata vera (ora `rollF`/`rollB` usano la clip per rialzarsi mentre il corpo scivola); `chp` e `chk` si alzano (anti-aerei) anche se la hitbox resta bassa; la camminata gira circa 5 volte più veloce della clip perché la logica cammina a 4,5 m/s; posa di vittoria (la logica non la usa ancora); Kael di Meshy (modello + scheletro, le stesse animazioni con lo stesso scheletro).
 Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Il forte dopo P,P,P combina solo se il quarto P viene premuto (e tenuto) già durante il p3 o al più 2 fotogrammi dopo il suo colpo: più tardi il colpito esce dallo stordimento prima che il forte parta (lo prende come primo colpo di una nuova combo). Dipende dai tempi di p3 e hp, non toccati.
 - Con la telecamera molto lontana (16:9 alla massima distanza, super salto) il fondale ha poco margine su un lato: lì il tremolio del fondale è più corto verso quel lato.
@@ -79,4 +90,4 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - I modelli Meshy di Ren e Kael sono la Tappa 2: prima mostra a Denis saldo e costo stimato, poi procedi solo con il suo ok. `docs/meshy/` non esiste ancora per questo gioco.
 
 ## Prossimo passo
-Denis prova la pagina sul telefono e con il controller e dice se la Tappa 1 si unisce a `main`. Poi si scrive il piano della Tappa 2 (un piano alla volta), a partire dai modelli Meshy di Ren e Kael.
+Denis prova Ren di Meshy sul telefono (app e pagina Claude) e guarda gli FPS dal menu di pausa ("FPS: SÌ"). Poi: Kael di Meshy (modello dal suo disegno + scheletro; le animazioni si riusano), mostrando prima saldo e costo.
