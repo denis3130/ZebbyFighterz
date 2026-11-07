@@ -164,5 +164,6 @@ function vwInput() {
   cv.addEventListener('dblclick', () => { VW.yaw = VW_YAW; VW.zoom = 1; });
 }
 
+VW.tick = n => { for (let k = 0; k < n; k++) { vwStep(); mdSync(VW.it, 0, VW.S); } };   // tests: n frames now, each drawn (the sash moves)
 window.VW = VW;   // for tests/viewer_check.py
 vwBoot();

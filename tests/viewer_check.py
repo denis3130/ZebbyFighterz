@@ -15,6 +15,52 @@ WRAP = ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" 
         '<style>:root{color-scheme:light}body{margin:0;font:14px/1.4 system-ui,sans-serif}[hidden]{display:none!important}</style></head><body>%s</body></html>')
 
 
+# The sash out of the body (Denis: "la fascia non entri nei vestiti/corpo"): every 3rd of 180 frames of each play button
+# (started from a still guard),
+# the sash's vertices below the band against the body as drawn (skinned on the CPU), inside = winding number > 0 by signed
+# ray crossings on 3 of 4 axis rays (the mesh's parts overlap). Returns the self-test (the hips' joint inside: 4 votes, a
+# point 1 m in front: 0) and per button [share of points inside, deepest (m, along the rays)].
+INSIDE = """async ([plays, frames, every]) => {
+  const it = VW.it, mesh = it.mesh, g = mesh.geometry, I = g.index.array, nt = I.length / 3, CELL = .02, v = new THREE.Vector3();
+  const rib = []; it.body.traverse(o => { if (o.isSkinnedMesh && o.geometry !== g && o.material.isMeshToonMaterial) rib.push(o); });
+  const X = new Float32Array(g.attributes.position.count * 3);
+  const skin = (m, out) => { const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); m.boneTransform(i, v); v.applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return out; };
+  const grid = (a, b) => { const G = new Map();
+    for (let t = 0; t < nt; t++) { let l0 = 1e9, h0 = -1e9, l1 = 1e9, h1 = -1e9;
+      for (let k = 0; k < 3; k++) { const i = I[t * 3 + k] * 3; l0 = Math.min(l0, X[i + a]); h0 = Math.max(h0, X[i + a]); l1 = Math.min(l1, X[i + b]); h1 = Math.max(h1, X[i + b]); }
+      for (let c0 = Math.floor(l0 / CELL); c0 <= Math.floor(h0 / CELL); c0++) for (let c1 = Math.floor(l1 / CELL); c1 <= Math.floor(h1 / CELL); c1++) {
+        const key = c0 * 100003 + c1; let l = G.get(key); if (!l) G.set(key, l = []); l.push(t); } }
+    return G; };
+  const cross = (G, a, b, c, p) => { const l = G.get(Math.floor(p[a] / CELL) * 100003 + Math.floor(p[b] / CELL)); let wp = 0, wm = 0, dp = 1e9, dm = 1e9;
+    if (l) for (const t of l) { const i0 = I[t * 3] * 3, i1 = I[t * 3 + 1] * 3, i2 = I[t * 3 + 2] * 3;
+      const ax = X[i0 + a], ay = X[i0 + b], bx = X[i1 + a], by = X[i1 + b], cx = X[i2 + a], cy = X[i2 + b], d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+      if (Math.abs(d) < 1e-14) continue;
+      const u = ((by - cy) * (p[a] - cx) + (cx - bx) * (p[b] - cy)) / d, w = ((cy - ay) * (p[a] - cx) + (ax - cx) * (p[b] - cy)) / d, z = 1 - u - w;
+      if (u < 0 || w < 0 || z < 0) continue;
+      const h = u * X[i0 + c] + w * X[i1 + c] + z * X[i2 + c], e1 = [0, 1, 2].map(k => X[i1 + k] - X[i0 + k]), e2 = [0, 1, 2].map(k => X[i2 + k] - X[i0 + k]);
+      const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]][c];
+      if (h > p[c]) { wp += n > 0 ? 1 : -1; dp = Math.min(dp, h - p[c]); } else { wm += n < 0 ? 1 : -1; dm = Math.min(dm, p[c] - h); } }
+    return [wp, wm, dp, dm]; };
+  const vote = (Gz, Gx, p) => { const z = cross(Gz, 0, 1, 2, p), x = cross(Gx, 1, 2, 0, p); return [[z[0], z[1], x[0], x[1]].filter(w => w > 0).length, Math.min(z[2], z[3], x[2], x[3])]; };
+  VW.speed = 0; VW.spin = false; it.root.updateMatrixWorld(true); skin(mesh, X);
+  const hip = it.bones[0].getWorldPosition(new THREE.Vector3()).toArray(), Gz0 = grid(0, 1), Gx0 = grid(1, 2);
+  const out = {self: [vote(Gz0, Gx0, hip)[0], vote(Gz0, Gx0, [hip[0], hip[1], hip[2] + 1])[0]]};
+  for (const k of plays) {   // each from a still guard (a button pressed mid-air drops the fighter to the floor at once)
+    document.getElementById('play0').click(); VW.tick(20); it.sash.F = null; VW.tick(60);   // the guard's pose settled, the sash anew
+    document.getElementById('play' + k).click(); let bad = 0, pts = 0, deep = 0;
+    for (let f = 0; f < frames; f++) {
+      VW.tick(1); if (f % every) continue;
+      it.root.updateMatrixWorld(true); skin(mesh, X); const Gz = grid(0, 1), Gx = grid(1, 2);
+      for (const r of rib) { const R = skin(r, new Float32Array(r.geometry.attributes.position.count * 3));
+        for (let i = 8; i < R.length / 3; i++) { const [vt, d] = vote(Gz, Gx, [R[i * 3], R[i * 3 + 1], R[i * 3 + 2]]); pts++; if (vt >= 3) { bad++; deep = Math.max(deep, d); } } } }
+    out[k] = [bad / pts, deep]; }
+  VW.speed = 1; return out; }"""
+SASH_OUT = {0: .015, 1: .01, 2: .01, 3: .02, 4: .05, 5: .01, 6: .01, 7: .01, 8: .01, 9: .05}   # most shares inside allowed per
+# button (7/11/2026, the worst of 5 starting moments: guard .7%, walk 0, punches .1%, kicks 1%, crouch 3.3%, jump .3%,
+# special 0, throw .4%, hit .1%, down 3.2%; before, with the legs as thin capsules: 8 to 38%). Crouching and lying, the
+# top of the sash is pressed between the thighs and the belly, hidden in the fold.
+
+
 async def route(r):
     u = r.request.url
     if 'three.min.js' in u: await r.fulfill(path=os.path.join(ROOT, 'three.min.js'), content_type='application/javascript')
@@ -64,17 +110,22 @@ async def main(out_dir):
             sash = await pg.evaluate("""async () => { const it = VW.it, sa = it.sash, r = {};
               if (!sa) return {ribbons: false};
               const tip = () => sa.ribbons.map(q => q.P[q.P.length - 1].clone()), off = () => Math.max(...sa.ribbons.map(q => q.P[q.P.length - 1].distanceTo(q.T[q.T.length - 1])));
-              document.getElementById('play0').click(); await new Promise(f => setTimeout(f, 1500));
-              const a = tip(); await new Promise(f => setTimeout(f, 200)); const b = tip();
+              VW.speed = 0; document.getElementById('play0').click(); VW.tick(100);   // the guard, still (game frames, not the clock)
+              const a = tip(); VW.tick(12); const b = tip(); VW.speed = 1;
               r.ribbons = sa.ribbons.length === 2 && sa.ribbons.every(q => q.bones.length >= 4);
               r.calm = a.every((p, i) => p.distanceTo(b[i]) < .02);
               document.getElementById('play5').click(); let most = 0;
               for (let k = 0; k < 12; k++) { await new Promise(f => setTimeout(f, 80)); most = Math.max(most, off()); }
-              r.swings = most > .03 && most < .6;
+              r.swings = most > .03 && most < 1;   // moves, without flying off (it is .5 m long)
               r.finite = sa.ribbons.every(q => q.P.every(p => Number.isFinite(p.x + p.y + p.z)));
               return r; }""")
             look.update(sash)
             if not all(look.values()): errs.append('look ' + str(look))
+            if w > h:   # once: the sash out of the body in every play button's moves
+                ins = await pg.evaluate(INSIDE, [list(SASH_OUT), 180, 3]); slf = ins.pop('self')
+                over = {k: v for k, v in ins.items() if v[0] > SASH_OUT[int(k)]}
+                if slf != [4, 0] or over: errs.append('sash inside the body %s (self-test %s)' % ({k: [round(v[0], 3), round(v[1], 3)] for k, v in over.items()}, slf))
+                print('  sash inside the body, per button (share, deepest m):', {k: [round(v[0], 3), round(v[1], 3)] for k, v in ins.items()})
             ok = n == 10 and drawn > 200 and not errs
             failed += not ok
             print(('PASS' if ok else 'FAIL') + ' viewer %dx%d: %d play buttons, %d drawn pixels of 4096 in the middle%s' % (w, h, n, drawn, (', ' + ' | '.join(errs[:3])) if errs else ''))

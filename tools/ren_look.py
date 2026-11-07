@@ -18,7 +18,8 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
         where the shell around the nose showed as a dark wedge; LINE_FINGER on the fingers, whose shells stuck out
         between the curled fingers of the fist)
   sash: {ribbons: [{j: SASH_SEG + 1 points in the Hips bone's frame, from the band to the tip; w: width; a: unit across;
-        n: unit out of its face; c: colour}], legs: {thigh, shin: radii of the trousers around the legs' bones}}: the
+        n: unit out of its face; c: colour}], body: [body_shape of each of BODY], blend: [byte offset, count] uint16: the
+        vertices shared between the parts (BLEND_W)}: the
         sash's two hanging tails as ribbons of their own (Meshy fused them with the trousers and the vest), where the
         drawing has them seen from the front; tools/paint_from_drawing.py paints the old ones over
   spikes: [{p (base), d (unit direction), t (unit: the lock's thin side, outward), len, r}] in the Head bone's frame:
@@ -45,7 +46,18 @@ NAMES = ('Thumb', 'Index', 'Middle', 'Ring', 'Pinky')
 # The sash's tails: on the model, orange below SASH_BAND (m, the band's lower edge) in pieces of at least SASH_MIN
 # vertices (painted over, tools/paint_from_drawing.py); as ribbons, the drawing's two tails seen from the front, each of
 # SASH_SEG bones, SASH_GAP m in front of the body, SASH_W m wide (clamped).
-SASH_BAND, SASH_MIN, SASH_SEG, SASH_GAP, SASH_W = 1.06, 200, 6, .018, (.06, .1)
+SASH_BAND, SASH_MIN, SASH_SEG, SASH_GAP, SASH_W = 1.06, 200, 9, .018, (.06, .1)
+# The body the sash stays out of: around each of these bones (to its child), the volume of the mesh's vertices that
+# follow it (weight BODY_W and more: the trousers, the vest's front flaps on the thighs, the hips with the crotch and the
+# belly), full
+# (all of it, the gaps under the flaps too), measured in BODY_BINS slices along the bone and BODY_SECT sectors around it:
+# per cell the farthest vertex, widened to its neighbours' (none is missed between two cells).
+BODY = {'Hips': 'Spine02', 'Spine02': 'Spine01', 'LeftUpLeg': 'LeftLeg', 'LeftLeg': 'LeftFoot', 'RightUpLeg': 'RightLeg', 'RightLeg': 'RightFoot'}   # bone: its child
+BODY_W, BODY_BINS, BODY_SECT = {'*': .5, 'Hips': .25}, 12, 24   # the hips' with the crotch (shared by the hips and both thighs)
+# The body between those parts (the trousers' crotch between the legs, the knees, the hips' creases): its vertices with
+# BLEND_W and more of their weight on a second part, one about every BLEND_D m between the heights BLEND_Y (m). They
+# stretch between the parts as the legs move, so no part's shape holds them: the sash keeps off them as drawn each frame.
+BLEND_W, BLEND_D, BLEND_Y = .2, .025, (.25, 1.1)
 
 
 def qm(q):
@@ -309,6 +321,31 @@ def sash_band_end(orange):
     return b
 
 
+def body_shape(P, J, W, G, idx, bone, child):
+    """The body around a bone, for the sash not to go into it: in the bone's bind frame, along its axis (to child's joint)
+    in BODY_BINS slices over its vertices (weight BODY_W[bone] and more), the radius per BODY_SECT sectors around the axis: the
+    farthest vertex in the cell, then the largest of the cell and its 8 neighbours. {b, ax, u (sector 0's direction),
+    len, t: [t0, t1] (bone lengths), r: [bins][sectors]}."""
+    b = idx[bone]; inv = np.linalg.inv(G[b]); w = ((J == b) * W).sum(1); Q = P[w >= BODY_W.get(bone, BODY_W['*'])] @ inv[:3, :3].T + inv[:3, 3]
+    a = inv[:3, :3] @ G[idx[child]][:3, 3] + inv[:3, 3]; ln = float(np.linalg.norm(a)); ax = a / ln
+    u = unit(np.cross(ax, [1., 0, 0] if abs(ax[0]) < .9 else [0, 0, 1.])); v = np.cross(ax, u)
+    t = Q @ ax / ln; rad = Q - np.outer(t * ln, ax); r = np.linalg.norm(rad, axis=1)
+    sec = ((np.arctan2(rad @ v, rad @ u) + np.pi) / (2 * np.pi) * BODY_SECT).astype(int) % BODY_SECT
+    t0, t1 = float(t.min()), float(t.max()); bi = np.clip(((t - t0) / (t1 - t0) * BODY_BINS).astype(int), 0, BODY_BINS - 1)
+    R = np.zeros((BODY_BINS, BODY_SECT)); np.maximum.at(R, (bi, sec), r)
+    for _ in range(BODY_SECT):   # empty cells from their neighbours
+        Z = R == 0
+        if not Z.any(): break
+        N = np.maximum(np.roll(R, 1, 1), np.roll(R, -1, 1)); N = np.maximum(N, np.vstack([R[1:], R[-1:]])); N = np.maximum(N, np.vstack([R[:1], R[:-1]]))
+        R[Z] = N[Z]
+    D = R.copy()
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            D = np.maximum(D, np.roll(np.vstack([R[:1]] * max(0, -di) + [R] + [R[-1:]] * max(0, di))[max(0, di):len(R) + max(0, di)], dj, 1))
+    return {'b': bone, 'ax': [round(float(x), 5) for x in ax], 'u': [round(float(x), 5) for x in u], 'len': round(ln, 5),
+            't': [round(t0, 4), round(t1, 4)], 'r': [[round(float(x), 4) for x in row] for row in D]}
+
+
 def drawing_tails(D):
     """The sash's two hanging tails in the drawing (front view): per tail, largest first, {top: (x, y) px of the middle of
     its first row under the band, tip: its lowest pixel, w: px wide (median of its upper half's rows), c: its colour}."""
@@ -423,11 +460,13 @@ def main(pkg, out, drawing):
         r = ribbon_of(t, P, sc, cx, by)
         ribbons.append({'j': [[round(float(v), 5) for v in ih[:3, :3] @ q + ih[:3, 3]] for q in r['j']], 'w': round(r['w'], 4),
                         'a': [round(float(v), 5) for v in ih[:3, :3] @ r['a']], 'n': [round(float(v), 5) for v in ih[:3, :3] @ r['n']], 'c': r['c']})
-    legs = {}
-    for part, (b0, b1) in {'thigh': ('LeftUpLeg', 'LeftLeg'), 'shin': ('LeftLeg', 'LeftFoot')}.items():
-        a0, a1 = G[idx[b0]][:3, 3], G[idx[b1]][:3, 3]; wv = ((J == idx[b0]) * W).sum(1) > .8; q = P[wv]
-        t = np.clip((q - a0) @ (a1 - a0) / ((a1 - a0) @ (a1 - a0)), 0, 1); legs[part] = round(float(np.percentile(np.linalg.norm(q - a0 - np.outer(t, a1 - a0), axis=1), 60)), 4)
-    print('sash ribbons', [(len(r['j']), r['w']) for r in ribbons], 'leg radii', legs)
+    body = [body_shape(P, J, W, G, idx, b, c) for b, c in BODY.items()]
+    Wb = np.stack([((J == idx[b]) * W).sum(1) for b in BODY], 1); second = np.sort(Wb, 1)[:, -2]
+    shared = (second >= BLEND_W) & (Wb.sum(1) >= .9) & (P[:, 1] > BLEND_Y[0]) & (P[:, 1] < BLEND_Y[1])
+    _, one = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True)   # one copy of each seam's vertices
+    cand = one[shared[one]]
+    blend = np.sort(cand[np.unique(np.floor(P[cand] / BLEND_D).astype(np.int64), axis=0, return_index=True)[1]]).astype(np.uint16)
+    print('sash ribbons', [(len(r['j']), r['w']) for r in ribbons], 'body shapes', [(x['b'], round(float(np.max(x['r'])), 3)) for x in body], 'shared points', len(blend))
     # --- the outline on the face: thin where the head faces forward and the texture is skin ---
     N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2)
     tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int); ts = tex.shape[0]
@@ -440,9 +479,9 @@ def main(pkg, out, drawing):
     flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2])).astype(np.float32)
     print('flat light on', int((flat > .5).sum()), 'vertices (head', int(((flat > .5) & (wh > .5)).sum()), ')')
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
-    of = len(blob); blob += flat.tobytes()
+    of = len(blob); blob += flat.tobytes(); ob = len(blob); blob += blend.tobytes()
     look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)],
-            'flat': [of, int(flat.size)], 'spikes': spikes, 'sash': {'ribbons': ribbons, 'legs': legs}}
+            'flat': [of, int(flat.size)], 'spikes': spikes, 'sash': {'ribbons': ribbons, 'body': body, 'blend': [ob, int(blend.size)]}}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_look.bin'), 'wb').write(blob)
     json.dump(look, open(os.path.join(out, name + '_look.json'), 'w'), separators=(',', ':'))

@@ -134,14 +134,14 @@ tv = np.zeros(len(P), bool)
 for t in sash_tails(P, vcol, I): tv[t] = True
 for _ in range(2):   # the tails' darker edges too: two rings of neighbours
     tv2 = tv.copy(); tv2[I[tv[I].any(1)].ravel()] = True; tv = tv2
-c = out[ys, xs]; orng = (c[:, 0] > 85) & (c[:, 0] > c[:, 1]) & (c[:, 0] - c[:, 2] > 55)   # warm: orange to its brown shadows
+c = out[ys, xs]; orng = (c[:, 0] > c[:, 1] + 12) & (c[:, 0] - c[:, 2] > 25)   # warm: orange to its dark brown shadows
 low = (pos[:, 1] < SASH_BAND) & (np.abs(pos[:, 0]) < .33)
 tt = ((tv[I[ks]].sum(1) >= 2) & low) | (orng & low)    # the model's tails, and the drawing's painted below the band
 # the drawing without its tails: each tail pixel (with its lines, a few px around) takes the colour of the nearest
 # pixel of the vest or the trousers beside it (not a black line): flat colours, split down the middle of the tail
 od = sash_orange(D); od[:sash_band_end(od) + 6] = False
 od = ndimage.binary_dilation(ndimage.binary_closing(od, iterations=2), iterations=4)
-warm = (D[..., 0] > 80) & (D[..., 0] > D[..., 1]) & (D[..., 0] - D[..., 2] > 40)   # the tails' orange edges, shadows
+warm = (D[..., 0] > D[..., 1] + 12) & (D[..., 0] - D[..., 2] > 25)   # the tails' orange edges and dark brown shadows
 src = ndimage.binary_erosion(mask, iterations=3) & ~od & ~warm & (D.sum(2) > 150)   # not the light anti-aliased edge either
 _, (sy, sx) = ndimage.distance_transform_edt(~src, return_indices=True)
 out[ys[tt], xs[tt]] = D[sy, sx][pvi[tt], pui[tt]]
