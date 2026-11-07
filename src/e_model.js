@@ -29,7 +29,8 @@ function mdData(key) {
 
 // One Meshy fighter (an F3D item), or null without its package: bones in the rest pose, the toon mesh and its outline
 // (same geometry, same skeleton), the limb points and one material (mats.main: the hit flash). Not yet in the scene.
-// Where CFG.looks[key] asks for them, the look data's parts: finger bones (fists), hair spikes, the face's thin outline.
+// Where CFG.looks[key] asks for them, the look data's parts: finger bones (fists), hair spikes, the face's thin outline,
+// the face's flat light, the outline's own width.
 function modelBuild(key) {
   const md = mdData(key);
   if (!md) return null;
@@ -42,12 +43,13 @@ function modelBuild(key) {
   // fists: the fingers' bones under the hands (after the package's in the skeleton, as the look's skin counts them)
   const fingers = look && lk.fists ? look.fingers.map(f => { const o = new THREE.Bone(); o.name = f.n; o.position.fromArray(f.t); return o; }) : [];
   fingers.forEach((o, k) => (B(look.fingers[k].p) || fingers.find(g => g.name === look.fingers[k].p)).add(o));
-  const per = look && lk.faceLine ? ' * aLine' : '', geo = fingers.length || per ? new THREE.BufferGeometry() : md.geo;
+  const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, geo = fingers.length || per || flat ? new THREE.BufferGeometry() : md.geo;
   if (geo !== md.geo) {   // the package's geometry, its attributes shared (not copied), with the look's skin and outline widths
     for (const a in md.geo.attributes) geo.setAttribute(a, md.geo.attributes[a]);
     geo.setIndex(md.geo.index);
     if (fingers.length) { geo.setAttribute('skinIndex', look.skin[0]); geo.setAttribute('skinWeight', look.skin[1]); }
     if (per) geo.setAttribute('aLine', look.line);
+    if (flat) geo.setAttribute('aFlat', look.flat);
   }
   // The texture appears once decoded; until then the mesh draws with an empty map (no error, no warning).
   const img = new Image(), tex = new THREE.Texture(img);
@@ -55,9 +57,15 @@ function modelBuild(key) {
   img.src = ASSETS[key + '/' + key + '.jpg'];
   img.decode().then(() => { tex.needsUpdate = true; }, () => {});
   const main = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true});
-  const line = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide, skinning: true}), w = (MD_OUTLINE / s).toFixed(5);
-  line.onBeforeCompile = sh => { sh.vertexShader = (per ? 'attribute float aLine;\n' : '') + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normal * ' + w + per + ';'); };
-  line.customProgramCacheKey = () => w + per;
+  if (flat) {   // the look's flat light: per vertex, the share of the texture's own colour (the face's drawn shading)
+    main.onBeforeCompile = sh => {
+      sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
+      sh.fragmentShader = 'varying float vFlat;\n' + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, vFlat);');
+    };
+    main.customProgramCacheKey = () => 'flat';
+  }
+  const ol = lk.line || {w: MD_OUTLINE, back: 0}, line = mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per, back: ol.back});
   const mesh = new THREE.SkinnedMesh(geo, main), outline = new THREE.SkinnedMesh(geo, line);
   mesh.frustumCulled = outline.frustumCulled = false;
   body.add(mesh, outline);
@@ -70,18 +78,35 @@ function modelBuild(key) {
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = look.fingers.map(f => new THREE.Quaternion().fromArray(f.fist)); }
   if (!md.hitT) mdMeasure(md, it);
-  if (look && lk.spikes) B('Head').add(mdSpikes(look.spikes));
+  if (look && lk.spikes) B('Head').add(mdSpikes(look.spikes, ol.back));
   return it;
 }
 
-// The hair spikes of the look data on the head: flattened cones in the hair colour of Denis's drawing, with outlines.
-const MD_HAIR = 0x4a3d45, MD_LINE = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide});
-function mdSpikes(list) {
+// An outline shell's material (the back faces drawn in the outline colour): o = {skinning, w (model units: the push
+// along the normals, '' for none), per (' * aLine': times the per-vertex width), back (m: pushed away from the camera,
+// so the shell shows around the silhouette and not through the body's folds)}.
+function mdLineMat(o) {
+  const m = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide, skinning: !!o.skinning}), per = o.per || '';
+  m.onBeforeCompile = sh => {
+    let v = (per ? 'attribute float aLine;\n' : '') + sh.vertexShader;
+    if (o.w) v = v.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normal * ' + o.w + per + ';');
+    if (o.back) v = v.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.z -= ' + o.back.toFixed(4) + ';\n\tgl_Position = projectionMatrix * mvPosition;');
+    sh.vertexShader = v;
+  };
+  m.customProgramCacheKey = () => [o.w, per, o.back].join('|');
+  return m;
+}
+
+// The hair spikes of the look data on the head: flattened cones in the hair colour of Denis's drawing, with outlines
+// (a scaled shell, pushed back by back m as the body's).
+const MD_HAIR = 0x4a3d45;
+function mdSpikes(list, back) {
   const g = new THREE.Group(), mat = new THREE.MeshToonMaterial({color: MD_HAIR, gradientMap: F3.grad}), up = new THREE.Vector3(0, 1, 0);
+  const line = mdLineMat({back}), k = back ? [1.12, 1.04, 1.18] : [1.22, 1.07, 1.35];
   for (const s of list) {
     const geo = new THREE.ConeGeometry(s.r, s.len, 7, 1); geo.translate(0, s.len / 2, 0); geo.scale(1, 1, .5);
-    const m = new THREE.Mesh(geo, mat), o = new THREE.Mesh(geo, MD_LINE);
-    o.scale.set(1.22, 1.07, 1.35); m.add(o);
+    const m = new THREE.Mesh(geo, mat), o = new THREE.Mesh(geo, line);
+    o.scale.set(...k); m.add(o);
     m.position.fromArray(s.p); m.quaternion.setFromUnitVectors(up, new THREE.Vector3().fromArray(s.d));
     g.add(m);
   }
@@ -89,7 +114,8 @@ function mdSpikes(list) {
 }
 
 // The look data of package key ('<key>/<key>_look.json' and '.bin', tools/ren_look.py), decoded once onto md, or null:
-// {fingers: the finger bones, skin: [skinIndex, skinWeight] with them, line: the outline widths, spikes}.
+// {fingers: the finger bones, skin: [skinIndex, skinWeight] with them, line: the outline widths, flat: the flat light's
+// share, spikes}.
 function mdLookData(md, key) {
   if (md.look !== undefined) return md.look;
   const j = ASSETS[key + '/' + key + '_look.json'], b64 = ASSETS[key + '/' + key + '_look.bin'];
@@ -99,7 +125,7 @@ function mdLookData(md, key) {
   const f32 = a => new Float32Array(u8.buffer, a[0], a[1]);
   return md.look = {fingers: j.fingers, spikes: j.spikes,
     skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
-    line: new THREE.BufferAttribute(f32(j.line), 1)};
+    line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1)};
 }
 
 // --- Poses: {q: local rotations, nb x 4, h: the Hips' local position} ---

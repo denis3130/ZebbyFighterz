@@ -10,6 +10,9 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
           branches of the geodesic distance from the wrist), with the joints at a hand's usual proportions.
   skin: [[byte offset, count] uint8 x4, [byte offset, count] float32 x4] per vertex: the package's skin with the
         fingers on their bones (bone index: the package's bones, then the fingers in the order above)
+  flat: [byte offset, count] float32 per vertex: how much of the light the toon shading leaves out there (1 on the front
+        of the head, fading to 0 by its sides): the drawing painted on the face has its own shading, the light's only
+        darkened half of it
   line: [byte offset, count] float32 per vertex: the outline's width there (1; LINE_FACE on the front of the face,
         where the shell around the nose showed as a dark wedge; LINE_FINGER on the fingers, whose shells stuck out
         between the curled fingers of the fist)
@@ -298,8 +301,12 @@ def main(pkg, out, drawing):
     line = np.ones(len(P), np.float32); line[face] = LINE_FACE
     on = (wn * (jn >= len(bones))).sum(1); line = np.minimum(line, 1 - (1 - LINE_FINGER) * on).astype(np.float32)
     print('outline thinned on', int(face.sum()), 'face and', int((on > 0).sum()), 'finger vertices')
+    flat = (smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh)).astype(np.float32)
+    print('flat light on', int((flat > .5).sum()), 'vertices of the head')
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
-    look = {'v': 2, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)], 'spikes': spikes}
+    of = len(blob); blob += flat.tobytes()
+    look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)],
+            'flat': [of, int(flat.size)], 'spikes': spikes}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_look.bin'), 'wb').write(blob)
     json.dump(look, open(os.path.join(out, name + '_look.json'), 'w'), separators=(',', ':'))

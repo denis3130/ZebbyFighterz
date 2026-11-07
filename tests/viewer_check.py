@@ -58,7 +58,7 @@ async def main(out_dir):
               document.getElementById('play6').click(); await new Promise(f => setTimeout(f, 300));
               r.open = it.curl === 0 && it.fingers.every(o => Math.abs(o.quaternion.w) > .9999);
               r.spikes = it.joints.head.children.some(g => g.isGroup && g.children.length >= 8);
-              r.line = !!it.mesh.geometry.attributes.aLine; return r; }""")
+              r.line = !!it.mesh.geometry.attributes.aLine && !!it.mesh.geometry.attributes.aFlat; return r; }""")
             if not all(look.values()): errs.append('look ' + str(look))
             ok = n == 10 and drawn > 200 and not errs
             failed += not ok

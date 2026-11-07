@@ -11,7 +11,9 @@ surface faces the viewer and is visible from the front takes the drawing's colou
 the front); the others keep the model's own texture. Outside the drawn silhouette the nearest drawn colour is used,
 so model edges that stick out a little take the drawing's outline. On the hands (the drawing's are spread a little
 differently) a texel that came out neither skin nor a dark line (the wraps' white, the background's grey on the
-fingertips) takes the colour of the nearest skin texel of the hands instead.
+fingertips) takes the colour of the nearest skin texel of the hands instead. On the face (the head's skin) the drawing
+is kept only where the surface faces the front squarely, plain skin where it turns away: the drawing's edges stretched
+over the sides of the nose and the jaw read as dirt.
 """
 import json, os, sys
 import numpy as np
@@ -27,12 +29,13 @@ def load(pkg):
     I = f(me['idx'], np.uint16 if me['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
     J = f(me['jnt'], np.uint8).reshape(-1, 4); W = f(me['wgt']).reshape(-1, 4)
     hands = [i for i, b in enumerate(m['bones']) if b['n'] in ('LeftHand', 'RightHand')]
-    return name, P, N, UV, I, (np.isin(J, hands) * W).sum(1)
+    head = [i for i, b in enumerate(m['bones']) if b['n'] == 'Head']
+    return name, P, N, UV, I, (np.isin(J, hands) * W).sum(1), (np.isin(J, head) * W).sum(1)
 
 
 if len(sys.argv) != 4: sys.exit(__doc__)
 PKG, DRAWING, OUT = sys.argv[1:]
-name, P, N, UV, I, HANDW = load(PKG)
+name, P, N, UV, I, HANDW, HEADW = load(PKG)
 D = np.asarray(Image.open(DRAWING).convert('RGB')).astype(np.float64)
 H, Wd = D.shape[:2]
 bg = D[5:40, 5:40].reshape(-1, 3).mean(0)
@@ -101,6 +104,14 @@ wgt = face * vis
 col = Dfill[pvi, pui]
 out = TEX.copy()
 out[ys, xs] = TEX[ys, xs] * (1 - wgt[:, None]) + col * wgt[:, None]
+# --- the face: the drawing where the head's skin faces the front, its skin colour where it turns away ---
+sk = lambda c: (c[:, 0] > 120) & (c[:, 1] > 75) & (c[:, 0] - c[:, 2] > 40)
+facet = ((HEADW[I[ks]] * bary).sum(1) > .5) & sk(TEX[ys, xs])
+fw = np.clip((nor[:, 2] - .45) / .2, 0, 1); fw = fw * fw * (3 - 2 * fw) * vis
+pick = facet & (fw > .9) & sk(col)
+skin_col = np.median(col[pick], 0) if pick.any() else np.array([246., 181, 131])
+out[ys[facet], xs[facet]] = col[facet] * fw[facet, None] + skin_col * (1 - fw[facet, None])
+print('face texels', int(facet.sum()), 'drawn (front) ', int((facet & (fw > .5)).sum()), 'skin', np.round(skin_col))
 # --- the hands: neither skin nor a dark line -> the nearest skin texel of the hands ---
 c = out[ys, xs]; hand = (HANDW[I[ks]] * bary).sum(1) > .5
 skin = (c[:, 0] > 150) & (c[:, 1] > 95) & (c[:, 0] - c[:, 2] > 50); dark = c.sum(1) < 240
