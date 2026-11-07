@@ -1873,10 +1873,14 @@ function modelBuild(key) {
   if (fingers.length) { it.fingers = fingers; it.fist = look.fingers.map(f => new THREE.Quaternion().fromArray(f.fist)); }
   if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash
     let at = bones.length + fingers.length;
+    const HB = skel.boneInverses[md.index.Hips].clone().invert(), hb = md.bones[md.index.Hips];   // the Hips at bind (world; in the body)
+    const HM = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(hb.t), new THREE.Quaternion().fromArray(hb.q), new THREE.Vector3(1, 1, 1));
     it.sash = {frame: 0, F: null, ribbons: look.sash.ribbons.map((r, i) => {
       const m = mdRibbon(md, r, at, skel, ol, s, body); at += sash[i].length; it.mats['sash' + i] = m.mesh.material;
-      return {bones: sash[i], w: r.w, s, fix: r.fix || 1, tuckRows: m.tuckRows, a: new THREE.Vector3().fromArray(r.a), j: r.j.map(p => new THREE.Vector3().fromArray(p)),
-        P: r.j.map(() => new THREE.Vector3()), Q: r.j.map(() => new THREE.Vector3()), T: r.j.map(() => new THREE.Vector3()), L: []};
+      return {bones: sash[i], w: r.w, wp: r.wp || r.j.map(() => r.w), s, fix: r.fix || 1, tuckRows: m.tuckRows, a: new THREE.Vector3().fromArray(r.a), j: r.j.map(p => new THREE.Vector3().fromArray(p)),
+        P: r.j.map(() => new THREE.Vector3()), Q: r.j.map(() => new THREE.Vector3()), T: r.j.map(() => new THREE.Vector3()), L: [],
+        sk: (r.sk || []).map((l, k) => ({b: l.map(e => e[0]), w: l.map(e => e[1]), p: new THREE.Vector3().fromArray(r.j[k]).applyMatrix4(HB)})),   // the top's skin (mdSash)
+        jb: r.j.map(p => new THREE.Vector3().fromArray(p).applyMatrix4(HM))};   // at bind, in the body
     }), body: look.sash.body.map(x => {   // the body it stays out of (mdBodyOut)
       const ax = new THREE.Vector3().fromArray(x.ax), u = new THREE.Vector3().fromArray(x.u);
       return {bone: B(x.b), ax, u, v: new THREE.Vector3().crossVectors(ax, u), len: x.len, t0: x.t[0], t1: x.t[1], nb: x.r.length, ns: x.r[0].length,
@@ -1904,24 +1908,28 @@ function mdLineMat(o) {
   return m;
 }
 
-// A sash ribbon r of the look data ({j: its chain's points in the Hips' frame, top to tip; w; a: across; n: out of its
-// face; c: colour}) as a thin slab with a cut tip, skinned along the chain (bone indices from at) and put in body: toon in
-// the sash's colour, with an outline as the body's (ol, scale s).
-const MD_RIB = {rows: 3, th: .012, back: .004};   // rows per bone, thickness (m), outline push back (less than the body's: it shows on it)
+// A sash ribbon r of the look data ({j: its chain's points in the Hips' frame, top to tip; wp: its width at each (w
+// alone: the same all along); tuck: m of it under the band; cut: the share of its length its tip's slanted cut takes, on
+// its inner edge (out: the side of a, away from the middle, that runs to the tip); a: across; n: out of its face; c:
+// colour}) as a thin slab, skinned along the chain (bone indices from at) and put in body: in the sash's colour, its
+// light mostly flat as on the band's front (flat; its back, toward the body, shade as dark: the drawing's twisted tails),
+// with an outline as the body's (ol, scale s) that starts at nothing where it comes out from under the band and grows
+// over fade m (Denis, 7/11: "la fascia è staccata": a line across its top cut it off the band).
+const MD_RIB = {rows: 3, th: .012, back: .004, flat: .7, shade: .8, fade: .03};   // rows per bone, thickness (m), outline push back (less than the body's: it shows on it)
 function mdRibbon(md, r, at, skel, ol, s, body) {
   const H = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(md.bones[md.index.Hips].t), new THREE.Quaternion().fromArray(md.bones[md.index.Hips].q), new THREE.Vector3(1, 1, 1));
   const C = r.j.map(p => new THREE.Vector3().fromArray(p).applyMatrix4(H)), a = new THREE.Vector3().fromArray(r.a).transformDirection(H), n = new THREE.Vector3().fromArray(r.n).transformDirection(H);
-  const nb = C.length - 1, cum = [0];
+  const nb = C.length - 1, cum = [0], wp = r.wp || C.map(() => r.w), out = r.out || 1, tuck = r.tuck || 0;
   for (let k = 1; k <= nb; k++) cum.push(cum[k - 1] + C[k].distanceTo(C[k - 1]));
-  const len = cum[nb], cut = Math.min(.35, 1.8 * r.w / len), pos = [], si = [], sw = [], idx = [], rows = nb * MD_RIB.rows;
+  const len = cum[nb], cut = r.cut !== undefined ? r.cut : Math.min(.35, 1.8 * r.w / len), pos = [], si = [], sw = [], col = [], lw = [], idx = [], rows = nb * MD_RIB.rows;
   const along = d => { let k = 0; while (k < nb - 1 && d > cum[k + 1]) k++; const f = Math.min(1, Math.max(0, (d - cum[k]) / (cum[k + 1] - cum[k]))); return {k, f, p: C[k].clone().lerp(C[k + 1], f)}; };
   for (let i = 0; i <= rows; i++) {
-    for (const [side, ends] of [[1, 1], [-1, 1 - cut]]) {   // the left edge to the tip, the right one cut short: a slanted end
-      const u = i / rows * ends, q = along(len * u), w = q.k < nb - 1 ? 1 - q.f : 1, b0 = at + q.k, b1 = at + Math.min(q.k + 1, nb - 1);
-      const half = r.w / 2 * (1 - .45 * Math.max(0, (u - .7) / .3));   // narrower toward the tip
+    for (const side of [1, -1]) {   // the outer edge to the tip, the inner one cut short: a slanted end
+      const d = len * i / rows * (side === out ? 1 : 1 - cut), q = along(d), w = q.k < nb - 1 ? 1 - q.f : 1, b0 = at + q.k, b1 = at + Math.min(q.k + 1, nb - 1);
+      const half = (wp[q.k] + (wp[q.k + 1] - wp[q.k]) * q.f) / 2, l = Math.min(1, Math.max(0, (d - tuck) / MD_RIB.fade));
       for (const face of [1, -1]) {
-        const v = q.p.clone().addScaledVector(a, side * half).addScaledVector(n, face * MD_RIB.th / 2);
-        pos.push(v.x, v.y, v.z); si.push(b0, b1, 0, 0); sw.push(w, 1 - w, 0, 0);
+        const v = q.p.clone().addScaledVector(a, side * half).addScaledVector(n, face * MD_RIB.th / 2), c = face > 0 ? 1 : MD_RIB.shade;
+        pos.push(v.x, v.y, v.z); si.push(b0, b1, 0, 0); sw.push(w, 1 - w, 0, 0); col.push(c, c, c); lw.push(l * l * (3 - 2 * l));
       }
     }
   }
@@ -1935,32 +1943,50 @@ function mdRibbon(md, r, at, skel, ol, s, body) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('aLine', new THREE.Float32BufferAttribute(lw, 1));
   g.computeVertexNormals();
-  const mesh = new THREE.SkinnedMesh(g, new THREE.MeshToonMaterial({color: new THREE.Color(r.c[0] / 255, r.c[1] / 255, r.c[2] / 255), gradientMap: F3.grad, skinning: true}));
-  const line = new THREE.SkinnedMesh(g, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: Math.min(ol.back || 0, MD_RIB.back)}));
+  const mat = new THREE.MeshToonMaterial({color: new THREE.Color(r.c[0] / 255, r.c[1] / 255, r.c[2] / 255), gradientMap: F3.grad, skinning: true, vertexColors: true});
+  mat.onBeforeCompile = sh => {   // mostly flat light (the hit flash's emissive kept)
+    sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+      '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_RIB.flat.toFixed(2) + ');');
+  };
+  mat.customProgramCacheKey = () => 'ribbon';
+  const mesh = new THREE.SkinnedMesh(g, mat);
+  const line = new THREE.SkinnedMesh(g, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per: ' * aLine', back: Math.min(ol.back || 0, MD_RIB.back)}));
   mesh.frustumCulled = line.frustumCulled = false;
   body.add(mesh, line); mesh.updateMatrixWorld(true); mesh.bind(skel, mesh.matrixWorld); line.bind(skel, mesh.matrixWorld);   // bound in the body
   return {mesh, line, tuckRows: Math.ceil((r.tuck || 0) / len * rows)};   // the rows under the band
 }
 
 // The sash's own motion (graphics only), each sim frame since the last call: per ribbon a chain of points from under the
-// band (its top fixed on the Hips: fix points, from under the band to a little below it) to the tip, with gravity, damping and a weak pull toward where the Hips would carry them (the
-// shape it hangs in, itself kept out of the body: the legs of a stance come forward into it), kept at the chain's
-// lengths, unfolding (points two apart no closer than at rest, by bend), above the floor and out of the body (mdBodyOut:
-// the full volumes around the hips, the belly, the thighs with the vest's flaps, the shins), its middle and both its
-// edges; then each bone turned along its segment. A new fighter, or one moved farther than jump a sim frame (put back), starts hanging
-// at rest.
+// band to the tip. Its top (fix points: under the band and at its lower edge, where it comes out) moves with the body's
+// skin there (mdGlue); the rest with gravity, damping and a weak pull toward the shape it hangs in (the drawing's: its
+// first points on the skin too, lying on the vest's flaps that follow the thighs; from there on as the Hips carry it;
+// itself kept out of the body), kept at the chain's lengths (as drawn), unfolding (points two apart no closer than at
+// rest, by bend), above the floor and out of the body (mdBodyOut: the full volumes around the hips, the belly, the
+// thighs with the vest's flaps, the shins), its middle and both its edges; then each bone put at its point and turned
+// along its segment. A new fighter, or one moved farther than jump a sim frame (put back), starts hanging at rest.
 const MD_SASH = {g: 9.8, damp: .93, pull: .08, top: 2, bend: .5, iter: 4, steps: 4, jump: .3, gap: .012, floor: .012, reach: .06, foot: .035, was: .006};
 // g (m/s²), damp, pull: a light cloth (Denis, 7/11: "alleggerisci il peso della fascia così si muove meglio"); top: the
-// pull is 1 + top times as strong just under the fixed part as at the tip (the cloth near the knot holds its shape);
+// pull is 1 + top times as strong just under the band as at the tip (the cloth near the knot holds its shape);
 // bend: share of a fold undone each round; reach, foot, was: m (mdBlendOut)
 // jump: m the band moves in a frame beyond which the sash starts over at rest (the fighter put back); gap: m kept off
 // the body (half the ribbon's thickness and its straight runs over the curves); floor: m kept above the floor (y = 0)
-const MD_SV = [0, 1, 2, 3, 4, 5, 6, 7].map(() => new THREE.Vector3()), MD_SM = new THREE.Matrix4();
+const MD_SV = [0, 1, 2, 3, 4, 5, 6, 7].map(() => new THREE.Vector3()), MD_SM = new THREE.Matrix4(), MD_GV = [new THREE.Vector3(), new THREE.Vector3()], MD_GM = new THREE.Matrix4();
+// Point k of ribbon r (look data sk: the skin of the body behind its first points) where the body's skin carries it
+// (world, in out): the band is skinned to the hips and the thighs, up to 10 cm from where the Hips alone would carry it
+// in the guard, and the vest's flaps under it follow the thighs.
+function mdGlue(it, r, k, out) {
+  const g = r.sk[k], skel = it.mesh.skeleton;
+  if (!g) return out.copy(r.j[k]).applyMatrix4(it.bones[mdData(it.key).index.Hips].matrixWorld);
+  out.set(0, 0, 0);
+  for (let i = 0; i < g.b.length; i++) out.addScaledVector(MD_GV[0].copy(g.p).applyMatrix4(MD_GM.multiplyMatrices(skel.bones[g.b[i]].matrixWorld, skel.boneInverses[g.b[i]])), g.w[i]);
+  return out;
+}
 function mdSash(it, S) {
   const sa = it.sash, hips = it.bones[mdData(it.key).index.Hips];
   it.root.updateMatrixWorld(true);
-  const r0 = sa.ribbons[0], band = MD_SV[0].copy(r0.j[0]).applyMatrix4(hips.matrixWorld), frames = Math.max(0, S.frame - sa.frame);
+  const r0 = sa.ribbons[0], band = mdGlue(it, r0, 0, MD_SV[0]), frames = Math.max(0, S.frame - sa.frame);
   const fresh = sa.F !== it.F || band.distanceTo(r0.P[0]) > MD_SASH.jump * Math.max(1, frames), n = fresh ? 0 : Math.min(MD_SASH.steps, frames);
   sa.F = it.F; sa.frame = S.frame;
   for (const sh of sa.body) {
@@ -1971,19 +1997,23 @@ function mdSash(it, S) {
   const gdt = MD_SASH.g / 3600, gap = MD_SASH.gap / it.scale;   // in the bones' frames (package metres)
   for (const r of sa.ribbons) {
     r.T0 = r.T0 || r.T.map(() => new THREE.Vector3()); r.T.forEach((t, k) => r.T0[k].copy(t));   // last frame's
-    r.j.forEach((p, k) => {   // pulled to a shape out of the body (the fixed top, under the band and just below it, as it is)
-      r.T[k].copy(p).applyMatrix4(hips.matrixWorld);
-      if (k >= r.fix) { mdBodyOut(r.T[k], sa.body, gap); mdBlendOut(r.T[k], fresh ? null : r.T0[k], sa.blend, gap * it.scale); }
-    });
+    const lie = Math.max(r.fix, r.sk.length);   // (look data without sk: on the Hips)
+    for (let k = 0; k < lie; k++) mdGlue(it, r, k, r.T[k]);   // the top on the body's skin: fixed under the band and at its edge, then lying on the vest
+    const off = MD_GV[1].copy(r.j[lie - 1]).applyMatrix4(hips.matrixWorld).negate().add(r.T[lie - 1]);
+    for (let k = lie; k < r.j.length; k++) {   // the rest as the Hips carry it, on from there, out of the body
+      r.T[k].copy(r.j[k]).applyMatrix4(hips.matrixWorld).add(off);
+      mdBodyOut(r.T[k], sa.body, gap); mdBlendOut(r.T[k], fresh ? null : r.T0[k], sa.blend, gap * it.scale);
+    }
     if (fresh) {
       r.T.forEach((t, k) => { r.P[k].copy(t); r.Q[k].copy(t); r.T0[k].copy(t); });
-      r.L = r.T.slice(1).map((t, k) => t.distanceTo(r.T[k])); r.L2 = r.T.slice(2).map((t, k) => t.distanceTo(r.T[k]));
+      const B = r.jb.map(p => p.clone().applyMatrix4(it.body.matrixWorld));   // its lengths as drawn (not of the targets: pushed out of a leg, they stretch)
+      r.L = B.slice(1).map((t, k) => t.distanceTo(B[k])); r.L2 = B.slice(2).map((t, k) => t.distanceTo(B[k]));
     }
     // across the ribbon at each point, in the world (from its bones as they were turned last)
     r.A = r.P.map((p, k) => (r.A && r.A[k] || new THREE.Vector3()).copy(r.a).transformDirection(r.bones[Math.min(k, r.bones.length - 1)].matrixWorld));
     for (let step = 0; step < n; step++) {   // frames missed in between: the targets go there a step at a time
       const f = (step + 1) / n, T = k => MD_SV[0].copy(r.T0[k]).lerp(r.T[k], f), nf = r.P.length - r.fix;
-      for (let k = 0; k < r.fix; k++) { r.P[k].copy(T(k)); r.Q[k].copy(r.P[k]); }   // the top: fixed on the hips
+      for (let k = 0; k < r.fix; k++) { r.P[k].copy(T(k)); r.Q[k].copy(r.P[k]); }   // the top: fixed on the body
       for (let k = r.fix; k < r.P.length; k++) {
         const v = MD_SV[1].subVectors(r.P[k], r.Q[k]).multiplyScalar(MD_SASH.damp);
         r.Q[k].copy(r.P[k]); r.P[k].add(v).addScaledVector(MD_SV[2].subVectors(T(k), r.P[k]), MD_SASH.pull * (1 + MD_SASH.top * (1 - (k - r.fix) / nf))); r.P[k].y -= gdt;
@@ -2000,8 +2030,9 @@ function mdSash(it, S) {
       mdSashChain(r); mdSashOut(r, sa, gap, true); mdSashChain(r);   // as the bones will draw it: exact lengths from the band
     }
     let parent = hips;
-    r.bones.forEach((b, k) => {   // turned so its segment points at the next point
-      const want = MD_SV[3].subVectors(r.P[k + 1], r.P[k]).transformDirection(MD_SM.copy(parent.matrixWorld).invert());
+    r.bones.forEach((b, k) => {   // at its point (the top's: where the skin took it), turned so its segment points at the next
+      const inv = MD_SM.copy(parent.matrixWorld).invert(), want = MD_SV[3].subVectors(r.P[k + 1], r.P[k]).transformDirection(inv);
+      b.position.copy(r.P[k]).applyMatrix4(inv);
       b.quaternion.setFromUnitVectors(MD_SV[4].subVectors(r.j[k + 1], r.j[k]).normalize(), want);
       b.updateMatrixWorld(); parent = b;
     });
@@ -2028,8 +2059,8 @@ function mdSashOut(r, sa, gap, edges) {
   for (let k = r.fix; k < r.P.length; k++) {
     out(r.P[k], r.Q[k]);
     if (edges) for (const side of [1, -1]) {
-      const e = MD_SV[5].copy(r.P[k]).addScaledVector(r.A[k], side * r.w / 2 * r.s), e0 = MD_SV[6].copy(e);
-      if (out(e, MD_SV[7].copy(r.Q[k]).addScaledVector(r.A[k], side * r.w / 2 * r.s))) r.P[k].add(e.sub(e0));
+      const e = MD_SV[5].copy(r.P[k]).addScaledVector(r.A[k], side * r.wp[k] / 2 * r.s), e0 = MD_SV[6].copy(e);
+      if (out(e, MD_SV[7].copy(r.Q[k]).addScaledVector(r.A[k], side * r.wp[k] / 2 * r.s))) r.P[k].add(e.sub(e0));
     }
   }
 }

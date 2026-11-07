@@ -17,11 +17,15 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
   line: [byte offset, count] float32 per vertex: the outline's width there (1; LINE_FACE on the front of the face,
         where the shell around the nose showed as a dark wedge; LINE_FINGER on the fingers, whose shells stuck out
         between the curled fingers of the fist)
-  sash: {ribbons: [{j: SASH_SEG + 1 points in the Hips bone's frame, from under the band to the tip; fix: how many of
-        them stay fixed on the hips; tuck: m under the band; w: width; a: unit across; n: unit out of its face; c: colour}], body: [body_shape of each of BODY], blend: [byte offset, count] uint16: the
-        vertices shared between the parts (BLEND_W)}: the
-        sash's two hanging tails as ribbons of their own (Meshy fused them with the trousers and the vest), where the
-        drawing has them seen from the front; tools/paint_from_drawing.py paints the old ones over
+  sash: {ribbons: [{j: SASH_SEG + 1 points in the Hips bone's frame, from under the band (its edge the 2nd) to the tip;
+        fix: how many of them stay on the body; sk: per point from the top, the skin ([bone, weight] x4) of the body
+        behind it (the fixed ones and those lying on the vest's flaps); tuck: m under the band; wp: width at each
+        point; w: the widest; cut: share of the length of the tip's slanted cut; out: the side of a (1, -1) away from
+        the middle; a: unit across; n: unit out of its face; c: colour (the band's)}], body: [body_shape of each of
+        BODY], blend: [byte offset, count] uint16: the vertices shared between the parts (BLEND_W)}: the sash's two
+        hanging tails as ribbons of their own (Meshy fused them with the trousers and the vest), where the drawing has
+        them seen from the front, as wide as there, coming out from under the band's knot; tools/paint_from_drawing.py
+        paints the old ones over
   spikes: [{p (base), d (unit direction), t (unit: the lock's thin side, outward), len, r}] in the Head bone's frame:
         anime hair locks where DRAWING (Denis's character sheet, fit as tools/paint_from_drawing.py) has the tips of its
         hair's silhouette seen from the front (each reaching that tip, tilted back), and clumps on the back of the head
@@ -43,11 +47,18 @@ BLEND = .35          # a joint's skin blend reaches this share of the shorter ph
 FIST = (82, 100, 60)    # the fist: bend (degrees) at the knuckle, middle and last joint of a finger
 THUMB_ON = 1.1      # in the fist the thumb lies across the index and middle finger, this many radii in front of them
 NAMES = ('Thumb', 'Index', 'Middle', 'Ring', 'Pinky')
-# The sash's tails: on the model, orange below SASH_BAND (m, the band's lower edge) in pieces of at least SASH_MIN
-# vertices (painted over, tools/paint_from_drawing.py); as ribbons, the drawing's two tails seen from the front, each of
-# SASH_SEG bones, SASH_GAP m in front of the body, SASH_W m wide (clamped).
-SASH_BAND, SASH_MIN, SASH_SEG, SASH_GAP, SASH_W = 1.06, 200, 9, .018, (.06, .1)
-SASH_TUCK, SASH_FIX = .012, .05   # a ribbon starts this far under the band's front; fixed on the hips to this far below it
+# The sash's tails: on the model, orange below SASH_BAND (m) in pieces of at least SASH_MIN vertices (painted over,
+# tools/paint_from_drawing.py); as ribbons, the drawing's two tails seen from the front (its orange under its band on
+# each side of the middle, in pieces of at least SASH_PIECE px: the dark folds split a tail), each a chain of SASH_SEG
+# bones: one under the band, from SASH_TUCK m behind its front to its lower edge, where the ribbon comes out (its front
+# face SASH_OUT m out of the body; SASH_TH m thick, as e_model.js MD_RIB.th), then evenly down to the drawing's tip,
+# SASH_GAP m in front of the body from 10 cm under the band; as wide as the drawing's tail there (across it, clamped
+# to SASH_W). Its top (under the band, and down to SASH_FIX m under it) moves with the skin of the body there: of the
+# SASH_SKIN front vertices nearest to each of its points, seen from the front (Meshy skinned the band to the hips and the
+# thighs: in the guard it is up to 10 cm from where the hips alone would carry it); so does the shape the rest hangs in,
+# down to SASH_LIE m under the band (lying on the vest's flaps, which follow the thighs).
+SASH_BAND, SASH_MIN, SASH_SEG, SASH_GAP, SASH_W = 1.06, 200, 9, .018, (.02, .1)
+SASH_TUCK, SASH_FIX, SASH_OUT, SASH_TH, SASH_PIECE, SASH_SKIN, SASH_LIE = .015, .05, .002, .012, 1000, 8, .15
 # The body the sash stays out of: around each of these bones (to its child), the volume of the mesh's vertices that
 # follow it (weight BODY_W and more: the trousers, the vest's front flaps on the thighs, the hips with the crotch and the
 # belly), full
@@ -347,42 +358,86 @@ def body_shape(P, J, W, G, idx, bone, child):
             't': [round(t0, 4), round(t1, 4)], 'r': [[round(float(x), 4) for x in row] for row in D]}
 
 
-def drawing_tails(D):
-    """The sash's two hanging tails in the drawing (front view): per tail, largest first, {top: (x, y) px of the middle of
-    its first row under the band, tip: its lowest pixel, w: px wide (median of its upper half's rows), c: its colour}."""
+def drawing_band(D):
+    """The drawing's band: its first and last row (from its top while at least 45% as orange as its most orange row, the
+    tails below are less, over gaps of up to 3 rows: the dark line between its two wraps)."""
+    cnt = sash_orange(D).sum(1); r0 = int(np.argmax(cnt > .3 * cnt.max())); r1 = r0
+    while any(r1 + k < len(cnt) and cnt[r1 + k] >= .45 * cnt.max() for k in (1, 2, 3, 4)):
+        r1 += next(k for k in (1, 2, 3, 4) if cnt[r1 + k] >= .45 * cnt.max())
+    return r0, r1
+
+
+def drawing_fit(P, mask):
+    """The front projection of the model (bind pose, P) on the drawing: the scale (px/m) and the drawing's point (cx, by)
+    of the model's x = 0, y = 0 that put the most vertices inside the drawn silhouette (mask). (share inside, s, cx, by)."""
+    ys, xs = np.nonzero(mask); feet, top, mid = ys.max(), ys.min(), (xs.min() + xs.max()) / 2
+    s0 = (feet - top) / (P[:, 1].max() - P[:, 1].min()); best = None; H, Wd = mask.shape
+    for ds in (-.02, -.01, 0, .01, .02):
+        for dx in (-8, -4, 0, 4, 8):
+            for dy in (-8, -4, 0, 4, 8):
+                s = s0 * (1 + ds); u, v = mid + dx + P[:, 0] * s, feet + dy - P[:, 1] * s
+                score = mask[np.clip(v.round().astype(int), 0, H - 1), np.clip(u.round().astype(int), 0, Wd - 1)].mean()
+                if best is None or score > best[0]: best = (score, s, mid + dx, feet + dy)
+    return best
+
+
+def drawing_tails(D, cx):
+    """The sash's two hanging tails in the drawing (front view), the left one first: its orange under the band
+    (drawing_band) on each side of cx, in pieces of at least SASH_PIECE px. Per tail {top: (x, y) px, the middle of its
+    first row; tip: its lowest pixel; wp: its width (px) across it (square to top-tip), each row from the top to its
+    widest (9 rows' median), where the tip's slanted cut starts; cut: the share of its length that cut takes; c: its
+    colour}."""
     from scipy import ndimage
-    orange = sash_orange(D); below = orange.copy(); below[:sash_band_end(orange) + 6] = False
+    below = sash_orange(D); below[:drawing_band(D)[1] + 3] = False
     lab, n = ndimage.label(below); sizes = ndimage.sum(below, lab, range(1, n + 1)); out = []
-    for k in np.argsort(-sizes)[:2]:
-        ys, xs = np.nonzero(lab == k + 1); r0 = ys.min(); rw = []
-        for y in range(r0, r0 + (ys.max() - r0) // 2):
-            x = xs[ys == y]
-            if len(x): rw.append(x.max() - x.min() + 1)
-        top = xs[ys == r0].mean(); i = np.argmax(ys)
-        out.append({'top': (float(top), float(r0)), 'tip': (float(xs[i]), float(ys[i])), 'w': float(np.median(rw)), 'c': [int(v) for v in np.median(D[ys, xs], 0)]})
+    for side in (-1, 1):
+        ids = [k + 1 for k in range(n) if sizes[k] >= SASH_PIECE and np.sign(np.nonzero(lab == k + 1)[1].mean() - cx) == side]
+        ys, xs = np.nonzero(np.isin(lab, ids)); t0, t1 = int(ys.min()), int(ys.max())
+        top, tip = (float(xs[ys == t0].mean()), float(t0)), (float(xs[ys == t1].mean()), float(t1))
+        cos = (t1 - t0) / np.hypot(tip[0] - top[0], t1 - t0)
+        w = ndimage.median_filter(np.array([np.ptp(xs[ys == y]) + 1 if (ys == y).any() else 0 for y in range(t0, t1 + 1)]) * cos, 9)
+        peak = int(np.argmax(w))
+        out.append({'top': top, 'tip': tip, 'wp': [float(x) for x in w[:peak + 1]], 'cut': 1 - peak / (t1 - t0), 'c': [int(v) for v in np.median(D[ys, xs], 0)]})
     return out
 
 
-def ribbon_of(t, P, sc, cx, by, mid):
-    """A hanging ribbon for drawing tail t, in model space: {j: SASH_SEG + 1 points evenly along it, from under the band
-    (SASH_TUCK m behind its front at the height mid) out of the band's lower edge (SASH_BAND) where the drawing's tail
-    starts across, straight down to the drawing's tip (front view), in front of the body (SASH_GAP, half of it at the band);
-    fix: how many from the top stay fixed on the hips (those under the band and SASH_FIX m below it); tuck: m of it under
-    the band; w: width (m); a: unit across; n: unit out of its face (forward); c: colour}."""
+def ribbon_of(t, P, sc, cx, by, mid, y0):
+    """A hanging ribbon for drawing tail t, in model space: {j: SASH_SEG + 1 points: under the band (SASH_TUCK m behind
+    its front at the height mid), at its lower edge y0 where it comes out (its front face SASH_OUT m out of the body),
+    then evenly down to the drawing's tip (front view), in front of the body (SASH_GAP from 10 cm under the band); fix:
+    how many from the top move with the body (those two, and those SASH_FIX m under the band); tuck: m of it under the
+    band; wp: its width (m) at each point, the drawing's; w: its widest; cut: the share of its length its tip's slanted
+    cut takes; out: the side of a (1 or -1) away from the middle (that edge runs to the tip, the inner one is cut); a:
+    unit across; n: unit out of its face (forward); c: colour}."""
     def front(x, y):
         near = P[(np.abs(P[:, 0] - x) < .02) & (np.abs(P[:, 1] - y) < .012)]
         return float(near[:, 2].max()) if len(near) else 0.
     x0, x1, y1 = (t['top'][0] - cx) / sc, (t['tip'][0] - cx) / sc, (by - t['tip'][1]) / sc
-    path = [[x0, mid, front(x0, mid) - SASH_TUCK]]
-    for u in np.linspace(0, 1, 16):
-        x, y = x0 + (x1 - x0) * u, SASH_BAND + (y1 - SASH_BAND) * u
-        path.append([x, y, front(x, y) + SASH_GAP * (.5 + .5 * min(1, (SASH_BAND - y) / .1))])
+    path = []
+    for u in np.linspace(0, 1, 24):
+        x, y = x0 + (x1 - x0) * u, y0 + (y1 - y0) * u; f = min(1., (y0 - y) / .1)
+        path.append([x, y, front(x, y) + (SASH_OUT - SASH_TH / 2) * (1 - f) + SASH_GAP * f])
     path = np.array(path); arc = np.r_[0, np.cumsum(np.linalg.norm(np.diff(path, axis=0), axis=1))]
-    at = np.linspace(0, arc[-1], SASH_SEG + 1); j = np.array([np.interp(at, arc, path[:, k]) for k in range(3)]).T
-    fix = int((at <= arc[1] + SASH_FIX + 1e-9).sum())
+    at = np.linspace(0, arc[-1], SASH_SEG); top = [x0, mid, front(x0, mid) - SASH_TUCK]
+    j = np.vstack([top, np.array([np.interp(at, arc, path[:, k]) for k in range(3)]).T])
+    wp = np.array(t['wp']); w = np.clip(np.r_[wp[0], wp[np.minimum((at / arc[-1] * (t['tip'][1] - t['top'][1])).astype(int), len(wp) - 1)]] / sc, *SASH_W)
     d = unit(j[-1] - j[1]); a = unit(np.cross(d, [0, 0, 1.])); n = unit(np.cross(a, d))
     if n[2] < 0: n, a = -n, -a
-    return {'j': j, 'fix': fix, 'tuck': float(arc[1]), 'w': float(np.clip(t['w'] / sc, SASH_W[0], SASH_W[1])), 'a': a, 'n': n, 'c': t['c']}
+    return {'j': j, 'fix': 1 + int((at <= SASH_FIX + 1e-9).sum()), 'tuck': float(np.linalg.norm(j[1] - j[0])), 'wp': w, 'w': float(w.max()),
+            'cut': float(t['cut']), 'out': 1 if a[0] * x0 > 0 else -1, 'a': a, 'n': n, 'c': t['c']}
+
+
+def skin_near(p, P, ok, J, W):
+    """The skin of the body's front at p (model space): the bones and weights (up to 4, summing to 1) of the SASH_SKIN
+    vertices ok (the front of the trunk and the legs) nearest to p seen from the front (x, y), of those at most 6 cm
+    behind it, the nearer counting more."""
+    near = np.nonzero(ok & (P[:, 2] > p[2] - .06))[0]
+    d = np.hypot(P[near, 0] - p[0], P[near, 1] - p[1]); o = np.argsort(d)[:SASH_SKIN]; acc = {}
+    for v, dv in zip(near[o], d[o]):
+        for b, w in zip(J[v], W[v]):
+            if w > 0: acc[int(b)] = acc.get(int(b), 0) + float(w) / float(dv + .005)
+    top = sorted(acc.items(), key=lambda kv: -kv[1])[:4]; tot = sum(w for _, w in top)
+    return [[b, round(w / tot, 4)] for b, w in top]
 
 
 def main(pkg, out, drawing):
@@ -467,13 +522,22 @@ def main(pkg, out, drawing):
     for y0 in np.arange(.9, 1.3, .01):
         sel = (col0[:, 0] > 170) & (col0[:, 0] - col0[:, 1] > 50) & (col0[:, 2] < 90) & (P[:, 1] >= y0) & (P[:, 1] < y0 + .01) & (np.abs(P[:, 0]) < .3)
         if sel.any() and len(np.unique((np.degrees(np.arctan2(P[sel, 0], P[sel, 2])) % 360 // 15).astype(int))) * 15 >= 200: ring.append(y0 + .005)
-    mid = (min(ring) + max(ring)) / 2
-    for t in drawing_tails(D):
-        r = ribbon_of(t, P, sc, cx, by, mid)
-        ribbons.append({'j': [[round(float(v), 5) for v in ih[:3, :3] @ q + ih[:3, 3]] for q in r['j']], 'w': round(r['w'], 4), 'fix': r['fix'], 'tuck': round(r['tuck'], 4),
+    mid, y0 = (min(ring) + max(ring)) / 2, min(ring) - .005
+    # placed as tools/paint_from_drawing.py paints the drawing (its band, with the tails' tops, on the model's band)
+    from scipy import ndimage
+    fit = drawing_fit(P, ndimage.binary_opening(mask, iterations=1)); Nv = f(me['nor']).reshape(-1, 3).astype(np.float64)
+    trunk = np.isin(J, [idx[b] for b in set(BODY) | set(BODY.values()) | {'LeftFoot', 'RightFoot'}])
+    front_ok = ((trunk * W).sum(1) >= .9) & (Nv[:, 2] > .2)   # the front of the trunk and the legs (not the arms)
+    for t in drawing_tails(D, fit[2]):
+        r = ribbon_of(t, P, fit[1], fit[2], fit[3], mid, y0)
+        ribbons.append({'j': [[round(float(v), 5) for v in ih[:3, :3] @ q + ih[:3, 3]] for q in r['j']], 'w': round(r['w'], 4), 'wp': [round(float(v), 4) for v in r['wp']],
+                        'fix': r['fix'], 'tuck': round(r['tuck'], 4), 'cut': round(r['cut'], 3), 'out': r['out'], 'sk': [skin_near(q, P, front_ok, J, W) for k, q in enumerate(r['j']) if k < r['fix'] or y0 - q[1] <= SASH_LIE + 1e-9],
                         'a': [round(float(v), 5) for v in ih[:3, :3] @ r['a']], 'n': [round(float(v), 5) for v in ih[:3, :3] @ r['n']], 'c': r['c']})
-    print('sash band from %.2f to %.2f m; ribbons fixed at the top: %s' % (min(ring) - .005, max(ring) + .005, [r['fix'] for r in ribbons]))
-    for r in ribbons: r['c'] = ribbons[0]['c']   # one orange for both tails (their own differed a little)
+        print('ribbon from x %.3f (y %.3f) to the tip (%.3f, %.3f), widths %s, cut %.2f, fixed %d, its top on the skin of %s' % (r['j'][1][0], y0, r['j'][-1][0], r['j'][-1][1],
+              np.round(r['wp'], 3).tolist(), r['cut'], r['fix'], [[(bones[b]['n'], w) for b, w in s] for s in ribbons[-1]['sk']]))
+    print('sash band from %.2f to %.2f m (the drawing fit: %s)' % (y0, max(ring) + .005, np.round(fit, 3).tolist()))
+    r0, r1 = drawing_band(D); od = sash_orange(D)
+    for r in ribbons: r['c'] = [int(v) for v in np.median(D[r0:r1 + 1][od[r0:r1 + 1]], 0)]   # the band's orange, as painted
     body = [body_shape(P, J, W, G, idx, b, c) for b, c in BODY.items()]
     Wb = np.stack([((J == idx[b]) * W).sum(1) for b in BODY], 1); second = np.sort(Wb, 1)[:, -2]
     shared = (second >= BLEND_W) & (Wb.sum(1) >= .9) & (P[:, 1] > BLEND_Y[0]) & (P[:, 1] < BLEND_Y[1])

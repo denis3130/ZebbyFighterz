@@ -56,8 +56,8 @@ INSIDE = """async ([plays, frames, every]) => {
     out[k] = [bad / pts, deep]; }
   VW.speed = 1; return out; }"""
 SASH_OUT = {0: .01, 1: .01, 2: .01, 3: .025, 4: .05, 5: .01, 6: .01, 7: .015, 8: .015, 9: .04}   # most shares inside allowed per
-# button (7/11/2026, light tails fixed under the band, the worst of 5 starting moments: guard 0, walk 0, punches .1%,
-# kicks 1.4%, crouch 2.2%, jump .1%, special .2%, throw .4%, hit .2%, down 1.9%; before, with the legs as thin capsules: 8
+# button (7/11/2026, light tails on the band's skin, the worst of 5 starting moments: guard .1%, walk 0, punches .1%,
+# kicks .6%, crouch 2.6%, jump .1%, special 0, throw 0, hit 0, down 2.2%; before, with the legs as thin capsules: 8
 # to 38%). Crouching and lying, the top of the sash is pressed between the thighs and the belly, hidden in the fold.
 
 

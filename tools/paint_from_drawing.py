@@ -49,18 +49,12 @@ mask = ndimage.binary_opening(mask, iterations=1)
 _, (iy, ix) = ndimage.distance_transform_edt(~mask, return_indices=True)
 Dfill = D[iy, ix]
 
-# --- global alignment: scale + offset maximising the silhouette overlap ---
+# --- global alignment: scale + offset maximising the silhouette overlap (tools/ren_look.py places the sash's ribbons
+# with it too) ---
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ren_look import drawing_fit, drawing_band, sash_tails, sash_orange, sash_band_end, SASH_BAND
 def project(s, cx, by): return cx + P[:, 0] * s, by - P[:, 1] * s
-ys_, xs_ = np.nonzero(mask); feet, top, mid = ys_.max(), ys_.min(), (xs_.min() + xs_.max()) / 2
-s0 = (feet - top) / (P[:, 1].max() - P[:, 1].min()); best = None
-for ds in (-.02, -.01, 0, .01, .02):
-    for dx in (-8, -4, 0, 4, 8):
-        for dy in (-8, -4, 0, 4, 8):
-            s = s0 * (1 + ds); u, v = project(s, mid + dx, feet + dy)
-            # cheap IoU on vertices: share of projected vertices inside the drawing mask
-            ui = np.clip(u.round().astype(int), 0, Wd - 1); vi = np.clip(v.round().astype(int), 0, H - 1)
-            score = mask[vi, ui].mean()
-            if best is None or score > best[0]: best = (score, s, mid + dx, feet + dy)
+best = drawing_fit(P, mask)
 print('alignment (vertices inside the drawing):', best)
 _, s, cx, by = best
 u, v = project(s, cx, by)
@@ -128,8 +122,6 @@ out[ys[hairt], xs[hairt]] = col[hairt] * hw[hairt, None] + hair_col * (1 - hw[ha
 print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col))
 # --- the sash's tails: hanging ribbons in the look (tools/ren_look.py), so off the body: each tail texel takes the colour
 # of the nearest texel (in space) that is not orange, the trousers or the vest under it ---
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ren_look import sash_tails, sash_orange, sash_band_end, SASH_BAND
 vcol = TEX[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)].astype(int)
 tv = np.zeros(len(P), bool)
 for t in sash_tails(P, vcol, I): tv[t] = True
@@ -176,9 +168,7 @@ low_ = ring & (pos[:, 1] < Y0 - .005)   # Meshy's orange under the band: the top
 out[ys[low_], xs[low_]] = D[sy, sx][pvi[low_], pui[low_]]; ring = ring & ~low_
 # the drawing's band: the rows from its top while at least 45% as orange as its most orange row (the tails below are
 # less), over gaps of up to 3 rows (the dark line between its two wraps)
-odb = sash_orange(D); cnt = odb.sum(1); r0 = int(np.argmax(cnt > .3 * cnt.max())); r1 = r0
-while any(r1 + k < len(cnt) and cnt[r1 + k] >= .45 * cnt.max() for k in (1, 2, 3, 4)):
-    r1 += next(k for k in (1, 2, 3, 4) if cnt[r1 + k] >= .45 * cnt.max())
+odb = sash_orange(D); r0, r1 = drawing_band(D)
 ext = [(np.nonzero(odb[r])[0].min() - 3, np.nonzero(odb[r])[0].max() + 3) if odb[r].any() else (1, 0) for r in range(r0, r1 + 1)]
 band_px = D[r0:r1 + 1][odb[r0:r1 + 1]]; lit = np.median(band_px, 0); shade = lit * .8
 ml = TC[ring].mean(1); two = np.where((ml < np.median(ml) * BAND_SHADOW)[:, None], shade, lit)   # sides and back
