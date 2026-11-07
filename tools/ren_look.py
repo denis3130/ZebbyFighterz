@@ -129,10 +129,12 @@ def branches(Pw, nb, ws):
     return out
 
 
-def fingers_of(Lw, lab, l, thumb):
+def fingers_of(Lw, lab, l, n, thumb):
     """The joints of a hand's fingers (hand frame), thumb first then from the index outward: {k (label), d (unit, toward
     the tip), r (radius), j: three joints (thumb: its base inside the palm, the web, the last joint; a finger: the
-    knuckle, the middle and the last joint), tip}."""
+    knuckle, the middle and the last joint), tip}. In the fist (FIST) the four fingers end level: each knuckle is moved
+    along its finger (the tip stays) until its lowest curled joint is at the fingers' mean height, as in a real fist
+    (the longer fingers, bent from where their length put the knuckle, came out lower)."""
     y = np.array([0, 1., 0]); F = []
     for k in range(lab.max() + 1):
         Q = Lw[lab == k]
@@ -146,10 +148,21 @@ def fingers_of(Lw, lab, l, thumb):
     free = th['tip'] - th['web']; at = lambda f, s: f['c'] + f['d'] * s
     out = [{'k': th['k'], 'd': th['d'], 'r': th['r'], 'tip': at(th, th['tip']),
             'j': [at(th, th['web'] - .8 * free), at(th, th['web'] + .1 * free), at(th, th['web'] + THUMB_IP * free)]}]
-    for f in rest:
-        L = (f['tip'] - f['web']) / FREE; b0 = f['tip'] - L
-        out.append({'k': f['k'], 'd': f['d'], 'r': f['r'], 'tip': at(f, f['tip']),
-                    'j': [at(f, b0), at(f, b0 + FINGER_SEG[0] * L), at(f, b0 + (FINGER_SEG[0] + FINGER_SEG[1]) * L)]})
+    joints = lambda f, b0: [at(f, b0), at(f, b0 + FINGER_SEG[0] * (f['tip'] - b0)), at(f, b0 + (FINGER_SEG[0] + FINGER_SEG[1]) * (f['tip'] - b0))]
+
+    def low(f, b0):   # the lowest (y) joint of finger f curled into the fist, its knuckle at b0
+        j = joints(f, b0); ax = unit(np.cross(f['d'], unit(n - f['d'] * (n @ f['d']))))
+        j1 = j[0] + qm(qaxis(ax, FIST[0])) @ (j[1] - j[0]); j2 = j1 + qm(qaxis(ax, FIST[0] + FIST[1])) @ (j[2] - j[1])
+        return min(j1[1], j2[1])
+    b0 = [f['tip'] - (f['tip'] - f['web']) / FREE for f in rest]
+    level = float(np.mean([low(f, b) for f, b in zip(rest, b0)]))
+    for f, b in zip(rest, b0):
+        lo, hi = b - .4 * (f['tip'] - b), b + .4 * (f['tip'] - b)    # low() grows with the knuckle's place: bisection
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            if low(f, mid) < level: lo = mid
+            else: hi = mid
+        out.append({'k': f['k'], 'd': f['d'], 'r': f['r'], 'tip': at(f, f['tip']), 'j': joints(f, (lo + hi) / 2)})
     return out
 
 
@@ -239,7 +252,7 @@ def main(pkg, out, drawing):
         for u, v in E[ins[E[:, 0]] & ins[E[:, 1]]]:
             dl = float(np.linalg.norm(Lw[u] - Lw[v])); nb[u].append((int(v), dl)); nb[v].append((int(u), dl))
         lab = branches(Lw, nb, ws)
-        fg = fingers_of(Lw, lab, l, thumb)
+        fg = fingers_of(Lw, lab, l, n, thumb)
         base = len(bones) + len(fingers)
         fists = fist_of(fg, l, n, thumb)
         for i, F in enumerate(fg):

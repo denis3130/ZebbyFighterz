@@ -9,7 +9,9 @@ The model's bind pose (A-pose, the one Meshy built from this same drawing) is pr
 onto the drawing with the scale and offset that put the most vertices inside the drawn silhouette. Every texel whose
 surface faces the viewer and is visible from the front takes the drawing's colour (blended in by how much it faces
 the front); the others keep the model's own texture. Outside the drawn silhouette the nearest drawn colour is used,
-so model edges that stick out a little take the drawing's outline.
+so model edges that stick out a little take the drawing's outline. On the hands (the drawing's are spread a little
+differently) a texel that came out neither skin nor a dark line (the wraps' white, the background's grey on the
+fingertips) takes the colour of the nearest skin texel of the hands instead.
 """
 import json, os, sys
 import numpy as np
@@ -23,12 +25,14 @@ def load(pkg):
     f = lambda a, dt=np.float32: np.frombuffer(B, dt, a[1], a[0])
     P = f(me['pos']).reshape(-1, 3).astype(np.float64); N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2).astype(np.float64)
     I = f(me['idx'], np.uint16 if me['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
-    return name, P, N, UV, I
+    J = f(me['jnt'], np.uint8).reshape(-1, 4); W = f(me['wgt']).reshape(-1, 4)
+    hands = [i for i, b in enumerate(m['bones']) if b['n'] in ('LeftHand', 'RightHand')]
+    return name, P, N, UV, I, (np.isin(J, hands) * W).sum(1)
 
 
 if len(sys.argv) != 4: sys.exit(__doc__)
 PKG, DRAWING, OUT = sys.argv[1:]
-name, P, N, UV, I = load(PKG)
+name, P, N, UV, I, HANDW = load(PKG)
 D = np.asarray(Image.open(DRAWING).convert('RGB')).astype(np.float64)
 H, Wd = D.shape[:2]
 bg = D[5:40, 5:40].reshape(-1, 3).mean(0)
@@ -97,6 +101,13 @@ wgt = face * vis
 col = Dfill[pvi, pui]
 out = TEX.copy()
 out[ys, xs] = TEX[ys, xs] * (1 - wgt[:, None]) + col * wgt[:, None]
-print('texels', len(ks), 'painted (w>.5)', int((wgt > .5).sum()), 'visible', int(vis.sum()))
+# --- the hands: neither skin nor a dark line -> the nearest skin texel of the hands ---
+c = out[ys, xs]; hand = (HANDW[I[ks]] * bary).sum(1) > .5
+skin = (c[:, 0] > 150) & (c[:, 1] > 95) & (c[:, 0] - c[:, 2] > 50); dark = c.sum(1) < 240
+good = np.zeros((TS, TS), bool); good[ys[hand & skin], xs[hand & skin]] = True
+_, (gy, gx) = ndimage.distance_transform_edt(~good, return_indices=True)
+bad = hand & ~skin & ~dark
+out[ys[bad], xs[bad]] = out[gy[ys[bad], xs[bad]], gx[ys[bad], xs[bad]]]
+print('texels', len(ks), 'painted (w>.5)', int((wgt > .5).sum()), 'visible', int(vis.sum()), 'hand texels recoloured', int(bad.sum()), 'of', int(hand.sum()))
 Image.fromarray(out.clip(0, 255).astype(np.uint8)).save(OUT, quality=85, optimize=True)
 print(OUT, os.path.getsize(OUT))

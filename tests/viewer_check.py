@@ -51,6 +51,10 @@ async def main(out_dir):
               document.getElementById('play0').click(); await new Promise(f => setTimeout(f, 300));
               r.fists = !!it.fingers && it.fingers.length === 30 && it.mesh.skeleton.bones.length === it.bones.length + 30 && it.curl === 1
                 && it.fingers.every((o, i) => Math.abs(o.quaternion.dot(it.fist[i])) > .9999);
+              it.root.updateMatrixWorld(true);   // a real fist: the four curled fingers end level (hand frame, within 2 mm)
+              r.level = ['Left', 'Right'].every(h => { const H = it.bones.find(b => b.name === h + 'Hand');
+                const y = ['Index', 'Middle', 'Ring', 'Pinky'].map(f => Math.min(...[2, 3].map(k => H.worldToLocal(it.fingers.find(o => o.name === h + 'Hand' + f + k).getWorldPosition(new THREE.Vector3())).y)));
+                return Math.max(...y) - Math.min(...y) < .002; });
               document.getElementById('play6').click(); await new Promise(f => setTimeout(f, 300));
               r.open = it.curl === 0 && it.fingers.every(o => Math.abs(o.quaternion.w) > .9999);
               r.spikes = it.joints.head.children.some(g => g.isGroup && g.children.length >= 8);

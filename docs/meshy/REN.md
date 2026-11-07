@@ -43,6 +43,7 @@ Foglio di controllo di tutte le pose: `python3 tools/pose_sheet.py out.png [move
   `input_task_id` accetta solo task della API (la documentazione Meshy lo dice: i task della API restano nella API e
   non compaiono in "My Assets"). Per usarne uno serve scaricarlo dal sito (Download → GLB) e metterlo nel repository.
 - Le dita di Ren le calcola `tools/ren_look.py` dal suo mesh (le mani hanno dita separate): 3 ossa per dito e per il
-  pollice, pesi della pelle sfumati sulle articolazioni, pugno con il pollice sopra indice e medio. Solo dove
+  pollice, pesi della pelle sfumati sulle articolazioni, nel pugno le quattro dita chiuse alla stessa altezza (le nocche
+  spostate lungo le dita) e il pollice sopra indice e medio. Solo dove
   `CFG.looks.ren.fists` è acceso (per ora nell'anteprima).
 
