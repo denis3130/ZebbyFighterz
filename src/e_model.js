@@ -53,7 +53,7 @@ function modelBuild(key) {
   mesh.bind(skel); outline.bind(skel);
   const limbs = {}, B = n => bones[md.index[n]];
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
-  const it = {kind: 'model', key, root, body, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
+  const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (!md.hitT) mdMeasure(md, it);
   return it;
@@ -90,7 +90,10 @@ function mdUp(u) { return Math.max(0, Math.min(1, u)); }
 
 // Entry e of CFG.clips (see there) as a pose; c = {F, S, m: the move, id: the act, u (air acts), force (a clip time
 // used instead of the move's, by the hit-time search)}. The Hips stay over the root in x and z (the sim moves the
-// fighter); y is the clip's unless the entry fixes it.
+// fighter); y is the clip's unless the entry fixes it ('cap': never above the rest pose's, for clips that leave the
+// floor while the sim stays on it). plant = the feet ('L', 'R' or 'LR') held by IK where the entry's t[0] pose has them,
+// so a grounded strike neither slides nor lifts its support foot. Poses are those of a fighter facing right: facing
+// left is drawn as the mirror image (mdSync).
 function mdEval(md, e, c) {
   if (e.kick) return mdKick(md, e, c);
   if (e.low) return mdLayer(md, mdEval(md, e.low, c), mdEval(md, e.up, c));
@@ -101,11 +104,25 @@ function mdEval(md, e, c) {
   else if (e.at !== undefined) t = e.at;
   else if (e.t) t = c.force !== undefined ? c.force : mdMoveT(e.t, c.m, F.af, md.hitT[c.id]);
   else if (e.k) t = mdKey(e.k, c.u !== undefined ? c.u : F.af);
-  const p = mdSample(md, e.c, t, loop);
+  const p = mdRoot(md, e, mdSample(md, e.c, t, loop));
+  if (e.walk) mdHipsTurn(p, MD_Y, 90 - F3_YAW / F3_DEG, md.index.Spine02);
+  if (e.plant) {   // each planted foot held where the t[0] pose has it, turned as it is there
+    const p0 = mdRoot(md, e, mdSample(md, e.c, e.t ? e.t[0] : 0, false));
+    for (const leg of e.plant) {
+      const i = md.index[leg === 'L' ? 'LeftFoot' : 'RightFoot'], w = mdWorld(md, p0, i, MD_M[1]);
+      mdLegIK(md, p, leg, MD_V[3].setFromMatrixPosition(w).toArray(), new THREE.Quaternion().setFromRotationMatrix(w));
+    }
+  }
+  return p;
+}
+
+// The Hips of a sampled pose over the root (x, z), and its y as the entry asks ('cap': at most the Hips' height in the
+// entry's t[0] pose, the stance the move starts from).
+function mdRoot(md, e, p) {
   p.h[0] = 0; p.h[2] = 0;
-  if (e.y !== undefined) p.h[1] = e.y;
+  if (e.y === 'cap') p.h[1] = Math.min(p.h[1], md.clips[e.c].h[Math.round((e.t ? e.t[0] : 0) * md.clips[e.c].fps) * 3 + 1]);
+  else if (e.y !== undefined) p.h[1] = e.y;
   if (e.pitch) mdHipsTurn(p, MD_X, e.pitch, false);
-  if (e.walk) mdHipsTurn(p, MD_Y, F.face * (90 - F3_YAW / F3_DEG), md.index.Spine02);
   return p;
 }
 
@@ -172,9 +189,9 @@ function mdWorld(md, p, i, out) {
   return out;
 }
 // The leg ('L' or 'R') of p bent so its ankle reaches target (model space, metres of the package), the knee staying
-// on the side it bends to now; rotations only, p is changed in place.
+// on the side it bends to now; footQ (optional) = the foot's world rotation to keep. Rotations only, p changed in place.
 const MD_V = [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector3()), MD_QW = [0, 1, 2].map(() => new THREE.Quaternion());
-function mdLegIK(md, p, leg, target) {
+function mdLegIK(md, p, leg, target, footQ) {
   const iu = md.index[leg === 'L' ? 'LeftUpLeg' : 'RightUpLeg'], il = md.index[leg === 'L' ? 'LeftLeg' : 'RightLeg'];
   const ia = md.index[leg === 'L' ? 'LeftFoot' : 'RightFoot'], V = MD_V, Q = MD_QW, m = MD_M[1];
   const A = V[0].setFromMatrixPosition(mdWorld(md, p, iu, m)), qu = Q[0].setFromRotationMatrix(m);
@@ -193,6 +210,7 @@ function mdLegIK(md, p, leg, target) {
   const quW = d1.clone().multiply(qu), qlW = d2.multiply(d1).multiply(ql);
   qp.invert().multiply(quW).toArray(p.q, iu * 4);   // up leg local = parent^-1 * its new world rotation
   quW.invert().multiply(qlW).toArray(p.q, il * 4);  // lower leg local = up leg^-1 * its new world rotation
+  if (footQ) qlW.invert().multiply(footQ).toArray(p.q, ia * 4);   // foot local = lower leg^-1 * the kept world rotation
 }
 
 // A kick made on a base pose (CFG.clips {kick: base entry, leg, to}): the ankle goes from where the base pose has it
@@ -210,7 +228,8 @@ function mdKick(md, e, c) {
 // distance the lower foot has moved along that axis since frame 0, md.hitT[move] = the hit frame's clip time.
 function mdMeasure(md, it) {
   const C = CFG.clips, v = new THREE.Vector3(), at = (p, face) => {
-    mdApply(it, p); it.root.position.set(0, 0, 0); it.root.rotation.y = face * F3_YAW; it.root.updateMatrixWorld(true);
+    mdApply(it, p); it.root.position.set(0, 0, 0); it.root.rotation.y = face * F3_YAW; it.body.scale.x = it.scale * (face < 0 ? -1 : 1);
+    it.root.updateMatrixWorld(true);
   };
   md.walkV = {}; md.walkD = {};
   for (const k in C) {
@@ -282,7 +301,7 @@ function mdApply(it, p) {
 }
 
 // Every drawn frame, for side's Meshy fighter: as f3Sync does for the placeholders (visible, at F.x, F.y, turned
-// face * F3_YAW), a change to a free or movement act eased in over CFG.anim.model frames by F.af, a strike over its
+// face * F3_YAW, and mirrored when facing left), a change to a free or movement act eased in over CFG.anim.model frames by F.af, a strike over its
 // first CFG.anim.strikeIn frames (never into its active frames: there the pose is the clip's). Hits and throws snap.
 function mdSync(it, side, S) {
   it.root.visible = !!S;
@@ -290,6 +309,7 @@ function mdSync(it, side, S) {
   const F = fighterOf(S, side), m = CFG.moves[F.act], n = m ? Math.min(CFG.anim.strikeIn, m.s - 1) : CFG.anim.model;
   it.root.position.set(F.x / 1000, F.y / 1000, side ? -.05 : .05);
   it.root.rotation.y = F.face * F3_YAW;
+  it.body.scale.x = it.scale * F.face;   // facing left: the mirror image (fx's squash scales the root, not the body)
   let p = mdPoseOf(F, S) || mdRest(mdData(it.key));
   if (F !== it.F) it.from = null;
   else if (F.act !== it.act) it.from = F3_EASE[F.act] || (m && n > 0) ? it.pose : null;

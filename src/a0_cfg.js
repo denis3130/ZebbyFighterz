@@ -68,7 +68,9 @@ const CFG={
   // load: the frame whose limb point lies deepest in the move's box, both facings), held through the active frames,
   // recovery to t1 (air moves: in 8 frames, then held until the landing); k = [[x, t], ...] piecewise linear in F.af
   // (in u, 0 at take-off to 1 falling, for the air and flight poses); low/up = hips and legs from one entry, the rest
-  // from the other. Options: y = the hips' height in m (poses in the air), pitch = degrees leaning forward (air attacks
+  // from the other. Options: y = the hips' height in m (poses in the air; 'cap' = never above the rest pose, for clips
+  // that hop while the sim stays on the floor), plant = feet held by IK where the t[0] pose has them ('L', 'R', 'LR':
+  // grounded strikes neither slide nor lift the support foot), pitch = degrees leaning forward (air attacks
   // strike downward), limb = the hitting point when the clip strikes with another limb than CFG.moves names.
   // kick = a base entry whose leg ('L'/'R') reaches 'to' (ankle, model space m) by IK: in startup, held, back in recovery.
   clips:{
@@ -76,11 +78,12 @@ const CFG={
     dashF:{c:'a16', walk:4}, dashB:{c:'a20', walk:1},
     crouch:{low:{c:'a54', at:.67}, up:{c:'a89', loop:1}}, guard:{c:'a138', at:1}, guardC:{low:{c:'a54', at:.67}, up:{c:'a138', at:1}},
     jumpSquat:{c:'a466', k:[[0,0],[4,.3]]}, air:{c:'a466', k:[[0,.53],[.5,.8],[1,1.07]], y:.95}, landing:{c:'a466', k:[[0,1.1],[5,1.4]]},
-    p1:{c:'a191', t:[.2,1]}, p2:{c:'a192', t:[.3,1.2]}, p3:{c:'a193', t:[0,.8]}, hp:{c:'a210', t:[1.45,2.6]},
-    k1:{c:'a209', t:[.35,1.15], limb:'footR'}, k2:{c:'a215', t:[.5,1.6]}, hk:{c:'a207', t:[.8,1.9]},
+    p1:{c:'a191', t:[.2,1], plant:'LR'}, p2:{c:'a192', t:[.3,1.2], plant:'LR'}, p3:{c:'a193', t:[0,.8], plant:'LR'},
+    hp:{c:'a210', t:[1.45,2.6], plant:'LR'}, k1:{c:'a209', t:[.35,1.15], limb:'footR', plant:'L'},
+    k2:{c:'a215', t:[.5,1.6], plant:'L', y:'cap'}, hk:{c:'a215', t:[.3,1.6], plant:'L', y:'cap'},
     cp:{low:{c:'a54', at:.67}, up:{c:'a192', t:[.3,1.2]}},
     ck:{kick:{low:{c:'a54', at:.67}, up:{c:'a89', loop:1}}, leg:'L', to:[.1,.1,.72]},
-    chp:{c:'a194', t:[.1,1]}, chk:{c:'a422', t:[0,1], limb:'footL'},
+    chp:{c:'a194', t:[.1,1], plant:'LR'}, chk:{c:'a422', t:[0,1], limb:'footL', plant:'R', y:'cap'},
     jp:{c:'a457', t:[1.1,1.6], y:.95, pitch:20, limb:'handL'}, jhp:{c:'a457', t:[1.1,1.6], y:.95, pitch:30, limb:'handL'},
     jk:{c:'a422', t:[.13,.6], y:.95, pitch:40, limb:'footL'}, jhk:{c:'a422', t:[.13,.6], y:.95, pitch:45, limb:'footL'},
     spec:{c:'a214', k:[[0,.33],[14,1.53],[24,2.1],[44,3.2]]},

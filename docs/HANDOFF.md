@@ -26,7 +26,7 @@ python3 tests/play_check.py
 - Opzioni di `run.py`: `--viewport WxH`, `--touch`, `--mobile`, `--seed N` (un fallimento si ripete con lo stesso seme).
 - Servono `pip install playwright` e Chromium (il runner usa Chrome/Chromium di sistema se c'è). `three.min.js` (r128) è nel repository e i test lo usano al posto del CDN.
 - `run.py` fallisce anche sugli errori della console (tranne "Failed to load resource": i font bloccati).
-- Stato dei test al 6/11/2026 (dopo le correzioni finali): tutti verdi, 246 prove sui 17 comandi qui sopra, 0 errori.
+- Stato dei test al 7/11/2026 (Tappa 2a, dopo la revisione finale): tutti verdi, 288 prove sui comandi qui sopra più `play_check`, 0 errori.
 
 ## Architettura in poche righe
 - `src/` è unito da `mk.sh` (ordine in `FILES`) tramite `build.py`; le immagini di `assets/` entrano come data URI, quindi `index.html` è un solo file.
@@ -78,6 +78,7 @@ python3 tests/play_check.py
 - `tests/perf.test.js` (senza sincronizzazione) resta sui 0,6 ms per fotogramma: misura solo la CPU.
 
 ## Note per Denis / per dopo
+- Revisione finale Tappa 2a (7/11): Ren a destra è specchiato (si vede di fronte su entrambi i lati); nei colpi a terra i piedi d'appoggio restano fermi (IK) e Ren non si stacca da terra; `hk` usa la clip del calcio alto (il calcio circolare Meshy a207 è girato e in salto, senza piedi a terra: per dopo un calcio circolare a terra). 288 prove verdi.
 - Tappa 2a: capelli più a punte come nel disegno (Denis: "non mi piace ma teniamolo così"); rotolata vera (ora `rollF`/`rollB` usano la clip per rialzarsi mentre il corpo scivola); `chp` e `chk` si alzano (anti-aerei) anche se la hitbox resta bassa; la camminata gira circa 5 volte più veloce della clip perché la logica cammina a 4,5 m/s; posa di vittoria (la logica non la usa ancora); Kael di Meshy (modello + scheletro, le stesse animazioni con lo stesso scheletro).
 Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Il forte dopo P,P,P combina solo se il quarto P viene premuto (e tenuto) già durante il p3 o al più 2 fotogrammi dopo il suo colpo: più tardi il colpito esce dallo stordimento prima che il forte parta (lo prende come primo colpo di una nuova combo). Dipende dai tempi di p3 e hp, non toccati.

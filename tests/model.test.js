@@ -43,3 +43,29 @@ T.test('crouched acts keep the head down', () => { const S=__VF.simCreate({seed:
   for(const [act,n] of [['crouch',20],['guardC',20],['cp',15],['ck',19]]) for(let af=1;af<=n;af++){ Object.assign(f,{act,af}); __VF.renderFrame(S,0); T.ok(__VF.headTop(0)<=top, act+' af '+af+' head '+__VF.headTop(0).toFixed(2)); }
   Object.assign(f,{act:'block',af:2,stun:8,prev:B.D|B.L}); __VF.renderFrame(S,0); T.ok(__VF.headTop(0)<=top,'crouching block'); });
 T.test('facing left mirrors the limbs', () => { const S=__VF.simCreate({seed:1,mode:'versus',chars:['ren','kael']}), f=F(S,0); Object.assign(f,{x:0,face:-1,act:'p1',af:5}); __VF.renderFrame(S,0); T.ok(__VF.limbWorld(0,'handL').x<-.2); });
+// Final review fixes (Tappa 2a).
+// Grounded strikes keep Ren on the floor: on every frame of every move that is not an air move, a foot touches the floor.
+T.test('grounded strikes keep a foot on the floor', () => { const S=__VF.simCreate({seed:1,mode:'versus',chars:['ren','kael']}), f=F(S,0);
+  for(const [id,m] of Object.entries(__VF.CFG.moves)){ if(m.r==='land') continue;
+    for(let af=1;af<=m.s+m.a+m.r;af++){ Object.assign(f,{x:0,face:1,act:id,af,air:false,y:0}); __VF.F3D[0].F=null; __VF.renderFrame(S,0);
+      const lo=Math.min(__VF.limbWorld(0,'footL').y,__VF.limbWorld(0,'footR').y); T.ok(lo<.13, id+' af '+af+' lowest foot at '+lo.toFixed(2)); } } });
+// ...and the foot on the floor does not slide: frame to frame the support foot (the lower one, on the floor) moves < 2 cm.
+T.test('grounded strikes do not slide the support foot', () => { const S=__VF.simCreate({seed:1,mode:'versus',chars:['ren','kael']}), f=F(S,0), feet=()=>[__VF.limbWorld(0,'footL'),__VF.limbWorld(0,'footR')];
+  for(const [id,m] of Object.entries(__VF.CFG.moves)){ if(m.r==='land') continue; let worst=0, at=''; const e=__VF.CFG.clips[id], hit=(e&&e.limb)||m.limb;
+    for(let af=1;af<m.s+m.a+m.r;af++){ Object.assign(f,{x:0,face:1,act:id,af,air:false,y:0}); __VF.F3D[0].F=null; __VF.renderFrame(S,0); const a=feet();
+      f.af=af+1; __VF.F3D[0].F=null; __VF.renderFrame(S,0); const b=feet();
+      for(const k of [0,1]) if(['footL','footR'][k]!==hit&&a[k].y<.12&&b[k].y<.12&&a[k].y<=a[1-k].y&&b[k].y<=b[1-k].y){ const d=a[k].distanceTo(b[k]); if(d>worst){ worst=d; at='af '+af; } } }   // the striking foot may sweep the floor
+    T.ok(worst<.02, id+' support foot slid '+worst.toFixed(3)+' at '+at); } });
+// Facing left is the mirror image of facing right (both sides show Ren's front, as in FighterZ-style games).
+T.test('facing left draws the mirror image', () => { const S=__VF.simCreate({seed:1,mode:'versus',chars:['ren','kael']}), f=F(S,0), pts=()=>['handL','handR','footL','footR'].map(l=>__VF.limbWorld(0,l));
+  for(const [act,af] of [['idle',10],['p1',5],['hk',15],['walkF',8]]){ Object.assign(f,{x:0,face:1,act,af}); __VF.F3D[0].F=null; __VF.renderFrame(S,0); const a=pts();
+    Object.assign(f,{face:-1}); __VF.F3D[0].F=null; __VF.renderFrame(S,0); const b=pts();
+    for(let k=0;k<4;k++){ T.near(b[k].x,-a[k].x,.002,act+' x '+k); T.near(b[k].y,a[k].y,.002,act+' y '+k); T.near(b[k].z,a[k].z,.002,act+' z '+k); } } });
+// Review Focus 1 for real: a fresh model drawn in the same turn as its build (texture not decoded, never uploaded) draws
+// with no warning or error.
+T.test('a fresh model draws before its texture decodes, silently', () => { const it=__VF.modelBuild('ren'), tex=it.mesh.material.map, msgs=[], w=console.warn, e=console.error;
+  T.eq(tex.version,0,'texture not marked for upload yet'); console.warn=(...a)=>msgs.push('warn '+a.join(' ')); console.error=(...a)=>msgs.push('error '+a.join(' '));
+  try { __VF.scene.add(it.root); const S=__VF.simCreate({seed:1,mode:'versus',chars:['ren','kael']}); __VF.renderFrame(S,0); __VF.renderer.render(__VF.scene,__VF.camera);
+    const gl=__VF.renderer.getContext(), px=new Uint8Array(4); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px); }
+  finally { console.warn=w; console.error=e; __VF.scene.remove(it.root); }
+  T.eq(msgs.length,0,msgs.join(' | ')); });
