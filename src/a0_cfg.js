@@ -100,8 +100,8 @@ const CFG={
   // flatFace = the front of the head without the toon light (the drawing painted there has its own shading); sash = the
   // sash's tails as ribbons of their own, swinging with gravity (e_model mdSash) instead of painted on the legs;
   // faceShape = the shape as drawn (tools/ren_look.py drawn_shape: the face smooth below the eyes with a small nose,
-  // the fringe off the eyes, the collar's points), the drawn face's features as a decal of their own (face_uv) and the
-  // jaw's shadow on the neck (jaw_curve).
+  // the fringe off the eyes, the collar's points) and the drawn face's features, the jaw's line and the neck's shadow
+  // under it as a decal of their own (e_model mdFaceMat).
   looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,

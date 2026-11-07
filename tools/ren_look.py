@@ -26,11 +26,13 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
         hanging tails as ribbons of their own (Meshy fused them with the trousers and the vest), where the drawing has
         them seen from the front, as wide as there, coming out from under the band's knot; tools/paint_from_drawing.py
         paints the old ones over
-  face: {idx: [byte offset, count] uint16, uvw: [byte offset, count] float32 x3}: the face decal's coordinates and share
-        shown at the vertices where it shows (face_uv); skin: [byte offset, count] uint8 per vertex, 1 on the skin (the
-        head's and the neck's, head_skin, and the body's); jaw: the jaw's shadow on the neck ({curve: the chin's edge,
-        jaw_curve's [xc, y0, k, r]; half: m, the shadow's half width; gap, deep: m under the edge where it starts and
-        ends; back: z where it has thinned out; shade: rgb})
+  face: the face decal, laid per pixel by its bind position's front projection (fit: drawing_fit's scale, cx, by; decal:
+        FACE_DECAL) where it is on the front of the face and the neck (depth: face_depth's {box, z, n, map: [byte
+        offset, count] uint8 x2 per cell}; within seen m of it), faded as its bind normal turns away (front:
+        FACE_FRONT); and the shadow under the jaw (shade: JAW_SHADE, jaw: [JAW_BEHIND, the cut's z at y, y, its slope dz/dy: JAW_CUT]; the depth map's
+        second byte: in its band under the jaw's edge from 128 up, the third: so there and above it where it takes
+        what is behind the jaw (each by its distance from their edges, JAW_RAMP rows to 0 or 255: smooth edges after the
+        texture's filtering), the fourth: the jaw's edge's depth, over z as the first)
   move: {idx: [byte offset, count] uint16, pos, nor: [byte offset, count] float32 x3}: the vertices drawn_shape changes
         (the nose flatter, the fringe off the eyes, the collar's points), their bind positions and normals (all the
         rest is measured on it)
@@ -124,31 +126,51 @@ def smooth(e0, e1, x):
 # The shape (bind pose, model space) where Meshy's differs from the drawing; the paint (tools/paint_from_drawing.py) and
 # the model (look data move, CFG.looks.ren.faceShape) use the same (Denis, 7/11: "la faccia è troppo buggata", "creali un
 # naso piccolo coerente con tutto", "occhi mezzi coperti", "il colletto ... a punta"):
-# - the face below the eyes: Meshy made the nose a thin ridge with a zigzag front and the mouth a slit 2-3 cm deep (the
-#   drawing projected on them stretched into smears): a smooth surface instead, a quadratic fitted to Meshy's face there
-#   (FACE_X: its middle; robustly, the ridge and the slit left out), with a small nose on it (NOSE: from its root between
-#   the eyes to its tip, h m out at the tip, half as wide as w at the root and the tip, back on the face at end; in
-#   NOSE_BOX, fading to Meshy's over NOSE_FADE m at the box's edges) and the mouth's slit filled to it (MOUTH_BOX);
+# - the face: Meshy made the nose a thin ridge with a zigzag front, the mouth a slit 2-3 cm deep, the eyes sockets and
+#   the cheeks and jaw creased (the drawing projected on them stretched into smears, the outline showed through the
+#   creases as black lines; Denis, 7/11: "non riesci a farlo come un viso normale?"): the ridge flattened and the slit
+#   filled to a quadratic fitted to Meshy's face there (FACE_X: its middle; robustly, the ridge and the slit left out;
+#   NOSE_BOX, MOUTH_BOX, fading to Meshy's over NOSE_FADE m at the boxes' edges); then the whole face smoothed (face_region:
+#   from under the fringe to under the chin, in front of the ears; FACE_SMOOTH rounds of Taubin smoothing, its border
+#   with the hair and the neck kept), and a small nose put on it (NOSE: from its root between the eyes to its tip, h m out
+#   at the tip, half as wide as w at the root and the tip, back on the face at end); its normals the smooth surface's;
 # - the fringe: hanging 2-4 cm in front of the face down to the eyes (a camera a little above saw them half covered): its
 #   hair more than FRINGE_Z m in front of the forehead (z FRINGE_FACE) lifted to the brows (y FRINGE_CUT[0]; the lock
 #   between the eyes, FRINGE_CUT[2] m either side of x FRINGE_X, down to FRINGE_CUT[1], as drawn), what hung below
 #   kept FRINGE_KEEP as long, and pulled FRINGE_BACK of the way back toward the face from 2 cm above the cut down;
 # - the collar: a round roll; its top corners seen from the front (the highest and outermost of its teal and light rim
 #   by the neck) pulled out and up by COLLAR_TIP m into the drawing's points, less with the distance (gone at COLLAR_R).
-FACE_X, NOSE = .0124, {'root': 1.580, 'tip': 1.546, 'end': 1.537, 'h': .009, 'w': (.005, .009)}
+FACE_X, NOSE = .0124, {'root': 1.581, 'tip': 1.555, 'end': 1.548, 'h': .009, 'w': (.005, .009)}   # (where the drawing's nose is)
 NOSE_BOX, MOUTH_BOX, NOSE_FADE = (.014, (1.532, 1.586)), (.032, (1.497, 1.537)), .005   # (half width about FACE_X, y range)
+FACE_SMOOTH, FACE_BOX = 30, (.066, (1.465, 1.66), -.035)   # face_region's box: half width about FACE_X, y range, in front of z
 FRINGE_X, FRINGE_CUT, FRINGE_KEEP, FRINGE_BACK, FRINGE_FACE, FRINGE_Z = .005, (1.628, 1.600, .016), .3, .35, .078, .006
 COLLAR_TIP, COLLAR_R = (.025, .02), .05
 # The face's decal (CFG.looks.ren.faceShape): Meshy left the nose and the mouth only a few texels of its texture (the
 # drawing painted there came out blurred, in blocks), so the drawn face's features are a texture of their own
-# (tools/paint_from_drawing.py: <name>_face.png, the drawing's FACE_DECAL box, x0, y0, x1, y1 px) laid on the face by
-# its own coordinates: each vertex's front projection on the drawing (drawing_fit), read stretched below FACE_EYES (the
-# drawn eyes' lower edge) so the drawn chin (row FACE_CHIN_D) lands on the model's (FACE_CHIN): the model's face is
-# longer below the eyes than the drawn one (its eyes as drawn: moved into Meshy's eye sockets they were painted on
-# their walls). Shown on the head's front in front of the ears (FACE_ZONE: half width about FACE_X, y range), as it
-# faces the front (FACE_FRONT: the normal's z where it starts and where it is all).
-FACE_DECAL, FACE_EYES, FACE_CHIN_D, FACE_CHIN = (440, 130, 580, 250), 177., 238., 256.8
-FACE_ZONE, FACE_FRONT, FACE_FLAT = (.06, (1.47, 1.635)), (.3, .55), .035   # FACE_FLAT: half width of the face's middle, all flat lit
+# (tools/paint_from_drawing.py: <name>_face.png, the drawing's FACE_DECAL box, x0, y0, x1, y1 px: the eyes and brows, the
+# nose, the mouth) laid on the face by their own coordinates: each point's front projection on the drawing
+# (drawing_fit; the smooth face's chin is where the drawn one is). Shown on the front of the head in front of the ears
+# and of the neck (FACE_ZONE: half width about FACE_X, y range), as it faces the front (FACE_FRONT: the normal's z where
+# it starts and where it is all).
+# Under the jaw (Denis, 7/11: "non voglio bug o cose strane"; the drawing's black and brown V, laid from the front,
+# smeared on the jaw's underside seen from the side; a shadow from the jaw's height over the neck, or on the skin facing
+# down, came out in blotches: Meshy's neck is lumpy): a band of the drawing's shadow colour under the jaw (JAW_SHADE,
+# 0..1) with crisp, smooth edges from every side: where a point's front projection is from JAW_UP rows above the jaw's
+# edge seen from the front (jaw_edge: where the surface steps back more than JAW_STEP m from one of the drawing's rows
+# to the next, from row JAW_FROM down, under the eyes; smoothed along it) to JAW_BAND below it (rows at the sides, at
+# the chin's column, the half width of the chin's peak: as deep as the drawing's shadow; down to none over JAW_TAPER
+# columns at the jaw's ends); and, from JAW_HIDE rows above the edge, what is more than JAW_BEHIND m behind the jaw's
+# edge (the jaw's underside at its corners, the neck's sides under it; hidden behind the cheeks seen from the front);
+# in front of the line JAW_CUT ((y, z) from behind the ear lobe to the notch between the collarbones: on the neck's
+# sides like the line of its muscle from behind the ear, as anime draws it; not the back of the neck; cut straight
+# down, it looked like a sticker). Its edges compare the point's own position
+# with smooth curves along the jaw (the front's depth map, 1 mm cells, made them saw-toothed); its bands are stored as
+# distances from their edges (JAW_RAMP rows from 0 to 1: a mask's edges, filtered over the cells, came out in steps).
+# The jaw's line is the outline.
+FACE_DECAL, JAW_STEP, JAW_FROM, JAW_UP, JAW_HIDE, JAW_BAND, JAW_TAPER = (440, 130, 580, 250), .005, 190, 1.5, 15., (12., 23., 25.), 12.
+JAW_BEHIND, JAW_CUT, JAW_RAMP = .004, ((1.57, -.055), (1.44, 0.)), 5.
+JAW_SHADE = (162 / 255, 104 / 255, 75 / 255)
+FACE_ZONE, FACE_FRONT, FACE_FLAT, FACE_SEEN, FACE_CELL = (.06, (1.47, 1.635)), (.3, .55), .035, .003, .001   # FACE_FLAT: half width of the face's middle, all flat lit
 
 
 # The skin of the head and the neck (Denis, 7/11: "la faccia è ancora fatta malissimo, non voglio bug o cose strane"):
@@ -156,16 +178,11 @@ FACE_ZONE, FACE_FRONT, FACE_FLAT = (.06, (1.47, 1.635)), (.3, .55), .035   # FAC
 # (its glints, the tips of the ears showing through the locks): those are hair; the islands on the face's front
 # (FACE_ZONE[0] about FACE_X, in front of z SKIN_FRONT_Z: the forehead between the fringe's locks, beside the eyes) are
 # skin. On the skin the light is flat (the toon light's bands followed the facets of Meshy's cheeks, jaw and neck:
-# blocks), and under the jaw the neck has a shadow as in the drawing (jaw_curve; JAW_SHADOW m deep under the jaw, in
-# JAW_SHADE times the skin's colour: the drawing's neck shadow (166, 107, 76) over its skin (252, 183, 131)).
-# JAW_SCAN, JAW_DROP, JAW_NECK_Y: m (jaw_curve); the shadow from JAW_GAP m under the chin's edge to JAW_SHADOW m under
-# it, on the neck's front (its depth thinning to nothing from JAW_BACK + 2 cm back to JAW_BACK, z), as wide as the neck
-# plus JAW_WIDE m.
-SKIN_FRONT_Z, JAW_SCAN, JAW_DROP, JAW_NECK_Y = .02, (1.455, 1.535), .008, (1.47, 1.50)
-JAW_GAP, JAW_SHADOW, JAW_BACK, JAW_WIDE, JAW_SHADE = .0, .022, -.03, .003, (.66, .58, .58)
+# blocks); the shadow under the jaw is the drawing's, in the face decal.
+SKIN_FRONT_Z = .02
 # The neck's front down to the collarbones (NECK_ZONE: x about its middle, its half width; y range; in front of z), clean
-# skin and flat light like the face (the drawing's neck shadow fell there in blotches: Meshy's chin is lower than the
-# drawn one; and Meshy skinned it to the spine: the head's and the neck's skin above did not reach it).
+# skin and flat light like the face (the drawing painted there fell in blotches; and Meshy skinned it to the spine: the
+# head's and the neck's skin above did not reach it).
 NECK_ZONE = (.006, .065, (1.455, 1.53), -.04)
 
 
@@ -192,45 +209,100 @@ def head_skin(P, I, col, whn):
     return keep[weld]
 
 
-def jaw_curve(P, I, sk):
-    """The jaw's shadow on the neck (CFG.looks.ren.faceShape; e_model mdFaceMat draws it per pixel, from smooth curves:
-    following Meshy's few large facets under the chin it came out in blocks): the chin's lower edge seen from the front
-    (per column, scanning down, where the depth of the surface first drops by JAW_DROP m: the chin over the neck behind
-    it) as a rounded V, y = y0 + sqrt((k (x - xc))^2 + r^2) - r; and the neck's half width seen from the front (the skin
-    between JAW_NECK_Y). P: positions; sk: the skin, per vertex. ([xc, y0, k, r], half width)."""
-    from scipy.optimize import least_squares
-    g = .001; X0, X1, Y0, Y1 = -.09, .11, 1.42, 1.60; nx, ny = int(round((X1 - X0) / g)) + 1, int(round((Y1 - Y0) / g)) + 1
-    Z = np.full((nx, ny), -np.inf); SK = np.zeros((nx, ny), bool); cent = P[I].mean(1)
-    for k in np.nonzero((cent[:, 0] > X0 - .02) & (cent[:, 0] < X1 + .02) & (cent[:, 1] > Y0 - .02) & (cent[:, 1] < Y1 + .02) & (cent[:, 2] > -.08))[0]:
+def face_and_neck(face, hs, col, P):
+    """Per vertex: the face (drawn_shape's), the head's and the neck's skin (head_skin's hs) and the neck's front
+    (NECK_ZONE, skin-coloured in Meshy's texture: col)."""
+    return face | hs | ((col[:, 0] > 120) & (col[:, 1] > 75) & (col[:, 0] - col[:, 2] > 40) & neck_zone(P))
+
+
+def jaw_edge(P, I, sel, fit, cols):
+    """The jaw's lower edge seen from the front, in the drawing's rows (fit: drawing_fit's s, cx, by; pixel k's centre at
+    k) at its columns cols: the last row on the chin's front, where the front-most surface of the triangles of sel
+    (face_and_neck) steps back more than JAW_STEP m to the next row (onto the chin's underside), from row JAW_FROM
+    down; nan where it does not."""
+    s, cx, by = fit
+    zf = front_depth(P, I[sel[I].all(1)], FACE_X - FACE_ZONE[0] - .01, FACE_X + FACE_ZONE[0] + .01, FACE_ZONE[1][0] - .01, FACE_ZONE[1][1] + .01)
+    rows = np.arange(JAW_FROM, FACE_DECAL[3] + 30); out = np.full(len(cols), np.nan)
+    for k, c in enumerate(cols):
+        z = zf(np.full(len(rows), (c - cx) / s), (by - rows) / s); st = np.nonzero(z[:-1] - z[1:] > JAW_STEP)[0]
+        if len(st): out[k] = rows[st[0]]
+    return out
+
+
+def front_depth(P, I, x0, x1, y0, y1, g=.001):
+    """The front view's depth (the largest z) of the mesh (positions P, triangles I) on a grid of g m over x0..x1,
+    y0..y1: a function of (x, y) arrays (-inf where nothing is)."""
+    nx, ny = int(round((x1 - x0) / g)) + 1, int(round((y1 - y0) / g)) + 1; Z = np.full((nx, ny), -np.inf); cent = P[I].mean(1)
+    for k in np.nonzero((cent[:, 0] > x0 - .02) & (cent[:, 0] < x1 + .02) & (cent[:, 1] > y0 - .02) & (cent[:, 1] < y1 + .02))[0]:
         a, b, c = P[I[k]]
-        lo = np.maximum(np.floor((np.minimum(np.minimum(a, b), c)[:2] - [X0, Y0]) / g).astype(int), 0); hi = np.minimum(np.ceil((np.maximum(np.maximum(a, b), c)[:2] - [X0, Y0]) / g).astype(int), [nx - 1, ny - 1])
+        lo = np.maximum(np.floor((np.minimum(np.minimum(a, b), c)[:2] - [x0, y0]) / g).astype(int), 0); hi = np.minimum(np.ceil((np.maximum(np.maximum(a, b), c)[:2] - [x0, y0]) / g).astype(int), [nx - 1, ny - 1])
         d = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
         if (hi < lo).any() or abs(d) < 1e-14: continue
-        gx, gy = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1), indexing='ij'); X = X0 + gx * g; Yc = Y0 + gy * g
-        u = ((b[1] - c[1]) * (X - c[0]) + (c[0] - b[0]) * (Yc - c[1])) / d; v = ((c[1] - a[1]) * (X - c[0]) + (a[0] - c[0]) * (Yc - c[1])) / d; w = 1 - u - v
-        zz = u * a[2] + v * b[2] + w * c[2]; up = (u >= 0) & (v >= 0) & (w >= 0) & (zz > Z[gx, gy])
-        Z[gx[up], gy[up]] = zz[up]; SK[gx[up], gy[up]] = sk[I[k]].sum() >= 2
-    pts = []
-    for ix in range(nx):
-        for iy in range(int(round((JAW_SCAN[1] - Y0) / g)), int(round((JAW_SCAN[0] - Y0) / g)), -1):
-            if SK[ix, iy] and np.isfinite(Z[ix, iy - 3:iy + 1]).all() and Z[ix, iy] - Z[ix, iy - 3:iy].min() > JAW_DROP:
-                pts.append((X0 + ix * g, Y0 + iy * g)); break
-    pts = np.array(pts)
-    curve = lambda p, x: p[1] + np.sqrt((p[2] * (x - p[0])) ** 2 + p[3] ** 2) - p[3]
-    fit = least_squares(lambda p: curve(p, pts[:, 0]) - pts[:, 1], [np.median(pts[:, 0]), pts[:, 1].min(), .8, .005], bounds=([-.05, 1.45, .1, .001], [.06, 1.56, 3, .05]))
-    rows = [np.nonzero(SK[:, int(round((y - Y0) / g))] & (Z[:, int(round((y - Y0) / g))] > -.01))[0] for y in np.arange(JAW_NECK_Y[0], JAW_NECK_Y[1] + 1e-9, .005)]
-    half = float(np.median([(r.max() - r.min()) * g / 2 for r in rows if len(r)]))
-    print('jaw edge: %d columns, the curve xc %.4f y0 %.4f k %.3f r %.4f (rms %.4f m); the neck %.3f m wide' % (len(pts), *fit.x, np.sqrt((fit.fun ** 2).mean()), 2 * half))
-    return [round(float(v), 5) for v in fit.x], round(half, 4)
+        gx, gy = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1), indexing='ij'); X = x0 + gx * g; Y = y0 + gy * g
+        u = ((b[1] - c[1]) * (X - c[0]) + (c[0] - b[0]) * (Y - c[1])) / d; v = ((c[1] - a[1]) * (X - c[0]) + (a[0] - c[0]) * (Y - c[1])) / d; w = 1 - u - v
+        zz = u * a[2] + v * b[2] + w * c[2]; up = (u >= -.01) & (v >= -.01) & (w >= -.01) & (zz > Z[gx, gy])
+        Z[gx[up], gy[up]] = zz[up]
+    return lambda x, y: Z[np.clip(np.round((x - x0) / g).astype(int), 0, nx - 1), np.clip(np.round((y - y0) / g).astype(int), 0, ny - 1)]
 
 
-def face_uv(P, N, wh, fit):
-    """The face decal's coordinates per vertex (FACE_*): [u, v, share shown], float32. fit: drawing_fit's."""
-    _, s, cx, by = fit; pu, pv = cx + P[:, 0] * s, by - P[:, 1] * s
-    fv = np.where(pv > FACE_EYES, FACE_EYES + (pv - FACE_EYES) * (FACE_CHIN_D - FACE_EYES) / (FACE_CHIN - FACE_EYES), pv)
-    x0, y0, x1, y1 = FACE_DECAL
-    zone = (wh > .5) & (np.abs(P[:, 0] - FACE_X) < FACE_ZONE[0]) & (P[:, 1] > FACE_ZONE[1][0]) & (P[:, 1] < FACE_ZONE[1][1]) & (P[:, 2] > -.01)
-    return np.stack([(pu - x0 + .5) / (x1 - x0), (fv - y0 + .5) / (y1 - y0), zone * smooth(FACE_FRONT[0], FACE_FRONT[1], N[:, 2])], 1).astype(np.float32)
+def face_depth(P, I, sel, fit):
+    """The face's and the neck's surface seen from the front (CFG.looks.ren.faceShape; e_model mdFaceMat lays the face
+    decal per pixel where a point is on it: a per-vertex mask faded over whole triangles of Meshy's coarse mesh, 5-8 mm,
+    half an eye; and on the surfaces hidden behind the chin the decal stretched the mouth's lines): its depth (the
+    largest z) over FACE_ZONE on a grid of FACE_CELL m, from the triangles of sel only (face_and_neck: not the fringe's
+    locks in front of the face, nor the collar), its holes filled from their nearest cell and smoothed; and the shadow
+    under the jaw (JAW_*) in front view (jaw_edge, fit: drawing_fit's s, cx, by; along the jaw its rows without the odd
+    column, smoothed; none beyond its ends). ([x0, y0, x1, y1], [z0, z1], nx, ny, uint8 bytes x4 per cell: the depth
+    0..255 over z0..z1, 255 in the shadow's band, 255 there and in the rows above it where it takes what is behind the
+    jaw, the depth of the jaw's edge in that column as the first)."""
+    from scipy import ndimage
+    x0, x1, y0, y1 = FACE_X - FACE_ZONE[0] - .01, FACE_X + FACE_ZONE[0] + .01, FACE_ZONE[1][0] - .01, FACE_ZONE[1][1] + .01
+    t = I[sel[I].all(1)]; zf = front_depth(P, t, x0, x1, y0, y1, FACE_CELL)
+    nx, ny = int(round((x1 - x0) / FACE_CELL)) + 1, int(round((y1 - y0) / FACE_CELL)) + 1
+    gx, gy = np.meshgrid(x0 + np.arange(nx) * FACE_CELL, y0 + np.arange(ny) * FACE_CELL, indexing='ij'); Z = zf(gx, gy)
+    have = np.isfinite(Z); _, (ix, iy) = ndimage.distance_transform_edt(~have, return_indices=True); Z = ndimage.gaussian_filter(Z[ix, iy], 1.)
+    z0, z1 = float(Z.min()) - .002, float(Z.max()) + .002
+    s, cx, by = fit; cols = np.arange(int(np.floor(cx + x0 * s)), int(np.ceil(cx + x1 * s)) + 1)
+    with np.errstate(invalid='ignore'): e = jaw_edge(P, I, sel, fit, cols)
+    ok = np.isfinite(e) & (e >= JAW_FROM + 2)   # (not the cheeks' sides, just under the scan's start)
+    runs = np.split(np.nonzero(ok)[0], np.nonzero(np.diff(np.nonzero(ok)[0]) > 1)[0] + 1); run = max(runs, key=len)
+    c, e = cols[run], e[run]; med = ndimage.median_filter(e, 5, mode='nearest'); good = np.abs(e - med) <= 3
+    e = ndimage.gaussian_filter1d(np.interp(c, c[good], e[good]), 1.5, mode='nearest')
+    ze = ndimage.gaussian_filter1d(zf((c - cx) / s, (by - e) / s), 2., mode='nearest')   # (the jaw's edge: its depth)
+    px, py = cx + gx * s, by - gy * s; edge = np.interp(px, c, e); chin = c[np.argmax(e)]; zedge = np.interp(px, c, ze)
+    taper = np.clip((px - c[0]) / JAW_TAPER, 0, 1) * np.clip((c[-1] - px) / JAW_TAPER, 0, 1)
+    deep = edge + (JAW_BAND[0] + (JAW_BAND[1] - JAW_BAND[0]) * np.clip(1 - np.abs(px - chin) / JAW_BAND[2], 0, 1) ** 2) * taper
+    ends = np.minimum(px - c[0], c[-1] - px)   # (none beyond the jaw's ends)
+    band = np.clip(.5 + np.minimum(np.minimum(py - (edge - JAW_UP), deep - py), ends) / JAW_RAMP, 0, 1)
+    hide = np.clip(.5 + np.minimum(np.minimum(py - (edge - JAW_HIDE * taper), deep - py), ends) / JAW_RAMP, 0, 1)
+    print('face and neck depth %d x %d cells of %.0f mm, z %.3f..%.3f (%d%% from them, the rest filled); the jaw\'s edge over the drawing\'s columns %d..%d, rows %d..%d (the chin at %d)' % (
+        nx, ny, FACE_CELL * 1000, z0, z1, 100 * have.mean(), c[0], c[-1], e.min(), e.max(), chin) + ', its depth %.3f..%.3f' % (ze.min(), ze.max()))
+    return [round(x0, 5), round(y0, 5), round(x1, 5), round(y1, 5)], [round(z0, 5), round(z1, 5)], nx, ny, \
+        np.stack([np.round((Z - z0) / (z1 - z0) * 255), np.round(band * 255), np.round(hide * 255), np.round(np.clip((zedge - z0) / (z1 - z0), 0, 1) * 255)], -1).astype(np.uint8).transpose(1, 0, 2).tobytes()
+
+
+def face_region(Pw, Nw, T, E, whw, hairw, skinw):
+    """The face on the welded mesh (positions Pw, normals Nw, triangles T, edges E; per welded vertex its weight on the
+    head, whether it is hair-coloured and skin-coloured in Meshy's texture): the head's vertices in FACE_BOX but the hair
+    mass (the big hair-coloured piece); of that mass, the brows, lashes and eye lines Meshy painted on the face's own
+    surface (in the eyes' band, not in front of a smooth fit of the face's skin by 3 mm) are face (the eye sockets
+    behind it too). The piece that holds the nose. (face, its border: the face's vertices next to the rest)"""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    nw = len(Pw); cc = lambda m: connected_components(coo_matrix((np.ones(int(m.sum())), (E[m, 0], E[m, 1])), shape=(nw, nw)), directed=False)[1]
+    lab = cc(hairw[E[:, 0]] & hairw[E[:, 1]]); ids, cnt = np.unique(lab[hairw], return_counts=True); mass = hairw & (lab == ids[np.argmax(cnt)])
+    box = (whw > .5) & (np.abs(Pw[:, 0] - FACE_X) < FACE_BOX[0]) & (Pw[:, 1] > FACE_BOX[1][0]) & (Pw[:, 1] < FACE_BOX[1][1]) & (Pw[:, 2] > FACE_BOX[2])
+    X = lambda p: np.stack([np.ones(len(p)), p[:, 0] - FACE_X, p[:, 1] - 1.58, (p[:, 0] - FACE_X) ** 2, (p[:, 1] - 1.58) ** 2, (p[:, 0] - FACE_X) * (p[:, 1] - 1.58),
+                            (p[:, 0] - FACE_X) ** 2 * (p[:, 1] - 1.58), (p[:, 1] - 1.58) ** 3], 1)
+    fr = box & skinw & (Nw[:, 2] > .3) & (Pw[:, 1] > 1.53) & (Pw[:, 1] < 1.64); use = fr
+    for _ in range(5):
+        c = np.linalg.lstsq(X(Pw[use]), Pw[use, 2], rcond=None)[0]; res = Pw[:, 2] - X(Pw) @ c; use = fr & (np.abs(res) < .005)
+    painted = mass & (np.abs(Pw[:, 0] - FACE_X) < .048) & (Pw[:, 1] > 1.55) & (Pw[:, 1] < 1.622) & (res < .003)
+    face = box & (~mass | painted)
+    lab = cc(face[E[:, 0]] & face[E[:, 1]]); nose = np.argmin(np.where(face, np.hypot(Pw[:, 0] - FACE_X, Pw[:, 1] - 1.55), 9))
+    face &= lab == lab[nose]
+    out = np.zeros(nw, bool); a, b = E[:, 0], E[:, 1]; out[a[face[a] & ~face[b]]] = True; out[b[face[b] & ~face[a]]] = True
+    return face, face & out
 
 
 def drawn_shape(P, N, I, wh, col):
@@ -252,8 +324,7 @@ def drawn_shape(P, N, I, wh, col):
     h = np.where(y >= n['tip'], n['h'] * np.clip((n['root'] - y) / (n['root'] - n['tip']), 0, 1) ** 1.3, n['h'] * np.clip(1 - ((n['tip'] - y) / (n['tip'] - n['end'])) ** 2, 0, 1))
     w = n['w'][0] + (n['w'][1] - n['w'][0]) * np.clip((n['root'] - y) / (n['root'] - n['end']), 0, 1)
     nb, en = box(NOSE_BOX[0], *NOSE_BOX[1]); nose = nb & (P[:, 2] > zb - .03)
-    zn = zb + h * np.clip(1 - ((P[:, 0] - FACE_X) / w) ** 2, 0, 1) ** 2
-    Q[nose, 2] = P[nose, 2] * (1 - en[nose]) + zn[nose] * en[nose]
+    Q[nose, 2] = P[nose, 2] * (1 - en[nose]) + zb[nose] * en[nose]   # (flat: the small nose goes on after the smoothing)
     mb, em = box(MOUTH_BOX[0], *MOUTH_BOX[1]); mouth = mb & ~nb & (P[:, 2] > zb - .06) & (P[:, 2] < zb - .001)
     Q[mouth, 2] = P[mouth, 2] * (1 - em[mouth]) + (zb[mouth] - .001) * em[mouth]
     hair = (wh > .5) & (col.mean(1) < 115) & ~(col[:, 1] > col[:, 0] + 8)
@@ -269,23 +340,42 @@ def drawn_shape(P, N, I, wh, col):
         tip = Qw[c[np.argmax(Qw[c, 1] + .3 * np.abs(Qw[c, 0]))]]
         w = np.clip(1 - np.linalg.norm(Qw - tip, axis=1) / COLLAR_R, 0, 1) ** 2 * collar
         Qw = Qw + np.outer(w, [side * COLLAR_TIP[0], COLLAR_TIP[1], 0])
-    moved = np.abs(Qw - P[first]).sum(1) > 1e-9; Q = Qw[weld]
-    T = weld[I]; aff = np.zeros(len(first), bool); aff[T[moved[T].any(1)].ravel()] = True
+    # the face smoothed (its border kept), the small nose on it
+    nw = len(first); T = weld[I]; E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
+    per = lambda m: np.bincount(weld, m.astype(float), nw) / np.bincount(weld, minlength=nw) > .5
+    whw = np.zeros(nw); np.maximum.at(whw, weld, wh)
+    skinc = (col[:, 0] > 120) & (col[:, 1] > 75) & (col[:, 0] - col[:, 2] > 40)
     def area_normals(p):
-        fn = np.cross(p[T[:, 1]] - p[T[:, 0]], p[T[:, 2]] - p[T[:, 0]]); acc = np.zeros((len(first), 3))
+        fn = np.cross(p[T[:, 1]] - p[T[:, 0]], p[T[:, 2]] - p[T[:, 0]]); acc = np.zeros((nw, 3))
         for c in range(3): np.add.at(acc, T[:, c], fn)
         return acc / np.maximum(np.linalg.norm(acc, axis=1, keepdims=True), 1e-12)
+    face, border = face_region(Qw, area_normals(Qw), T, E, whw, per(hair | (col.mean(1) < 115) & ~teal) & (whw > .3), per(skinc))
+    free = face & ~border
+    from scipy.sparse import csr_matrix
+    A = csr_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)); deg = np.asarray(A.sum(1)).ravel()
+    before = Qw.copy()
+    for _ in range(FACE_SMOOTH):
+        for lam in (.5, -.53):   # Taubin: a step in, a step out (no shrinking)
+            Qw[free] += lam * ((A @ Qw) / deg[:, None] - Qw)[free]
+    y = Qw[:, 1]
+    h = np.where(y >= n['tip'], n['h'] * np.clip((n['root'] - y) / (n['root'] - n['tip']), 0, 1) ** 1.3, n['h'] * np.clip(1 - ((n['tip'] - y) / (n['tip'] - n['end'])) ** 2, 0, 1))
+    w = n['w'][0] + (n['w'][1] - n['w'][0]) * np.clip((n['root'] - y) / (n['root'] - n['end']), 0, 1)
+    Qw[free, 2] += (h * np.clip(1 - ((Qw[:, 0] - FACE_X) / w) ** 2, 0, 1) ** 2)[free]
+    smooth_d = np.linalg.norm(Qw - before, axis=1)[free]
+    moved = np.abs(Qw - P[first]).sum(1) > 1e-9; Q = Qw[weld]
+    aff = np.zeros(nw, bool); aff[T[moved[T].any(1)].ravel()] = True
     n0, n1 = area_normals(P[first]), area_normals(Qw); Nn = N.copy()
-    for v in np.nonzero(aff[weld])[0]:   # each normal turned as its vertex's surface turned
+    for v in np.nonzero((face & ~border)[weld])[0]: Nn[v] = n1[weld[v]]   # the face's: the smooth surface's
+    for v in np.nonzero((aff & ~(face & ~border))[weld])[0]:   # the others: each normal turned as its vertex's surface turned
         a, b = n0[weld[v]], n1[weld[v]]; c = np.cross(a, b); s = np.linalg.norm(c)
         if s < 1e-9: continue
         K = np.array([[0, -c[2], c[1]], [c[2], 0, -c[0]], [-c[1], c[0], 0]]) / s; ang = np.arctan2(s, float(a @ b))
         Nn[v] = (np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * K @ K) @ N[v]
     eyes = fr & (np.abs(P[:, 0] - FRINGE_X) > FRINGE_CUT[2])
-    print('drawn shape: face fit on %d points (rms %.4f m); nose %d vertices (out of the face up to %.3f -> %.3f m), mouth %d (up to %.3f m in -> filled), fringe %d (lowest in the eyes\' columns %.3f -> %.3f m), collar %d' % (
-        int(use.sum()), np.sqrt((r[use] ** 2).mean()), int(nose.sum()), (P[nose, 2] - zb[nose]).max(), (Q[nose, 2] - zb[nose]).max(), int(mouth.sum()),
+    print('drawn shape: the face %d vertices smoothed (%d on its border kept; moved %.4f m on average, %.4f at most); nose %d vertices (out of the face up to %.3f -> %.3f m), mouth %d (up to %.3f m in -> filled), fringe %d (lowest in the eyes\' columns %.3f -> %.3f m), collar %d' % (
+        int(free.sum()), int(border.sum()), smooth_d.mean(), smooth_d.max(), int(nose.sum()), (P[nose, 2] - zb[nose]).max(), n['h'], int(mouth.sum()),
         (zb[mouth] - P[mouth, 2]).max(), int(fr.sum()), P[eyes, 1].min(), Q[eyes, 1].min(), int((moved & collar).sum())))
-    return Q, Nn, np.nonzero(moved[weld] | aff[weld])[0]
+    return Q, Nn, np.nonzero(moved[weld] | aff[weld])[0], face[weld]
 
 
 # Hair spikes: those of the drawing's silhouette (front view) are tilted SPIKE_TILT degrees back and start SPIKE_IN m
@@ -632,7 +722,7 @@ def main(pkg, out, drawing):
     N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2)
     tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int); ts = tex.shape[0]
     col = tex[np.clip((UV[:, 1] * ts).astype(int), 0, ts - 1), np.clip((UV[:, 0] * ts).astype(int), 0, ts - 1)]
-    P, N, moved = drawn_shape(P, N, I, ((J == idx['Head']) * W).sum(1), col)
+    P, N, moved, face_mask = drawn_shape(P, N, I, ((J == idx['Head']) * W).sum(1), col)
     # --- the fingers: the mesh welded across its texture seams, then each hand's fingers on it ---
     _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True)
     weld = weld.ravel(); T = weld[I]
@@ -753,17 +843,14 @@ def main(pkg, out, drawing):
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
     of = len(blob); blob += flat.tobytes(); op = len(blob); blob += P[moved].astype(np.float32).tobytes(); on = len(blob); blob += N[moved].astype(np.float32).tobytes()
     ob = len(blob); blob += blend.tobytes(); om = len(blob); blob += moved.astype(np.uint16).tobytes()
-    fuv = face_uv(P, N, wh, fit); fi = np.nonzero(fuv[:, 2] > 0)[0].astype(np.uint16)
-    ofi = len(blob); blob += fi.tobytes(); blob += b'\0' * (-len(blob) % 4); ofu = len(blob); blob += fuv[fi].tobytes()
-    print('face decal on', len(fi), 'vertices')
-    skin = hs | ((col[:, 0] > 120) & (col[:, 1] > 75) & (col[:, 0] - col[:, 2] > 40) & (whn < .3))   # (the neck's skin down to the collar too: the jaw's shadow ends at its own depth)
-    jcurve, jhalf = jaw_curve(P, I, skin)
-    osk = len(blob); blob += skin.astype(np.uint8).tobytes()
+    dbox, dz, dnx, dny, ddata = face_depth(P, I, face_and_neck(face_mask, hs, col, P), fit[1:])
+    odm = len(blob); blob += ddata
     look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)],
             'flat': [of, int(flat.size)], 'spikes': spikes, 'sash': {'ribbons': ribbons, 'body': body, 'blend': [ob, int(blend.size)]},
             'move': {'idx': [om, len(moved)], 'pos': [op, 3 * len(moved)], 'nor': [on, 3 * len(moved)]},
-            'face': {'idx': [ofi, len(fi)], 'uvw': [ofu, 3 * len(fi)], 'skin': [osk, len(hs)],
-                     'jaw': {'curve': jcurve, 'half': round(jhalf + JAW_WIDE, 4), 'gap': JAW_GAP, 'deep': JAW_SHADOW, 'back': JAW_BACK, 'shade': list(JAW_SHADE)}}}
+            'face': {'fit': [round(float(v), 5) for v in fit[1:]], 'decal': list(FACE_DECAL), 'front': list(FACE_FRONT), 'seen': FACE_SEEN,
+                     'depth': {'box': dbox, 'z': dz, 'n': [dnx, dny], 'map': [odm, len(ddata)]}, 'shade': [round(v, 4) for v in JAW_SHADE],
+                     'jaw': [JAW_BEHIND, JAW_CUT[0][1], JAW_CUT[0][0], round((JAW_CUT[1][1] - JAW_CUT[0][1]) / (JAW_CUT[1][0] - JAW_CUT[0][0]), 5)]}}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_look.bin'), 'wb').write(blob)
     json.dump(look, open(os.path.join(out, name + '_look.json'), 'w'), separators=(',', ':'))
