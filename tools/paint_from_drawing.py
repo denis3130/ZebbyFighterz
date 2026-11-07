@@ -155,22 +155,40 @@ _, (gy, gx) = ndimage.distance_transform_edt(~good, return_indices=True)
 bad = hand & ~skin & ~dark
 out[ys[bad], xs[bad]] = out[gy[ys[bad], xs[bad]], gx[ys[bad], xs[bad]]]
 print('texels', len(ks), 'painted (w>.5)', int((wgt > .5).sum()), 'visible', int(vis.sum()), 'hand texels recoloured', int(bad.sum()), 'of', int(hand.sum()))
-# --- the band: a piece of its own now (tools/ren_look.py waist_band), over the body; the body under it (and the knot
-# Meshy hung below it at the front) takes the colours of the clothes around it, so no orange is left on the body to show
-# at the band's edges; the vest just under it loses the orange that came from the drawing's tails (the drawing has the
-# band a few cm higher than the model) ---
-BAND_Y = (1.02, 1.22)
+# --- the band: the drawing's own band (its two wraps crossing in the knot) on the model's band, at the model's height
+# (the drawing has it a few cm higher: painted where it is in the drawing, its colours fell on the vest), where the band
+# faces the front; the sides and the back in the drawing's orange, lit or in shadow where Meshy painted its folds darker.
+# The drawing's orange that fell on the clothes around goes ---
+BAND_Y, BAND_SHADOW = (1.02, 1.22), .82
 TC = TEX[ys, xs]; area = (pos[:, 1] > BAND_Y[0]) & (pos[:, 1] < BAND_Y[1]) & (np.abs(pos[:, 0]) < .35)
 R_ = np.maximum(TC[:, 0], 1.)
 ring = area & (TC[:, 0] > 60) & (TC[:, 1] / R_ < .66) & ((TC[:, 0] - TC[:, 2]) / R_ > .65)   # Meshy's orange and its browns, not the skin
 c = out[ys, xs]; skin_m = (TC[:, 0] > 150) & (TC[:, 1] > 95) & (TC[:, 0] - TC[:, 2] > 50) & (TC[:, 1] / R_ > .6)   # Meshy's skin
 stray = area & ~ring & ~skin_m & (c[:, 0] > c[:, 1] + 12) & (c[:, 0] - c[:, 2] > 25)   # the drawing's sash's orange on the clothes
 out[ys[stray], xs[stray]] = D[sy, sx][pvi[stray], pui[stray]]
-from scipy.spatial import cKDTree
-c = out[ys, xs]; keep = area & ~ring & ~((c[:, 0] > c[:, 1] + 12) & (c[:, 0] - c[:, 2] > 25))
-_, nn = cKDTree(pos[keep]).query(pos[ring], k=8); src = np.nonzero(keep)[0][nn]
-out[ys[ring], xs[ring]] = np.median(out[ys[src], xs[src]], 1)
-print('band: %d texels under it in the clothes\' colours around, %d stray orange texels on the vest repainted' % (int(ring.sum()), int(stray.sum())))
+# the model's band: the heights where Meshy's orange goes round the waist (as tools/ren_look.py finds it)
+vo = (vcol[:, 0] > 170) & (vcol[:, 0] - vcol[:, 1] > 50) & (vcol[:, 2] < 90) & (np.abs(P[:, 0]) < .3); ring_y = []
+for y0 in np.arange(.9, 1.3, .01):
+    sl = vo & (P[:, 1] >= y0) & (P[:, 1] < y0 + .01)
+    if sl.any() and len(np.unique((np.degrees(np.arctan2(P[sl, 0], P[sl, 2])) % 360 // 15).astype(int))) * 15 >= 200: ring_y.append(y0)
+Y0, Y1 = min(ring_y), max(ring_y) + .01
+low_ = ring & (pos[:, 1] < Y0 - .005)   # Meshy's orange under the band: the tops of its old tails, now ribbons of their own
+out[ys[low_], xs[low_]] = D[sy, sx][pvi[low_], pui[low_]]; ring = ring & ~low_
+# the drawing's band: the rows from its top while at least 45% as orange as its most orange row (the tails below are
+# less), over gaps of up to 3 rows (the dark line between its two wraps)
+odb = sash_orange(D); cnt = odb.sum(1); r0 = int(np.argmax(cnt > .3 * cnt.max())); r1 = r0
+while any(r1 + k < len(cnt) and cnt[r1 + k] >= .45 * cnt.max() for k in (1, 2, 3, 4)):
+    r1 += next(k for k in (1, 2, 3, 4) if cnt[r1 + k] >= .45 * cnt.max())
+ext = [(np.nonzero(odb[r])[0].min() - 3, np.nonzero(odb[r])[0].max() + 3) if odb[r].any() else (1, 0) for r in range(r0, r1 + 1)]
+band_px = D[r0:r1 + 1][odb[r0:r1 + 1]]; lit = np.median(band_px, 0); shade = lit * .8
+ml = TC[ring].mean(1); two = np.where((ml < np.median(ml) * BAND_SHADOW)[:, None], shade, lit)   # sides and back
+bp = pos[ring]; v = np.round(r0 + (Y1 - bp[:, 1]) / (Y1 - Y0) * (r1 - r0)).astype(int); u = np.round(cx + bp[:, 0] * s).astype(int)
+inb = (v >= r0) & (v <= r1)
+inb[inb] = [ext[vv - r0][0] <= uu <= ext[vv - r0][1] for vv, uu in zip(v[inb], u[inb])]
+dcol = two.copy(); dcol[inb] = D[np.clip(v[inb], 0, H - 1), np.clip(u[inb], 0, Wd - 1)]
+fw = np.clip((nor[ring, 2] - .25) / .35, 0, 1); fw = fw * fw * (3 - 2 * fw)
+out[ys[ring], xs[ring]] = dcol * fw[:, None] + two * (1 - fw[:, None])
+print('band: drawing rows %d-%d on the model at %.2f-%.2f m, %d texels (%d from the drawing), %d stray orange texels and %d of old tail tops repainted' % (r0, r1, Y0, Y1, int(ring.sum()), int((inb & (fw > .5)).sum()), int(stray.sum()), int(low_.sum())))
 # --- padding: every texel outside the triangles takes its nearest triangle texel's colour (the gutters between UV pieces
 # kept Meshy's old colours, which showed as thin cracks along the seams once filtered, the sash's orange most of all) ---
 inside = tid >= 0

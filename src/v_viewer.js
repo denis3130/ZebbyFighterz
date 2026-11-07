@@ -5,6 +5,7 @@
 const VW = {it: null, F: null, S: null, renderer: null, scene: null, camera: null, shadow: null, plan: [], step: 0, left: 0,
   name: '', speed: 1, acc: 0, last: null, yaw: .55, zoom: 1, fit: 5.4, spin: true, idleMs: 0, pointers: new Map(), pinch: 0, tex: {}, mats: {}};
 const VW_DT = 1000 / 60, VW_YAW = .55, VW_TALL = 2.15, VW_WIDE = 2.1;   // metres that fit above the controls, and across
+const VW_PACE = .85;   // the viewer plays 15% slower than the game (Denis, 7/11: "il pg è troppo veloce", only here)
 // What each button plays: a list of steps [act, frames, mode]; a move id alone takes its frame data from CFG.moves.
 // Modes: 'jump' (take-off at the jump speed, falls with gravity until the floor), 'jumpAtk' (the same, the air kick
 // starting 8 frames in), 'fly' (knocked up, flies until the floor), 'walkF'/'walkB'/'dash' (walks the fighter state).
@@ -118,7 +119,7 @@ function vwStep() {
 function vwLoop(now) {
   requestAnimationFrame(vwLoop);
   const dt = VW.last === null ? 0 : Math.min(100, now - VW.last); VW.last = now;
-  VW.acc += dt * VW.speed;
+  VW.acc += dt * VW.speed * VW_PACE;
   while (VW.acc >= VW_DT) { vwStep(); VW.acc -= VW_DT; }
   if (VW.spin && VW.pointers.size === 0 && now - VW.idleMs > 2500) VW.yaw += dt * .00035;
   const it = VW.it, F = VW.F;
