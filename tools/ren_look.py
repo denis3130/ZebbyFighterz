@@ -26,6 +26,8 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
         hanging tails as ribbons of their own (Meshy fused them with the trousers and the vest), where the drawing has
         them seen from the front, as wide as there, coming out from under the band's knot; tools/paint_from_drawing.py
         paints the old ones over
+  face: {idx: [byte offset, count] uint16, uvw: [byte offset, count] float32 x3}: the face decal's coordinates and share
+        shown at the vertices where it shows (face_uv)
   move: {idx: [byte offset, count] uint16, pos, nor: [byte offset, count] float32 x3}: the vertices drawn_shape changes
         (the nose flatter, the fringe off the eyes, the collar's points), their bind positions and normals (all the
         rest is measured on it)
@@ -117,20 +119,42 @@ def smooth(e0, e1, x):
 
 
 # The shape (bind pose, model space) where Meshy's differs from the drawing; the paint (tools/paint_from_drawing.py) and
-# the model (look data move, CFG.looks.ren.faceShape) use the same (Denis, 7/11: "macchie su naso", "occhi mezzi
-# coperti", "il colletto ... a punta"):
-# - the nose: a thin ridge up to 2.6 cm out of the cheeks (from the side a paper triangle, the paint on its sides
-#   stretched): in NOSE_BOX (x, y) kept NOSE_KEEP of how far it stands out of the face's surface around it (a quadratic
-#   through the face's front outside the box), fading to all of it over NOSE_FADE m at the box's edges;
+# the model (look data move, CFG.looks.ren.faceShape) use the same (Denis, 7/11: "la faccia è troppo buggata", "creali un
+# naso piccolo coerente con tutto", "occhi mezzi coperti", "il colletto ... a punta"):
+# - the face below the eyes: Meshy made the nose a thin ridge with a zigzag front and the mouth a slit 2-3 cm deep (the
+#   drawing projected on them stretched into smears): a smooth surface instead, a quadratic fitted to Meshy's face there
+#   (FACE_X: its middle; robustly, the ridge and the slit left out), with a small nose on it (NOSE: from its root between
+#   the eyes to its tip, h m out at the tip, half as wide as w at the root and the tip, back on the face at end; in
+#   NOSE_BOX, fading to Meshy's over NOSE_FADE m at the box's edges) and the mouth's slit filled to it (MOUTH_BOX);
 # - the fringe: hanging 2-4 cm in front of the face down to the eyes (a camera a little above saw them half covered): its
 #   hair more than FRINGE_Z m in front of the forehead (z FRINGE_FACE) lifted to the brows (y FRINGE_CUT[0]; the lock
 #   between the eyes, FRINGE_CUT[2] m either side of x FRINGE_X, down to FRINGE_CUT[1], as drawn), what hung below
 #   kept FRINGE_KEEP as long, and pulled FRINGE_BACK of the way back toward the face from 2 cm above the cut down;
 # - the collar: a round roll; its top corners seen from the front (the highest and outermost of its teal and light rim
 #   by the neck) pulled out and up by COLLAR_TIP m into the drawing's points, less with the distance (gone at COLLAR_R).
-NOSE_BOX, NOSE_KEEP, NOSE_FADE = ((-.008, .032), (1.528, 1.592)), .4, .008
+FACE_X, NOSE = .0124, {'root': 1.580, 'tip': 1.546, 'end': 1.537, 'h': .009, 'w': (.005, .009)}
+NOSE_BOX, MOUTH_BOX, NOSE_FADE = (.014, (1.532, 1.586)), (.032, (1.497, 1.537)), .005   # (half width about FACE_X, y range)
 FRINGE_X, FRINGE_CUT, FRINGE_KEEP, FRINGE_BACK, FRINGE_FACE, FRINGE_Z = .005, (1.628, 1.600, .016), .3, .35, .078, .006
 COLLAR_TIP, COLLAR_R = (.025, .02), .05
+# The face's decal (CFG.looks.ren.faceShape): Meshy left the nose and the mouth only a few texels of its texture (the
+# drawing painted there came out blurred, in blocks), so the drawn face's features are a texture of their own
+# (tools/paint_from_drawing.py: <name>_face.png, the drawing's FACE_DECAL box, x0, y0, x1, y1 px) laid on the face by
+# its own coordinates: each vertex's front projection on the drawing (drawing_fit), read stretched below FACE_EYES (the
+# drawn eyes' lower edge) so the drawn chin (row FACE_CHIN_D) lands on the model's (FACE_CHIN): the model's face is
+# longer below the eyes than the drawn one (its eyes as drawn: moved into Meshy's eye sockets they were painted on
+# their walls). Shown on the head's front in front of the ears (FACE_ZONE: half width about FACE_X, y range), as it
+# faces the front (FACE_FRONT: the normal's z where it starts and where it is all).
+FACE_DECAL, FACE_EYES, FACE_CHIN_D, FACE_CHIN = (440, 130, 580, 250), 177., 238., 256.8
+FACE_ZONE, FACE_FRONT, FACE_FLAT = (.06, (1.47, 1.635)), (.1, .35), .035   # FACE_FLAT: half width of the face's middle, all flat lit
+
+
+def face_uv(P, N, wh, fit):
+    """The face decal's coordinates per vertex (FACE_*): [u, v, share shown], float32. fit: drawing_fit's."""
+    _, s, cx, by = fit; pu, pv = cx + P[:, 0] * s, by - P[:, 1] * s
+    fv = np.where(pv > FACE_EYES, FACE_EYES + (pv - FACE_EYES) * (FACE_CHIN_D - FACE_EYES) / (FACE_CHIN - FACE_EYES), pv)
+    x0, y0, x1, y1 = FACE_DECAL
+    zone = (wh > .5) & (np.abs(P[:, 0] - FACE_X) < FACE_ZONE[0]) & (P[:, 1] > FACE_ZONE[1][0]) & (P[:, 1] < FACE_ZONE[1][1]) & (P[:, 2] > -.01)
+    return np.stack([(pu - x0 + .5) / (x1 - x0), (fv - y0 + .5) / (y1 - y0), zone * smooth(FACE_FRONT[0], FACE_FRONT[1], N[:, 2])], 1).astype(np.float32)
 
 
 def drawn_shape(P, N, I, wh, col):
@@ -139,21 +163,29 @@ def drawn_shape(P, N, I, wh, col):
     (Meshy's: the hair dark, the vest teal). The copies of a vertex along the texture's seams move together; the vertices
     of the triangles around a moved one turn their normal as their surface turns (Meshy's own smoothing kept)."""
     _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel()
-    Q = P.copy(); (x0, x1), (y0, y1) = NOSE_BOX
-    face = (wh > .5) & (P[:, 2] > .02) & (np.abs(P[:, 0]) < .065) & (P[:, 1] > 1.51) & (P[:, 1] < 1.60)
-    box = (P[:, 0] > x0) & (P[:, 0] < x1) & (P[:, 1] > y0) & (P[:, 1] < y1)
-    X = lambda p: np.stack([np.ones(len(p)), p[:, 0], p[:, 1], p[:, 0] ** 2, p[:, 1] ** 2, p[:, 0] * p[:, 1]], 1)
-    zb = X(P) @ np.linalg.lstsq(X(P[face & ~box]), P[face & ~box, 2], rcond=None)[0]
-    nose = face & box & (P[:, 2] > zb + .002)
-    e = np.minimum(np.minimum(P[:, 0] - x0, x1 - P[:, 0]), np.minimum(P[:, 1] - y0, y1 - P[:, 1]))
-    keep = 1 - (1 - NOSE_KEEP) * np.clip(e / NOSE_FADE, 0, 1)
-    Q[nose, 2] = zb[nose] + (P[nose, 2] - zb[nose]) * keep[nose]
+    Q = P.copy()
+    X = lambda p: np.stack([np.ones(len(p)), p[:, 0] - FACE_X, p[:, 1] - 1.54, (p[:, 0] - FACE_X) ** 2, (p[:, 1] - 1.54) ** 2, (p[:, 0] - FACE_X) * (p[:, 1] - 1.54)], 1)
+    low = (wh > .5) & (np.abs(P[:, 0] - FACE_X) < .045) & (P[:, 1] > 1.495) & (P[:, 1] < 1.58) & (P[:, 2] > -.02); use = low
+    for _ in range(6):   # the fit again on the points near it (not the ridge, the slit, the jaw's underside)
+        c = np.linalg.lstsq(X(P[use]), P[use, 2], rcond=None)[0]; r = P[:, 2] - X(P) @ c; use = low & (r > -.004) & (r < .006)
+    zb = X(P) @ c
+    def box(half, y0, y1):   # vertices in the box, and how far inside (0 at its edges, 1 from NOSE_FADE in)
+        e = np.minimum(np.minimum(P[:, 0] - FACE_X + half, FACE_X + half - P[:, 0]), np.minimum(P[:, 1] - y0, y1 - P[:, 1]))
+        return (wh > .5) & (e > 0), np.clip(e / NOSE_FADE, 0, 1)
+    y, n = P[:, 1], NOSE
+    h = np.where(y >= n['tip'], n['h'] * np.clip((n['root'] - y) / (n['root'] - n['tip']), 0, 1) ** 1.3, n['h'] * np.clip(1 - ((n['tip'] - y) / (n['tip'] - n['end'])) ** 2, 0, 1))
+    w = n['w'][0] + (n['w'][1] - n['w'][0]) * np.clip((n['root'] - y) / (n['root'] - n['end']), 0, 1)
+    nb, en = box(NOSE_BOX[0], *NOSE_BOX[1]); nose = nb & (P[:, 2] > zb - .03)
+    zn = zb + h * np.clip(1 - ((P[:, 0] - FACE_X) / w) ** 2, 0, 1) ** 2
+    Q[nose, 2] = P[nose, 2] * (1 - en[nose]) + zn[nose] * en[nose]
+    mb, em = box(MOUTH_BOX[0], *MOUTH_BOX[1]); mouth = mb & ~nb & (P[:, 2] > zb - .06) & (P[:, 2] < zb - .001)
+    Q[mouth, 2] = P[mouth, 2] * (1 - em[mouth]) + (zb[mouth] - .001) * em[mouth]
     hair = (wh > .5) & (col.mean(1) < 115) & ~(col[:, 1] > col[:, 0] + 8)
     cut = FRINGE_CUT[0] - (FRINGE_CUT[0] - FRINGE_CUT[1]) * np.clip(1 - np.abs(P[:, 0] - FRINGE_X) / FRINGE_CUT[2], 0, 1) ** 2
     fr = hair & (np.abs(P[:, 0] - FRINGE_X) < .07) & (P[:, 1] < cut + .02) & (P[:, 1] > cut - .06) & (P[:, 2] > FRINGE_FACE + FRINGE_Z)
     Q[fr, 1] = np.where(P[fr, 1] < cut[fr], cut[fr] - (cut[fr] - P[fr, 1]) * FRINGE_KEEP, P[fr, 1])
     Q[fr, 2] = P[fr, 2] - (P[fr, 2] - FRINGE_FACE) * FRINGE_BACK * np.clip((cut[fr] + .02 - P[fr, 1]) / .02, 0, 1)
-    Qw = np.zeros((len(first), 3)); Qw[weld[~(nose | fr)]] = P[~(nose | fr)]; Qw[weld[nose | fr]] = Q[nose | fr]   # (the moved copy wins)
+    mv = nose | mouth | fr; Qw = np.zeros((len(first), 3)); Qw[weld[~mv]] = P[~mv]; Qw[weld[mv]] = Q[mv]   # (the moved copy wins)
     teal = (col[:, 1] > col[:, 0] + 10) & (col[:, 2] > col[:, 0] + 10); light = (col.min(1) > 125) & (col.max(1) - col.min(1) < 45)
     collar = np.zeros(len(first), bool); np.logical_or.at(collar, weld, (teal | light) & (P[:, 1] > 1.42) & (P[:, 1] < 1.56) & (np.abs(P[:, 0]) < .2))
     for side in (-1, 1):
@@ -174,9 +206,9 @@ def drawn_shape(P, N, I, wh, col):
         K = np.array([[0, -c[2], c[1]], [c[2], 0, -c[0]], [-c[1], c[0], 0]]) / s; ang = np.arctan2(s, float(a @ b))
         Nn[v] = (np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * K @ K) @ N[v]
     eyes = fr & (np.abs(P[:, 0] - FRINGE_X) > FRINGE_CUT[2])
-    print('drawn shape: nose %d vertices (out of the face up to %.3f -> %.3f m), fringe %d (lowest in the eyes\' columns %.3f -> %.3f m), collar %d' % (
-        int(nose.sum()), (P[nose, 2] - zb[nose]).max(), (Q[nose, 2] - zb[nose]).max(), int(fr.sum()), P[eyes, 1].min(), Q[eyes, 1].min(),
-        int((moved & collar).sum())))
+    print('drawn shape: face fit on %d points (rms %.4f m); nose %d vertices (out of the face up to %.3f -> %.3f m), mouth %d (up to %.3f m in -> filled), fringe %d (lowest in the eyes\' columns %.3f -> %.3f m), collar %d' % (
+        int(use.sum()), np.sqrt((r[use] ** 2).mean()), int(nose.sum()), (P[nose, 2] - zb[nose]).max(), (Q[nose, 2] - zb[nose]).max(), int(mouth.sum()),
+        (zb[mouth] - P[mouth, 2]).max(), int(fr.sum()), P[eyes, 1].min(), Q[eyes, 1].min(), int((moved & collar).sum())))
     return Q, Nn, np.nonzero(moved[weld] | aff[weld])[0]
 
 
@@ -632,14 +664,23 @@ def main(pkg, out, drawing):
     for w, pn in palms: inner |= (w + on > .5) & (N @ pn > LINE_PALM)
     line[inner] = 0
     print('outline thinned on', int(face.sum()), 'face and', int((on > 0).sum()), 'finger vertices; none on', int(web.sum()), 'of the thumbs\' roots and', int(inner.sum()), 'of the hands\' inner side')
-    flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2])).astype(np.float32)
+    flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2]))
+    # the middle of the face all flat (the nose's sides and underside too: the drawn nose has its shadow in the face
+    # decal; the toon light's bands on its few facets read as a pink and a brown patch), and no outline on the nose
+    mid = (wh > .5) & (np.abs(P[:, 0] - FACE_X) < FACE_FLAT) & (P[:, 1] > FACE_ZONE[1][0]) & (P[:, 1] < FACE_ZONE[1][1]) & (P[:, 2] > -.01)
+    flat = np.maximum(flat, mid * smooth(-.2, .1, N[:, 2])).astype(np.float32)
+    nose = (wh > .5) & (np.abs(P[:, 0] - FACE_X) < NOSE_BOX[0]) & (P[:, 1] > NOSE_BOX[1][0]) & (P[:, 1] < NOSE_BOX[1][1]); line[nose] = 0
     print('flat light on', int((flat > .5).sum()), 'vertices (head', int(((flat > .5) & (wh > .5)).sum()), ')')
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
     of = len(blob); blob += flat.tobytes(); op = len(blob); blob += P[moved].astype(np.float32).tobytes(); on = len(blob); blob += N[moved].astype(np.float32).tobytes()
     ob = len(blob); blob += blend.tobytes(); om = len(blob); blob += moved.astype(np.uint16).tobytes()
+    fuv = face_uv(P, N, wh, fit); fi = np.nonzero(fuv[:, 2] > 0)[0].astype(np.uint16)
+    ofi = len(blob); blob += fi.tobytes(); blob += b'\0' * (-len(blob) % 4); ofu = len(blob); blob += fuv[fi].tobytes()
+    print('face decal on', len(fi), 'vertices')
     look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)],
             'flat': [of, int(flat.size)], 'spikes': spikes, 'sash': {'ribbons': ribbons, 'body': body, 'blend': [ob, int(blend.size)]},
-            'move': {'idx': [om, len(moved)], 'pos': [op, 3 * len(moved)], 'nor': [on, 3 * len(moved)]}}
+            'move': {'idx': [om, len(moved)], 'pos': [op, 3 * len(moved)], 'nor': [on, 3 * len(moved)]},
+            'face': {'idx': [ofi, len(fi)], 'uvw': [ofu, 3 * len(fi)]}}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_look.bin'), 'wb').write(blob)
     json.dump(look, open(os.path.join(out, name + '_look.json'), 'w'), separators=(',', ':'))

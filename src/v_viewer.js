@@ -49,6 +49,7 @@ function vwBoot() {
   img.src = ASSETS['ren/ren_painted.jpg'] || ASSETS['ren/ren.jpg']; img.decode().then(() => { t.needsUpdate = true; }, () => {});
   VW.tex.draw = t;
   VW.mats.toon = it.mats.main; VW.mats.flat = new THREE.MeshBasicMaterial({map: t, skinning: true});
+  if (it.face) mdFaceMat(VW.mats.flat, it.face);   // the face decal on both lights
   document.getElementById('stage').style.backgroundImage = 'url(' + ASSETS['arena/cascata.jpg'] + ')';
   vwUi(); vwInput(); vwResize(); addEventListener('resize', vwResize);
   vwPlay(0); vwPaint('draw'); vwLight('toon'); vwSpeed(1);
@@ -79,7 +80,11 @@ function vwUi() {
   vwPress('spin', VW.spin);
 }
 function vwPress(id, on) { document.getElementById(id).setAttribute('aria-pressed', on ? 'true' : 'false'); }
-function vwPaint(k) { VW.paint = k; VW.mats.toon.map = VW.tex[k]; VW.mats.flat.map = VW.tex[k]; VW.mats.toon.needsUpdate = VW.mats.flat.needsUpdate = true; vwPress('pDraw', k === 'draw'); vwPress('pMeshy', k === 'meshy'); }
+function vwPaint(k) {
+  VW.paint = k; VW.mats.toon.map = VW.tex[k]; VW.mats.flat.map = VW.tex[k]; VW.mats.toon.needsUpdate = VW.mats.flat.needsUpdate = true;
+  if (VW.it.face) mdFaceShow(VW.it.face, k === 'draw');   // the drawn face's decal with the drawing's paint only
+  vwPress('pDraw', k === 'draw'); vwPress('pMeshy', k === 'meshy');
+}
 function vwLight(k) { VW.it.mesh.material = VW.mats[k]; vwPress('lToon', k === 'toon'); vwPress('lFlat', k === 'flat'); }
 function vwSpeed(s) { VW.speed = s; vwPress('s1', s === 1); vwPress('s2', s === .5); vwPress('s4', s === .25); }
 

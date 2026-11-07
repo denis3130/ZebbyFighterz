@@ -4,6 +4,7 @@
 usage: python3 tools/paint_from_drawing.py PACKAGE_DIR DRAWING.png OUT.jpg
   PACKAGE_DIR  a tools/meshy_pack.py output folder (name.json, name.bin, name.jpg, name = the folder's name)
   DRAWING      the front character sheet, on a flat background (its top-left corner is the background colour)
+  writes OUT.jpg and, beside it, <name>_face.png: the face decal (the drawn face's features, see below)
 
 The model's bind pose (A-pose, the one Meshy built from this same drawing) is projected orthographically from the front
 onto the drawing with the scale and offset that put the most vertices inside the drawn silhouette. Every texel whose
@@ -12,13 +13,13 @@ the front); the others keep the model's own texture. Outside the drawn silhouett
 so model edges that stick out a little take the drawing's outline. On the hands (the drawing's are spread a little
 differently) a texel that came out neither skin nor a dark line (the wraps' white, the background's grey on the
 fingertips) takes the colour of the nearest skin texel of the hands instead. The texels between the UV pieces take
-their nearest piece's colour at the end. On the face (the head's skin) the drawing
-is kept only where the surface faces the front squarely, plain skin where it turns away: the drawing's edges stretched
-over the sides of the nose and the jaw read as dirt. The hair, likewise: the drawing where it faces the front, the
+their nearest piece's colour at the end. The face is clean skin in the texture: its
+features (eyes, brows, the nose's shadow, the mouth) are the face decal, laid on by tools/ren_look.py face_uv (Meshy left
+the face only a few scattered texels). The hair: the drawing where it faces the front, the
 hair's own colour elsewhere (the highlights stretched over its sides looked like horns; Meshy's white glints). The
 sash's tails (ribbons of their own in the look) take the colour of what is under them; on the band and the vest just
-under it the thin dark lines go. The model's shape is the look's (tools/ren_look.py drawn_shape: a small nose, the fringe
-off the eyes, the collar's points). The collar is flat like the drawing's where the drawing does not reach it (its
+under it the thin dark lines go. The model's shape is the look's (tools/ren_look.py drawn_shape: the face smooth with a
+small nose, the fringe off the eyes, the collar's points). The collar is flat like the drawing's where the drawing does not reach it (its
 teal, in shadow where Meshy's folds are darker; no glossy glints), the drawing is painted on the body's skin only where
 it faces the front well (turned away, its lines stretched into streaks), and the drawing's background between its hair
 locks is never a colour of the head.
@@ -45,7 +46,7 @@ if len(sys.argv) != 4: sys.exit(__doc__)
 PKG, DRAWING, OUT = sys.argv[1:]
 name, P, N, UV, I, HANDW, HEADW = load(PKG)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ren_look import drawn_shape, drawing_fit, drawing_band, sash_tails, sash_orange, sash_band_end, SASH_BAND
+from ren_look import drawn_shape, drawing_fit, drawing_band, sash_tails, sash_orange, sash_band_end, SASH_BAND, FACE_X, FACE_DECAL
 # the shape as the model draws it (ren_look.drawn_shape: a small nose, the fringe off the eyes, the collar's points)
 T0 = np.asarray(Image.open(os.path.join(PKG, name + '.jpg')).convert('RGB')).astype(int)
 P, N, _ = drawn_shape(P, N, I, HEADW, T0[np.clip((UV[:, 1] * T0.shape[0]).astype(int), 0, T0.shape[0] - 1), np.clip((UV[:, 0] * T0.shape[1]).astype(int), 0, T0.shape[1] - 1)])
@@ -138,29 +139,65 @@ okv = ((col[:, 1] > col[:, 0] + 8) & (col[:, 2] > col[:, 0] + 8)) | (col.mean(1)
 colv = np.where(okv[:, None], col, two)
 out[ys[vr], xs[vr]] = colv[vr] * wgt[vr, None] + two[vr] * (1 - wgt[vr, None])
 print('collar texels', int(vest.sum()), 'in its flat teal where the drawing is not (%d), its rim %d' % (int((vest & (wgt < .5)).sum()), int(rim.sum())))
-# --- the face: the drawing where the head's skin faces the front, its skin colour where it turns away ---
+# --- the face (Denis, 7/11: "la faccia è troppo buggata"): its skin clean, in the drawing's skin colour; the drawn
+# face's features (FACE_ZONES, drawing pixels: the eyes and brows, the lock between the eyes, the nose's shadow and
+# nostril, the mouth, the mark on the cheek; each pixel by how far its colour is from the skin's, FACE_INK) in a texture
+# of their own, the face decal (<name>_face.png: the drawing's ren_look.FACE_DECAL box, laid on the face by
+# ren_look.face_uv): Meshy left the nose and the mouth only a few texels (painted here, they came out blurred, in
+# blocks). The rest of the drawn face (its jaw's outline, the hair's strands and shadows over it) stretched over the
+# model's face as dirt ---
+FACE_INK = (18., 60.)
+FACE_ZONES = [([(464, 151), (474, 151), (503, 164), (503, 181), (468, 181), (464, 172)], 0),   # left eye and brow
+              ([(515, 164), (546, 151), (556, 151), (556, 172), (552, 181), (515, 181)], 0),   # right eye and brow
+              ([(500, 146), (517, 146), (512, 181), (505, 181)], 0),               # the lock between the eyes
+              ([(496, 190), (518, 190), (520, 206), (494, 206)], 1),               # the nose: its shadow and nostril (small;
+              ([(493, 208), (528, 208), (528, 223), (493, 223)], 0),               # its light edge, a pink facet, left out)
+              ([(534, 185), (550, 185), (550, 198), (534, 198)], 0)]               # the mark on the cheek; 1: darker only
 sk = lambda c: (c[:, 0] > 120) & (c[:, 1] > 75) & (c[:, 0] - c[:, 2] > 40)
-facet = ((HEADW[I[ks]] * bary).sum(1) > .5) & sk(TEX[ys, xs])
-fw = np.clip((nor[:, 2] - .45) / .2, 0, 1); fw = fw * fw * (3 - 2 * fw) * vis
-pick = facet & (fw > .9) & sk(col)
-skin_col = np.median(col[pick], 0) if pick.any() else np.array([246., 181, 131])
-# the drawing's background showing between its hair locks (grey, near the background's colour; its anti-aliased edges
-# too) is no colour of the head: the skin's there, the hair's on the hair (it showed as a white streak by the temple)
-bgl = (np.abs(col - bg).sum(1) < 75) & (col.max(1) - col.min(1) < 25)
-colf = np.where(bgl[:, None], skin_col, col)
-out[ys[facet], xs[facet]] = colf[facet] * fw[facet, None] + skin_col * (1 - fw[facet, None])
-print('face texels', int(facet.sum()), 'drawn (front) ', int((facet & (fw > .5)).sum()), 'skin', np.round(skin_col))
+# the face: the head's skin, and all of the head in front of the ears from the brows down, the jaw's sides and underside
+# too (Meshy painted its own eyes, lower, in dark colours: as hair they showed as dark bands under the drawn eyes; the
+# drawing's jaw outline, stretched over the jaw's sides, as a dark stepped streak)
+facez = (np.abs(pos[:, 0] - FACE_X) < .056) & (pos[:, 1] > 1.46) & (pos[:, 1] < 1.60) & (pos[:, 2] > -.05)
+facet = ((HEADW[I[ks]] * bary).sum(1) > .5) & (sk(TEX[ys, xs]) | facez)
+patch = D[185:230, 470:545].reshape(-1, 3); skin_col = np.median(patch[sk(patch) & (patch.sum(1) > 520)], 0)   # the drawn face's skin
+zone = []
+for dark in (0, 1):
+    zimg = Image.new('L', (Wd, H), 0); zd = ImageDraw.Draw(zimg)
+    for z, d in FACE_ZONES:
+        if d == dark: zd.polygon(z, fill=255)
+    zone.append(ndimage.gaussian_filter(np.asarray(zimg).astype(np.float64) / 255, 1.2))
+darker = np.clip((skin_col.mean() - D.mean(2) - 4) / 8, 0, 1)
+ink = np.clip((np.linalg.norm(D - skin_col, axis=2) - FACE_INK[0]) / (FACE_INK[1] - FACE_INK[0]), 0, 1) * np.clip(zone[0] + zone[1] * darker, 0, 1)
+# the decal covers the face's skin below the brows too (FACE_SKIN, drawing pixels: within its outline, not the hair at
+# its sides), so the base texture does not show there at all: Meshy's face is in small scattered pieces of its texture,
+# whose edges bled their neighbours' colours (a pink patch under the nose, streaks along the jaw); above, only the
+# features (the fringe stands there)
+FACE_SKIN = [(466, 164), (552, 164), (556, 182), (552, 205), (535, 224), (508, 239), (505, 239), (480, 218), (466, 203), (463, 182)]
+zimg = Image.new('L', (Wd, H), 0); ImageDraw.Draw(zimg).polygon(FACE_SKIN, fill=255)
+alpha = np.maximum(ink, ndimage.gaussian_filter(np.asarray(zimg).astype(np.float64) / 255, 2.))
+Dface = skin_col * (1 - ink[..., None]) + D * ink[..., None]
+x0, y0, x1, y1 = FACE_DECAL; R = 256   # the decal's texels: sampled at their centres (no resampling halos)
+gx, gy = np.meshgrid(x0 - .5 + (np.arange(R) + .5) * (x1 - x0) / R, y0 - .5 + (np.arange(R) + .5) * (y1 - y0) / R)
+dec = np.dstack([ndimage.map_coordinates(c, [gy, gx], order=1, mode='nearest') for c in (Dface[..., 0], Dface[..., 1], Dface[..., 2], alpha * 255)])
+FACE_PNG = os.path.join(os.path.dirname(os.path.abspath(OUT)), name + '_face.png')
+Image.fromarray(np.clip(dec, 0, 255).round().astype(np.uint8), 'RGBA').save(FACE_PNG, optimize=True)
+out[ys[facet], xs[facet]] = skin_col
+print('face texels', int(facet.sum()), 'skin', np.round(skin_col), '; the decal', FACE_PNG, 'with', int((ink > .5).sum()), 'px of the drawing\'s features')
+# the drawing's background between its hair locks (grey, near its colour; its anti-aliased edges too) and its skin are
+# no colour of the hair: the hair's own there (the model's locks stand where the drawing has the face or the background:
+# skin-coloured and grey patches on them looked torn)
+bgl = ((np.abs(col - bg).sum(1) < 75) & (col.max(1) - col.min(1) < 25)) | sk(col)
 # --- the hair: the drawing where it faces the front, elsewhere the hair's own colour (no stretched highlights at the
 # sides, no Meshy glints) ---
 # (the hair: the head's texels that are neither skin nor the vest's teal, from the hair's lowest point up: the collar's
 # teal and its light trim below stay)
 tc = TEX[ys, xs]; hv = ((HEADW[I[ks]] * bary).sum(1) > .5) & ~sk(tc); teal = tc[:, 1] > tc[:, 0] + 8
-like = hv & ~teal & (tc.mean(1) <= 110); hairt = hv & ~teal & (pos[:, 1] >= np.percentile(pos[like, 1], 1))
+like = hv & ~teal & ~facet & (tc.mean(1) <= 110); hairt = hv & ~teal & ~facet & (pos[:, 1] >= np.percentile(pos[like, 1], 1))
 hair_col = np.median(tc[like], 0)
 hw = np.clip((nor[:, 2] - .35) / .25, 0, 1); hw = hw * hw * (3 - 2 * hw) * vis
 colh = np.where(bgl[:, None], hair_col, col)
 out[ys[hairt], xs[hairt]] = colh[hairt] * hw[hairt, None] + hair_col * (1 - hw[hairt, None])
-print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col), 'background in the drawing: on', int((bgl & facet & (fw > 0)).sum()), 'face and', int((bgl & hairt & (hw > 0)).sum()), 'hair texels')
+print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col), '; the drawing\'s background or skin on', int((bgl & hairt & (hw > 0)).sum()), 'of them')
 # --- the sash's tails: hanging ribbons in the look (tools/ren_look.py), so off the body: each tail texel takes the colour
 # of the nearest texel (in space) that is not orange, the trousers or the vest under it ---
 vcol = TEX[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)].astype(int)

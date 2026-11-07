@@ -30,7 +30,7 @@ function mdData(key) {
 // One Meshy fighter (an F3D item), or null without its package: bones in the rest pose, the toon mesh and its outline
 // (same geometry, same skeleton), the limb points and one material (mats.main: the hit flash). Not yet in the scene.
 // Where CFG.looks[key] asks for them, the look data's parts: finger bones (fists), hair spikes, the face's thin outline,
-// the face's flat light, the outline's own width, the face's shape.
+// the face's flat light, the outline's own width, the face's shape and its decal (the drawn features).
 function modelBuild(key) {
   const md = mdData(key);
   if (!md) return null;
@@ -59,6 +59,11 @@ function modelBuild(key) {
       const p = new Float32Array(md.geo.attributes.position.array), n = new Float32Array(md.geo.attributes.normal.array), m = look.move;
       m.idx.forEach((v, i) => { p.set(m.pos.subarray(i * 3, i * 3 + 3), v * 3); n.set(m.nor.subarray(i * 3, i * 3 + 3), v * 3); });
       geo.setAttribute('position', new THREE.BufferAttribute(p, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+      if (look.face) {   // the face decal's coordinates and share shown (mdFaceMat)
+        const a = new Float32Array(md.geo.attributes.position.count * 3), fd = look.face;
+        fd.idx.forEach((v, i) => a.set(fd.uvw.subarray(i * 3, i * 3 + 3), v * 3));
+        geo.setAttribute('aFace', new THREE.BufferAttribute(a, 3));
+      }
     }
   }
   // The texture appears once decoded; until then the mesh draws with an empty map (no error, no warning).
@@ -75,6 +80,13 @@ function modelBuild(key) {
     };
     main.customProgramCacheKey = () => 'flat';
   }
+  // the face decal (look data face, ASSETS '<char>/<char>_face.png'): shown once decoded (an empty texture reads black)
+  const face = shape && look.face && ASSETS[key + '/' + key + '_face.png'] ? {tex: new THREE.Texture(new Image()), on: {value: 0}, want: true, ready: false} : null;
+  if (face) {
+    face.tex.flipY = false; face.tex.image.src = ASSETS[key + '/' + key + '_face.png'];
+    face.tex.image.decode().then(() => { face.tex.needsUpdate = true; face.ready = true; mdFaceShow(face, face.want); }, () => {});
+    mdFaceMat(main, face);
+  }
   const ol = lk.line || {w: MD_OUTLINE, back: 0}, line = mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per, back: ol.back});
   const mesh = new THREE.SkinnedMesh(geo, main), outline = new THREE.SkinnedMesh(geo, line);
   mesh.frustumCulled = outline.frustumCulled = false;
@@ -87,6 +99,7 @@ function modelBuild(key) {
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = look.fingers.map(f => new THREE.Quaternion().fromArray(f.fist)); }
+  if (face) it.face = face;
   if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash
     let at = bones.length + fingers.length;
     const HB = skel.boneInverses[md.index.Hips].clone().invert(), hb = md.bones[md.index.Hips];   // the Hips at bind (world; in the body)
@@ -108,6 +121,23 @@ function modelBuild(key) {
   if (look && lk.spikes) B('Head').add(mdSpikes(look.spikes, ol.back));
   return it;
 }
+
+// Material m with the face decal over its map (face: {tex, on: a uniform, 1 shown}): the decal at the vertices' aFace
+// coordinates, by its alpha times their share (aFace's third). Chained after m's own shader changes.
+function mdFaceMat(m, face) {
+  const prev = m.onBeforeCompile, key = m.customProgramCacheKey();
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
+    sh.uniforms.uFace = {value: face.tex}; sh.uniforms.uFaceOn = face.on;
+    sh.vertexShader = 'attribute vec3 aFace;\nvarying vec3 vFace;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFace = aFace;');
+    sh.fragmentShader = 'uniform sampler2D uFace;\nuniform float uFaceOn;\nvarying vec3 vFace;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+      '#include <map_fragment>\n\tvec4 faceTexel = texture2D(uFace, vFace.xy);\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, faceTexel.rgb, faceTexel.a * vFace.z * uFaceOn);');
+  };
+  m.customProgramCacheKey = () => key + '|face';
+  return m;
+}
+// The face decal shown or not (once its texture is decoded).
+function mdFaceShow(face, show) { face.want = show; face.on.value = face.ready && show ? 1 : 0; }
 
 // An outline shell's material (the back faces drawn in the outline colour): o = {skinning, w (model units: the push
 // along the normals, '' for none), per (' * aLine': times the per-vertex width), back (m: pushed away from the camera,
@@ -405,6 +435,7 @@ function mdLookData(md, key) {
   const f32 = a => new Float32Array(u8.buffer, a[0], a[1]);
   return md.look = {fingers: j.fingers, spikes: j.spikes, sash: j.sash && {ribbons: j.sash.ribbons, body: j.sash.body, blend: new Uint16Array(u8.buffer, j.sash.blend[0], j.sash.blend[1])},
     move: j.move && {idx: new Uint16Array(u8.buffer, j.move.idx[0], j.move.idx[1]), pos: f32(j.move.pos), nor: f32(j.move.nor)},
+    face: j.face && {idx: new Uint16Array(u8.buffer, j.face.idx[0], j.face.idx[1]), uvw: f32(j.face.uvw)},
     skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
     line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1)};
 }
