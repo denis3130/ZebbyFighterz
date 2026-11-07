@@ -28,6 +28,11 @@ const VW_NAMES = {idle: 'Guardia', guard: 'Parata', crouch: 'Accovacciato', guar
   getup: 'Si rialza'};
 
 function vwBoot() {
+  // The proposal Denis is judging (7/11/2026): guard A (the boxing guard the punches start from, breathing), fists
+  // (open only in the special and the throw) and the head held a little higher.
+  Object.assign(CFG.looks.ren, {fists: true, headUp: 12, spikes: true, faceLine: true});
+  const guard = {c: 'a191', at: 0, breathe: 1};
+  Object.assign(CFG.clips, {idle: guard, intro: guard, crouch: {low: {c: 'a54', at: .67}, up: guard}});
   const it = modelBuild('ren');
   if (!it) { document.getElementById('now').textContent = 'Il modello di Ren non è nel pacchetto.'; return; }
   const cv = document.getElementById('view');
@@ -120,7 +125,7 @@ function vwLoop(now) {
   mdSync(it, 0, VW.S);
   it.root.position.set(0, F.y / 1000, 0); it.root.rotation.y = VW.yaw; it.body.scale.x = it.scale;
   VW.shadow.scale.setScalar(Math.max(.35, 1 - F.y / 2500));
-  const cy = .95 + F.y / 2000, c = VW.camera, d = VW.fit * VW.zoom;
+  const cy = .95 + F.y / 2000 + Math.max(0, 1 - VW.zoom) * .75, c = VW.camera, d = VW.fit * VW.zoom;   // zooming in looks up to the face
   c.position.set(0, cy + .1, d); c.lookAt(0, cy, 0);
   VW.renderer.render(VW.scene, c);
   const m = CFG.moves[F.act], tot = m ? m.s + m.a + (m.r === 'land' ? 8 : m.r) : 0;
@@ -159,4 +164,5 @@ function vwInput() {
   cv.addEventListener('dblclick', () => { VW.yaw = VW_YAW; VW.zoom = 1; });
 }
 
+window.VW = VW;   // for tests/viewer_check.py
 vwBoot();

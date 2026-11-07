@@ -280,6 +280,11 @@ const CFG={
     hitStun:{c:'a174', k:[[0,.47],[8,1.1]]}, fly:{c:'a7', k:[[0,.1],[1,.6]], y:.6}, down:{c:'a7', at:1.5},
     getup:{c:'a3', k:[[0,.15],[16,1.6]]}, roll:{c:'a3', k:[[0,.15],[22,1.6]]}, win:{c:'a17', k:[[0,0],[18,.3]]},
   },
+  // The "Ren dipinto" look (Denis's choices, 7/11/2026), off in the game until he approves it in the viewer: fists =
+  // fist meshes with the open hands folded away (ASSETS '<char>/<char>_look.json|bin', tools/ren_look.py), open again in
+  // the acts of openHands; headUp = degrees the head is raised in every pose (the face shows at the game's camera);
+  // spikes = anime hair spikes on the sides, back and top of the hair; faceLine = a thin outline on the front of the face.
+  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
@@ -1833,7 +1838,11 @@ function modelBuild(key) {
   img.decode().then(() => { tex.needsUpdate = true; }, () => {});
   const main = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true});
   const line = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide, skinning: true}), w = (MD_OUTLINE / s).toFixed(5);
-  line.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normal * ' + w + ';'); };
+  const lk0 = CFG.looks[key], thin = lk0 && lk0.faceLine && mdLookData(md, key);   // the look's outline widths per vertex
+  if (thin && thin.line && !md.geo.attributes.aLine) md.geo.setAttribute('aLine', thin.line);
+  const per = thin && thin.line ? ' * aLine' : '';
+  line.onBeforeCompile = sh => { sh.vertexShader = (per ? 'attribute float aLine;\n' : '') + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normal * ' + w + per + ';'); };
+  line.customProgramCacheKey = () => w + per;
   const mesh = new THREE.SkinnedMesh(md.geo, main), outline = new THREE.SkinnedMesh(md.geo, line);
   mesh.frustumCulled = outline.frustumCulled = false;
   body.add(mesh, outline);
@@ -1845,7 +1854,67 @@ function modelBuild(key) {
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (!md.hitT) mdMeasure(md, it);
+  const lk = CFG.looks[key], look = lk && (lk.fists || lk.spikes) && mdLookData(md, key);
+  if (look && lk.fists) {   // fists: the open hands fold into the fist meshes (a morph target), unfolded where the act opens them
+    if (!md.geo.morphAttributes.position) md.geo.morphAttributes.position = [look.fold];
+    main.morphTargets = line.morphTargets = true; mesh.updateMorphTargets(); outline.updateMorphTargets();
+    it.fists = ['L', 'R'].map(k => { const g = mdFist(look.hands[k]); B(look.hands[k].bone).add(g); return g; });
+  }
+  if (look && lk.spikes) B('Head').add(mdSpikes(look.spikes));
   return it;
+}
+
+// The hair spikes of the look data on the head: flattened cones in the hair colour of Denis's drawing, with outlines.
+const MD_HAIR = 0x4a3d45;
+function mdSpikes(list) {
+  const g = new THREE.Group(), mat = new THREE.MeshToonMaterial({color: MD_HAIR, gradientMap: F3.grad}), up = new THREE.Vector3(0, 1, 0);
+  for (const s of list) {
+    const geo = new THREE.ConeGeometry(s.r, s.len, 7, 1); geo.translate(0, s.len / 2, 0); geo.scale(1, 1, .5);
+    const m = new THREE.Mesh(geo, mat), o = new THREE.Mesh(geo, MD_FIST_LINE);
+    o.scale.set(1.22, 1.07, 1.35); m.add(o);
+    m.position.fromArray(s.p); m.quaternion.setFromUnitVectors(up, new THREE.Vector3().fromArray(s.d));
+    g.add(m);
+  }
+  return g;
+}
+
+// The look data of package key ('<key>/<key>_look.json' and '.bin', tools/ren_look.py), decoded once onto md, or null.
+function mdLookData(md, key) {
+  if (md.look !== undefined) return md.look;
+  const j = ASSETS[key + '/' + key + '_look.json'], b64 = ASSETS[key + '/' + key + '_look.bin'];
+  if (!j || !b64) return md.look = null;
+  const s = atob(b64), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  return md.look = {hands: j.hands, spikes: j.spikes || [], fold: new THREE.BufferAttribute(new Float32Array(u8.buffer, j.fold[0], j.fold[1]), 3),
+    line: j.line ? new THREE.BufferAttribute(new Float32Array(u8.buffer, j.line[0], j.line[1]), 1) : null};
+}
+
+// A fist for hand h of the look data, in the hand bone's frame: a rounded block from the wrist to the knuckles, the
+// knuckles along its end and the thumb across the front of the curled fingers; toon shaded in the skin colour of
+// Denis's drawing, each part with a black outline shell.
+const MD_SKIN = 0xf6b583, MD_FIST_LINE = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide});
+function mdFist(h) {
+  const g = new THREE.Group(), mat = new THREE.MeshToonMaterial({color: MD_SKIN, gradientMap: F3.grad}), [sx, sy, sz] = h.size;
+  g.matrixAutoUpdate = false;
+  g.matrix.makeBasis(new THREE.Vector3().fromArray(h.l), new THREE.Vector3(0, 1, 0), new THREE.Vector3().fromArray(h.n)).setPosition(new THREE.Vector3().fromArray(h.c));
+  const part = (geo, x, y, z, line) => {
+    const m = new THREE.Mesh(geo, mat), o = new THREE.Mesh(geo, MD_FIST_LINE);
+    m.position.set(x, y, z); o.scale.setScalar(line); m.add(o); g.add(m); return m;
+  };
+  part(mdRounded(sx, sy, sz), 0, 0, 0, 1.13);
+  for (let k = 0; k < 4; k++) part(new THREE.SphereGeometry(.011, 10, 8), (k - 1.5) * sx * .52, sy * .82, -sz * .2, 1.3);
+  const crease = new THREE.BoxGeometry(.0028, sy * 1.05, .006);   // the lines between the curled fingers, on the front
+  for (let k = -1; k <= 1; k++) { const c = new THREE.Mesh(crease, MD_FIST_LINE.clone()); c.material.side = THREE.FrontSide; c.position.set(k * sx * .52, sy * .3, sz * .97); g.add(c); }
+  const th = new THREE.CylinderGeometry(.0115, .0125, sx * 1.15, 10); th.rotateZ(Math.PI / 2);
+  part(th, h.thumb * sx * .2, -sy * .18, sz * .92, 1.22);
+  return g;
+}
+// A box with rounded edges and corners: a sphere pushed out toward its bounding box (half sizes sx, sy, sz).
+function mdRounded(sx, sy, sz) {
+  const g = new THREE.SphereGeometry(1, 22, 16), p = g.attributes.position, f = k => Math.sign(k) * Math.pow(Math.abs(k), .55);
+  for (let i = 0; i < p.count; i++) p.setXYZ(i, f(p.getX(i)) * sx, f(p.getY(i)) * sy, f(p.getZ(i)) * sz);
+  g.computeVertexNormals();
+  return g;
 }
 
 // --- Poses: {q: local rotations, nb x 4, h: the Hips' local position} ---
@@ -1873,7 +1942,9 @@ function mdPoseOf(F, S) {
       break;
     case 'rollF': case 'rollB': e = C.roll; break;
   }
-  return mdEval(md, e || C.idle, c);
+  const p = mdEval(md, e || C.idle, c), lk = CFG.looks[F.char];
+  if (lk && lk.headUp) mdBoneTurn(p, md.index.Head, MD_X, -lk.headUp);
+  return p;
 }
 function mdUp(u) { return Math.max(0, Math.min(1, u)); }
 
@@ -1894,6 +1965,10 @@ function mdEval(md, e, c) {
   else if (e.t) t = c.force !== undefined ? c.force : mdMoveT(e.t, c.m, F.af, md.hitT[c.id]);
   else if (e.k) t = mdKey(e.k, c.u !== undefined ? c.u : F.af);
   const p = mdRoot(md, e, mdSample(md, e.c, t, loop));
+  if (e.breathe) {   // a held pose breathes: the body bobs and the chest rises with S.frame
+    const b = Math.sin((c.S.frame + 23 * F.side) * .09);
+    p.h[1] += .009 * b; mdBoneTurn(p, md.index.Spine01, MD_X, -1.4 * b);
+  }
   if (e.walk) mdHipsTurn(p, MD_Y, 90 - F3_YAW / F3_DEG, md.index.Spine02);
   if (e.plant) {   // each planted foot held where the t[0] pose has it, turned as it is there
     const p0 = mdRoot(md, e, mdSample(md, e.c, e.t ? e.t[0] : 0, false));
@@ -1949,6 +2024,11 @@ function mdLayer(md, low, up) {
   const q = up.q.slice();
   for (const n of MD_LOWER) { const i = md.index[n] * 4; q.set(low.q.subarray(i, i + 4), i); }
   return {q, h: low.h.slice()};
+}
+
+// Turns bone i of pose p by deg about axis in its own frame.
+function mdBoneTurn(p, i, axis, deg) {
+  MD_QA.fromArray(p.q, i * 4).multiply(MD_QR.setFromAxisAngle(axis, deg * F3_DEG)).toArray(p.q, i * 4);
 }
 
 // Turns the whole body about axis (model space) by deg at the Hips. keep = index of the Hips' child that keeps its
@@ -2099,6 +2179,11 @@ function mdSync(it, side, S) {
   it.root.position.set(F.x / 1000, F.y / 1000, side ? -.05 : .05);
   it.root.rotation.y = F.face * F3_YAW;
   it.body.scale.x = it.scale * F.face;   // facing left: the mirror image (fx's squash scales the root, not the body)
+  if (it.fists) {
+    const open = CFG.looks[it.key].openHands.includes(F.act);
+    it.mesh.morphTargetInfluences[0] = it.outline.morphTargetInfluences[0] = open ? 0 : 1;
+    it.fists[0].visible = it.fists[1].visible = !open;
+  }
   let p = mdPoseOf(F, S) || mdRest(mdData(it.key));
   if (F !== it.F) it.from = null;
   else if (F.act !== it.act) it.from = F3_EASE[F.act] || (m && n > 0) ? it.pose : null;

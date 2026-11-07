@@ -45,6 +45,15 @@ async def main(out_dir):
             drawn = await pg.evaluate("""() => { const c = document.getElementById('view'), g = document.createElement('canvas'); g.width = 64; g.height = 64;
               const x = g.getContext('2d'); x.drawImage(c, c.width * .35, c.height * .2, c.width * .3, c.height * .6, 0, 0, 64, 64);
               const d = x.getImageData(0, 0, 64, 64).data; let k = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) k++; return k; }""")
+            # the proposal's look: fists in the guard, open hands in the special, spikes on the head, thin face outline
+            look = await pg.evaluate("""async () => { const it = VW.it, r = {};
+              document.getElementById('play0').click(); await new Promise(f => setTimeout(f, 300));
+              r.fists = !!it.fists && it.fists.every(g => g.visible) && it.mesh.morphTargetInfluences[0] === 1;
+              document.getElementById('play6').click(); await new Promise(f => setTimeout(f, 300));
+              r.open = it.fists.every(g => !g.visible) && it.mesh.morphTargetInfluences[0] === 0;
+              r.spikes = it.joints.head.children.some(g => g.isGroup && g.children.length >= 8);
+              r.line = !!it.mesh.geometry.attributes.aLine; return r; }""")
+            if not all(look.values()): errs.append('look ' + str(look))
             ok = n == 10 and drawn > 200 and not errs
             failed += not ok
             print(('PASS' if ok else 'FAIL') + ' viewer %dx%d: %d play buttons, %d drawn pixels of 4096 in the middle%s' % (w, h, n, drawn, (', ' + ' | '.join(errs[:3])) if errs else ''))
