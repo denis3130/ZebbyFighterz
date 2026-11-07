@@ -20,6 +20,7 @@ Rispondi sempre a Denis **in italiano**, con messaggi brevi e chiari (spesso usa
 - Lancia `bash mk.sh`, poi pubblica `index.html` con lo strumento Artifact (un solo file, icona `game`) su quell'URL.
 - Prima di pubblicare: tutti i test verdi e nessun errore nella console.
 - Il ramo `tappa1-basi` si unisce a `main` solo dopo la prova di Denis.
+- Versione "app" per il telefono: `play/` (creata da `mk.sh` con `tools/make_play.py`: pagina intera con three.js dentro, manifest, icona di Ren, service worker per giocare offline). La serve GitHub Pages: https://denis3130.github.io/ZebbyFighterz/play/ (Pages va attivato da Denis in Settings → Pages, ramo `tappa1-basi`, cartella `/ (root)`; da questa sessione non si può). Si installa da Safari/Chrome con "Aggiungi alla schermata Home". Prova: `python3 tests/play_check.py`.
 
 ## Regole di lavoro di Denis
 - Giochi completi e curati: niente emoji al posto della grafica, niente combattimenti fatti solo di numeri.

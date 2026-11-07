@@ -10,3 +10,4 @@ s=s[:i]+s[j+1:];open(p,"w").write(s);print("stripped",len(s))
 PY
 python3 -c "
 import re;s=open('game_w.html').read();open('g.js','w').write(re.findall(r'<script>\n(.*?)\n</script>',s,re.S)[0])" && node --check g.js && echo SYNTAX_OK
+python3 tools/make_play.py

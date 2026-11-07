@@ -61,6 +61,12 @@ python3 tests/run.py tests/orient.test.js --viewport 390x844 --touch --mobile
 - HUD: il contatore delle combo si azzera all'inizio di un nuovo round. Il tremolio sposta anche il fondale dipinto (tutto lo schermo trema insieme).
 - Pausa: "FPS: SÌ / NO".
 
+## Versione "app" per il telefono (7/11/2026)
+- `play/` è la versione da installare sul telefono: `tools/make_play.py` (lanciato da `mk.sh`) prende `index.html`, ci mette dentro three.js (niente CDN), le meta per la schermata Home, il manifest (schermo intero, orizzontale), le icone dal ritratto di Ren e `sw.js`, che salva la pagina e i font per giocare offline. Ogni build cambia il nome della cache, così il telefono prende la versione nuova.
+- Indirizzo: https://denis3130.github.io/ZebbyFighterz/play/ — funziona quando GitHub Pages è attivo (Settings → Pages → ramo `tappa1-basi`, `/ (root)`; il file `.nojekyll` fa servire i file così come sono).
+- Su iPhone: Safari → Condividi → "Aggiungi alla schermata Home". La pagina Claude invece resta dentro il sito di Claude (barra in alto) e da File l'html non gira.
+- Prova: `python3 tests/play_check.py` (servita in http, senza CDN: manifest, service worker attivo, ricarica offline fino alla lotta).
+
 ## Note per Denis / per dopo
 Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Il forte dopo P,P,P combina solo se il quarto P viene premuto (e tenuto) già durante il p3 o al più 2 fotogrammi dopo il suo colpo: più tardi il colpito esce dallo stordimento prima che il forte parta (lo prende come primo colpo di una nuova combo). Dipende dai tempi di p3 e hp, non toccati.
