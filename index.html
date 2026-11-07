@@ -1875,9 +1875,9 @@ function modelBuild(key) {
     let at = bones.length + fingers.length;
     it.sash = {frame: 0, F: null, ribbons: look.sash.ribbons.map((r, i) => {
       const m = mdRibbon(md, r, at, skel, ol, s, body); at += sash[i].length; it.mats['sash' + i] = m.mesh.material;
-      return {bones: sash[i], w: r.w, s, a: new THREE.Vector3().fromArray(r.a), j: r.j.map(p => new THREE.Vector3().fromArray(p)),
+      return {bones: sash[i], w: r.w, s, fix: r.fix || 1, tuckRows: m.tuckRows, a: new THREE.Vector3().fromArray(r.a), j: r.j.map(p => new THREE.Vector3().fromArray(p)),
         P: r.j.map(() => new THREE.Vector3()), Q: r.j.map(() => new THREE.Vector3()), T: r.j.map(() => new THREE.Vector3()), L: []};
-    }), body: look.sash.body.map(x => {   // the body it stays out of (mdBodyOut)
+    }), band: look.sash.band && mdBand(look.sash.band, skel, ol, s, body), body: look.sash.body.map(x => {   // the body it stays out of (mdBodyOut)
       const ax = new THREE.Vector3().fromArray(x.ax), u = new THREE.Vector3().fromArray(x.u);
       return {bone: B(x.b), ax, u, v: new THREE.Vector3().crossVectors(ax, u), len: x.len, t0: x.t[0], t1: x.t[1], nb: x.r.length, ns: x.r[0].length,
         r: Float32Array.from(x.r.flat()), rmax: Float32Array.from(x.r.map(row => Math.max(...row))), inv: new THREE.Matrix4(), pinv: new THREE.Matrix4(), world: null, c: new THREE.Vector3(),
@@ -1940,19 +1940,44 @@ function mdRibbon(md, r, at, skel, ol, s, body) {
   const line = new THREE.SkinnedMesh(g, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: Math.min(ol.back || 0, MD_RIB.back)}));
   mesh.frustumCulled = line.frustumCulled = false;
   body.add(mesh, line); mesh.updateMatrixWorld(true); mesh.bind(skel, mesh.matrixWorld); line.bind(skel, mesh.matrixWorld);   // bound in the body
-  return {mesh, line};
+  return {mesh, line, tuckRows: Math.ceil((r.tuck || 0) / len * rows)};   // the rows under the band
 }
 
-// The sash's own motion (graphics only), each sim frame since the last call: per ribbon a chain of points from the band
-// (held by the Hips) to the tip, with gravity, damping and a weak pull toward where the Hips would carry them (the
+// The band around the waist (look data sash.band: rings of points in the body's frame with their skin, the last two the
+// inner edges) as a piece of its own, in body: a ring wall, closed at the top and the bottom, toon in the sash's colour
+// with an outline as the ribbons'.
+function mdBand(b, skel, ol, s, body) {
+  const rows = b.p.length - 2, S = b.p[0].length, pos = [], si = [], sw = [], idx = [], at = (i, k) => i * S + ((k % S) + S) % S;
+  b.p.forEach((row, i) => row.forEach((p, k) => { pos.push(...p); si.push(...b.j[i][k]); sw.push(...b.w[i][k]); }));
+  const quad = (A, B, C, D) => idx.push(A, B, C, A, C, D);
+  for (let k = 0; k < S; k++) {
+    for (let i = 0; i + 1 < rows; i++) quad(at(i, k), at(i, k + 1), at(i + 1, k + 1), at(i + 1, k));   // the outside
+    quad(at(0, k), at(rows, k), at(rows, k + 1), at(0, k + 1));                                           // the bottom edge
+    quad(at(rows - 1, k), at(rows - 1, k + 1), at(rows + 1, k + 1), at(rows + 1, k));                     // the top edge
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  g.computeVertexNormals();
+  const mesh = new THREE.SkinnedMesh(g, new THREE.MeshToonMaterial({color: new THREE.Color(b.c[0] / 255, b.c[1] / 255, b.c[2] / 255), gradientMap: F3.grad, skinning: true}));
+  const line = new THREE.SkinnedMesh(g, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: Math.min(ol.back || 0, MD_RIB.back)}));
+  mesh.frustumCulled = line.frustumCulled = false;
+  body.add(mesh, line); mesh.updateMatrixWorld(true); mesh.bind(skel, mesh.matrixWorld); line.bind(skel, mesh.matrixWorld);
+  return mesh;
+}
+
+// The sash's own motion (graphics only), each sim frame since the last call: per ribbon a chain of points from under the
+// band (its top fixed on the Hips: fix points, from under the band to a little below it) to the tip, with gravity, damping and a weak pull toward where the Hips would carry them (the
 // shape it hangs in, itself kept out of the body: the legs of a stance come forward into it), kept at the chain's
 // lengths, unfolding (points two apart no closer than at rest, by bend), above the floor and out of the body (mdBodyOut:
 // the full volumes around the hips, the belly, the thighs with the vest's flaps, the shins), its middle and both its
 // edges; then each bone turned along its segment. A new fighter, or one moved farther than jump a sim frame (put back), starts hanging
 // at rest.
-const MD_SASH = {g: 9.8, damp: .93, pull: .08, top: 2, bend: .5, iter: 4, steps: 4, jump: .3, gap: .012, floor: .012, reach: .06, foot: .035, was: .006};
-// top: the pull is 1 + top times as strong at the band as at the tip (the cloth near the knot holds its shape); reach,
-// foot, was: m (mdBlendOut)
+const MD_SASH = {g: 14.7, damp: .85, pull: .18, top: 2, bend: .6, iter: 4, steps: 4, jump: .3, gap: .012, floor: .012, reach: .06, foot: .035, was: .006};
+// g (m/s², 1.5 times the real one), damp, pull: a heavy, thick cloth (Denis, 7/11: "più pesanti": after a jump it hangs
+// still again in 1.2 s, 2.3 before; stiffer still, it could not bend round a kicking thigh and went into it); top: the
+// pull is 1 + top times as strong just under the fixed part as at the tip (the cloth near the knot holds its shape);
+// bend: share of a fold undone each round; reach, foot, was: m (mdBlendOut)
 // jump: m the band moves in a frame beyond which the sash starts over at rest (the fighter put back); gap: m kept off
 // the body (half the ribbon's thickness and its straight runs over the curves); floor: m kept above the floor (y = 0)
 const MD_SV = [0, 1, 2, 3, 4, 5, 6, 7].map(() => new THREE.Vector3()), MD_SM = new THREE.Matrix4();
@@ -1970,9 +1995,9 @@ function mdSash(it, S) {
   const gdt = MD_SASH.g / 3600, gap = MD_SASH.gap / it.scale;   // in the bones' frames (package metres)
   for (const r of sa.ribbons) {
     r.T0 = r.T0 || r.T.map(() => new THREE.Vector3()); r.T.forEach((t, k) => r.T0[k].copy(t));   // last frame's
-    r.j.forEach((p, k) => {   // pulled to a shape out of the body
+    r.j.forEach((p, k) => {   // pulled to a shape out of the body (the fixed top, under the band and just below it, as it is)
       r.T[k].copy(p).applyMatrix4(hips.matrixWorld);
-      if (k) { mdBodyOut(r.T[k], sa.body, gap); mdBlendOut(r.T[k], fresh ? null : r.T0[k], sa.blend, gap * it.scale); }
+      if (k >= r.fix) { mdBodyOut(r.T[k], sa.body, gap); mdBlendOut(r.T[k], fresh ? null : r.T0[k], sa.blend, gap * it.scale); }
     });
     if (fresh) {
       r.T.forEach((t, k) => { r.P[k].copy(t); r.Q[k].copy(t); r.T0[k].copy(t); });
@@ -1981,18 +2006,18 @@ function mdSash(it, S) {
     // across the ribbon at each point, in the world (from its bones as they were turned last)
     r.A = r.P.map((p, k) => (r.A && r.A[k] || new THREE.Vector3()).copy(r.a).transformDirection(r.bones[Math.min(k, r.bones.length - 1)].matrixWorld));
     for (let step = 0; step < n; step++) {   // frames missed in between: the targets go there a step at a time
-      const f = (step + 1) / n, T = k => MD_SV[0].copy(r.T0[k]).lerp(r.T[k], f);
-      r.P[0].copy(T(0));
-      for (let k = 1; k < r.P.length; k++) {
+      const f = (step + 1) / n, T = k => MD_SV[0].copy(r.T0[k]).lerp(r.T[k], f), nf = r.P.length - r.fix;
+      for (let k = 0; k < r.fix; k++) { r.P[k].copy(T(k)); r.Q[k].copy(r.P[k]); }   // the top: fixed on the hips
+      for (let k = r.fix; k < r.P.length; k++) {
         const v = MD_SV[1].subVectors(r.P[k], r.Q[k]).multiplyScalar(MD_SASH.damp);
-        r.Q[k].copy(r.P[k]); r.P[k].add(v).addScaledVector(MD_SV[2].subVectors(T(k), r.P[k]), MD_SASH.pull * (1 + MD_SASH.top * (1 - k / (r.P.length - 1)))); r.P[k].y -= gdt;
+        r.Q[k].copy(r.P[k]); r.P[k].add(v).addScaledVector(MD_SV[2].subVectors(T(k), r.P[k]), MD_SASH.pull * (1 + MD_SASH.top * (1 - (k - r.fix) / nf))); r.P[k].y -= gdt;
       }
       for (let it2 = 0; it2 < MD_SASH.iter; it2++) {
         mdSashLengths(r);
-        for (let k = 0; k + 2 < r.P.length; k++) {   // no sharp folds
+        for (let k = Math.max(0, r.fix - 2); k + 2 < r.P.length; k++) {   // no sharp folds
           const d = MD_SV[1].subVectors(r.P[k + 2], r.P[k]), l = d.length() || 1e-9, e = (l - r.L2[k]) / l * MD_SASH.bend;
           if (e >= 0) continue;
-          if (k === 0) r.P[2].addScaledVector(d, -e); else { r.P[k].addScaledVector(d, e / 2); r.P[k + 2].addScaledVector(d, -e / 2); }
+          if (k < r.fix) r.P[k + 2].addScaledVector(d, -e); else { r.P[k].addScaledVector(d, e / 2); r.P[k + 2].addScaledVector(d, -e / 2); }
         }
         mdSashOut(r, sa, gap, it2 === MD_SASH.iter - 1);   // the edges in the last round
       }
@@ -2006,25 +2031,25 @@ function mdSash(it, S) {
     });
   }
 }
-// Ribbon r's chain back to its segments' lengths, both ends of each moving (the band's point stays).
+// Ribbon r's chain back to its segments' lengths, both ends of each moving (the fixed top stays).
 function mdSashLengths(r) {
-  for (let k = 0; k + 1 < r.P.length; k++) {
+  for (let k = r.fix - 1; k + 1 < r.P.length; k++) {
     const d = MD_SV[1].subVectors(r.P[k + 1], r.P[k]), l = d.length() || 1e-9, e = (l - r.L[k]) / l;
-    if (k === 0) r.P[1].addScaledVector(d, -e); else { r.P[k].addScaledVector(d, e / 2); r.P[k + 1].addScaledVector(d, -e / 2); }
+    if (k < r.fix) r.P[k + 1].addScaledVector(d, -e); else { r.P[k].addScaledVector(d, e / 2); r.P[k + 1].addScaledVector(d, -e / 2); }
   }
 }
-// The same from the band down, each point put at its exact length from the one above (the chain the bones draw).
+// The same from the fixed top down, each point put at its exact length from the one above (the chain the bones draw).
 function mdSashChain(r) {
-  for (let k = 0; k + 1 < r.P.length; k++) {
+  for (let k = r.fix - 1; k + 1 < r.P.length; k++) {
     const d = MD_SV[1].subVectors(r.P[k + 1], r.P[k]), l = d.length() || 1e-9;
     r.P[k + 1].copy(r.P[k]).addScaledVector(d, r.L[k] / l);
   }
 }
-// Ribbon r's points (but the band's) above the floor and out of the body: each point, and (edges) each edge beside it
+// Ribbon r's points (but the fixed top's) above the floor and out of the body: each point, and (edges) each edge beside it
 // (half the width across), moved by what takes it out.
 function mdSashOut(r, sa, gap, edges) {
   const out = (p, q) => mdBodyOut(p, sa.body, gap, q) | mdBlendOut(p, q, sa.blend, gap * r.s);
-  for (let k = 1; k < r.P.length; k++) {
+  for (let k = r.fix; k < r.P.length; k++) {
     out(r.P[k], r.Q[k]);
     if (edges) for (const side of [1, -1]) {
       const e = MD_SV[5].copy(r.P[k]).addScaledVector(r.A[k], side * r.w / 2 * r.s), e0 = MD_SV[6].copy(e);
@@ -2147,7 +2172,7 @@ function mdSpikes(list, back) {
 
 // The look data of package key ('<key>/<key>_look.json' and '.bin', tools/ren_look.py), decoded once onto md, or null:
 // {fingers: the finger bones, skin: [skinIndex, skinWeight] with them, line: the outline widths, flat: the flat light's
-// share, spikes, sash: {ribbons, body: the shapes the sash stays out of, blend: the vertices between them}}.
+// share, spikes, sash: {ribbons, band, body: the shapes the sash stays out of, blend: the vertices between them}}.
 function mdLookData(md, key) {
   if (md.look !== undefined) return md.look;
   const j = ASSETS[key + '/' + key + '_look.json'], b64 = ASSETS[key + '/' + key + '_look.bin'];
@@ -2155,7 +2180,7 @@ function mdLookData(md, key) {
   const s = atob(b64), u8 = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
   const f32 = a => new Float32Array(u8.buffer, a[0], a[1]);
-  return md.look = {fingers: j.fingers, spikes: j.spikes, sash: j.sash && {ribbons: j.sash.ribbons, body: j.sash.body, blend: new Uint16Array(u8.buffer, j.sash.blend[0], j.sash.blend[1])},
+  return md.look = {fingers: j.fingers, spikes: j.spikes, sash: j.sash && {ribbons: j.sash.ribbons, band: j.sash.band, body: j.sash.body, blend: new Uint16Array(u8.buffer, j.sash.blend[0], j.sash.blend[1])},
     skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
     line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1)};
 }

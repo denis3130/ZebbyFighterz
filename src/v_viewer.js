@@ -165,5 +165,6 @@ function vwInput() {
 }
 
 VW.tick = n => { for (let k = 0; k < n; k++) { vwStep(); mdSync(VW.it, 0, VW.S); } };   // tests: n frames now, each drawn (the sash moves)
+VW.sash = MD_SASH;   // tests: the sash's numbers
 window.VW = VW;   // for tests/viewer_check.py
 vwBoot();

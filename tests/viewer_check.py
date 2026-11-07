@@ -16,13 +16,13 @@ WRAP = ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" 
 
 
 # The sash out of the body (Denis: "la fascia non entri nei vestiti/corpo"): every 3rd of 180 frames of each play button
-# (started from a still guard),
+# (started from a still guard), more than 5 mm in (less is a touch, under the outlines),
 # the sash's vertices below the band against the body as drawn (skinned on the CPU), inside = winding number > 0 by signed
 # ray crossings on 3 of 4 axis rays (the mesh's parts overlap). Returns the self-test (the hips' joint inside: 4 votes, a
 # point 1 m in front: 0) and per button [share of points inside, deepest (m, along the rays)].
 INSIDE = """async ([plays, frames, every]) => {
   const it = VW.it, mesh = it.mesh, g = mesh.geometry, I = g.index.array, nt = I.length / 3, CELL = .02, v = new THREE.Vector3();
-  const rib = []; it.body.traverse(o => { if (o.isSkinnedMesh && o.geometry !== g && o.material.isMeshToonMaterial) rib.push(o); });
+  const rib = []; it.body.traverse(o => { if (o.isSkinnedMesh && o.geometry !== g && o.material.isMeshToonMaterial && o !== it.sash.band) rib.push(o); });   /* the tails */
   const X = new Float32Array(g.attributes.position.count * 3);
   const skin = (m, out) => { const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); m.boneTransform(i, v); v.applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return out; };
   const grid = (a, b) => { const G = new Map();
@@ -52,13 +52,14 @@ INSIDE = """async ([plays, frames, every]) => {
       VW.tick(1); if (f % every) continue;
       it.root.updateMatrixWorld(true); skin(mesh, X); const Gz = grid(0, 1), Gx = grid(1, 2);
       for (const r of rib) { const R = skin(r, new Float32Array(r.geometry.attributes.position.count * 3));
-        for (let i = 8; i < R.length / 3; i++) { const [vt, d] = vote(Gz, Gx, [R[i * 3], R[i * 3 + 1], R[i * 3 + 2]]); pts++; if (vt >= 3) { bad++; deep = Math.max(deep, d); } } } }
+        for (let i = (it.sash.ribbons[rib.indexOf(r)].tuckRows + 2) * 4; i < R.length / 3; i++) { /* not the part under the band */ const [vt, d] = vote(Gz, Gx, [R[i * 3], R[i * 3 + 1], R[i * 3 + 2]]); pts++; if (vt >= 3 && d > .005) { bad++; deep = Math.max(deep, d); } } } }
     out[k] = [bad / pts, deep]; }
   VW.speed = 1; return out; }"""
-SASH_OUT = {0: .015, 1: .01, 2: .01, 3: .02, 4: .05, 5: .01, 6: .01, 7: .01, 8: .01, 9: .05}   # most shares inside allowed per
-# button (7/11/2026, the worst of 5 starting moments: guard .7%, walk 0, punches .1%, kicks 1%, crouch 3.3%, jump .3%,
-# special 0, throw .4%, hit .1%, down 3.2%; before, with the legs as thin capsules: 8 to 38%). Crouching and lying, the
-# top of the sash is pressed between the thighs and the belly, hidden in the fold.
+SASH_OUT = {0: .01, 1: .01, 2: .01, 3: .025, 4: .05, 5: .01, 6: .01, 7: .015, 8: .015, 9: .04}   # most shares inside allowed per
+# button (7/11/2026, heavy tails fixed under the band, the worst of 5 starting moments: guard .2%, walk .4%, punches .3%,
+# kicks 1.9%, crouch 3.6%, jump .2%, special .5%, throw .9%, hit 1.2%, down 2.7%; before, with the legs as thin
+# capsules: 8 to 38%). Crouching and lying, the top of the sash is pressed between the thighs and the belly, hidden in
+# the fold.
 
 
 async def route(r):
@@ -118,6 +119,7 @@ async def main(out_dir):
               for (let k = 0; k < 12; k++) { await new Promise(f => setTimeout(f, 80)); most = Math.max(most, off()); }
               r.swings = most > .03 && most < 1;   // moves, without flying off (it is .5 m long)
               r.finite = sa.ribbons.every(q => q.P.every(p => Number.isFinite(p.x + p.y + p.z)));
+              r.band = !!sa.band && sa.band.geometry.index.count > 0 && sa.band.material.color.equals(sa.ribbons[0].bones[0] && it.mats.sash0.color);   // the waist band: a piece of its own, the tails' orange
               return r; }""")
             look.update(sash)
             if not all(look.values()): errs.append('look ' + str(look))

@@ -16,7 +16,8 @@ their nearest piece's colour at the end. On the face (the head's skin) the drawi
 is kept only where the surface faces the front squarely, plain skin where it turns away: the drawing's edges stretched
 over the sides of the nose and the jaw read as dirt. The hair, likewise: the drawing where it faces the front, the
 hair's own colour elsewhere (the highlights stretched over its sides looked like horns; Meshy's white glints). The
-sash's tails (ribbons of their own in the look) take the colour of what is under them.
+sash's tails (ribbons of their own in the look) take the colour of what is under them; on the band and the vest just
+under it the thin dark lines go.
 """
 import json, os, sys
 import numpy as np
@@ -154,6 +155,22 @@ _, (gy, gx) = ndimage.distance_transform_edt(~good, return_indices=True)
 bad = hand & ~skin & ~dark
 out[ys[bad], xs[bad]] = out[gy[ys[bad], xs[bad]], gx[ys[bad], xs[bad]]]
 print('texels', len(ks), 'painted (w>.5)', int((wgt > .5).sum()), 'visible', int(vis.sum()), 'hand texels recoloured', int(bad.sum()), 'of', int(hand.sum()))
+# --- the band: a piece of its own now (tools/ren_look.py waist_band), over the body; the body under it (and the knot
+# Meshy hung below it at the front) takes the colours of the clothes around it, so no orange is left on the body to show
+# at the band's edges; the vest just under it loses the orange that came from the drawing's tails (the drawing has the
+# band a few cm higher than the model) ---
+BAND_Y = (1.02, 1.22)
+TC = TEX[ys, xs]; area = (pos[:, 1] > BAND_Y[0]) & (pos[:, 1] < BAND_Y[1]) & (np.abs(pos[:, 0]) < .35)
+R_ = np.maximum(TC[:, 0], 1.)
+ring = area & (TC[:, 0] > 60) & (TC[:, 1] / R_ < .66) & ((TC[:, 0] - TC[:, 2]) / R_ > .65)   # Meshy's orange and its browns, not the skin
+c = out[ys, xs]; skin_m = (TC[:, 0] > 150) & (TC[:, 1] > 95) & (TC[:, 0] - TC[:, 2] > 50) & (TC[:, 1] / R_ > .6)   # Meshy's skin
+stray = area & ~ring & ~skin_m & (c[:, 0] > c[:, 1] + 12) & (c[:, 0] - c[:, 2] > 25)   # the drawing's sash's orange on the clothes
+out[ys[stray], xs[stray]] = D[sy, sx][pvi[stray], pui[stray]]
+from scipy.spatial import cKDTree
+c = out[ys, xs]; keep = area & ~ring & ~((c[:, 0] > c[:, 1] + 12) & (c[:, 0] - c[:, 2] > 25))
+_, nn = cKDTree(pos[keep]).query(pos[ring], k=8); src = np.nonzero(keep)[0][nn]
+out[ys[ring], xs[ring]] = np.median(out[ys[src], xs[src]], 1)
+print('band: %d texels under it in the clothes\' colours around, %d stray orange texels on the vest repainted' % (int(ring.sum()), int(stray.sum())))
 # --- padding: every texel outside the triangles takes its nearest triangle texel's colour (the gutters between UV pieces
 # kept Meshy's old colours, which showed as thin cracks along the seams once filtered, the sash's orange most of all) ---
 inside = tid >= 0
