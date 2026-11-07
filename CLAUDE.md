@@ -20,6 +20,7 @@ Rispondi sempre a Denis **in italiano**, con messaggi brevi e chiari (spesso usa
 ## Pubblicare
 - Pagina giocabile (pagina Claude "Voidrise Fighters"): https://claude.ai/artifact/RdQfJDspYWN6SFx5BoMhCY — si continua a pubblicare lì
 - Lancia `bash mk.sh`, poi pubblica `index.html` con lo strumento Artifact (un solo file, icona `game`) su quell'URL.
+- Anteprima 3D di Ren (pagina a parte, senza giocare): https://claude.ai/artifact/V3vLHuaZbf47o3DYo65jZC — pubblica `viewer.html` (creato da `mk.sh`, non nel repository) su quell'URL. Prova: `python3 tests/viewer_check.py`. La pittura dal disegno (`tools/paint_from_drawing.py` → `viewer_assets/ren/ren_painted.jpg`) per ora è solo nell'anteprima.
 - Prima di pubblicare: tutti i test verdi e nessun errore nella console.
 - Il ramo `tappa1-basi` si unisce a `main` solo dopo la prova di Denis.
 - Versione "app" per il telefono: `play/` (creata da `mk.sh` con `tools/make_play.py`: pagina intera con three.js dentro, manifest, icona di Ren, service worker per giocare offline). La serve GitHub Pages: https://denis3130.github.io/ZebbyFighterz/play/ (GitHub Pages pubblica il ramo `gh-pages`: per aggiornare l'app, dopo `bash mk.sh` e il commit, `git push origin <ramo>:gh-pages`). Si installa da Safari/Chrome con "Aggiungi alla schermata Home". Prova: `python3 tests/play_check.py`.

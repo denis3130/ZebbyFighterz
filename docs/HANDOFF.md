@@ -90,5 +90,9 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Gli FPS sul telefono vanno misurati dal menu di pausa ("FPS: SÌ").
 - I modelli Meshy di Ren e Kael sono la Tappa 2: prima mostra a Denis saldo e costo stimato, poi procedi solo con il suo ok. `docs/meshy/` non esiste ancora per questo gioco.
 
+## Anteprima 3D di Ren (7/11/2026)
+- `viewer.html` (da `mk.sh`, con `src/viewer_head.html` + `src/v_viewer.js` e gli asset in `viewer_assets/`): Ren da solo sulla cascata, si gira col dito, pulsanti per ogni animazione (le stesse pose del gioco: `mdSync` su un lottatore finto), rallentatore, pittura "Disegno"/"Meshy", luce "3D"/"Piatta". Pubblicata su https://claude.ai/artifact/V3vLHuaZbf47o3DYo65jZC.
+- Proposta in corso: Ren con il disegno di Denis dipinto sopra (proiezione frontale, `tools/paint_from_drawing.py`; il corpo combacia all'89% col disegno). Da fare se Denis approva: capelli a punte dalla forma del disegno, testa più alta nelle pose, contorno senza macchia sul naso; poi nel gioco.
+
 ## Prossimo passo
 Denis prova Ren di Meshy sul telefono (app e pagina Claude) e guarda gli FPS dal menu di pausa ("FPS: SÌ"). Poi: Kael di Meshy (modello dal suo disegno + scheletro; le animazioni si riusano), mostrando prima saldo e costo.
