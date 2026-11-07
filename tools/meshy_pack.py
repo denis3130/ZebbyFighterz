@@ -90,6 +90,40 @@ def rot_part(m):
     s = np.linalg.norm(m[:3, 0]); return m[:3, :3] / s, s
 
 
+def qangle(a, b):
+    """Angle in degrees between unit quaternions a and b (last axis)."""
+    return np.degrees(2 * np.arccos(np.clip(np.abs((a * b).sum(-1)), 0, 1)))
+
+
+def qslerp(a, b, t):
+    d = (a * b).sum()
+    if d < 0: b, d = -b, -d
+    if d > .9995: r = a + (b - a) * t; return r / np.linalg.norm(r)
+    th = np.arccos(d); return (np.sin((1 - t) * th) * a + np.sin(t * th) * b) / np.sin(th)
+
+
+SPIKE_RES, SPIKE_RATIO = 12, 3   # a glitch: 1-2 frames off the path between their neighbours by > 12 deg and > 3x that gap
+
+
+def despike(q, b):
+    """Repairs Meshy's glitch frames of bone b in a clip's rotations (n x bones x 4, in place): a run of 1 or 2 frames
+    farther than SPIKE_RES degrees (and SPIKE_RATIO times the gap between the neighbours) from the slerp between the
+    frames around it is replaced by that slerp. Only the Hips are checked (seen on 7/11/2026: the walk-back clip's hips
+    twist by 20 degrees for 2 frames and back, which flicks the feet); the limbs' fast strikes look alike and are real.
+    Returns the repaired runs as (first, last)."""
+    n = len(q); fixed = []; i = 0
+    while i < n - 2:
+        for L in (1, 2):
+            j = i + L + 1
+            if j >= n: continue
+            gap = qangle(q[i, b], q[j, b]); res = max(qangle(q[i + k, b], qslerp(q[i, b], q[j, b], k / (L + 1))) for k in range(1, L + 1))
+            if res > SPIKE_RES and res > SPIKE_RATIO * gap:
+                for k in range(1, L + 1): q[i + k, b] = qslerp(q[i, b], q[j, b], k / (L + 1))
+                fixed.append((i + 1, i + L)); break
+        i += 1
+    return fixed
+
+
 def main(rig_path, anim_dir, out_dir):
     name = os.path.basename(os.path.normpath(out_dir)); os.makedirs(out_dir, exist_ok=True)
     j, BIN = read_glb(rig_path)
@@ -149,6 +183,8 @@ def main(rig_path, anim_dir, out_dir):
         for i, bn in enumerate(names):
             if (bn, 'rotation') in tracks: q[:, i] = tracks[(bn, 'rotation')]
         q[:, hips] = np.array([mat_q(rot_part(Ga)[0] @ qmat(r)) for r in q[:, hips]])
+        rep = despike(q, hips)
+        if rep: print('  %s: Hips glitch frames repaired: %s' % (cid, ', '.join('%d-%d' % r for r in rep)))
         hraw = tracks.get(('Hips', 'translation'))
         h = (hraw @ Ga[:3, :3].T + Ga[:3, 3] + off) if hraw is not None else np.repeat(bt[hips][None], n, 0)
         clips[cid] = {'name': an.get('name', cid).split('|')[1] if '|' in an.get('name', '') else an.get('name', cid), 'n': n, 'fps': 30,

@@ -58,8 +58,36 @@ const CFG={
   // strength and shimmer; leaves = number of drifting leaves. footRow and cover keep the waterfall's crest and the
   // temple on top (image rows 213-255) in view, with some sky, on 20:9 phones; footRow stays on the painted floor.
   arena:{footRow:.83, cover:1.1, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
-  // Fighter animation (graphics only): blend = frames over which the pose eases into a new free or movement action.
-  anim:{blend:5},
+  // Fighter animation (graphics only): blend = frames over which the pose eases into a new free or movement action;
+  // the Meshy fighters ease over model frames (their clips' poses differ more: a mid-stride walk to the wide stance) and
+  // ease a strike in over its first strikeIn frames (at most its startup minus 1: the active frames stay exact).
+  anim:{blend:5, model:10, strikeIn:4},
+  // Meshy fighters (graphics only, e_model.js): per act the clip (Meshy action id, 'a89') and its times in seconds.
+  // loop = cycle on S.frame; walk = clip time from the distance walked (1 = the clip's planted-foot speed, measured at
+  // load; else that speed in m/s); at = a held pose; t = [t0, t1] of a move: startup from t0 to the hit frame (found at
+  // load: the frame whose limb point lies deepest in the move's box, both facings), held through the active frames,
+  // recovery to t1 (air moves: in 8 frames, then held until the landing); k = [[x, t], ...] piecewise linear in F.af
+  // (in u, 0 at take-off to 1 falling, for the air and flight poses); low/up = hips and legs from one entry, the rest
+  // from the other. Options: y = the hips' height in m (poses in the air), pitch = degrees leaning forward (air attacks
+  // strike downward), limb = the hitting point when the clip strikes with another limb than CFG.moves names.
+  // kick = a base entry whose leg ('L'/'R') reaches 'to' (ankle, model space m) by IK: in startup, held, back in recovery.
+  clips:{
+    idle:{c:'a89', loop:1}, intro:{c:'a89', loop:1}, walkF:{c:'a21', walk:1}, walkB:{c:'a20', walk:1},
+    dashF:{c:'a16', walk:4}, dashB:{c:'a20', walk:1},
+    crouch:{low:{c:'a54', at:.67}, up:{c:'a89', loop:1}}, guard:{c:'a138', at:1}, guardC:{low:{c:'a54', at:.67}, up:{c:'a138', at:1}},
+    jumpSquat:{c:'a466', k:[[0,0],[4,.3]]}, air:{c:'a466', k:[[0,.53],[.5,.8],[1,1.07]], y:.95}, landing:{c:'a466', k:[[0,1.1],[5,1.4]]},
+    p1:{c:'a191', t:[.2,1]}, p2:{c:'a192', t:[.3,1.2]}, p3:{c:'a193', t:[0,.8]}, hp:{c:'a210', t:[1.45,2.6]},
+    k1:{c:'a209', t:[.35,1.15], limb:'footR'}, k2:{c:'a215', t:[.5,1.6]}, hk:{c:'a207', t:[.8,1.9]},
+    cp:{low:{c:'a54', at:.67}, up:{c:'a192', t:[.3,1.2]}},
+    ck:{kick:{low:{c:'a54', at:.67}, up:{c:'a89', loop:1}}, leg:'L', to:[.1,.1,.72]},
+    chp:{c:'a194', t:[.1,1]}, chk:{c:'a422', t:[0,1], limb:'footL'},
+    jp:{c:'a457', t:[1.1,1.6], y:.95, pitch:20, limb:'handL'}, jhp:{c:'a457', t:[1.1,1.6], y:.95, pitch:30, limb:'handL'},
+    jk:{c:'a422', t:[.13,.6], y:.95, pitch:40, limb:'footL'}, jhk:{c:'a422', t:[.13,.6], y:.95, pitch:45, limb:'footL'},
+    spec:{c:'a214', k:[[0,.33],[14,1.53],[24,2.1],[44,3.2]]},
+    thr:{c:'a421', k:[[0,.6],[6,1.4]]}, thrHit:{c:'a421', k:[[0,1.4],[22,2],[30,2.53],[40,3.3]]}, thrWhiff:{c:'a421', k:[[0,1.4],[24,.3]]},
+    hitStun:{c:'a174', k:[[0,.47],[8,1.1]]}, fly:{c:'a7', k:[[0,.1],[1,.6]], y:.6}, down:{c:'a7', at:1.5},
+    getup:{c:'a3', k:[[0,.15],[16,1.6]]}, roll:{c:'a3', k:[[0,.15],[22,1.6]]}, win:{c:'a17', k:[[0,0],[18,.3]]},
+  },
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
