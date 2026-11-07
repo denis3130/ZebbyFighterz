@@ -26,6 +26,9 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
         hanging tails as ribbons of their own (Meshy fused them with the trousers and the vest), where the drawing has
         them seen from the front, as wide as there, coming out from under the band's knot; tools/paint_from_drawing.py
         paints the old ones over
+  move: {idx: [byte offset, count] uint16, pos, nor: [byte offset, count] float32 x3}: the vertices drawn_shape changes
+        (the nose flatter, the fringe off the eyes, the collar's points), their bind positions and normals (all the
+        rest is measured on it)
   spikes: [{p (base), d (unit direction), t (unit: the lock's thin side, outward), len, r}] in the Head bone's frame:
         anime hair locks where DRAWING (Denis's character sheet, fit as tools/paint_from_drawing.py) has the tips of its
         hair's silhouette seen from the front (each reaching that tip, tilted back), and clumps on the back of the head
@@ -38,7 +41,11 @@ from PIL import Image
 HAND_W = .3          # vertices with at least this weight on a hand bone belong to the hand
 LINE_FACE = .2       # outline width kept on the front of the face
 LINE_FINGER = .4     # and on the fingers
+LINE_THUMB = (.08, .92)   # none where the thumb's skin turns into the hand's (this share of it on the thumb's bones)
+LINE_PALM = .2       # nor on the hand's inner side (its normal this far toward the palm's): curled into the fist, it
+                     # faces itself, its shell showed as black wedges in the gaps between the fingers (Denis: "lo spigolo")
 FLAT_BODY = 1.       # flat light on the front of the body (the drawing), as on the face
+FLAT_HAND = .75      # and on the hands: the toon light's bands followed the facets of the fingers (Denis: "pugni a blocchi")
 PERSIST = .015       # a finger stands out at least this far (geodesic, m) from where it joins the hand
 FINGER_SEG = (.45, .30, .25)    # proximal, middle and distal phalanx: shares of a finger's length
 FREE = .80           # the free part of a finger (from the web between the fingers to the tip): share of its length
@@ -108,6 +115,70 @@ def unit(v):
 def smooth(e0, e1, x):
     t = np.clip((x - e0) / (e1 - e0), 0, 1)
     return t * t * (3 - 2 * t)
+
+
+# The shape (bind pose, model space) where Meshy's differs from the drawing; the paint (tools/paint_from_drawing.py) and
+# the model (look data move, CFG.looks.ren.faceShape) use the same (Denis, 7/11: "macchie su naso", "occhi mezzi
+# coperti", "il colletto ... a punta"):
+# - the nose: a thin ridge up to 2.6 cm out of the cheeks (from the side a paper triangle, the paint on its sides
+#   stretched): in NOSE_BOX (x, y) kept NOSE_KEEP of how far it stands out of the face's surface around it (a quadratic
+#   through the face's front outside the box), fading to all of it over NOSE_FADE m at the box's edges;
+# - the fringe: hanging 2-4 cm in front of the face down to the eyes (a camera a little above saw them half covered): its
+#   hair more than FRINGE_Z m in front of the forehead (z FRINGE_FACE) lifted to the brows (y FRINGE_CUT[0]; the lock
+#   between the eyes, FRINGE_CUT[2] m either side of x FRINGE_X, down to FRINGE_CUT[1], as drawn), what hung below
+#   kept FRINGE_KEEP as long, and pulled FRINGE_BACK of the way back toward the face from 2 cm above the cut down;
+# - the collar: a round roll; its top corners seen from the front (the highest and outermost of its teal and light rim
+#   by the neck) pulled out and up by COLLAR_TIP m into the drawing's points, less with the distance (gone at COLLAR_R).
+NOSE_BOX, NOSE_KEEP, NOSE_FADE = ((-.008, .032), (1.528, 1.592)), .4, .008
+FRINGE_X, FRINGE_CUT, FRINGE_KEEP, FRINGE_BACK, FRINGE_FACE, FRINGE_Z = .005, (1.628, 1.600, .016), .3, .35, .078, .006
+COLLAR_TIP, COLLAR_R = (.025, .02), .05
+
+
+def drawn_shape(P, N, I, wh, col):
+    """The shape as drawn (NOSE_*, FRINGE_*, COLLAR_*): (positions, normals, indices of the vertices that changed). P, N:
+    the mesh's bind positions and normals; wh: each vertex's weight on the head; col: the texture's colour at each vertex
+    (Meshy's: the hair dark, the vest teal). The copies of a vertex along the texture's seams move together; the vertices
+    of the triangles around a moved one turn their normal as their surface turns (Meshy's own smoothing kept)."""
+    _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel()
+    Q = P.copy(); (x0, x1), (y0, y1) = NOSE_BOX
+    face = (wh > .5) & (P[:, 2] > .02) & (np.abs(P[:, 0]) < .065) & (P[:, 1] > 1.51) & (P[:, 1] < 1.60)
+    box = (P[:, 0] > x0) & (P[:, 0] < x1) & (P[:, 1] > y0) & (P[:, 1] < y1)
+    X = lambda p: np.stack([np.ones(len(p)), p[:, 0], p[:, 1], p[:, 0] ** 2, p[:, 1] ** 2, p[:, 0] * p[:, 1]], 1)
+    zb = X(P) @ np.linalg.lstsq(X(P[face & ~box]), P[face & ~box, 2], rcond=None)[0]
+    nose = face & box & (P[:, 2] > zb + .002)
+    e = np.minimum(np.minimum(P[:, 0] - x0, x1 - P[:, 0]), np.minimum(P[:, 1] - y0, y1 - P[:, 1]))
+    keep = 1 - (1 - NOSE_KEEP) * np.clip(e / NOSE_FADE, 0, 1)
+    Q[nose, 2] = zb[nose] + (P[nose, 2] - zb[nose]) * keep[nose]
+    hair = (wh > .5) & (col.mean(1) < 115) & ~(col[:, 1] > col[:, 0] + 8)
+    cut = FRINGE_CUT[0] - (FRINGE_CUT[0] - FRINGE_CUT[1]) * np.clip(1 - np.abs(P[:, 0] - FRINGE_X) / FRINGE_CUT[2], 0, 1) ** 2
+    fr = hair & (np.abs(P[:, 0] - FRINGE_X) < .07) & (P[:, 1] < cut + .02) & (P[:, 1] > cut - .06) & (P[:, 2] > FRINGE_FACE + FRINGE_Z)
+    Q[fr, 1] = np.where(P[fr, 1] < cut[fr], cut[fr] - (cut[fr] - P[fr, 1]) * FRINGE_KEEP, P[fr, 1])
+    Q[fr, 2] = P[fr, 2] - (P[fr, 2] - FRINGE_FACE) * FRINGE_BACK * np.clip((cut[fr] + .02 - P[fr, 1]) / .02, 0, 1)
+    Qw = np.zeros((len(first), 3)); Qw[weld[~(nose | fr)]] = P[~(nose | fr)]; Qw[weld[nose | fr]] = Q[nose | fr]   # (the moved copy wins)
+    teal = (col[:, 1] > col[:, 0] + 10) & (col[:, 2] > col[:, 0] + 10); light = (col.min(1) > 125) & (col.max(1) - col.min(1) < 45)
+    collar = np.zeros(len(first), bool); np.logical_or.at(collar, weld, (teal | light) & (P[:, 1] > 1.42) & (P[:, 1] < 1.56) & (np.abs(P[:, 0]) < .2))
+    for side in (-1, 1):
+        c = np.nonzero(collar & (np.sign(Qw[:, 0]) == side) & (Qw[:, 2] > -.04) & (Qw[:, 2] < .03))[0]
+        tip = Qw[c[np.argmax(Qw[c, 1] + .3 * np.abs(Qw[c, 0]))]]
+        w = np.clip(1 - np.linalg.norm(Qw - tip, axis=1) / COLLAR_R, 0, 1) ** 2 * collar
+        Qw = Qw + np.outer(w, [side * COLLAR_TIP[0], COLLAR_TIP[1], 0])
+    moved = np.abs(Qw - P[first]).sum(1) > 1e-9; Q = Qw[weld]
+    T = weld[I]; aff = np.zeros(len(first), bool); aff[T[moved[T].any(1)].ravel()] = True
+    def area_normals(p):
+        fn = np.cross(p[T[:, 1]] - p[T[:, 0]], p[T[:, 2]] - p[T[:, 0]]); acc = np.zeros((len(first), 3))
+        for c in range(3): np.add.at(acc, T[:, c], fn)
+        return acc / np.maximum(np.linalg.norm(acc, axis=1, keepdims=True), 1e-12)
+    n0, n1 = area_normals(P[first]), area_normals(Qw); Nn = N.copy()
+    for v in np.nonzero(aff[weld])[0]:   # each normal turned as its vertex's surface turned
+        a, b = n0[weld[v]], n1[weld[v]]; c = np.cross(a, b); s = np.linalg.norm(c)
+        if s < 1e-9: continue
+        K = np.array([[0, -c[2], c[1]], [c[2], 0, -c[0]], [-c[1], c[0], 0]]) / s; ang = np.arctan2(s, float(a @ b))
+        Nn[v] = (np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * K @ K) @ N[v]
+    eyes = fr & (np.abs(P[:, 0] - FRINGE_X) > FRINGE_CUT[2])
+    print('drawn shape: nose %d vertices (out of the face up to %.3f -> %.3f m), fringe %d (lowest in the eyes\' columns %.3f -> %.3f m), collar %d' % (
+        int(nose.sum()), (P[nose, 2] - zb[nose]).max(), (Q[nose, 2] - zb[nose]).max(), int(fr.sum()), P[eyes, 1].min(), Q[eyes, 1].min(),
+        int((moved & collar).sum())))
+    return Q, Nn, np.nonzero(moved[weld] | aff[weld])[0]
 
 
 # Hair spikes: those of the drawing's silhouette (front view) are tilted SPIKE_TILT degrees back and start SPIKE_IN m
@@ -450,15 +521,21 @@ def main(pkg, out, drawing):
     G = [None] * len(bones)
     for i, b in enumerate(bones):
         M = np.eye(4); M[:3, :3] = qm(b['q']); M[:3, 3] = b['t']; G[i] = M if b['p'] < 0 else G[b['p']] @ M
+    # --- the shape as drawn (drawn_shape): all below is measured on it ---
+    N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2)
+    tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int); ts = tex.shape[0]
+    col = tex[np.clip((UV[:, 1] * ts).astype(int), 0, ts - 1), np.clip((UV[:, 0] * ts).astype(int), 0, ts - 1)]
+    P, N, moved = drawn_shape(P, N, I, ((J == idx['Head']) * W).sum(1), col)
     # --- the fingers: the mesh welded across its texture seams, then each hand's fingers on it ---
     _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True)
     weld = weld.ravel(); T = weld[I]
     E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
-    jn, wn = J.astype(np.int64).copy(), W.astype(np.float64).copy(); fingers = []
+    jn, wn = J.astype(np.int64).copy(), W.astype(np.float64).copy(); fingers = []; palms = []
     for side in ('Left', 'Right'):
         hi = idx[side + 'Hand']; w = ((J == hi) * W).sum(1); Gi = G[hi]; inv = np.linalg.inv(Gi)
         L = P @ inv[:3, :3].T + inv[:3, 3]
         l, n, thumb = hand_frame(L[w >= HAND_W], w[w >= HAND_W], Gi[:3, :3])
+        palms.append((w, Gi[:3, :3] @ n))   # the side the palm faces, in the model
         ws = np.unique(weld[w >= HAND_W]); ins = np.zeros(len(first), bool); ins[ws] = True
         Lw = L[first]; nb = [[] for _ in first]
         for u, v in E[ins[E[:, 0]] & ins[E[:, 1]]]:
@@ -546,20 +623,26 @@ def main(pkg, out, drawing):
     blend = np.sort(cand[np.unique(np.floor(P[cand] / BLEND_D).astype(np.int64), axis=0, return_index=True)[1]]).astype(np.uint16)
     print('sash ribbons', [(len(r['j']), r['w']) for r in ribbons], 'body shapes', [(x['b'], round(float(np.max(x['r'])), 3)) for x in body], 'shared points', len(blend))
     # --- the outline on the face: thin where the head faces forward and the texture is skin ---
-    N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2)
-    tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int); ts = tex.shape[0]
-    col = tex[np.clip((UV[:, 1] * ts).astype(int), 0, ts - 1), np.clip((UV[:, 0] * ts).astype(int), 0, ts - 1)]
     skin = (col[:, 0] > 150) & (col[:, 1] > 95) & (col[:, 0] - col[:, 2] > 50)
     face = (wh >= .5) & (N[:, 2] > .15) & skin
     line = np.ones(len(P), np.float32); line[face] = LINE_FACE
     on = (wn * (jn >= len(bones))).sum(1); line = np.minimum(line, 1 - (1 - LINE_FINGER) * on).astype(np.float32)
-    print('outline thinned on', int(face.sum()), 'face and', int((on > 0).sum()), 'finger vertices')
-    flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2])).astype(np.float32)
+    thumbs = [len(bones) + k for k, F in enumerate(fingers) if 'Thumb' in F['n']]
+    tw = (wn * np.isin(jn, thumbs)).sum(1); web = (tw > LINE_THUMB[0]) & (tw < LINE_THUMB[1]); line[web] = 0
+    inner = np.zeros(len(P), bool)
+    for w, pn in palms: inner |= (w + on > .5) & (N @ pn > LINE_PALM)
+    line[inner] = 0
+    print('outline thinned on', int(face.sum()), 'face and', int((on > 0).sum()), 'finger vertices; none on', int(web.sum()), 'of the thumbs\' roots and', int(inner.sum()), 'of the hands\' inner side')
+    hw = ((J == idx['LeftHand']) * W).sum(1) + ((J == idx['RightHand']) * W).sum(1)
+    flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2]))
+    flat = np.maximum(flat, FLAT_HAND * smooth(.3, .7, hw)).astype(np.float32)
     print('flat light on', int((flat > .5).sum()), 'vertices (head', int(((flat > .5) & (wh > .5)).sum()), ')')
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
-    of = len(blob); blob += flat.tobytes(); ob = len(blob); blob += blend.tobytes()
+    of = len(blob); blob += flat.tobytes(); op = len(blob); blob += P[moved].astype(np.float32).tobytes(); on = len(blob); blob += N[moved].astype(np.float32).tobytes()
+    ob = len(blob); blob += blend.tobytes(); om = len(blob); blob += moved.astype(np.uint16).tobytes()
     look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)],
-            'flat': [of, int(flat.size)], 'spikes': spikes, 'sash': {'ribbons': ribbons, 'body': body, 'blend': [ob, int(blend.size)]}}
+            'flat': [of, int(flat.size)], 'spikes': spikes, 'sash': {'ribbons': ribbons, 'body': body, 'blend': [ob, int(blend.size)]},
+            'move': {'idx': [om, len(moved)], 'pos': [op, 3 * len(moved)], 'nor': [on, 3 * len(moved)]}}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_look.bin'), 'wb').write(blob)
     json.dump(look, open(os.path.join(out, name + '_look.json'), 'w'), separators=(',', ':'))

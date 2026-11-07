@@ -17,7 +17,11 @@ is kept only where the surface faces the front squarely, plain skin where it tur
 over the sides of the nose and the jaw read as dirt. The hair, likewise: the drawing where it faces the front, the
 hair's own colour elsewhere (the highlights stretched over its sides looked like horns; Meshy's white glints). The
 sash's tails (ribbons of their own in the look) take the colour of what is under them; on the band and the vest just
-under it the thin dark lines go.
+under it the thin dark lines go. The model's shape is the look's (tools/ren_look.py drawn_shape: a small nose, the fringe
+off the eyes, the collar's points). The vest is flat like the drawing's where the drawing does not reach it (its teal,
+in shadow where Meshy's folds are darker; no glossy glints), the body's skin clean under the drawing (which is painted
+there only where the skin faces the front well: turned away, its lines stretched into streaks), the hands' skin clean
+(the drawing's hands are open), and the drawing's background between its hair locks is never a colour of the head.
 """
 import json, os, sys
 import numpy as np
@@ -40,6 +44,11 @@ def load(pkg):
 if len(sys.argv) != 4: sys.exit(__doc__)
 PKG, DRAWING, OUT = sys.argv[1:]
 name, P, N, UV, I, HANDW, HEADW = load(PKG)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ren_look import drawn_shape, drawing_fit, drawing_band, sash_tails, sash_orange, sash_band_end, SASH_BAND
+# the shape as the model draws it (ren_look.drawn_shape: a small nose, the fringe off the eyes, the collar's points)
+T0 = np.asarray(Image.open(os.path.join(PKG, name + '.jpg')).convert('RGB')).astype(int)
+P, N, _ = drawn_shape(P, N, I, HEADW, T0[np.clip((UV[:, 1] * T0.shape[0]).astype(int), 0, T0.shape[0] - 1), np.clip((UV[:, 0] * T0.shape[1]).astype(int), 0, T0.shape[1] - 1)])
 D = np.asarray(Image.open(DRAWING).convert('RGB')).astype(np.float64)
 H, Wd = D.shape[:2]
 bg = D[5:40, 5:40].reshape(-1, 3).mean(0)
@@ -51,8 +60,6 @@ Dfill = D[iy, ix]
 
 # --- global alignment: scale + offset maximising the silhouette overlap (tools/ren_look.py places the sash's ribbons
 # with it too) ---
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ren_look import drawing_fit, drawing_band, sash_tails, sash_orange, sash_band_end, SASH_BAND
 def project(s, cx, by): return cx + P[:, 0] * s, by - P[:, 1] * s
 best = drawing_fit(P, mask)
 print('alignment (vertices inside the drawing):', best)
@@ -102,13 +109,46 @@ wgt = face * vis
 col = Dfill[pvi, pui]
 out = TEX.copy()
 out[ys, xs] = TEX[ys, xs] * (1 - wgt[:, None]) + col * wgt[:, None]
+# --- the body's skin (arms, chest, neck; not the head, not the hands): the drawing only where it faces the front well
+# (SKIN_FRONT: the normal's z from where it starts to where it is all), on a clean skin in the drawing's colour (Denis,
+# 7/11: "le righe del disegno sembrano graffi": turned away, the drawing's muscle lines stretched into streaks, and
+# Meshy's own painted lines beside them doubled them) ---
+SKIN_FRONT = (.5, .72)
+tsk = TEX[ys, xs]; skb = (tsk[:, 0] > 120) & (tsk[:, 1] > 75) & (tsk[:, 0] - tsk[:, 2] > 40) & (tsk[:, 1] > .6 * tsk[:, 0])   # (not the sash's orange)
+skb &= ((HEADW[I[ks]] * bary).sum(1) < .5) & ((HANDW[I[ks]] * bary).sum(1) < .5)
+ws = np.clip((nor[:, 2] - SKIN_FRONT[0]) / (SKIN_FRONT[1] - SKIN_FRONT[0]), 0, 1); ws = ws * ws * (3 - 2 * ws) * vis
+csk = (col[:, 0] > 150) & (col[:, 1] > 95) & (col[:, 0] - col[:, 2] > 50) & (col[:, 1] > .62 * col[:, 0])
+skin_body = np.median(col[skb & (ws > .9) & csk], 0)
+out[ys[skb], xs[skb]] = col[skb] * ws[skb, None] + skin_body * (1 - ws[skb, None])
+print('body skin texels', int(skb.sum()), 'drawn (front)', int((skb & (ws > .5)).sum()), 'skin', np.round(skin_body))
+# --- the vest flat as the drawing's (Denis, 7/11: "il colletto opaco"): where the drawing does not reach it, its teal
+# lit or in shadow where Meshy painted its folds darker, instead of Meshy's glossy shading and white glints (the collar
+# looked like a shiny tube); the collar's light rim (Meshy's) a dark edge ---
+VEST, VEST_SHADE, VEST_FOLD = np.array([66., 107, 113]), .72, .85
+tc = TEX[ys, xs]; lum = tc.mean(1)
+vest = (tc[:, 1] > tc[:, 0] + 10) & (tc[:, 2] > tc[:, 0] + 10)
+rim = (tc.min(1) > 125) & (tc.max(1) - tc.min(1) < 45) & (pos[:, 1] > 1.40) & (np.hypot(pos[:, 0], pos[:, 2] + .01) < .19) & ((HEADW[I[ks]] * bary).sum(1) < .9)
+two = np.where((lum < np.median(lum[vest]) * VEST_FOLD)[:, None], VEST * VEST_SHADE, VEST)
+two[rim] = VEST * VEST_SHADE   # a dark edge (the drawing's light lining, on the round collar's top fold, read as a glint too)
+vr = vest | rim
+# on the vest the drawing gives its teal and its dark lines and shadows; anything else is the drawing's background, its
+# collar's lining or the neck's skin where the model's collar stands higher or wider than the drawn one (on the round
+# collar they showed as white glints)
+okv = ((col[:, 1] > col[:, 0] + 8) & (col[:, 2] > col[:, 0] + 8)) | (col.mean(1) < 70)
+colv = np.where(okv[:, None], col, two)
+out[ys[vr], xs[vr]] = colv[vr] * wgt[vr, None] + two[vr] * (1 - wgt[vr, None])
+print('vest texels', int(vest.sum()), 'in its flat teal where the drawing is not (%d), collar rim %d' % (int((vest & (wgt < .5)).sum()), int(rim.sum())))
 # --- the face: the drawing where the head's skin faces the front, its skin colour where it turns away ---
 sk = lambda c: (c[:, 0] > 120) & (c[:, 1] > 75) & (c[:, 0] - c[:, 2] > 40)
 facet = ((HEADW[I[ks]] * bary).sum(1) > .5) & sk(TEX[ys, xs])
 fw = np.clip((nor[:, 2] - .45) / .2, 0, 1); fw = fw * fw * (3 - 2 * fw) * vis
 pick = facet & (fw > .9) & sk(col)
 skin_col = np.median(col[pick], 0) if pick.any() else np.array([246., 181, 131])
-out[ys[facet], xs[facet]] = col[facet] * fw[facet, None] + skin_col * (1 - fw[facet, None])
+# the drawing's background showing between its hair locks (grey, near the background's colour; its anti-aliased edges
+# too) is no colour of the head: the skin's there, the hair's on the hair (it showed as a white streak by the temple)
+bgl = (np.abs(col - bg).sum(1) < 75) & (col.max(1) - col.min(1) < 25)
+colf = np.where(bgl[:, None], skin_col, col)
+out[ys[facet], xs[facet]] = colf[facet] * fw[facet, None] + skin_col * (1 - fw[facet, None])
 print('face texels', int(facet.sum()), 'drawn (front) ', int((facet & (fw > .5)).sum()), 'skin', np.round(skin_col))
 # --- the hair: the drawing where it faces the front, elsewhere the hair's own colour (no stretched highlights at the
 # sides, no Meshy glints) ---
@@ -118,8 +158,9 @@ tc = TEX[ys, xs]; hv = ((HEADW[I[ks]] * bary).sum(1) > .5) & ~sk(tc); teal = tc[
 like = hv & ~teal & (tc.mean(1) <= 110); hairt = hv & ~teal & (pos[:, 1] >= np.percentile(pos[like, 1], 1))
 hair_col = np.median(tc[like], 0)
 hw = np.clip((nor[:, 2] - .35) / .25, 0, 1); hw = hw * hw * (3 - 2 * hw) * vis
-out[ys[hairt], xs[hairt]] = col[hairt] * hw[hairt, None] + hair_col * (1 - hw[hairt, None])
-print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col))
+colh = np.where(bgl[:, None], hair_col, col)
+out[ys[hairt], xs[hairt]] = colh[hairt] * hw[hairt, None] + hair_col * (1 - hw[hairt, None])
+print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col), 'background in the drawing: on', int((bgl & facet & (fw > 0)).sum()), 'face and', int((bgl & hairt & (hw > 0)).sum()), 'hair texels')
 # --- the sash's tails: hanging ribbons in the look (tools/ren_look.py), so off the body: each tail texel takes the colour
 # of the nearest texel (in space) that is not orange, the trousers or the vest under it ---
 vcol = TEX[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)].astype(int)
@@ -139,14 +180,13 @@ src = ndimage.binary_erosion(mask, iterations=3) & ~od & ~warm & (D.sum(2) > 150
 _, (sy, sx) = ndimage.distance_transform_edt(~src, return_indices=True)
 out[ys[tt], xs[tt]] = D[sy, sx][pvi[tt], pui[tt]]
 print('sash tail texels repainted', int(tt.sum()))
-# --- the hands: neither skin nor a dark line -> the nearest skin texel of the hands ---
-c = out[ys, xs]; hand = (HANDW[I[ks]] * bary).sum(1) > .5
-skin = (c[:, 0] > 150) & (c[:, 1] > 95) & (c[:, 0] - c[:, 2] > 50); dark = c.sum(1) < 240
-good = np.zeros((TS, TS), bool); good[ys[hand & skin], xs[hand & skin]] = True
-_, (gy, gx) = ndimage.distance_transform_edt(~good, return_indices=True)
-bad = hand & ~skin & ~dark
-out[ys[bad], xs[bad]] = out[gy[ys[bad], xs[bad]], gx[ys[bad], xs[bad]]]
-print('texels', len(ks), 'painted (w>.5)', int((wgt > .5).sum()), 'visible', int(vis.sum()), 'hand texels recoloured', int(bad.sum()), 'of', int(hand.sum()))
+# --- the hands: their skin clean, in the body's skin colour (the drawing's hands are open, spread a little differently:
+# its lines landed across the fist's fingers as streaks and in the fold of the thumb); the wraps' white and the wrist
+# band as Meshy painted them ---
+hand = (HANDW[I[ks]] * bary).sum(1) > .5
+th = TEX[ys, xs]; hsk = hand & (th[:, 0] > 120) & (th[:, 1] > 75) & (th[:, 0] - th[:, 2] > 40) & (th[:, 1] > .6 * th[:, 0])
+out[ys[hsk], xs[hsk]] = skin_body
+print('texels', len(ks), 'painted (w>.5)', int((wgt > .5).sum()), 'visible', int(vis.sum()), 'hand skin texels clean', int(hsk.sum()), 'of', int(hand.sum()))
 # --- the band: the drawing's own band (its two wraps crossing in the knot) on the model's band, at the model's height
 # (the drawing has it a few cm higher: painted where it is in the drawing, its colours fell on the vest), where the band
 # faces the front; the sides and the back in the drawing's orange, lit or in shadow where Meshy painted its folds darker.

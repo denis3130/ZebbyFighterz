@@ -279,8 +279,10 @@ const CFG={
   // and on the fingers; line = the outline {w: width m, back: m pushed away from the camera, so it shows around the
   // silhouette and not through the folds of the body, the hair and the hands}, null: the game's (e_model MD_OUTLINE);
   // flatFace = the front of the head without the toon light (the drawing painted there has its own shading); sash = the
-  // sash's tails as ribbons of their own, swinging with gravity (e_model mdSash) instead of painted on the legs.
-  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false}},
+  // sash's tails as ribbons of their own, swinging with gravity (e_model mdSash) instead of painted on the legs;
+  // faceShape = the shape as drawn (tools/ren_look.py drawn_shape: a small nose, the fringe off the eyes, the collar's
+  // points).
+  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
@@ -1817,10 +1819,13 @@ function mdData(key) {
   return MD[key] = {meta, nb: meta.bones.length, bones: meta.bones, index, geo, clips};
 }
 
+// The look's light at most this many times the texture's colour: the drawing's colours are its lit ones, the toon light
+// only shades them (in full it washed the vest's collar and shoulders out to white streaks, like gloss).
+const MD_LIT = 1.0;
 // One Meshy fighter (an F3D item), or null without its package: bones in the rest pose, the toon mesh and its outline
 // (same geometry, same skeleton), the limb points and one material (mats.main: the hit flash). Not yet in the scene.
 // Where CFG.looks[key] asks for them, the look data's parts: finger bones (fists), hair spikes, the face's thin outline,
-// the face's flat light, the outline's own width.
+// the face's flat light, the outline's own width, the face's shape.
 function modelBuild(key) {
   const md = mdData(key);
   if (!md) return null;
@@ -1829,7 +1834,7 @@ function modelBuild(key) {
   body.scale.setScalar(s); root.add(body);
   const bones = md.bones.map(b => { const o = new THREE.Bone(); o.name = b.n; o.position.fromArray(b.t); o.quaternion.fromArray(b.q); return o; });
   md.bones.forEach((b, i) => (b.p < 0 ? body : bones[b.p]).add(bones[i]));
-  const B = n => bones[md.index[n]], lk = CFG.looks[key] || {}, look = (lk.fists || lk.spikes || lk.faceLine) && mdLookData(md, key);
+  const B = n => bones[md.index[n]], lk = CFG.looks[key] || {}, look = (lk.fists || lk.spikes || lk.faceLine || lk.flatFace || lk.sash || lk.faceShape) && mdLookData(md, key);
   // fists: the fingers' bones under the hands (after the package's in the skeleton, as the look's skin counts them)
   const fingers = look && lk.fists ? look.fingers.map(f => { const o = new THREE.Bone(); o.name = f.n; o.position.fromArray(f.t); return o; }) : [];
   fingers.forEach((o, k) => (B(look.fingers[k].p) || fingers.find(g => g.name === look.fingers[k].p)).add(o));
@@ -1837,13 +1842,19 @@ function modelBuild(key) {
   const sash = look && lk.sash && look.sash ? look.sash.ribbons.map(r => r.j.slice(0, -1).map((p, k) => {
     const o = new THREE.Bone(); o.name = 'Sash' + k; o.position.fromArray(k ? p.map((v, i) => v - r.j[k - 1][i]) : p); return o; })) : [];
   sash.forEach(ch => ch.forEach((o, k) => (k ? ch[k - 1] : B('Hips')).add(o)));
-  const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, geo = fingers.length || per || flat ? new THREE.BufferGeometry() : md.geo;
+  const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, shape = look && lk.faceShape && look.move;
+  const geo = fingers.length || per || flat || shape ? new THREE.BufferGeometry() : md.geo;
   if (geo !== md.geo) {   // the package's geometry, its attributes shared (not copied), with the look's skin and outline widths
     for (const a in md.geo.attributes) geo.setAttribute(a, md.geo.attributes[a]);
     geo.setIndex(md.geo.index);
     if (fingers.length) { geo.setAttribute('skinIndex', look.skin[0]); geo.setAttribute('skinWeight', look.skin[1]); }
     if (per) geo.setAttribute('aLine', look.line);
     if (flat) geo.setAttribute('aFlat', look.flat);
+    if (shape) {   // the face's shape: copies of the positions and normals, the moved vertices changed
+      const p = new Float32Array(md.geo.attributes.position.array), n = new Float32Array(md.geo.attributes.normal.array), m = look.move;
+      m.idx.forEach((v, i) => { p.set(m.pos.subarray(i * 3, i * 3 + 3), v * 3); n.set(m.nor.subarray(i * 3, i * 3 + 3), v * 3); });
+      geo.setAttribute('position', new THREE.BufferAttribute(p, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+    }
   }
   // The texture appears once decoded; until then the mesh draws with an empty map (no error, no warning).
   const img = new Image(), tex = new THREE.Texture(img);
@@ -1855,7 +1866,7 @@ function modelBuild(key) {
     main.onBeforeCompile = sh => {
       sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
       sh.fragmentShader = 'varying float vFlat;\n' + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, vFlat);');
+        '$&\n\toutgoingLight = min(outgoingLight, diffuseColor.rgb * ' + MD_LIT.toFixed(2) + ' + totalEmissiveRadiance);\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, vFlat);');
     };
     main.customProgramCacheKey = () => 'flat';
   }
@@ -1948,7 +1959,7 @@ function mdRibbon(md, r, at, skel, ol, s, body) {
   const mat = new THREE.MeshToonMaterial({color: new THREE.Color(r.c[0] / 255, r.c[1] / 255, r.c[2] / 255), gradientMap: F3.grad, skinning: true, vertexColors: true});
   mat.onBeforeCompile = sh => {   // mostly flat light (the hit flash's emissive kept)
     sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-      '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_RIB.flat.toFixed(2) + ');');
+      '$&\n\toutgoingLight = min(outgoingLight, diffuseColor.rgb * ' + MD_LIT.toFixed(2) + ' + totalEmissiveRadiance);\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_RIB.flat.toFixed(2) + ');');
   };
   mat.customProgramCacheKey = () => 'ribbon';
   const mesh = new THREE.SkinnedMesh(g, mat);
@@ -2188,6 +2199,7 @@ function mdLookData(md, key) {
   for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
   const f32 = a => new Float32Array(u8.buffer, a[0], a[1]);
   return md.look = {fingers: j.fingers, spikes: j.spikes, sash: j.sash && {ribbons: j.sash.ribbons, body: j.sash.body, blend: new Uint16Array(u8.buffer, j.sash.blend[0], j.sash.blend[1])},
+    move: j.move && {idx: new Uint16Array(u8.buffer, j.move.idx[0], j.move.idx[1]), pos: f32(j.move.pos), nor: f32(j.move.nor)},
     skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
     line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1)};
 }
