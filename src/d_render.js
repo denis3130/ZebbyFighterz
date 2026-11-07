@@ -244,8 +244,9 @@ function rdShadowsStep(S) {
 }
 
 // --- Fighters ---
-// The two placeholder fighters (side 0 Ren, side 1 Kael; F3D) and the light they are shaded by.
+// The two fighters (side 0 Ren, side 1 Kael; F3D): a Meshy model when its package is in ASSETS (e_model.js), else
+// the placeholder; and the light they are shaded by.
 function rdFightersBuild() {
   scene.add(...f3Lights());
-  for (const c of ['ren', 'kael']) { const it = fighterBuild(c); F3D.push(it); scene.add(it.root); }
+  for (const c of ['ren', 'kael']) { const it = modelBuild(c) || fighterBuild(c); F3D.push(it); scene.add(it.root); }
 }

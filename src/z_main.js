@@ -46,5 +46,5 @@ function startMatch(mode,o){
   G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
   G.mode=mode; G.state='fight'; G.acc=0; G.last=null; menuSync();
 }
-window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,showScreen,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD};
+window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,showScreen,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,modelBuild,mdData,mdPoseOf,mdMix,headTop,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD};
 boot();

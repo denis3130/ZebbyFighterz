@@ -163,6 +163,7 @@ const F3_EASE = {idle: 1, walkF: 1, walkB: 1, crouch: 1, guard: 1, guardC: 1, ju
 function f3Sync(S) {
   for (let i = 0; i < F3D.length; i++) {
     const it = F3D[i];
+    if (it.kind === 'model') { mdSync(it, i, S); continue; }   // a Meshy fighter (e_model.js)
     it.root.visible = !!S;
     if (!S) { it.F = null; continue; }
     const F = fighterOf(S, i), n = CFG.anim.blend;
