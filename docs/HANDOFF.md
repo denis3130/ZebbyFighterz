@@ -63,7 +63,7 @@ python3 tests/run.py tests/orient.test.js --viewport 390x844 --touch --mobile
 
 ## Versione "app" per il telefono (7/11/2026)
 - `play/` è la versione da installare sul telefono: `tools/make_play.py` (lanciato da `mk.sh`) prende `index.html`, ci mette dentro three.js (niente CDN), le meta per la schermata Home, il manifest (schermo intero, orizzontale), le icone dal ritratto di Ren e `sw.js`, che salva la pagina e i font per giocare offline. Ogni build cambia il nome della cache, così il telefono prende la versione nuova.
-- Indirizzo: https://denis3130.github.io/ZebbyFighterz/play/ — funziona quando GitHub Pages è attivo (Settings → Pages → ramo `tappa1-basi`, `/ (root)`; il file `.nojekyll` fa servire i file così come sono).
+- Indirizzo: https://denis3130.github.io/ZebbyFighterz/play/ — GitHub Pages pubblica il ramo `gh-pages` (creato il 7/11/2026 con `git push origin tappa1-basi:gh-pages`, che ha acceso Pages da solo). Per aggiornare l'app: `bash mk.sh`, commit, poi lo stesso push sul ramo `gh-pages`. Il file `.nojekyll` fa servire i file così come sono.
 - Su iPhone: Safari → Condividi → "Aggiungi alla schermata Home". La pagina Claude invece resta dentro il sito di Claude (barra in alto) e da File l'html non gira.
 - Prova: `python3 tests/play_check.py` (servita in http, senza CDN: manifest, service worker attivo, ricarica offline fino alla lotta).
 
