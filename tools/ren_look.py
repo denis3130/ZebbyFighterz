@@ -17,6 +17,10 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
   line: [byte offset, count] float32 per vertex: the outline's width there (1; LINE_FACE on the front of the face,
         where the shell around the nose showed as a dark wedge; LINE_FINGER on the fingers, whose shells stuck out
         between the curled fingers of the fist)
+  sash: {ribbons: [{j: SASH_SEG + 1 points in the Hips bone's frame, from the band to the tip; w: width; a: unit across;
+        n: unit out of its face; c: colour}], legs: {thigh, shin: radii of the trousers around the legs' bones}}: the
+        sash's two hanging tails as ribbons of their own (Meshy fused them with the trousers and the vest), where the
+        drawing has them seen from the front; tools/paint_from_drawing.py paints the old ones over
   spikes: [{p (base), d (unit direction), t (unit: the lock's thin side, outward), len, r}] in the Head bone's frame:
         anime hair locks where DRAWING (Denis's character sheet, fit as tools/paint_from_drawing.py) has the tips of its
         hair's silhouette seen from the front (each reaching that tip, tilted back), and clumps on the back of the head
@@ -38,6 +42,10 @@ BLEND = .35          # a joint's skin blend reaches this share of the shorter ph
 FIST = (82, 100, 60)    # the fist: bend (degrees) at the knuckle, middle and last joint of a finger
 THUMB_ON = 1.1      # in the fist the thumb lies across the index and middle finger, this many radii in front of them
 NAMES = ('Thumb', 'Index', 'Middle', 'Ring', 'Pinky')
+# The sash's tails: on the model, orange below SASH_BAND (m, the band's lower edge) in pieces of at least SASH_MIN
+# vertices (painted over, tools/paint_from_drawing.py); as ribbons, the drawing's two tails seen from the front, each of
+# SASH_SEG bones, SASH_GAP m in front of the body, SASH_W m wide (clamped).
+SASH_BAND, SASH_MIN, SASH_SEG, SASH_GAP, SASH_W = 1.06, 200, 6, .018, (.06, .1)
 
 
 def qm(q):
@@ -270,6 +278,69 @@ def hand_frame(L, w, R):
     return l, n, thumb
 
 
+def sash_tails(P, col, I):
+    """The orange sash's two hanging tails (Meshy made them part of the trousers' and the vest's skin): per tail the
+    mesh's vertex indices, the largest first. col: the texture's colour at each vertex."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    orange = (col[:, 0] > 170) & (col[:, 1] > 70) & (col[:, 1] < 170) & (col[:, 2] < 90) & (col[:, 0] - col[:, 1] > 50)
+    _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel()
+    nw = len(first); ow = np.zeros(nw); np.add.at(ow, weld, orange.astype(float)); ow = ow / np.bincount(weld, minlength=nw) > .5
+    Pw = P[first]; ring = ow & (Pw[:, 1] > SASH_BAND)
+    tail = ow & (Pw[:, 1] <= SASH_BAND) & (np.abs(Pw[:, 0]) < .33)
+    T = weld[I]; E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
+    E = E[tail[E[:, 0]] & tail[E[:, 1]]]
+    lab = connected_components(coo_matrix((np.ones(len(E)), (E[:, 0], E[:, 1])), shape=(nw, nw)), directed=False)[1]
+    ids, n = np.unique(lab[tail], return_counts=True)
+    return [np.nonzero(tail[weld] & (lab[weld] == ids[k]))[0] for k in np.argsort(-n) if n[k] >= SASH_MIN]
+
+
+def sash_orange(D):
+    """The drawing's pixels of the sash's orange (not the skin's warm shadows: far less blue than red)."""
+    R, G, B = D[..., 0], D[..., 1], D[..., 2]
+    return (R > 170) & (G > 60) & (G < 185) & (R - B > 140)
+
+
+def sash_band_end(orange):
+    """The last row of the sash's band in the drawing: the first run of rows more than 100 px orange (the tails widen
+    lower down, two of them can be as wide again)."""
+    cnt = orange.sum(1); b = int(np.argmax(cnt > 100))
+    while b + 1 < len(cnt) and cnt[b + 1] > 100: b += 1
+    return b
+
+
+def drawing_tails(D):
+    """The sash's two hanging tails in the drawing (front view): per tail, largest first, {top: (x, y) px of the middle of
+    its first row under the band, tip: its lowest pixel, w: px wide (median of its upper half's rows), c: its colour}."""
+    from scipy import ndimage
+    orange = sash_orange(D); below = orange.copy(); below[:sash_band_end(orange) + 6] = False
+    lab, n = ndimage.label(below); sizes = ndimage.sum(below, lab, range(1, n + 1)); out = []
+    for k in np.argsort(-sizes)[:2]:
+        ys, xs = np.nonzero(lab == k + 1); r0 = ys.min(); rw = []
+        for y in range(r0, r0 + (ys.max() - r0) // 2):
+            x = xs[ys == y]
+            if len(x): rw.append(x.max() - x.min() + 1)
+        top = xs[ys == r0].mean(); i = np.argmax(ys)
+        out.append({'top': (float(top), float(r0)), 'tip': (float(xs[i]), float(ys[i])), 'w': float(np.median(rw)), 'c': [int(v) for v in np.median(D[ys, xs], 0)]})
+    return out
+
+
+def ribbon_of(t, P, sc, cx, by):
+    """A hanging ribbon for drawing tail t, in model space: {j: SASH_SEG + 1 points from the band down to the tip, on the
+    line the drawing shows seen from the front, SASH_GAP m in front of the body; w: width (m); a: unit across; n: unit
+    out of its face (forward)}."""
+    x0, y0 = (t['top'][0] - cx) / sc, min((by - t['top'][1]) / sc, SASH_BAND + .02)
+    x1, y1 = (t['tip'][0] - cx) / sc, (by - t['tip'][1]) / sc
+    j = []
+    for u in np.linspace(0, 1, SASH_SEG + 1):
+        x, y = x0 + (x1 - x0) * u, y0 + (y1 - y0) * u
+        near = P[(np.abs(P[:, 0] - x) < .025) & (np.abs(P[:, 1] - y) < .025)]
+        j.append([x, y, (near[:, 2].max() if len(near) else 0.) + SASH_GAP])
+    j = np.array(j); d = unit(j[-1] - j[0]); a = unit(np.cross(d, [0, 0, 1.])); n = unit(np.cross(a, d))
+    if n[2] < 0: n, a = -n, -a
+    return {'j': j, 'w': float(np.clip(t['w'] / sc, SASH_W[0], SASH_W[1])), 'a': a, 'n': n, 'c': t['c']}
+
+
 def main(pkg, out, drawing):
     name = os.path.basename(os.path.normpath(pkg))
     m = json.load(open(os.path.join(pkg, name + '.json'))); B = open(os.path.join(pkg, name + '.bin'), 'rb').read(); me = m['mesh']
@@ -344,6 +415,19 @@ def main(pkg, out, drawing):
         if ln <= .05: continue
         add(base, axis, ln, .03 + .01 * ((k * 104729) % 5) / 4)
     print('spikes', nf, 'from the drawing,', len(spikes) - nf, 'on the back')
+    # --- the sash: its tails become ribbons hanging from the band (the tails painted on the body go, paint_from_drawing) ---
+    UVs = f(me['uv']).reshape(-1, 2); tex0 = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int)
+    col0 = tex0[np.clip((UVs[:, 1] * tex0.shape[0]).astype(int), 0, tex0.shape[0] - 1), np.clip((UVs[:, 0] * tex0.shape[1]).astype(int), 0, tex0.shape[1] - 1)]
+    hp = idx['Hips']; Gh = G[hp]; ih = np.linalg.inv(Gh); ribbons = []
+    for t in drawing_tails(D):
+        r = ribbon_of(t, P, sc, cx, by)
+        ribbons.append({'j': [[round(float(v), 5) for v in ih[:3, :3] @ q + ih[:3, 3]] for q in r['j']], 'w': round(r['w'], 4),
+                        'a': [round(float(v), 5) for v in ih[:3, :3] @ r['a']], 'n': [round(float(v), 5) for v in ih[:3, :3] @ r['n']], 'c': r['c']})
+    legs = {}
+    for part, (b0, b1) in {'thigh': ('LeftUpLeg', 'LeftLeg'), 'shin': ('LeftLeg', 'LeftFoot')}.items():
+        a0, a1 = G[idx[b0]][:3, 3], G[idx[b1]][:3, 3]; wv = ((J == idx[b0]) * W).sum(1) > .8; q = P[wv]
+        t = np.clip((q - a0) @ (a1 - a0) / ((a1 - a0) @ (a1 - a0)), 0, 1); legs[part] = round(float(np.percentile(np.linalg.norm(q - a0 - np.outer(t, a1 - a0), axis=1), 60)), 4)
+    print('sash ribbons', [(len(r['j']), r['w']) for r in ribbons], 'leg radii', legs)
     # --- the outline on the face: thin where the head faces forward and the texture is skin ---
     N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2)
     tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int); ts = tex.shape[0]
@@ -358,7 +442,7 @@ def main(pkg, out, drawing):
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
     of = len(blob); blob += flat.tobytes()
     look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)],
-            'flat': [of, int(flat.size)], 'spikes': spikes}
+            'flat': [of, int(flat.size)], 'spikes': spikes, 'sash': {'ribbons': ribbons, 'legs': legs}}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_look.bin'), 'wb').write(blob)
     json.dump(look, open(os.path.join(out, name + '_look.json'), 'w'), separators=(',', ':'))

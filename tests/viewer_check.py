@@ -49,7 +49,8 @@ async def main(out_dir):
             # in the special, spikes on the head, thin face outline
             look = await pg.evaluate("""async () => { const it = VW.it, r = {};
               document.getElementById('play0').click(); await new Promise(f => setTimeout(f, 300));
-              r.fists = !!it.fingers && it.fingers.length === 30 && it.mesh.skeleton.bones.length === it.bones.length + 30 && it.curl === 1
+              const sashBones = it.sash ? it.sash.ribbons.reduce((n, q) => n + q.bones.length, 0) : 0;
+              r.fists = !!it.fingers && it.fingers.length === 30 && it.mesh.skeleton.bones.length === it.bones.length + 30 + sashBones && it.curl === 1
                 && it.fingers.every((o, i) => Math.abs(o.quaternion.dot(it.fist[i])) > .9999);
               it.root.updateMatrixWorld(true);   // a real fist: the four curled fingers end level (hand frame, within 2 mm)
               r.level = ['Left', 'Right'].every(h => { const H = it.bones.find(b => b.name === h + 'Hand');
@@ -59,6 +60,20 @@ async def main(out_dir):
               r.open = it.curl === 0 && it.fingers.every(o => Math.abs(o.quaternion.w) > .9999);
               r.spikes = it.joints.head.children.some(g => g.isGroup && g.children.length >= 8);
               r.line = !!it.mesh.geometry.attributes.aLine && !!it.mesh.geometry.attributes.aFlat; return r; }""")
+            # the sash: two ribbons on chains of bones; calm in the guard, swinging after a jump, never NaN
+            sash = await pg.evaluate("""async () => { const it = VW.it, sa = it.sash, r = {};
+              if (!sa) return {ribbons: false};
+              const tip = () => sa.ribbons.map(q => q.P[q.P.length - 1].clone()), off = () => Math.max(...sa.ribbons.map(q => q.P[q.P.length - 1].distanceTo(q.T[q.T.length - 1])));
+              document.getElementById('play0').click(); await new Promise(f => setTimeout(f, 1500));
+              const a = tip(); await new Promise(f => setTimeout(f, 200)); const b = tip();
+              r.ribbons = sa.ribbons.length === 2 && sa.ribbons.every(q => q.bones.length >= 4);
+              r.calm = a.every((p, i) => p.distanceTo(b[i]) < .02);
+              document.getElementById('play5').click(); let most = 0;
+              for (let k = 0; k < 12; k++) { await new Promise(f => setTimeout(f, 80)); most = Math.max(most, off()); }
+              r.swings = most > .03 && most < .6;
+              r.finite = sa.ribbons.every(q => q.P.every(p => Number.isFinite(p.x + p.y + p.z)));
+              return r; }""")
+            look.update(sash)
             if not all(look.values()): errs.append('look ' + str(look))
             ok = n == 10 and drawn > 200 and not errs
             failed += not ok

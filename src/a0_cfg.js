@@ -97,8 +97,9 @@ const CFG={
   // spikes = anime hair spikes on the sides, back and top of the hair; faceLine = a thin outline on the front of the face
   // and on the fingers; line = the outline {w: width m, back: m pushed away from the camera, so it shows around the
   // silhouette and not through the folds of the body, the hair and the hands}, null: the game's (e_model MD_OUTLINE);
-  // flatFace = the front of the head without the toon light (the drawing painted there has its own shading).
-  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false}},
+  // flatFace = the front of the head without the toon light (the drawing painted there has its own shading); sash = the
+  // sash's tails as ribbons of their own, swinging with gravity (e_model mdSash) instead of painted on the legs.
+  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m

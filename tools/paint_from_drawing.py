@@ -11,10 +11,12 @@ surface faces the viewer and is visible from the front takes the drawing's colou
 the front); the others keep the model's own texture. Outside the drawn silhouette the nearest drawn colour is used,
 so model edges that stick out a little take the drawing's outline. On the hands (the drawing's are spread a little
 differently) a texel that came out neither skin nor a dark line (the wraps' white, the background's grey on the
-fingertips) takes the colour of the nearest skin texel of the hands instead. On the face (the head's skin) the drawing
+fingertips) takes the colour of the nearest skin texel of the hands instead. The texels between the UV pieces take
+their nearest piece's colour at the end. On the face (the head's skin) the drawing
 is kept only where the surface faces the front squarely, plain skin where it turns away: the drawing's edges stretched
 over the sides of the nose and the jaw read as dirt. The hair, likewise: the drawing where it faces the front, the
-hair's own colour elsewhere (the highlights stretched over its sides looked like horns; Meshy's white glints).
+hair's own colour elsewhere (the highlights stretched over its sides looked like horns; Meshy's white glints). The
+sash's tails (ribbons of their own in the look) take the colour of what is under them.
 """
 import json, os, sys
 import numpy as np
@@ -123,6 +125,27 @@ hair_col = np.median(tc[like], 0)
 hw = np.clip((nor[:, 2] - .35) / .25, 0, 1); hw = hw * hw * (3 - 2 * hw) * vis
 out[ys[hairt], xs[hairt]] = col[hairt] * hw[hairt, None] + hair_col * (1 - hw[hairt, None])
 print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col))
+# --- the sash's tails: hanging ribbons in the look (tools/ren_look.py), so off the body: each tail texel takes the colour
+# of the nearest texel (in space) that is not orange, the trousers or the vest under it ---
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ren_look import sash_tails, sash_orange, sash_band_end, SASH_BAND
+vcol = TEX[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)].astype(int)
+tv = np.zeros(len(P), bool)
+for t in sash_tails(P, vcol, I): tv[t] = True
+for _ in range(2):   # the tails' darker edges too: two rings of neighbours
+    tv2 = tv.copy(); tv2[I[tv[I].any(1)].ravel()] = True; tv = tv2
+c = out[ys, xs]; orng = (c[:, 0] > 85) & (c[:, 0] > c[:, 1]) & (c[:, 0] - c[:, 2] > 55)   # warm: orange to its brown shadows
+low = (pos[:, 1] < SASH_BAND) & (np.abs(pos[:, 0]) < .33)
+tt = ((tv[I[ks]].sum(1) >= 2) & low) | (orng & low)    # the model's tails, and the drawing's painted below the band
+# the drawing without its tails: each tail pixel (with its lines, a few px around) takes the colour of the nearest
+# pixel of the vest or the trousers beside it (not a black line): flat colours, split down the middle of the tail
+od = sash_orange(D); od[:sash_band_end(od) + 6] = False
+od = ndimage.binary_dilation(ndimage.binary_closing(od, iterations=2), iterations=4)
+warm = (D[..., 0] > 80) & (D[..., 0] > D[..., 1]) & (D[..., 0] - D[..., 2] > 40)   # the tails' orange edges, shadows
+src = ndimage.binary_erosion(mask, iterations=3) & ~od & ~warm & (D.sum(2) > 150)   # not the light anti-aliased edge either
+_, (sy, sx) = ndimage.distance_transform_edt(~src, return_indices=True)
+out[ys[tt], xs[tt]] = D[sy, sx][pvi[tt], pui[tt]]
+print('sash tail texels repainted', int(tt.sum()))
 # --- the hands: neither skin nor a dark line -> the nearest skin texel of the hands ---
 c = out[ys, xs]; hand = (HANDW[I[ks]] * bary).sum(1) > .5
 skin = (c[:, 0] > 150) & (c[:, 1] > 95) & (c[:, 0] - c[:, 2] > 50); dark = c.sum(1) < 240
@@ -131,5 +154,10 @@ _, (gy, gx) = ndimage.distance_transform_edt(~good, return_indices=True)
 bad = hand & ~skin & ~dark
 out[ys[bad], xs[bad]] = out[gy[ys[bad], xs[bad]], gx[ys[bad], xs[bad]]]
 print('texels', len(ks), 'painted (w>.5)', int((wgt > .5).sum()), 'visible', int(vis.sum()), 'hand texels recoloured', int(bad.sum()), 'of', int(hand.sum()))
+# --- padding: every texel outside the triangles takes its nearest triangle texel's colour (the gutters between UV pieces
+# kept Meshy's old colours, which showed as thin cracks along the seams once filtered, the sash's orange most of all) ---
+inside = tid >= 0
+_, (gy, gx) = ndimage.distance_transform_edt(~inside, return_indices=True)
+out[~inside] = out[gy[~inside], gx[~inside]]
 Image.fromarray(out.clip(0, 255).astype(np.uint8)).save(OUT, quality=85, optimize=True)
 print(OUT, os.path.getsize(OUT))
