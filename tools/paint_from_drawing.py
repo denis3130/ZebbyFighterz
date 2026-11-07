@@ -13,7 +13,8 @@ so model edges that stick out a little take the drawing's outline. On the hands 
 differently) a texel that came out neither skin nor a dark line (the wraps' white, the background's grey on the
 fingertips) takes the colour of the nearest skin texel of the hands instead. On the face (the head's skin) the drawing
 is kept only where the surface faces the front squarely, plain skin where it turns away: the drawing's edges stretched
-over the sides of the nose and the jaw read as dirt.
+over the sides of the nose and the jaw read as dirt. The hair, likewise: the drawing where it faces the front, the
+hair's own colour elsewhere (the highlights stretched over its sides looked like horns; Meshy's white glints).
 """
 import json, os, sys
 import numpy as np
@@ -99,7 +100,7 @@ vis = (fid == ks)
 near = ~vis & (fid >= 0)
 for j in np.nonzero(near)[0]:
     if fid[j] in vt[I[ks[j], 0]] or fid[j] in vt[I[ks[j], 1]] or fid[j] in vt[I[ks[j], 2]]: vis[j] = True
-face = np.clip((nor[:, 2] - .1) / .35, 0, 1); face = face * face * (3 - 2 * face)
+face = np.clip((nor[:, 2] - .25) / .3, 0, 1); face = face * face * (3 - 2 * face)
 wgt = face * vis
 col = Dfill[pvi, pui]
 out = TEX.copy()
@@ -112,6 +113,16 @@ pick = facet & (fw > .9) & sk(col)
 skin_col = np.median(col[pick], 0) if pick.any() else np.array([246., 181, 131])
 out[ys[facet], xs[facet]] = col[facet] * fw[facet, None] + skin_col * (1 - fw[facet, None])
 print('face texels', int(facet.sum()), 'drawn (front) ', int((facet & (fw > .5)).sum()), 'skin', np.round(skin_col))
+# --- the hair: the drawing where it faces the front, elsewhere the hair's own colour (no stretched highlights at the
+# sides, no Meshy glints) ---
+# (the hair: the head's texels that are neither skin nor the vest's teal, from the hair's lowest point up: the collar's
+# teal and its light trim below stay)
+tc = TEX[ys, xs]; hv = ((HEADW[I[ks]] * bary).sum(1) > .5) & ~sk(tc); teal = tc[:, 1] > tc[:, 0] + 8
+like = hv & ~teal & (tc.mean(1) <= 110); hairt = hv & ~teal & (pos[:, 1] >= np.percentile(pos[like, 1], 1))
+hair_col = np.median(tc[like], 0)
+hw = np.clip((nor[:, 2] - .35) / .25, 0, 1); hw = hw * hw * (3 - 2 * hw) * vis
+out[ys[hairt], xs[hairt]] = col[hairt] * hw[hairt, None] + hair_col * (1 - hw[hairt, None])
+print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col))
 # --- the hands: neither skin nor a dark line -> the nearest skin texel of the hands ---
 c = out[ys, xs]; hand = (HANDW[I[ks]] * bary).sum(1) > .5
 skin = (c[:, 0] > 150) & (c[:, 1] > 95) & (c[:, 0] - c[:, 2] > 50); dark = c.sum(1) < 240

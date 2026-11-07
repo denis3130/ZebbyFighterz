@@ -1886,17 +1886,18 @@ function mdLineMat(o) {
   return m;
 }
 
-// The hair spikes of the look data on the head: flattened cones in the hair colour of Denis's drawing, with outlines
-// (a scaled shell, pushed back by back m as the body's).
-const MD_HAIR = 0x4a3d45;
+// The hair spikes of the look data on the head: flat cones (thin along t, the head's outward direction, so each lies
+// on the hair like a lock) in the hair colour of Denis's drawing, with outlines (a scaled shell, pushed back by back m
+// as the body's).
+const MD_HAIR = 0x3b303a;
 function mdSpikes(list, back) {
-  const g = new THREE.Group(), mat = new THREE.MeshToonMaterial({color: MD_HAIR, gradientMap: F3.grad}), up = new THREE.Vector3(0, 1, 0);
-  const line = mdLineMat({back}), k = back ? [1.12, 1.04, 1.18] : [1.22, 1.07, 1.35];
+  const g = new THREE.Group(), mat = new THREE.MeshToonMaterial({color: MD_HAIR, gradientMap: F3.grad});
+  const line = mdLineMat({back}), k = back ? [1.12, 1.04, 1.18] : [1.22, 1.07, 1.35], M = new THREE.Matrix4();
   for (const s of list) {
-    const geo = new THREE.ConeGeometry(s.r, s.len, 7, 1); geo.translate(0, s.len / 2, 0); geo.scale(1, 1, .5);
-    const m = new THREE.Mesh(geo, mat), o = new THREE.Mesh(geo, line);
+    const geo = new THREE.ConeGeometry(s.r, s.len, 14, 3); geo.translate(0, s.len / 2, 0); geo.scale(1, 1, .45);
+    const m = new THREE.Mesh(geo, mat), o = new THREE.Mesh(geo, line), a = new THREE.Vector3().fromArray(s.d), t = new THREE.Vector3().fromArray(s.t);
     o.scale.set(...k); m.add(o);
-    m.position.fromArray(s.p); m.quaternion.setFromUnitVectors(up, new THREE.Vector3().fromArray(s.d));
+    m.position.fromArray(s.p); m.quaternion.setFromRotationMatrix(M.makeBasis(new THREE.Vector3().crossVectors(a, t), a, t));
     g.add(m);
   }
   return g;

@@ -11,14 +11,16 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
   skin: [[byte offset, count] uint8 x4, [byte offset, count] float32 x4] per vertex: the package's skin with the
         fingers on their bones (bone index: the package's bones, then the fingers in the order above)
   flat: [byte offset, count] float32 per vertex: how much of the light the toon shading leaves out there (1 on the front
-        of the head, fading to 0 by its sides): the drawing painted on the face has its own shading, the light's only
-        darkened half of it
+        of the head, FLAT_BODY on the rest of the front, fading to 0 by the sides, where tools/paint_from_drawing.py
+        paints the drawing): the drawing has its own shading (the anime muscles too), the light only darkened it in
+        muddy bands; the sides and the back keep the toon light, for the volume
   line: [byte offset, count] float32 per vertex: the outline's width there (1; LINE_FACE on the front of the face,
         where the shell around the nose showed as a dark wedge; LINE_FINGER on the fingers, whose shells stuck out
         between the curled fingers of the fist)
-  spikes: [{p (base), d (unit direction), len, r}] in the Head bone's frame: anime hair spikes on the sides, back and
-        top of the hair (Meshy's hair is a round mass seen from the side), each kept inside the drawing's silhouette
-        seen from the front (DRAWING: Denis's character sheet, the same front fit as tools/paint_from_drawing.py)
+  spikes: [{p (base), d (unit direction), t (unit: the lock's thin side, outward), len, r}] in the Head bone's frame:
+        anime hair locks where DRAWING (Denis's character sheet, fit as tools/paint_from_drawing.py) has the tips of its
+        hair's silhouette seen from the front (each reaching that tip, tilted back), and clumps on the back of the head
+        kept inside that silhouette (Meshy's hair is a round mass seen from the side and the back)
 """
 import heapq, json, os, sys
 import numpy as np
@@ -27,6 +29,7 @@ from PIL import Image
 HAND_W = .3          # vertices with at least this weight on a hand bone belong to the hand
 LINE_FACE = .2       # outline width kept on the front of the face
 LINE_FINGER = .4     # and on the fingers
+FLAT_BODY = 1.       # flat light on the front of the body (the drawing), as on the face
 PERSIST = .015       # a finger stands out at least this far (geodesic, m) from where it joins the hand
 FINGER_SEG = (.45, .30, .25)    # proximal, middle and distal phalanx: shares of a finger's length
 FREE = .80           # the free part of a finger (from the web between the fingers to the tip): share of its length
@@ -75,9 +78,45 @@ def smooth(e0, e1, x):
     return t * t * (3 - 2 * t)
 
 
-# Spike directions (azimuth from the front around the up axis, elevation), degrees: sides, back and top, never the face.
-SPIKES = [(75, 12), (115, 15), (150, 12), (180, 18), (210, 12), (245, 15), (285, 12), (95, 40), (135, 42), (180, 45),
-          (225, 42), (265, 40), (125, 66), (180, 70), (235, 66), (180, 86)]
+# Hair spikes: those of the drawing's silhouette (front view) are tilted SPIKE_TILT degrees back and start SPIKE_IN m
+# inside the hair mass; a tip less than SPIKE_MIN m beyond the model's hair is left out. HAIR_BELOW: the hair is looked
+# for down to this far (m) below the head's centre. BACK_SPIKES: (azimuth from the front, elevation, upward flow).
+SPIKE_TILT, SPIKE_IN, SPIKE_MIN, HAIR_BELOW = 25, .025, .012, .08
+BACK_SPIKES = [(110, 5, -.25), (140, 8, -.3), (165, 10, -.35), (195, 10, -.35), (220, 8, -.3), (250, 5, -.25),
+               (125, 35, .1), (160, 40, .1), (200, 40, .1), (235, 35, .1), (145, 65, .4), (215, 65, .4), (180, 75, .5)]
+
+
+def hair_profile(D, mask, c, below):
+    """The drawing's hair seen from the front, as its outer radius (px) from the head's centre c per degree (from up,
+    clockwise): the dark, grey-purple part of the silhouette above c's height + below (the vest's teal is not hair)."""
+    from scipy import ndimage
+    R, G, B = D[..., 0], D[..., 1], D[..., 2]
+    hc = (D.max(2) < 150) & (np.abs(R - B) < 35) & (G - R < 25) & (B - G < 30)
+    rows = np.zeros_like(mask); rows[:int(c[1] + below)] = True
+    hair = ndimage.binary_closing(mask & rows & hc, iterations=2)
+    lab, n = ndimage.label(hair); hair = lab == (np.argmax(ndimage.sum(hair, lab, range(1, n + 1))) + 1)
+    ys, xs = np.nonzero(hair); ang = (np.degrees(np.arctan2(xs - c[0], -(ys - c[1]))) % 360).astype(int)
+    prof = np.zeros(360); np.maximum.at(prof, ang, np.hypot(xs - c[0], ys - c[1]))
+    return ndimage.uniform_filter1d(prof, 3, mode='wrap')
+
+
+def hair_tips(prof):
+    """The spikes of a hair profile: (angle, radius px, width px) at each local maximum within 10 degrees that stands
+    6 px above its surroundings, then one every 15 degrees where none is near, over the hair's top half."""
+    tips = []
+    for a in range(360):
+        if prof[a] <= 0: continue
+        win = prof[[(a + k) % 360 for k in range(-10, 11)]]
+        if prof[a] == win.max() and prof[a] - win.min() > 6: tips.append(a)
+    for a in range(-90, 91, 15):
+        if prof[a % 360] > 0 and all(min(abs(a % 360 - t), 360 - abs(a % 360 - t)) > 8 for t in tips): tips.append(a % 360)
+    out = []
+    for a in sorted(tips):
+        r = prof[a]; w = 1
+        while w < 20 and prof[(a - w) % 360] > r - 15 and prof[(a + w) % 360] > r - 15: w += 1
+        out.append((a, float(r), float(2 * r * np.sin(np.radians(w)))))
+    return [t for t in out if t[0] <= 100 or t[0] >= 260]
+
 
 
 def ray_far(P, T, o, d):
@@ -280,18 +319,31 @@ def main(pkg, out, drawing):
     sc = (ys.max() - ys.min()) / (P[:, 1].max() - P[:, 1].min()); cx = (xs.min() + xs.max()) / 2; by = ys.max()
     inside = lambda p: mask[int(np.clip(by - p[1] * sc, 0, mask.shape[0] - 1)), int(np.clip(cx + p[0] * sc, 0, mask.shape[1] - 1))]
     Gi = G[hi]; inv = np.linalg.inv(Gi); spikes = []
-    for k, (az, el) in enumerate(SPIKES):
+    hair = hair_profile(D, mask, (cx + c[0] * sc, by - c[1] * sc), HAIR_BELOW * sc)
+    def add(base, axis, ln, r):
+        rad = unit(base - c); t = rad - axis * (rad @ axis); t = unit(t) if np.linalg.norm(t) > 1e-6 else unit(np.cross(axis, [1., 0, 0]))
+        spikes.append({'p': [round(float(v), 5) for v in inv[:3, :3] @ base + inv[:3, 3]], 'd': [round(float(v), 5) for v in inv[:3, :3] @ axis],
+                       't': [round(float(v), 5) for v in inv[:3, :3] @ t], 'len': round(float(ln), 4), 'r': round(float(r), 4)})
+    # the drawing's spikes, seen from the front: each reaches where the drawing's tip is, tilted back
+    tilt = np.radians(SPIKE_TILT)
+    for th, rpx, width in hair_tips(hair):
+        dp = np.array([np.sin(np.radians(th)), np.cos(np.radians(th)), 0.]); r0 = ray_far(P, Th, c, dp); rt = rpx / sc
+        if r0 <= 0 or rt - r0 < SPIKE_MIN: continue
+        axis = unit(dp * np.cos(tilt) + np.array([0, 0, -np.sin(tilt)])); base = c + dp * (r0 - SPIKE_IN)
+        ln = (rt - r0 + SPIKE_IN) / np.cos(tilt)
+        add(base, axis, ln, np.clip(width / sc * .5, .022, .045))
+    nf = len(spikes)
+    # the back of the head (no drawing there): clumps out and back, the crown's up, the nape's down; from the front
+    # each stays inside the drawing's silhouette
+    for k, (az, el, up) in enumerate(BACK_SPIKES):
         a, e = np.radians(az), np.radians(el)
-        d = np.array([np.sin(a) * np.cos(e), np.sin(e), np.cos(a) * np.cos(e)])
-        r = ray_far(P, Th, c, d)
-        if r <= 0: continue
-        flow = d + np.array([0, .25, -.2]); flow /= np.linalg.norm(flow)   # anime hair sweeps up and back
-        base = c + d * (r - .018); ln = .085 + .05 * ((k * 7919) % 11) / 10
-        while ln > .04 and not inside(base + flow * ln): ln -= .01
-        if ln <= .04: continue
-        spikes.append({'p': [round(float(v), 5) for v in inv[:3, :3] @ base + inv[:3, 3]], 'd': [round(float(v), 5) for v in inv[:3, :3] @ flow],
-                       'len': round(float(ln), 4), 'r': round(.03 + .012 * ((k * 104729) % 7) / 6, 4)})
-    print('spikes', len(spikes), 'of', len(SPIKES))
+        d = np.array([np.sin(a) * np.cos(e), np.sin(e), np.cos(a) * np.cos(e)]); r0 = ray_far(P, Th, c, d)
+        if r0 <= 0: continue
+        axis = unit(d + np.array([0, up, -.35])); base = c + d * (r0 - SPIKE_IN); ln = .13 - .03 * ((k * 7919) % 5) / 4
+        while ln > .05 and not inside(base + axis * ln): ln -= .01
+        if ln <= .05: continue
+        add(base, axis, ln, .03 + .01 * ((k * 104729) % 5) / 4)
+    print('spikes', nf, 'from the drawing,', len(spikes) - nf, 'on the back')
     # --- the outline on the face: thin where the head faces forward and the texture is skin ---
     N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2)
     tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int); ts = tex.shape[0]
@@ -301,8 +353,8 @@ def main(pkg, out, drawing):
     line = np.ones(len(P), np.float32); line[face] = LINE_FACE
     on = (wn * (jn >= len(bones))).sum(1); line = np.minimum(line, 1 - (1 - LINE_FINGER) * on).astype(np.float32)
     print('outline thinned on', int(face.sum()), 'face and', int((on > 0).sum()), 'finger vertices')
-    flat = (smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh)).astype(np.float32)
-    print('flat light on', int((flat > .5).sum()), 'vertices of the head')
+    flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2])).astype(np.float32)
+    print('flat light on', int((flat > .5).sum()), 'vertices (head', int(((flat > .5) & (wh > .5)).sum()), ')')
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
     of = len(blob); blob += flat.tobytes()
     look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)],
