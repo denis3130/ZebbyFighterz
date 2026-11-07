@@ -79,6 +79,7 @@ python3 tests/play_check.py
 
 ## Note per Denis / per dopo
 - Revisione finale Tappa 2a (7/11): Ren a destra è specchiato (si vede di fronte su entrambi i lati); nei colpi a terra i piedi d'appoggio restano fermi (IK) e Ren non si stacca da terra; `hk` usa la clip del calcio alto (il calcio circolare Meshy a207 è girato e in salto, senza piedi a terra: per dopo un calcio circolare a terra). 288 prove verdi.
+- Anteprima (7/11): con la pittura dal disegno le punte delle dita aperte (speciale, presa) prendono il bianco delle fasce e il grigio del fondo, perché nel disegno le mani stanno in un altro punto; il pugno resta pulito. Si può dipingere di pelle la parte delle dita che la proiezione non vede bene.
 - Tappa 2a: capelli più a punte come nel disegno (Denis: "non mi piace ma teniamolo così"); rotolata vera (ora `rollF`/`rollB` usano la clip per rialzarsi mentre il corpo scivola); `chp` e `chk` si alzano (anti-aerei) anche se la hitbox resta bassa; la camminata gira circa 5 volte più veloce della clip perché la logica cammina a 4,5 m/s; posa di vittoria (la logica non la usa ancora); Kael di Meshy (modello + scheletro, le stesse animazioni con lo stesso scheletro).
 Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Il forte dopo P,P,P combina solo se il quarto P viene premuto (e tenuto) già durante il p3 o al più 2 fotogrammi dopo il suo colpo: più tardi il colpito esce dallo stordimento prima che il forte parta (lo prende come primo colpo di una nuova combo). Dipende dai tempi di p3 e hp, non toccati.
