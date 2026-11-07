@@ -38,15 +38,16 @@ def load(pkg):
     I = f(me['idx'], np.uint16 if me['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
     J = f(me['jnt'], np.uint8).reshape(-1, 4); W = f(me['wgt']).reshape(-1, 4)
     hands = [i for i, b in enumerate(m['bones']) if b['n'] in ('LeftHand', 'RightHand')]
-    head = [i for i, b in enumerate(m['bones']) if b['n'] == 'Head']
-    return name, P, N, UV, I, (np.isin(J, hands) * W).sum(1), (np.isin(J, head) * W).sum(1)
+    head = [i for i, b in enumerate(m['bones']) if b['n'] == 'Head']; neck = [i for i, b in enumerate(m['bones']) if b['n'] == 'neck']
+    return name, P, N, UV, I, (np.isin(J, hands) * W).sum(1), (np.isin(J, head) * W).sum(1), (np.isin(J, neck) * W).sum(1)
 
 
 if len(sys.argv) != 4: sys.exit(__doc__)
 PKG, DRAWING, OUT = sys.argv[1:]
-name, P, N, UV, I, HANDW, HEADW = load(PKG)
+name, P, N, UV, I, HANDW, HEADW, NECKW = load(PKG)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ren_look import drawn_shape, drawing_fit, drawing_band, sash_tails, sash_orange, sash_band_end, SASH_BAND, FACE_X, FACE_DECAL
+from ren_look import drawn_shape, drawing_fit, drawing_band, sash_tails, sash_orange, sash_band_end, SASH_BAND, FACE_X, FACE_DECAL, \
+    head_skin, neck_zone
 # the shape as the model draws it (ren_look.drawn_shape: a small nose, the fringe off the eyes, the collar's points)
 T0 = np.asarray(Image.open(os.path.join(PKG, name + '.jpg')).convert('RGB')).astype(int)
 P, N, _ = drawn_shape(P, N, I, HEADW, T0[np.clip((UV[:, 1] * T0.shape[0]).astype(int), 0, T0.shape[0] - 1), np.clip((UV[:, 0] * T0.shape[1]).astype(int), 0, T0.shape[1] - 1)])
@@ -158,7 +159,10 @@ sk = lambda c: (c[:, 0] > 120) & (c[:, 1] > 75) & (c[:, 0] - c[:, 2] > 40)
 # too (Meshy painted its own eyes, lower, in dark colours: as hair they showed as dark bands under the drawn eyes; the
 # drawing's jaw outline, stretched over the jaw's sides, as a dark stepped streak)
 facez = (np.abs(pos[:, 0] - FACE_X) < .056) & (pos[:, 1] > 1.46) & (pos[:, 1] < 1.60) & (pos[:, 2] > -.05)
-facet = ((HEADW[I[ks]] * bary).sum(1) > .5) & (sk(TEX[ys, xs]) | facez)
+VCOL = T0[np.clip((UV[:, 1] * T0.shape[0]).astype(int), 0, T0.shape[0] - 1), np.clip((UV[:, 0] * T0.shape[1]).astype(int), 0, T0.shape[1] - 1)]
+HS = head_skin(P, I, VCOL, HEADW + NECKW)   # the head's and the neck's skin (ren_look.head_skin: not the islands among the hair)
+hst = (HS[I[ks]] * bary).sum(1) > .5; hnw = ((HEADW + NECKW)[I[ks]] * bary).sum(1)
+facet = ((HEADW[I[ks]] * bary).sum(1) > .5) & (hst | facez)
 patch = D[185:230, 470:545].reshape(-1, 3); skin_col = np.median(patch[sk(patch) & (patch.sum(1) > 520)], 0)   # the drawn face's skin
 zone = []
 for dark in (0, 1):
@@ -182,22 +186,32 @@ dec = np.dstack([ndimage.map_coordinates(c, [gy, gx], order=1, mode='nearest') f
 FACE_PNG = os.path.join(os.path.dirname(os.path.abspath(OUT)), name + '_face.png')
 Image.fromarray(np.clip(dec, 0, 255).round().astype(np.uint8), 'RGBA').save(FACE_PNG, optimize=True)
 out[ys[facet], xs[facet]] = skin_col
+# the neck's skin clean too (the drawing's lines on it, stretched over its sides, read as smears; the jaw's shadow on it is
+# drawn per pixel, ren_look.jaw_map)
+neckt = ~facet & ((hst & (hnw > .5)) | (sk(TEX[ys, xs]) & neck_zone(pos)))   # (and its front down to the collarbones, ren_look.NECK_ZONE)
+out[ys[neckt], xs[neckt]] = skin_col
+print('neck texels', int(neckt.sum()))
 print('face texels', int(facet.sum()), 'skin', np.round(skin_col), '; the decal', FACE_PNG, 'with', int((ink > .5).sum()), 'px of the drawing\'s features')
 # the drawing's background between its hair locks (grey, near its colour; its anti-aliased edges too) and its skin are
 # no colour of the hair: the hair's own there (the model's locks stand where the drawing has the face or the background:
 # skin-coloured and grey patches on them looked torn)
-bgl = ((np.abs(col - bg).sum(1) < 75) & (col.max(1) - col.min(1) < 25)) | sk(col)
+# (on the hair only the drawing's hair colours: dark, purplish grey; its eyes' white and brown irises, on the locks hanging
+# in front of the eyes, read as glints and streaks)
+hairlike = (col.mean(1) < 125) & (np.abs(col[:, 0] - col[:, 2]) < 30) & (col[:, 1] <= col[:, 0] + 6)
+bgl = ~hairlike
 # --- the hair: the drawing where it faces the front, elsewhere the hair's own colour (no stretched highlights at the
 # sides, no Meshy glints) ---
 # (the hair: the head's texels that are neither skin nor the vest's teal, from the hair's lowest point up: the collar's
 # teal and its light trim below stay)
-tc = TEX[ys, xs]; hv = ((HEADW[I[ks]] * bary).sum(1) > .5) & ~sk(tc); teal = tc[:, 1] > tc[:, 0] + 8
+# (the skin-coloured islands among the hair, ren_look.head_skin, are hair; the vest's teal is the collar only below its
+# top, higher up a bluish white is Meshy's glint on the hair)
+tc = TEX[ys, xs]; hv = ((HEADW[I[ks]] * bary).sum(1) > .5) & ~hst; teal = (tc[:, 1] > tc[:, 0] + 8) & (pos[:, 1] < 1.56)
 like = hv & ~teal & ~facet & (tc.mean(1) <= 110); hairt = hv & ~teal & ~facet & (pos[:, 1] >= np.percentile(pos[like, 1], 1))
 hair_col = np.median(tc[like], 0)
 hw = np.clip((nor[:, 2] - .35) / .25, 0, 1); hw = hw * hw * (3 - 2 * hw) * vis
 colh = np.where(bgl[:, None], hair_col, col)
 out[ys[hairt], xs[hairt]] = colh[hairt] * hw[hairt, None] + hair_col * (1 - hw[hairt, None])
-print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col), '; the drawing\'s background or skin on', int((bgl & hairt & (hw > 0)).sum()), 'of them')
+print('hair texels', int(hairt.sum()), 'drawn (front)', int((hairt & (hw > .5)).sum()), 'hair colour', np.round(hair_col), '; not the drawing\'s hair colours on', int((bgl & hairt & (hw > 0)).sum()), 'of them')
 # --- the sash's tails: hanging ribbons in the look (tools/ren_look.py), so off the body: each tail texel takes the colour
 # of the nearest texel (in space) that is not orange, the trousers or the vest under it ---
 vcol = TEX[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)].astype(int)

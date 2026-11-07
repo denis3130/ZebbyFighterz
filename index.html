@@ -281,7 +281,8 @@ const CFG={
   // flatFace = the front of the head without the toon light (the drawing painted there has its own shading); sash = the
   // sash's tails as ribbons of their own, swinging with gravity (e_model mdSash) instead of painted on the legs;
   // faceShape = the shape as drawn (tools/ren_look.py drawn_shape: the face smooth below the eyes with a small nose,
-  // the fringe off the eyes, the collar's points) and the drawn face's features as a decal of their own (face_uv).
+  // the fringe off the eyes, the collar's points), the drawn face's features as a decal of their own (face_uv) and the
+  // jaw's shadow on the neck (jaw_curve).
   looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
@@ -1851,10 +1852,11 @@ function modelBuild(key) {
       const p = new Float32Array(md.geo.attributes.position.array), n = new Float32Array(md.geo.attributes.normal.array), m = look.move;
       m.idx.forEach((v, i) => { p.set(m.pos.subarray(i * 3, i * 3 + 3), v * 3); n.set(m.nor.subarray(i * 3, i * 3 + 3), v * 3); });
       geo.setAttribute('position', new THREE.BufferAttribute(p, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(n, 3));
-      if (look.face) {   // the face decal's coordinates and share shown (mdFaceMat)
+      if (look.face) {   // the face decal's coordinates and share shown, and where the skin is (mdFaceMat)
         const a = new Float32Array(md.geo.attributes.position.count * 3), fd = look.face;
         fd.idx.forEach((v, i) => a.set(fd.uvw.subarray(i * 3, i * 3 + 3), v * 3));
         geo.setAttribute('aFace', new THREE.BufferAttribute(a, 3));
+        geo.setAttribute('aSkin', new THREE.BufferAttribute(Float32Array.from(fd.skin), 1));
       }
     }
   }
@@ -1875,6 +1877,8 @@ function modelBuild(key) {
   // the face decal (look data face, ASSETS '<char>/<char>_face.png'): shown once decoded (an empty texture reads black)
   const face = shape && look.face && ASSETS[key + '/' + key + '_face.png'] ? {tex: new THREE.Texture(new Image()), on: {value: 0}, want: true, ready: false} : null;
   if (face) {
+    const jw = look.face.jaw;   // the jaw's shadow on the neck: the chin's edge as a curve, the shadow's width, depth and colour
+    face.jawA = new THREE.Vector4(...jw.curve); face.jawB = new THREE.Vector4(jw.half, jw.deep, jw.gap, jw.back); face.jawShade = new THREE.Vector3(...jw.shade);
     face.tex.flipY = false; face.tex.image.src = ASSETS[key + '/' + key + '_face.png'];
     face.tex.image.decode().then(() => { face.tex.needsUpdate = true; face.ready = true; mdFaceShow(face, face.want); }, () => {});
     mdFaceMat(main, face);
@@ -1915,15 +1919,29 @@ function modelBuild(key) {
 }
 
 // Material m with the face decal over its map (face: {tex, on: a uniform, 1 shown}): the decal at the vertices' aFace
-// coordinates, by its alpha times their share (aFace's third). Chained after m's own shader changes.
+// coordinates, by its alpha times their share (aFace's third), fading out as the surface turns edge-on to the camera
+// (MD_FACE_SEE: the cosine of the angle between them where it is gone and where it is whole). And the jaw's shadow on the
+// neck, per pixel from smooth curves (look data jaw: the chin's edge seen from the front, face.jawA; the neck's front
+// under it, as wide as the neck and down to a depth that thins out toward the back, face.jawB): on the skin (aSkin) at
+// those bind positions, the colour times face.jawShade, with a crisp edge (anime). Chained after m's own shader changes.
+const MD_FACE_SEE = [.15, .4];
 function mdFaceMat(m, face) {
   const prev = m.onBeforeCompile, key = m.customProgramCacheKey();
   m.onBeforeCompile = (sh, r) => {
     prev.call(m, sh, r);
     sh.uniforms.uFace = {value: face.tex}; sh.uniforms.uFaceOn = face.on;
-    sh.vertexShader = 'attribute vec3 aFace;\nvarying vec3 vFace;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFace = aFace;');
-    sh.fragmentShader = 'uniform sampler2D uFace;\nuniform float uFaceOn;\nvarying vec3 vFace;\n' + sh.fragmentShader.replace('#include <map_fragment>',
-      '#include <map_fragment>\n\tvec4 faceTexel = texture2D(uFace, vFace.xy);\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, faceTexel.rgb, faceTexel.a * vFace.z * uFaceOn);');
+    Object.assign(sh.uniforms, {uJawA: {value: face.jawA}, uJawB: {value: face.jawB}, uJawShade: {value: face.jawShade}});
+    // seen edge-on (the far eye of a turned head, its surface turning away), the decal fades out: drawn there it smeared
+    const lit = sh.vertexShader.includes('vNormal = normalize( transformedNormal )');   // (the toon material; the basic one has no normals)
+    sh.vertexShader = 'attribute vec3 aFace;\nattribute float aSkin;\nvarying vec3 vFace;\nvarying float vFaceSee;\nvarying vec4 vBind;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFace = aFace; vBind = vec4(transformed, aSkin);')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n\tvFaceSee = ' + (lit ? 'smoothstep(' + MD_FACE_SEE[0].toFixed(2) + ', ' + MD_FACE_SEE[1].toFixed(2) + ', dot(normalize(transformedNormal), normalize(-mvPosition.xyz)))' : '1.0') + ';');
+    sh.fragmentShader = 'uniform sampler2D uFace;\nuniform float uFaceOn;\nuniform vec4 uJawA;\nuniform vec4 uJawB;\nuniform vec3 uJawShade;\n' +
+      'varying vec3 vFace;\nvarying float vFaceSee;\nvarying vec4 vBind;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+      '#include <map_fragment>\n\tvec4 faceTexel = texture2D(uFace, vFace.xy);\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, faceTexel.rgb, faceTexel.a * vFace.z * vFaceSee * uFaceOn);' +
+      '\n\tfloat jawX = vBind.x - uJawA.x;\n\tfloat jawD = uJawA.y + sqrt(jawX * jawX * uJawA.z * uJawA.z + uJawA.w * uJawA.w) - uJawA.w - vBind.y;' +
+      '\n\tfloat jawDeep = uJawB.y * smoothstep(uJawB.w, uJawB.w + 0.02, vBind.z);' +
+      '\n\tfloat jawSh = step(0.5, vBind.w) * (1.0 - smoothstep(uJawB.x - 0.006, uJawB.x, abs(jawX))) * smoothstep(uJawB.z, uJawB.z + 0.0012, jawD) * (1.0 - smoothstep(jawDeep - 0.0012, jawDeep, jawD)) * uFaceOn;' +
+      '\n\tdiffuseColor.rgb *= mix(vec3(1.0), uJawShade, jawSh);');
   };
   m.customProgramCacheKey = () => key + '|face';
   return m;
@@ -2227,7 +2245,8 @@ function mdLookData(md, key) {
   const f32 = a => new Float32Array(u8.buffer, a[0], a[1]);
   return md.look = {fingers: j.fingers, spikes: j.spikes, sash: j.sash && {ribbons: j.sash.ribbons, body: j.sash.body, blend: new Uint16Array(u8.buffer, j.sash.blend[0], j.sash.blend[1])},
     move: j.move && {idx: new Uint16Array(u8.buffer, j.move.idx[0], j.move.idx[1]), pos: f32(j.move.pos), nor: f32(j.move.nor)},
-    face: j.face && {idx: new Uint16Array(u8.buffer, j.face.idx[0], j.face.idx[1]), uvw: f32(j.face.uvw)},
+    face: j.face && {idx: new Uint16Array(u8.buffer, j.face.idx[0], j.face.idx[1]), uvw: f32(j.face.uvw), skin: new Uint8Array(u8.buffer, j.face.skin[0], j.face.skin[1]),
+      jaw: j.face.jaw},
     skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
     line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1)};
 }
