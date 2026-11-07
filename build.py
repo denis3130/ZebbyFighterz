@@ -5,15 +5,20 @@ ASSET_DIR = os.path.join(ROOT, 'assets')
 MIME = {'.jpg': 'image/jpeg', '.png': 'image/png'}
 
 def assets():
-    """{path relative to assets/: data URI} for every jpg/png under assets/ (empty if there is no folder)."""
+    """{path relative to assets/: value} for the files under assets/ (empty if there is no folder): jpg/png as a data
+    URI, json as the parsed object, bin (a packed model, tools/meshy_pack.py) as a base64 string."""
     out = {}
     for d, _, names in os.walk(ASSET_DIR):
         for n in sorted(names):
             ext = os.path.splitext(n)[1].lower()
+            p = os.path.join(d, n)
+            key = os.path.relpath(p, ASSET_DIR).replace(os.sep, '/')
             if ext in MIME:
-                p = os.path.join(d, n)
-                key = os.path.relpath(p, ASSET_DIR).replace(os.sep, '/')
                 out[key] = 'data:%s;base64,%s' % (MIME[ext], base64.b64encode(open(p, 'rb').read()).decode())
+            elif ext == '.json':
+                out[key] = json.load(open(p, encoding='utf-8'))
+            elif ext == '.bin':
+                out[key] = base64.b64encode(open(p, 'rb').read()).decode()
     return dict(sorted(out.items()))
 
 def build(out, js, wrap=False):
