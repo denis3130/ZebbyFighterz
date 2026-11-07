@@ -92,9 +92,10 @@ const CFG={
     getup:{c:'a3', k:[[0,.15],[16,1.6]]}, roll:{c:'a3', k:[[0,.15],[22,1.6]]}, win:{c:'a17', k:[[0,0],[18,.3]]},
   },
   // The "Ren dipinto" look (Denis's choices, 7/11/2026), off in the game until he approves it in the viewer: fists =
-  // fist meshes with the open hands folded away (ASSETS '<char>/<char>_look.json|bin', tools/ren_look.py), open again in
-  // the acts of openHands; headUp = degrees the head is raised in every pose (the face shows at the game's camera);
-  // spikes = anime hair spikes on the sides, back and top of the hair; faceLine = a thin outline on the front of the face.
+  // the fingers curled on their own bones (ASSETS '<char>/<char>_look.json|bin', tools/ren_look.py), open in the acts
+  // of openHands; headUp = degrees the head is raised in every pose (the face shows at the game's camera);
+  // spikes = anime hair spikes on the sides, back and top of the hair; faceLine = a thin outline on the front of the face
+  // and on the fingers.
   looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,

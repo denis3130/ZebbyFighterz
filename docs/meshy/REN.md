@@ -34,3 +34,15 @@ La tabella è `CFG.clips` in `src/a0_cfg.js` (commentata lì). Il colpo cade nel
 il tempo del colpo di ogni mossa si trova al caricamento (il punto del colpo più dentro la hitbox). Il calcio basso
 (`ck`) è fatto con una IK sulla gamba sinistra, perché la clip "Sweeping Kick" non scende abbastanza.
 Foglio di controllo di tutte le pose: `python3 tools/pose_sheet.py out.png [moves|acts|all]`.
+
+## Dita (7/11/2026)
+- Lo scheletro della API non ha le dita: 24 ossa, solo `LeftHand`/`RightHand` (controllato anche nel FBX del task di
+  rigging). Il rigging fatto sul sito meshy.ai le ha: Denis ne ha fatto uno lì (modello da 95.085 facce). Nel
+  frattempo il saldo è sceso da 1225 a 1190 (35 crediti, quasi certamente quel modello: sito e API usano lo stesso).
+- I modelli fatti sul sito **non si raggiungono dalla API**: gli elenchi della API mostrano solo i task della API e
+  `input_task_id` accetta solo task della API (la documentazione Meshy lo dice: i task della API restano nella API e
+  non compaiono in "My Assets"). Per usarne uno serve scaricarlo dal sito (Download → GLB) e metterlo nel repository.
+- Le dita di Ren le calcola `tools/ren_look.py` dal suo mesh (le mani hanno dita separate): 3 ossa per dito e per il
+  pollice, pesi della pelle sfumati sulle articolazioni, pugno con il pollice sopra indice e medio. Solo dove
+  `CFG.looks.ren.fists` è acceso (per ora nell'anteprima).
+

@@ -45,12 +45,14 @@ async def main(out_dir):
             drawn = await pg.evaluate("""() => { const c = document.getElementById('view'), g = document.createElement('canvas'); g.width = 64; g.height = 64;
               const x = g.getContext('2d'); x.drawImage(c, c.width * .35, c.height * .2, c.width * .3, c.height * .6, 0, 0, 64, 64);
               const d = x.getImageData(0, 0, 64, 64).data; let k = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) k++; return k; }""")
-            # the proposal's look: fists in the guard, open hands in the special, spikes on the head, thin face outline
+            # the proposal's look: fists in the guard (the fingers curled on their own bones, in the skeleton), open hands
+            # in the special, spikes on the head, thin face outline
             look = await pg.evaluate("""async () => { const it = VW.it, r = {};
               document.getElementById('play0').click(); await new Promise(f => setTimeout(f, 300));
-              r.fists = !!it.fists && it.fists.every(g => g.visible) && it.mesh.morphTargetInfluences[0] === 1;
+              r.fists = !!it.fingers && it.fingers.length === 30 && it.mesh.skeleton.bones.length === it.bones.length + 30 && it.curl === 1
+                && it.fingers.every((o, i) => Math.abs(o.quaternion.dot(it.fist[i])) > .9999);
               document.getElementById('play6').click(); await new Promise(f => setTimeout(f, 300));
-              r.open = it.fists.every(g => !g.visible) && it.mesh.morphTargetInfluences[0] === 0;
+              r.open = it.curl === 0 && it.fingers.every(o => Math.abs(o.quaternion.w) > .9999);
               r.spikes = it.joints.head.children.some(g => g.isGroup && g.children.length >= 8);
               r.line = !!it.mesh.geometry.attributes.aLine; return r; }""")
             if not all(look.values()): errs.append('look ' + str(look))
