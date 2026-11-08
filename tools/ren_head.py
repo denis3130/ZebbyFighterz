@@ -40,6 +40,7 @@ DRAW_EYE, DRAW_CHIN = 168., 238.           # the drawing's rows (ren.png) of the
 BODY_NECK = (1.44, 1.47)                   # the body's neck: its skin between these heights fits its axis
 HIDE_Y = 1.445                             # the body's triangles above it are hidden
 BODY_X = .006                              # the body's middle (x)
+HIDE_RAY, HIDE_NECK_R = .08, .075   # (and all of them that are skin, or within that of the neck's axis: the old neck)
 HEAD_SMOOTH, HEAD_JAW = 3, 1.515
 # Meshy's colours to the sheet's (its texture a little lighter and greyer: pink skin, light shadows): each texel moves by
 # the offsets of the palette colours near it (HEAD_SPREAD: how near, rgb), its shades within a colour kept
@@ -233,8 +234,23 @@ def main(bust, pkg, out, texture=None):
     hw_ = np.zeros(nw, bool); hw_[weld[head]] = True
     for _ in range(HEAD_SMOOTH): Ww = np.where(hw_[:, None], Ww, .5 * Ww + .5 * (A @ Ww) / deg[:, None])
     Wv = Ww[weld]; top = np.argsort(-Wv, 1)[:, :4]; tw = np.take_along_axis(Wv, top, 1); tw /= np.maximum(tw.sum(1, keepdims=True), 1e-12)
-    # hidden: the body's triangles all above HIDE_Y
-    hide = np.nonzero((P[I, 1] > HIDE_Y).all(1))[0].astype(np.uint32)
+    # hidden: the body's triangles all above HIDE_Y that the new head covers: its old head (the Head bone's), and the rest
+    # (the old collar, the vest's top, the neck) where a ray out of the triangle along its normal meets the new head within
+    # HIDE_RAY m (the shoulders' tops it does not cover stay: hidden, their holes showed the outline's black inside)
+    up = (P[I, 1] > HIDE_Y).all(1); hw3 = ((J == hb) * W).sum(1)[I].mean(1)
+    no = skin_of(col) & (P[:, 1] > BODY_NECK[0]) & (P[:, 1] < BODY_NECK[1]) & (np.abs(P[:, 0]) < .08); circle_body = circle(P[no, 0], P[no, 2])
+    cand = np.nonzero(up & (hw3 < .5))[0]
+    A0 = Q[Iq[:, 0]]; E1 = Q[Iq[:, 1]] - A0; E2 = Q[Iq[:, 2]] - A0
+    cen = P[I[cand]].mean(1); fnb = np.cross(P[I[cand, 1]] - P[I[cand, 0]], P[I[cand, 2]] - P[I[cand, 0]]); fnb /= np.maximum(np.linalg.norm(fnb, axis=1, keepdims=True), 1e-12)
+    covered = np.zeros(len(cand), bool)
+    for k in range(len(cand)):   # (Moller-Trumbore against all the head's triangles)
+        o, d = cen[k] + fnb[k] * 1e-4, fnb[k]; pv = np.cross(d, E2); det = (E1 * pv).sum(1); ok = np.abs(det) > 1e-12
+        inv = np.where(ok, 1 / np.where(ok, det, 1), 0); tv = o - A0; u = (tv * pv).sum(1) * inv; qv = np.cross(tv, E1); v = (qv @ d) * inv; t = (qv * E2).sum(1) * inv
+        covered[k] = (ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0) & (t < HIDE_RAY)).any()
+    tcol = col[I[cand]].mean(1); old_neck = skin_of(tcol) | (np.hypot(cen[:, 0] - BODY_X, cen[:, 2] - circle_body[1]) < HIDE_NECK_R)   # (the old neck: the new one replaces it)
+    covered |= old_neck
+    hide = np.sort(np.concatenate([np.nonzero(up & (hw3 >= .5))[0], cand[covered]])).astype(np.uint32)
+    print('hidden: %d of the old head, %d of %d others under the new head (%d kept: not covered)' % (int((up & (hw3 >= .5)).sum()), int(covered.sum()), len(cand), int((~covered).sum())))
     blob = bytearray()
     def put(arr):
         while len(blob) % 4: blob.append(0)

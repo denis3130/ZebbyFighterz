@@ -1904,7 +1904,9 @@ function modelBuild(key) {
   if (head) {   // the new head: its own toon mesh and outline on the same skeleton (bound in the body, as the body's)
     const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = head.jpg;
     tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
-    const hm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true});
+    // (both sides: the bust is cut above the shoulders, its coat open there; seen into it, the outline's inner shell
+    // showed as black patches on the shoulders: now the coat's own colour, as a lining)
+    const hm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
     hm.onBeforeCompile = sh => {   // flat light: the sheet's own shading is in its texture (the hit flash's emissive kept)
       sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
         '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_HEAD_FLAT.toFixed(2) + ');');
