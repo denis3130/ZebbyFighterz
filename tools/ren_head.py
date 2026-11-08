@@ -42,6 +42,7 @@ HIDE_Y = 1.445                             # the body's triangles above it are h
 BODY_X = .006                              # the body's middle (x)
 HIDE_RAY, HIDE_NECK_R = .08, .075   # (and all of them that are skin, or within that of the neck's axis: the old neck)
 HEAD_SMOOTH, HEAD_JAW = 3, 1.515
+COLLAR_STIFF = (1.46, 1.50, .8)   # see main(): the collar's top on the spine, not on the shoulders
 # Meshy's colours to the sheet's (its texture a little lighter and greyer: pink skin, light shadows): each texel moves by
 # the offsets of the palette colours near it (HEAD_SPREAD: how near, rgb), its shades within a colour kept
 HEAD_PALETTE = [((68, 55, 70), (75, 64, 73)), ((52, 41, 53), (58, 48, 58)), ((100, 81, 90), (113, 94, 102)),   # hair, its dark, its light
@@ -281,6 +282,13 @@ def main(bust, pkg, out, texture=None):
     _, near = cKDTree(P[body]).query(Q[rest]); near = body[near]
     for k in range(4): np.add.at(Wf, (np.nonzero(rest)[0], J[near, k]), W[near, k] * (J[near, k] != hb))
     Wf[rest] /= np.maximum(Wf[rest].sum(1, keepdims=True), 1e-12)
+    # the collar stands up stiff: from COLLAR_STIFF[0] to [1] m up its share of the shoulders' and arms' weights goes to
+    # the top of the spine, up to COLLAR_STIFF[2] (on the shoulders, the nearest body vertex's, its back tore into shards
+    # when the arms went up: each half followed its own shoulder)
+    y0, y1, f = COLLAR_STIFF; sh = [bones.index(n) for n in ('LeftShoulder', 'RightShoulder', 'LeftArm', 'RightArm')]
+    k = np.nonzero(rest)[0]; mv = np.clip((Q[k, 1] - y0) / (y1 - y0), 0, 1) * f
+    take = Wf[np.ix_(k, sh)] * mv[:, None]; Wf[np.ix_(k, sh)] -= take; Wf[k, sp] += take.sum(1)
+    print('collar: %d vertices stiffer (their shoulders\' weight to the spine, up to %d%%)' % (int((mv > 0).sum()), round(100 * f)))
     print('skin: head %d, neck %d, collar and shirt %d vertices' % (head.sum(), neck.sum(), rest.sum()))
     print('temples: %d points of %d locks laid flat sunk under the skin' % temple_locks(Q, UVq, Iq, tb))
     _, first, weld = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel(); nw = len(first)
