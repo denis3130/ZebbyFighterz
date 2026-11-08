@@ -146,6 +146,16 @@ okv = ((col[:, 1] > col[:, 0] + 8) & (col[:, 2] > col[:, 0] + 8)) | (col.mean(1)
 colv = np.where(okv[:, None], col, two)
 out[ys[vr], xs[vr]] = colv[vr] * wgt[vr, None] + two[vr] * (1 - wgt[vr, None])
 print('collar texels', int(vest.sum()), 'in its flat teal where the drawing is not (%d), its rim %d' % (int((vest & (wgt < .5)).sum()), int(rim.sum())))
+# the vest's flaps under the sash: Meshy's are longer than the drawn ones, so below the drawn flaps' tips the drawing's
+# trousers (dark purple grey) were painted on them: there the vest's teal, lit or in shadow as Meshy's folds (VEST,
+# VEST_SHADE, VEST_FOLD); the drawing's black lines kept (darker than FLAP_LINE)
+FLAP_LINE = 40
+vb = (tc[:, 1] > tc[:, 0] + 10) & (tc[:, 2] > tc[:, 0] + 10) & ~collar & ((HEADW[I[ks]] * bary).sum(1) < .5)
+trous = (col.mean(1) >= FLAP_LINE) & (col.mean(1) < 120) & (np.abs(col[:, 0] - col[:, 2]) < 30) & (col[:, 1] <= col[:, 0] + 6) & (wgt > 0)
+flapm = vb & trous
+lumv = tc.mean(1); twov = np.where((lumv < np.median(lumv[vb]) * VEST_FOLD)[:, None], VEST * VEST_SHADE, VEST)
+out[ys[flapm], xs[flapm]] = (twov * wgt[:, None] + tc * (1 - wgt[:, None]))[flapm]
+print('vest flaps: %d texels with the drawing\'s trousers on them back to the vest\'s teal' % int(flapm.sum()))
 # --- the face (Denis, 7/11: "la faccia è troppo buggata"): its skin clean, in the drawing's skin colour; the drawn
 # face's features (FACE_ZONES, drawing pixels: the eyes and brows, the nose's shadow and nostril, the mouth; each pixel
 # by how far its colour is from the skin's, FACE_INK) in a texture of their own, the face decal (<name>_face.png: the
