@@ -57,6 +57,7 @@ TEMPLE_LINE = (.045, .1, 1.555, 1.62, -.03, .075, .1, .004)   # see main(): the 
 CHEEKS = (.03, 1.525, 1.595, .015, 1.583, .07)   # see cheek_marks(): |x| over, y between, z over, the eyes' band (over y, within |x|)
 EARS = (.045, .1, 1.545, 1.615, -.035, .03)   # see cheek_marks(): |x|, y, z ranges (m)
 TEMPLE_SPOT = (-.078, -.052, 1.570, 1.592, -.012, .016)   # (x, y, z ranges, m) a brown spot on one temple: see temple_spot()
+PLUG_LINE = .1                             # the outline of the plug under the face's holes (tools/ren_eyes.py): pushed back (m)
 FRINGE_PAINT = (.0008, 120., (60, 50, 60))   # see fringe_paint(): in front of the face by (m), lighter than (mean rgb), the colour they take
 FRINGE_NEAR, FRINGE_MAX = .01, .05
 FRINGE = (.02, .008, .004, 3, .002)   # the hair over the face: its outline's push back (m), the face's reach around it, the depth slack (m), smoothing rounds, grid (m): see fringe_back()
@@ -467,6 +468,14 @@ def main(bust, pkg, out, texture=None):
     # the face's locks from the sheet (tools/ren_fringe.py): Meshy's fringe over the forehead out, the sheet's locks in
     from ren_fringe import fringe as sheet_fringe
     Ik = sheet_fringe(Q, Nq, UVq, Iq, t, name, out)
+    # the eyes and the skin around them redrawn clean (tools/ren_eyes.py): the -x eye and brow from the +x ones, the
+    # bridge plain skin, the pieces floating off the head out, a plug of skin under the face's holes (its outline back)
+    from ren_eyes import eyes as clean_eyes
+    Ik, plug = clean_eyes(Q, Nq, UVq, Ik, t)
+    if plug is not None:
+        n0 = len(Q); Q = np.r_[Q, plug['pos']]; Nq = np.r_[Nq, plug['nor']]; UVq = np.r_[UVq, plug['uv']]
+        top = np.r_[top, top[plug['src']]]; tw = np.r_[tw, tw[plug['src']]]
+        lb_line = np.r_[lb_line, np.full(len(plug['pos']), PLUG_LINE)]; Ik = np.r_[Ik, plug['tri'] + n0]
     nv = len(Q)
     head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
             'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb_line.astype(np.float32))}
