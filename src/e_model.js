@@ -79,13 +79,17 @@ function modelBuild(key) {
   const face = shape && look.face && ASSETS[key + '/' + key + '_face.png'] ? {tex: new THREE.Texture(new Image()), on: {value: 0}, want: true, ready: false} : null;
   if (face) {
     const fd = look.face, dp = fd.depth;   // the face's and the neck's surface seen from the front, as a small texture (mdFaceMat)
-    face.depth = new THREE.DataTexture(Uint8Array.from(dp.map), dp.n[0], dp.n[1], THREE.RGBAFormat);
+    face.depth = new THREE.DataTexture(Uint8Array.from({length: dp.n[0] * dp.n[1] * 4}, (_, i) => i % 4 === 0 ? dp.map[i >> 2] : i % 4 === 3 ? 255 : 0), dp.n[0], dp.n[1], THREE.RGBAFormat);
     face.depth.magFilter = face.depth.minFilter = THREE.LinearFilter; face.depth.generateMipmaps = false; face.depth.needsUpdate = true;
     face.depthBox = new THREE.Vector4(dp.box[0], dp.box[1], 1 / (dp.box[2] - dp.box[0]), 1 / (dp.box[3] - dp.box[1]));
     face.depthZ = new THREE.Vector4(dp.z[0], dp.z[1] - dp.z[0], fd.seen, 0); face.depthCell = new THREE.Vector2(.5 / dp.n[0], .5 / dp.n[1]);
     // the decal's mapping: bind x, y -> the drawing's px (scale, cx, by) -> the decal's box; where it fades as it turns away
     face.map = new THREE.Vector3(...fd.fit); face.decal = new THREE.Vector4(...fd.decal); face.front = new THREE.Vector2(...fd.front);
-    face.shade = new THREE.Vector3(...fd.shade); face.jaw = new THREE.Vector4(...fd.jaw);   // the shadow under the jaw
+    const jw = fd.jaw;   // the shadow under the jaw: per angle around the neck, the jaw's edge height (r) and the band's depth (g)
+    face.jaw = new THREE.DataTexture(Uint8Array.from({length: jw.th[2] * 4}, (_, i) => i % 4 < 2 ? jw.map[(i >> 2) * 2 + i % 4] : i % 4 === 3 ? 255 : 0), jw.th[2], 1, THREE.RGBAFormat);
+    face.jaw.magFilter = face.jaw.minFilter = THREE.LinearFilter; face.jaw.generateMipmaps = false; face.jaw.needsUpdate = true;
+    face.jawAxis = new THREE.Vector2(...jw.axis); face.jawTh = new THREE.Vector3(...jw.th); face.jawY = new THREE.Vector4(jw.y[0], jw.y[1] - jw.y[0], jw.deep, jw.up);
+    face.shade = new THREE.Vector3(...fd.shade);
     face.tex.flipY = false; face.tex.image.src = ASSETS[key + '/' + key + '_face.png'];
     face.tex.image.decode().then(() => { face.tex.needsUpdate = true; face.ready = true; mdFaceShow(face, face.want); }, () => {});
     mdFaceMat(main, face);
@@ -131,10 +135,10 @@ function modelBuild(key) {
 // front of the face and the sides behind the chin take none) and its colour is skin's (never on the collar or the hair
 // beside them), faded as its bind normal turns away from the front (face.front) and as the surface turns edge-on to the
 // camera (MD_FACE_SEE: the cosine of the angle between them where it is gone and where it is whole). And the shadow under
-// the jaw, in face.shade, with crisp smooth edges the same from every side: on the skin whose bind position seen from
-// the front is in its band under the jaw's edge (face.depth's g) or, more than face.jaw.x m behind the jaw's edge (a:
-// its depth), in the rows above it (b); in front of the line z = face.jaw.y + (y - face.jaw.z) * face.jaw.w (from behind
-// the ear to the collarbones: not the back of the neck). Chained after m's own shader changes.
+// the jaw, in face.shade, with crisp smooth edges the same from every side: on the skin whose bind position, at its
+// angle around the neck (face.jawAxis; face.jawTh: the first angle, step and count of face.jaw), is from face.jawY.w m
+// above the jaw's edge (face.jaw's r, over face.jawY.x + face.jawY.y) down to the band's depth under it (g, times
+// face.jawY.z; none where there is no jaw). Chained after m's own shader changes.
 const MD_FACE_SEE = [.15, .4];
 function mdFaceMat(m, face) {
   const prev = m.onBeforeCompile, key = m.customProgramCacheKey();
@@ -142,13 +146,13 @@ function mdFaceMat(m, face) {
     prev.call(m, sh, r);
     sh.uniforms.uFace = {value: face.tex}; sh.uniforms.uFaceOn = face.on;
     Object.assign(sh.uniforms, {uDepth: {value: face.depth}, uDepthBox: {value: face.depthBox}, uDepthZ: {value: face.depthZ}, uDepthCell: {value: face.depthCell},
-      uMap: {value: face.map}, uDecal: {value: face.decal}, uFront: {value: face.front}, uShade: {value: face.shade}, uJaw: {value: face.jaw}});
+      uMap: {value: face.map}, uDecal: {value: face.decal}, uFront: {value: face.front}, uShade: {value: face.shade}, uJaw: {value: face.jaw}, uJawAxis: {value: face.jawAxis}, uJawTh: {value: face.jawTh}, uJawY: {value: face.jawY}});
     // seen edge-on (the far eye of a turned head, its surface turning away), the decal fades out: drawn there it smeared
     const lit = sh.vertexShader.includes('vNormal = normalize( transformedNormal )');   // (the toon material; the basic one has no normals)
     sh.vertexShader = 'varying float vFaceSee;\nvarying vec3 vBind;\nvarying vec3 vBindN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvBind = transformed; vBindN = normal;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n\tvFaceSee = ' + (lit ? 'smoothstep(' + MD_FACE_SEE[0].toFixed(2) + ', ' + MD_FACE_SEE[1].toFixed(2) + ', dot(normalize(transformedNormal), normalize(-mvPosition.xyz)))' : '1.0') + ';');
     sh.fragmentShader = 'uniform sampler2D uFace;\nuniform float uFaceOn;\n' +
-      'uniform sampler2D uDepth;\nuniform vec4 uDepthBox;\nuniform vec4 uDepthZ;\nuniform vec2 uDepthCell;\nuniform vec3 uMap;\nuniform vec4 uDecal;\nuniform vec2 uFront;\nuniform vec3 uShade;\nuniform vec4 uJaw;\n' +
+      'uniform sampler2D uDepth;\nuniform vec4 uDepthBox;\nuniform vec4 uDepthZ;\nuniform vec2 uDepthCell;\nuniform vec3 uMap;\nuniform vec4 uDecal;\nuniform vec2 uFront;\nuniform vec3 uShade;\nuniform sampler2D uJaw;\nuniform vec2 uJawAxis;\nuniform vec3 uJawTh;\nuniform vec4 uJawY;\n' +
       'varying float vFaceSee;\nvarying vec3 vBind;\nvarying vec3 vBindN;\n' + sh.fragmentShader.replace('#include <map_fragment>',
       '#include <map_fragment>' +
       '\n\tvec2 dUv = (vBind.xy - uDepthBox.xy) * uDepthBox.zw;\n\tfloat dIn = step(0.0, dUv.x) * step(dUv.x, 1.0) * step(0.0, dUv.y) * step(dUv.y, 1.0);' +
@@ -157,9 +161,9 @@ function mdFaceMat(m, face) {
       '\n\tfloat dz = uDepthZ.x + dTex.r * uDepthZ.y - vBind.z;' +   // (the face's surface minus this point's depth)
       '\n\tfloat onFace = dIn * (1.0 - smoothstep(uDepthZ.z, 2.0 * uDepthZ.z, abs(dz)));\n\tvec3 nb = normalize(vBindN);' +
       '\n\tfloat skinLike = smoothstep(0.12, 0.22, diffuseColor.r - diffuseColor.b) * smoothstep(0.45, 0.6, diffuseColor.r);' +   // (the texture there: skin, not the collar's teal nor the hair)
-      '\n\tfloat zEdge = uDepthZ.x + dTex.a * uDepthZ.y;' +   // (the jaw's edge in this column: its depth)
-      '\n\tfloat under = dIn * max(smoothstep(0.47, 0.53, dTex.g), smoothstep(0.47, 0.53, dTex.b) * (1.0 - smoothstep(zEdge - uJaw.x - 0.002, zEdge - uJaw.x, vBind.z)))' +
-      ' * smoothstep(0.0, 0.002, vBind.z - uJaw.y - (vBind.y - uJaw.z) * uJaw.w) * skinLike * uFaceOn;' +
+      '\n\tvec4 jw = texture2D(uJaw, vec2(((degrees(atan(vBind.x - uJawAxis.x, vBind.z - uJawAxis.y)) - uJawTh.x) / uJawTh.y + 0.5) / uJawTh.z, 0.5));' +
+      '\n\tfloat yEdge = uJawY.x + jw.r * uJawY.y, yUp = yEdge + uJawY.w * clamp(jw.g * uJawY.z / 0.005, 0.0, 1.0);' +   // (the top: the edge, a little above it along the jaw)
+      '\n\tfloat under = smoothstep(yEdge - jw.g * uJawY.z, yEdge - jw.g * uJawY.z + 0.0005, vBind.y) * (1.0 - smoothstep(yUp - 0.0005, yUp, vBind.y)) * skinLike * uFaceOn;' +
       '\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, uShade, under);' +
       '\n\tvec4 faceTexel = texture2D(uFace, vec2((uMap.y + vBind.x * uMap.x - uDecal.x + 0.5) / (uDecal.z - uDecal.x), (uMap.z - vBind.y * uMap.x - uDecal.y + 0.5) / (uDecal.w - uDecal.y)));' +
       '\n\tfloat faceShare = onFace * skinLike * smoothstep(uFront.x, uFront.y, nb.z) * vFaceSee * uFaceOn * (1.0 - under);' +
@@ -467,7 +471,8 @@ function mdLookData(md, key) {
   const f32 = a => new Float32Array(u8.buffer, a[0], a[1]);
   return md.look = {fingers: j.fingers, spikes: j.spikes, sash: j.sash && {ribbons: j.sash.ribbons, body: j.sash.body, blend: new Uint16Array(u8.buffer, j.sash.blend[0], j.sash.blend[1])},
     move: j.move && {idx: new Uint16Array(u8.buffer, j.move.idx[0], j.move.idx[1]), pos: f32(j.move.pos), nor: f32(j.move.nor)},
-    face: j.face && Object.assign({}, j.face, {depth: Object.assign({}, j.face.depth, {map: new Uint8Array(u8.buffer, j.face.depth.map[0], j.face.depth.map[1])})}),
+    face: j.face && Object.assign({}, j.face, {depth: Object.assign({}, j.face.depth, {map: new Uint8Array(u8.buffer, j.face.depth.map[0], j.face.depth.map[1])}),
+      jaw: Object.assign({}, j.face.jaw, {map: new Uint8Array(u8.buffer, j.face.jaw.map[0], j.face.jaw.map[1])})}),
     skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
     line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1)};
 }
