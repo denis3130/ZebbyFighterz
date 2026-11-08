@@ -136,5 +136,7 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - `paint_from_drawing.py` ora riempie anche gli spazi tra i pezzi della texture col colore del pezzo vicino: i vecchi colori lì si vedevano come crepe lungo le cuciture.
 - Il modello che Denis ha fatto sul sito meshy.ai (con le ossa delle dita) non si raggiunge dalla API: vedi `docs/meshy/REN.md`, "Dita".
 
+- Per dopo (annotate, non fatte): stesso metodo delle 3 viste per Kael, se Denis fa il suo foglio; se Denis vuole punte dei capelli ancora più lunghe, un'altra prova Meshy (30 crediti; alleggerire il modello non le arrotonda: a 60.000 e a 16.000 triangoli la sagoma è la stessa).
+
 ## Prossimo passo
 Denis guarda l'anteprima con la testa nuova (e pugni, guardia, muscoli, bordi, fascia). Se gli piace: accendere `CFG.looks.ren` nel gioco (con i dati del look e la pittura dal disegno dentro `index.html`), ripubblicare gioco e app. Poi: Kael di Meshy (modello dal suo disegno + scheletro; le animazioni si riusano), mostrando prima saldo e costo.
