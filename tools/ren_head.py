@@ -517,6 +517,12 @@ def main(bust, pkg, out, texture=None):
         n0 = len(Q); Q = np.r_[Q, plug['pos']]; Nq = np.r_[Nq, plug['nor']]; UVq = np.r_[UVq, plug['uv']]
         top = np.r_[top, top[plug['src']]]; tw = np.r_[tw, tw[plug['src']]]
         lb_line = np.r_[lb_line, np.full(len(plug['pos']), PLUG_LINE)]; Ik = np.r_[Ik, plug['tri'] + n0]
+    # the collar joined to the vest (tools/ren_collar.py): a skirt from the head's bottom edge to the vest, the collar's band
+    # on the vest in the vest's paint
+    from ren_collar import collar_join, load_body
+    PB_, IB_, UVB_, JB_, WB_ = load_body(pkg); keep_b = np.ones(len(IB_), bool); keep_b[hide.astype(np.int64)] = False
+    pp = os.path.join(out, name + '_painted.jpg'); paint_b = np.asarray(Image.open(pp).convert('RGB')).astype(np.float64) if os.path.exists(pp) else None
+    Q, Nq, UVq, Ik, top, tw, lb_line, flat_blk = collar_join(Q, Nq, UVq, Ik, top, tw, lb_line, t, PB_, IB_, UVB_, JB_, WB_, keep_b, paint_b)
     nv = len(Q)
     head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
             'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb_line.astype(np.float32))}
@@ -532,6 +538,8 @@ def main(bust, pkg, out, texture=None):
     inside = ndimage.binary_dilation(np.asarray(mimg) > 0, iterations=2)
     _, (gy, gx) = ndimage.distance_transform_edt(~inside, return_indices=True); t = t[gy, gx]
     print('texture: %d%% of its texels in the head\'s pieces, the rest padded' % round(100 * inside.mean()))
+    from ren_collar import SKIRT_RGB
+    r0, c0, blk = flat_blk; t[r0 - blk:r0 + blk + 1, c0 - blk:c0 + blk + 1] = SKIRT_RGB   # (the skirt's flat colour: after the padding)
     im = Image.fromarray(t.round().astype(np.uint8))
     if max(im.size) > HEAD_TEX: im = im.resize((HEAD_TEX, HEAD_TEX), Image.LANCZOS)
     im.save(os.path.join(out, name + '_head.jpg'), quality=88, optimize=True)
