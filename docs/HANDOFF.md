@@ -1,11 +1,11 @@
-# Passaggio di consegne — aggiornato il 7 novembre 2026
+# Passaggio di consegne — aggiornato l'8 novembre 2026
 
 - **Registro dell'esecuzione**: `docs/superpowers/plans/2026-11-06-voidrise-tappa1-basi.ledger.md` (ogni decisione presa, con il suo costo, e i punti minori rimandati).
 
 ## Dove siamo
 - **Tappa 2a "Ren di Meshy in gioco" (7/11/2026)**, ramo `tappa2-ren-meshy` (parte da `tappa1-basi`): il lato 0 (Ren) è il modello Meshy con scheletro e 25 animazioni Meshy; Kael resta il lottatore provvisorio. Piano: `docs/superpowers/plans/2026-11-07-voidrise-tappa2a-ren-meshy.md`, registro con tutte le decisioni: `...-ren-meshy.ledger.md`. Task Meshy, crediti (135 spesi, saldo 1225) e come rifare il pacchetto: `docs/meshy/REN.md`.
   - Come funziona: `tools/meshy_pack.py` → `assets/ren/` (json + bin + jpg, dentro `index.html`, che ora pesa 4,5 MB); `src/e_model.js` disegna lo `SkinnedMesh` toon con contorno e calcola la posa con `mdPoseOf(F, S)`, funzione pura dello stato; la tabella azione → clip è `CFG.clips`. Il colpo cade nel fotogramma attivo della logica (tempo trovato al caricamento); camminate sulla distanza del piede a terra (niente scivolate); calcio basso con IK.
-  - Denis non è contento della faccia (capelli meno a punte del disegno): "teniamolo così per ora".
+  - Denis non era contento della faccia: l'8/11 la testa è rifatta dal suo foglio delle 3 viste (vedi "Testa nuova dal foglio delle 3 viste" più sotto; per ora solo nell'anteprima).
 - **Tappa 1 "Basi del combattimento" finita** (Task 1-12 del piano `docs/superpowers/plans/2026-11-06-voidrise-tappa1-basi.md`), sul ramo `tappa1-basi`, più le correzioni della revisione finale (vedi sotto). **Non è ancora unita a `main`**: si unisce solo dopo la prova di Denis.
 - Che cosa c'è: allenamento contro un manichino (fermo o casuale), 2 giocatori in locale, arena "La Grande Cascata", due lottatori provvisori (Ren e Kael, cel-shading) con la stessa tabella di mosse, comandi su touch, tastiera (2 set) e controller, HUD, menu, pausa, fine partita, "gira il telefono".
 - Pagina giocabile: vedi `CLAUDE.md` ("Pubblicare").
@@ -142,4 +142,4 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Per dopo (annotate, non fatte): stesso metodo delle 3 viste per Kael, se Denis fa il suo foglio; se Denis vuole punte dei capelli ancora più lunghe, un'altra prova Meshy (30 crediti; alleggerire il modello non le arrotonda: a 60.000 e a 16.000 triangoli la sagoma è la stessa).
 
 ## Prossimo passo
-Denis guarda l'anteprima con la testa nuova (e pugni, guardia, muscoli, bordi, fascia). Se gli piace: accendere `CFG.looks.ren` nel gioco (con i dati del look e la pittura dal disegno dentro `index.html`), ripubblicare gioco e app. Poi: Kael di Meshy (modello dal suo disegno + scheletro; le animazioni si riusano), mostrando prima saldo e costo.
+Denis guarda l'anteprima (versione 26) con la testa nuova dal suo foglio, le fasce e gli stivali come il disegno. Se gli piace: accendere il look nel gioco con i 3 passi scritti sopra ("Per accendere il look nel gioco"), test, ripubblicare gioco e app. Poi: Kael di Meshy (modello dal suo disegno + scheletro; le animazioni si riusano), mostrando prima saldo e costo.
