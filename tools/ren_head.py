@@ -53,6 +53,7 @@ HEAD_PALETTE = [((68, 55, 70), (75, 64, 73)), ((52, 41, 53), (58, 48, 58)), ((10
 HEAD_SPREAD = 28.
 TEMPLE = (.05, .095, 1.556, 1.581, -.004, .058)   # the temples (|x| from the middle in, out; y; z; m): see temples()
 TEMPLE_SKIN, TEMPLE_SINK, TEMPLE_STRETCH = .5, .012, .5
+TEMPLE_SMOOTH, TEMPLE_GROW, TEMPLE_RINGS = True, .008, 2   # see temple_smooth() (False: temple_locks(), the locks sunk)
 TEMPLE_LINE = (.045, .1, 1.555, 1.62, -.03, .075, .1, .004)   # see main(): the temples' outline pushed back
 CHEEKS = (.03, 1.525, 1.595, .015, 1.583, .07)   # see cheek_marks(): |x| over, y between, z over, the eyes' band (over y, within |x|)
 EARS = (.045, .1, 1.545, 1.615, -.035, .03)   # see cheek_marks(): |x|, y, z ranges (m)
@@ -113,6 +114,42 @@ def temple_locks(Q, UV, I, tex):
     d = Q[v][:, [0, 2]] - np.array([BODY_X, 0.]); d /= np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-9)
     Q[v, 0] -= d[:, 0] * TEMPLE_SINK; Q[v, 2] -= d[:, 1] * TEMPLE_SINK
     return int(v.sum()), int(lock.sum())
+
+
+def temple_smooth(Q, UV, I, tex):
+    """The temples' skin made one smooth surface (8/11, Denis: "di lato il viso si deforma, deve essere omogeneo"): the
+    locks Meshy laid flat on the temples (as temple_locks() finds them) and the points around them within TEMPLE_ZONE
+    (TEMPLE grown by TEMPLE_GROW m; not the eyes) are placed by a bi-harmonic fill over the mesh from the points around
+    them, which stay: no dents, no folds (sunk under the skin, as before, they left long folded triangles: bumps and
+    notches on the face's outline from three quarters). Moves Q in place; returns (points moved, lock triangles)."""
+    TS = tex.shape[0]; sk = _skin_px(tex); C = Q[I].mean(1); A = Q[I]
+    lock = np.zeros(len(I), bool); face = np.zeros(len(I), bool)
+    for k in np.nonzero(_in_temple(C) | _in_temple(A[:, 0]) | _in_temple(A[:, 1]) | _in_temple(A[:, 2]))[0]:
+        q, _ = _texels(UV[I[k]] * TS, A[k], TS)
+        if not len(q): continue
+        f = sk[q[:, 1], q[:, 0]].mean(); face[k] = f >= TEMPLE_SKIN; lock[k] = (f < TEMPLE_SKIN) and _in_temple(C[k:k + 1])[0]
+    key = np.round(Q / 1e-6).astype(np.int64); _, first, weld = np.unique(key, axis=0, return_index=True, return_inverse=True); weld = weld.ravel(); nw = len(first)
+    T = weld[I]; E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
+    from scipy.sparse import csr_matrix, identity
+    from scipy.sparse.linalg import spsolve
+    Adj = csr_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw))
+    deg = np.asarray(Adj.sum(1)).ravel()
+    # the free points: the locks' and, around them, those in the grown zone (not the eyes': their whites and lashes)
+    W = Q[first]; g = TEMPLE_GROW; x0, x1, y0, y1, z0, z1 = TEMPLE; axw = np.abs(W[:, 0] - BODY_X)
+    zone = (axw > x0 - g) & (axw < x1 + g) & (W[:, 1] > y0 - g) & (W[:, 1] < y1 + g) & (W[:, 2] > z0 - g) & (W[:, 2] < z1 + g)
+    cw = tex[np.clip((UV[first, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[first, 0] * TS).astype(int), 0, TS - 1)].astype(int)
+    eye = (cw.min(1) > 175) | ((cw.mean(1) < 60) & (W[:, 1] > 1.582))
+    free = np.zeros(nw, bool); free[np.unique(T[lock])] = True
+    for _ in range(TEMPLE_RINGS): free |= (Adj @ free.astype(float) > 0) & zone
+    free &= zone & ~eye
+    # bi-harmonic: L^2 x = 0 on the free points (L: the uniform graph Laplacian), the others fixed
+    L = (csr_matrix((deg, (np.arange(nw), np.arange(nw))), shape=(nw, nw)) - Adj).tocsr(); M = (L @ L).tocsr()
+    f = np.nonzero(free)[0]; c = np.nonzero(~free)[0]
+    if not len(f): return 0, int(lock.sum())
+    Mff = M[f][:, f].tocsc(); Mfc = M[f][:, c]
+    Xf = np.stack([spsolve(Mff, -(Mfc @ W[c, k])) for k in range(3)], 1)
+    W2 = W.copy(); W2[f] = Xf; Q[:] = W2[weld]
+    return int(len(f)), int(lock.sum())
 
 
 def temples(t, Q, UV, I):
@@ -416,7 +453,8 @@ def main(bust, pkg, out, texture=None):
     take = Wf[np.ix_(k, sh)] * mv[:, None]; Wf[np.ix_(k, sh)] -= take; Wf[k, sp] += take.sum(1)
     print('collar: %d vertices stiffer (their shoulders\' weight to the spine, up to %d%%)' % (int((mv > 0).sum()), round(100 * f)))
     print('skin: head %d, neck %d, collar and shirt %d vertices' % (head.sum(), neck.sum(), rest.sum()))
-    print('temples: %d points of %d locks laid flat sunk under the skin' % temple_locks(Q, UVq, Iq, tb))
+    if TEMPLE_SMOOTH: print('temples: %d points around %d locks laid flat placed smooth (bi-harmonic)' % temple_smooth(Q, UVq, Iq, tb))
+    else: print('temples: %d points of %d locks laid flat sunk under the skin' % temple_locks(Q, UVq, Iq, tb))
     _, first, weld = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel(); nw = len(first)
     T = weld[Iq]; E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
     from scipy.sparse import csr_matrix
