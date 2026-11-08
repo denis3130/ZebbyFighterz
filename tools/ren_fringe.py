@@ -36,6 +36,14 @@ DROP_DZ, DROP_Y = .0015, 1.57             # Meshy's fringe: in front of the face
 GAP, TUCK, BROW_Y, HANG = .0025, .0015, 1.598, 1.6   # the locks' depth (see above); HANG: their curve's power
 LOCK_TH, LOCK_EDGE, LOCK_BACK, GRID = .0018, .0015, .4, 8   # the pillow: thickness, its ramp from the edge (m), its back's share; mesh grid (px)
 CUT_MIN = 2500                            # pieces of the locks the sides' limits cut off, smaller than that (px): left out
+EXTRA_LOCKS = [   # see fringe(): polygons (the sheet's front px) around the locks the masks miss
+    [(276, 300), (300, 298), (310, 380), (310, 418), (290, 420), (275, 412), (279, 380)],   # the long lock between the eyes, its lower part
+    [(384, 258), (414, 258), (417, 350), (401, 354), (388, 300)],                           # the lock over the right brow's outer half
+    [(182, 290), (226, 290), (222, 352), (206, 364), (186, 368)],                           # the locks over the left brow's outer end
+]
+UNDER_LOCKS = (23, 21, 24)                # see fringe(): the forehead under the locks (the sheet's hair shadow)
+BACK = .01                                # the forehead's painting: not on what is that far behind the face (m: the back of the head
+                                          # seen through the holes between the brows, painted skin, showed as a skin V on the nape)
 BRIDGE, BRIDGE_SKIN = (.022, 1.575, 1.605, .004), (248, 182, 135)   # see fringe(): Meshy's lock tips on the nose's bridge; the skin's colour
 SPIKES = (.068, 1.572, 1.614, 0, .004)   # see fringe(): the eyes' band (x from the middle, y, -, depth to the face; m)
 
@@ -196,6 +204,17 @@ def fringe(Q, N, UV, I, tex, name, out):
     touch = ndimage.sum(((np.abs(jj - bl[:, None]) < 3) | (np.abs(jj - br[:, None]) < 3)) & L, lab, range(1, n + 1)) > 0
     top = ndimage.maximum(np.broadcast_to(Y, L.shape), lab, range(1, n + 1))   # (each piece's top: the pieces under the brows, a
     L = np.isin(lab, np.nonzero((sz >= 80) & ~(touch & (sz < CUT_MIN)) & (top > BROW_Y + .002))[0] + 1)   # lock's tip the eye's mask cut off, float)
+    # the locks the rules above miss, placed by hand (EXTRA_LOCKS: polygons in the sheet's front px around them): their
+    # parts over the brows and the eyes' corners, at the temples and down the cheeks (dark, shadowed, they read as lines);
+    # the sheet's hair colours inside each (not its skin, eyes, ears' brown, background)
+    bg_s = np.abs(w - np.array([210, 210, 215.])).sum(2) < 45
+    hair_s = ~skin_s & ~brown_s & ~white_s & ~bg_s & (lum < 150)
+    pm = Image.new('L', (W, H), 0); dp = ImageDraw.Draw(pm)
+    for poly in EXTRA_LOCKS:   # (sheet px -> the frame's px)
+        dp.polygon([((((u_ - U0 + .5) * K + X0) - X0) / PX - .5, (Y1 - (Y1 - (v_ - V0 + .5) * K)) / PX - .5) for u_, v_ in poly], fill=255)
+    extra = hair_s & (np.asarray(pm) > 0) & ~ndimage.binary_dilation(white_s, iterations=1)
+    extra = ndimage.binary_opening(extra, iterations=1)
+    L |= extra
     # their depth: from the crown's edge (TUCK behind it) down to GAP in front of the face at the brows (and below;
     # where the hairline comes down to the brows, at the sides, close to the face all along)
     tt = np.where(ycut[None, :] > BROW_Y + .008, np.clip((Y - BROW_Y) / np.maximum(ycut[None, :] - BROW_Y, 1e-4), 0, 1), 0.)
@@ -224,6 +243,8 @@ def fringe(Q, N, UV, I, tex, name, out):
     pad = lambda arr: np.pad(arr, ((0, max(0, tr0 + TH - H)), (0, max(0, tc0 + TW - W))) + ((0, 0),) * (arr.ndim - 2), mode='edge')[tr0:tr0 + TH, tc0:tc0 + TW]
     lk = pad(L); _, (py, px) = ndimage.distance_transform_edt(~lk, return_indices=True)
     rgba = np.dstack([pad(w)[py, px], ndimage.gaussian_filter(lk.astype(float), .7) * 255]).clip(0, 255).astype(np.uint8)
+    if os.environ.get('REN_FRINGE_DEBUG'):   # (a try's masks: the sheet over the frame, the locks, the region, the hairline)
+        np.savez(os.environ['REN_FRINGE_DEBUG'], w=w, L=L, D=D, front=front, ycut=ycut, z_r=z_r, rgb_r=rgb_r, zsm=zsm, browtop=browtop, bl=bl, br=br)
     os.makedirs(out, exist_ok=True); Image.fromarray(rgba, 'RGBA').save(os.path.join(out, name + '_fringe.png'), optimize=True)
     blob = bytearray()
     def put(arr):
@@ -232,8 +253,11 @@ def fringe(Q, N, UV, I, tex, name, out):
     js = {'v': 1, 'verts': int(nv), 'tris': len(idx), 'pos': put(pos.astype(np.float32)), 'uv': put(uvs.astype(np.float32)), 'idx': put(idx.astype(np.uint16 if nv < 65536 else np.uint32))}
     open(os.path.join(out, name + '_fringe.bin'), 'wb').write(bytes(blob)); json.dump(js, open(os.path.join(out, name + '_fringe.json'), 'w'), separators=(',', ':'))
     # the forehead under the old fringe (seen from the front, over the region, under the hairline, above the head's own
-    # brows, on the face): the sheet's skin there, its shadows kept; under the sheet's hair, the skin's colour
+    # brows, on the face): the sheet's skin there, its shadows kept; under the sheet's hair, under the locks, the hair's
+    # shadow (UNDER_LOCKS: from the side, between the locks and the forehead and up to the crown's hair, a shadow, not
+    # bare skin), elsewhere the sheet's own hair
     skin_col = np.median(w[skin_s & front & (Y > 1.615)], 0)
+    under = ndimage.binary_dilation(L, iterations=3)
     mdk = (rgb_r.astype(int).mean(2) < 60) & (Y > 1.594) & (Y < 1.62) & (np.abs(X) < .07) & np.isfinite(z_r) & (z_r < zsm + .002)
     mth = ndimage.binary_opening(mdk, iterations=3); lab, n = ndimage.label(mth)
     mbrows = np.isin(lab, np.argsort(-ndimage.sum(mth, lab, range(1, n + 1)))[:2] + 1) if n else mth
@@ -241,12 +265,13 @@ def fringe(Q, N, UV, I, tex, name, out):
     kept = np.nonzero(keep)[0]; n_t = n_px = 0
     for kk in np.unique(t_r[t_r >= 0]):
         k_ = kept[kk]
-        if not ok[k_] or not D[ci[k_], cj[k_]] or C[k_, 1] >= ycut[cj[k_]] + .004 or C[k_, 1] <= Y1 - (btm[cj[k_]] - 2) * PX or dz[k_] > .004: continue
+        if not ok[k_] or not D[ci[k_], cj[k_]] or C[k_, 1] >= ycut[cj[k_]] + .004 or C[k_, 1] <= Y1 - (btm[cj[k_]] - 2) * PX or dz[k_] > .004 or dz[k_] < -BACK: continue
         q, p3 = texels(UV[I[k_]] * TS, P[I[k_]], TS)
         if not len(q): continue
         sc = np.stack([ndimage.map_coordinates(fs[..., m], [(Y1 - p3[:, 1]) / K + V0 - .5, (p3[:, 0] - X0) / K + U0 - .5], order=1) for m in range(3)], 1)
         isk = (sc[:, 0] > 60) & (sc[:, 0] - sc[:, 2] > 25)
-        tex[q[:, 1], q[:, 0]] = np.where(isk[:, None], sc, skin_col); n_t += 1; n_px += len(q)
+        fi = np.clip(((Y1 - p3[:, 1]) / PX - .5).round().astype(int), 0, H - 1); fj = np.clip(((p3[:, 0] - X0) / PX - .5).round().astype(int), 0, W - 1)
+        tex[q[:, 1], q[:, 0]] = np.where(isk[:, None], sc, np.where(under[fi, fj][:, None], UNDER_LOCKS, sc)); n_t += 1; n_px += len(q)
     print('fringe: Meshy\'s lock tips on the nose\'s bridge painted as skin (%d triangles, %d texels); their spikes around the eyes (%d texels)' % (int(bridge.sum()), n_bridge, n_spk))
     print('fringe: Meshy\'s fringe over the forehead removed (%d triangles), the forehead painted from the sheet (%d triangles), '
           'the sheet\'s locks: %d verts, %d tris, texture %dx%d' % (int(drop.sum()), n_t, nv, len(idx), TW, TH))
