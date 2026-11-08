@@ -42,7 +42,8 @@ DRAW_EYE, DRAW_CHIN = 168., 238.           # the drawing's rows (ren.png) of the
 BODY_NECK = (1.44, 1.47)                   # the body's neck: its skin between these heights fits its axis
 HIDE_Y = 1.445                             # the body's triangles above it are hidden
 BODY_X = .006                              # the body's middle (x)
-HIDE_RAY, HIDE_NECK_R = .08, .075   # (and all of them that are skin, or within that of the neck's axis: the old neck)
+HIDE_RAY, HIDE_NECK_R = .08, .075
+TAILS_PIECE, TAILS_Y = 200, (.5, 1.1)   # see main(): the old tails' floating pieces (triangles), where (y, m)   # (and all of them that are skin, or within that of the neck's axis: the old neck)
 HEAD_SMOOTH, HEAD_JAW, HEAD_TOP = 3, 1.515, 1.535   # (HEAD_TOP: above it all on the Head bone; the collar ends at 1.529)
 COLLAR_STIFF = (1.46, 1.50, .8)   # see main(): the collar's top on the spine, not on the shoulders
 # Meshy's colours to the sheet's (its texture a little lighter and greyer: pink skin, light shadows): each texel moves by
@@ -481,6 +482,22 @@ def main(bust, pkg, out, texture=None):
     old_collar = tips = np.zeros(len(cand), bool)   # (hiding more of the old collar opened holes into the outline's black)
     # (the old collar below HIDE_Y stays: the vest over the chest is the same piece, hidden it left holes)
     hide = np.sort(np.concatenate([np.nonzero(up & (hw3 >= .5))[0], cand[covered]])).astype(np.uint32)
+    # the sash's old tails (8/11, Denis: "rimuovere dal corpo la vecchia fascia ... le fasce che abbiamo sostituito con quelle
+    # che si muovono"): Meshy's two tails hanging at the hips (ren_look.sash_tails: its orange under the band; the ribbons
+    # of the look replace them), hidden too, with the pieces their removal leaves floating (under TAILS_PIECE triangles,
+    # their dark edges); they lie on the trousers, which are whole under them (no holes)
+    from ren_look import sash_tails
+    tv = np.zeros(len(P), bool)
+    for tl in sash_tails(P, col, I): tv[tl] = True
+    gone = tv[I].sum(1) >= 2; kept = np.ones(len(I), bool); kept[hide] = False; kept &= ~gone
+    from scipy.sparse import csr_matrix as _csr
+    from scipy.sparse.csgraph import connected_components as _cc
+    _, wb = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_inverse=True); wb = wb.ravel(); K = np.nonzero(kept)[0]
+    Aw = _csr((np.ones(3 * len(K)), (np.repeat(np.arange(len(K)), 3), wb[I[K]].ravel())), shape=(len(K), wb.max() + 1))
+    _, lab = _cc(Aw @ Aw.T, directed=False); szc = np.bincount(lab)
+    Ck = P[I[K]].mean(1); bits = K[(szc[lab] < TAILS_PIECE) & (Ck[:, 1] > TAILS_Y[0]) & (Ck[:, 1] < TAILS_Y[1])]
+    hide = np.unique(np.concatenate([hide, np.nonzero(gone)[0], bits])).astype(np.uint32)
+    print('old sash tails: %d triangles hidden, and %d of the pieces their removal left floating' % (int(gone.sum()), len(bits)))
     print('hidden: %d of the old head, %d of %d others under the new head or of the old collar (%d of it, %d by its pulled points; %d kept: not covered)' % (
         int((up & (hw3 >= .5)).sum()), int(covered.sum()), len(cand), int(old_collar.sum()), int(tips.sum()), int((~covered).sum())))
     blob = bytearray()
