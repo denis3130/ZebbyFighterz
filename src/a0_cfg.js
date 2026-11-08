@@ -101,8 +101,11 @@ const CFG={
   // sash's tails as ribbons of their own, swinging with gravity (e_model mdSash) instead of painted on the legs;
   // faceShape = the shape as drawn (tools/ren_look.py drawn_shape: the face smooth below the eyes with a small nose,
   // the fringe off the eyes, the collar's points) and the drawn face's features, the jaw's line and the neck's shadow
-  // under it as a decal of their own (e_model mdFaceMat).
-  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false}},
+  // under it as a decal of their own (e_model mdFaceMat); head = the new head from Denis's 3-view sheet (tools/ren_head.py:
+  // its old head, neck and collar's top hidden); paint = the drawing painted on the model (tools/paint_from_drawing.py,
+  // ASSETS '<char>/<char>_painted.jpg') instead of Meshy's own paint; clips = CFG.clips entries of its own (by act).
+  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false,
+    paint:false, clips:null}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m

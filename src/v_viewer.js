@@ -31,9 +31,9 @@ const VW_NAMES = {idle: 'Guardia', guard: 'Parata', crouch: 'Accovacciato', guar
 function vwBoot() {
   // The proposal Denis is judging (7/11/2026): guard A (the boxing guard the punches start from, breathing), fists
   // (open only in the special and the throw) and the head held a little higher.
-  Object.assign(CFG.looks.ren, {fists: true, headUp: 12, spikes: true, faceLine: true, line: {w: .007, back: .02}, flatFace: true, sash: true, faceShape: true, head: true});
   const guard = {c: 'a191', at: 0, breathe: 1};
-  Object.assign(CFG.clips, {idle: guard, intro: guard, crouch: {low: {c: 'a54', at: .67}, up: guard}});
+  Object.assign(CFG.looks.ren, {fists: true, headUp: 12, spikes: true, faceLine: true, line: {w: .007, back: .02}, flatFace: true, sash: true, faceShape: true, head: true,
+    clips: {idle: guard, intro: guard, crouch: {low: {c: 'a54', at: .67}, up: guard}}});   // (the paint: the viewer's own buttons, vwPaint)
   const it = modelBuild('ren');
   if (!it) { document.getElementById('now').textContent = 'Il modello di Ren non è nel pacchetto.'; return; }
   const cv = document.getElementById('view');

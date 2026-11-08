@@ -71,7 +71,7 @@ function modelBuild(key) {
   // The texture appears once decoded; until then the mesh draws with an empty map (no error, no warning).
   const img = new Image(), tex = new THREE.Texture(img);
   tex.flipY = false;   // glTF UVs
-  img.src = ASSETS[key + '/' + key + '.jpg'];
+  img.src = (lk.paint && ASSETS[key + '/' + key + '_painted.jpg']) || ASSETS[key + '/' + key + '.jpg'];   // (the look's: the drawing painted on it)
   img.decode().then(() => { tex.needsUpdate = true; }, () => {});
   const main = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true});
   if (flat) {   // the look's flat light: per vertex, the share of the texture's own colour (the face's drawn shading)
@@ -537,7 +537,7 @@ function mdRest(md) {
 function mdPoseOf(F, S) {
   const md = mdData(F.char);
   if (!md) return null;
-  const C = CFG.clips, c = {F, S, m: CFG.moves[F.act], id: F.act};
+  const lk = CFG.looks[F.char], C = lk && lk.clips ? mdLookClips(lk) : CFG.clips, c = {F, S, m: CFG.moves[F.act], id: F.act};
   let e = C[F.act];
   switch (F.act) {
     case 'block': e = F.prev & BTN.D ? C.guardC : C.guard; break;   // a block with down held is crouched, as in the sim
@@ -549,12 +549,19 @@ function mdPoseOf(F, S) {
       break;
     case 'rollF': case 'rollB': e = C.roll; break;
   }
-  const p = mdEval(md, e || C.idle, c), lk = CFG.looks[F.char];
+  const p = mdEval(md, e || C.idle, c);
   // the look's raised head, not when crouched (as the sim's hurtboxes: there it lifted the head above the crouching one)
   if (lk && lk.headUp && !(CROUCHED[F.act] || (F.act === 'block' && (F.prev & BTN.D)))) mdBoneTurn(p, md.index.Head, MD_X, -lk.headUp);
   return p;
 }
 function mdUp(u) { return Math.max(0, Math.min(1, u)); }
+// CFG.clips with a look's own entries (lk.clips) over them, made once per look (and again if either changes).
+const MD_LOOK_CLIPS = new WeakMap();
+function mdLookClips(lk) {
+  const m = MD_LOOK_CLIPS.get(lk);
+  if (m && m.base === CFG.clips && m.own === lk.clips) return m.C;
+  const C = Object.assign({}, CFG.clips, lk.clips); MD_LOOK_CLIPS.set(lk, {base: CFG.clips, own: lk.clips, C}); return C;
+}
 
 // Entry e of CFG.clips (see there) as a pose; c = {F, S, m: the move, id: the act, u (air acts), force (a clip time
 // used instead of the move's, by the hit-time search)}. The Hips stay over the root in x and z (the sim moves the
