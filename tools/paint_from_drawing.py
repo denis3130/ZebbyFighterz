@@ -40,12 +40,17 @@ def load(pkg):
     J = f(me['jnt'], np.uint8).reshape(-1, 4); W = f(me['wgt']).reshape(-1, 4)
     hands = [i for i, b in enumerate(m['bones']) if b['n'] in ('LeftHand', 'RightHand')]
     head = [i for i, b in enumerate(m['bones']) if b['n'] == 'Head']; neck = [i for i, b in enumerate(m['bones']) if b['n'] == 'neck']
-    return name, P, N, UV, I, (np.isin(J, hands) * W).sum(1), (np.isin(J, head) * W).sum(1), (np.isin(J, neck) * W).sum(1)
+    fore = [i for i, b in enumerate(m['bones']) if b['n'] in ('LeftForeArm', 'RightForeArm')]
+    return name, P, N, UV, I, (np.isin(J, hands) * W).sum(1), (np.isin(J, head) * W).sum(1), (np.isin(J, neck) * W).sum(1), (np.isin(J, fore) * W).sum(1)
+
+
+def _mark(r, c, n):
+    m = np.zeros((n, n), bool); m[r, c] = True; return m
 
 
 if len(sys.argv) != 4: sys.exit(__doc__)
 PKG, DRAWING, OUT = sys.argv[1:]
-name, P, N, UV, I, HANDW, HEADW, NECKW = load(PKG)
+name, P, N, UV, I, HANDW, HEADW, NECKW, FOREW = load(PKG)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ren_look import drawn_shape, drawing_fit, drawing_band, sash_tails, sash_orange, sash_band_end, SASH_BAND, FACE_X, FACE_DECAL, \
     head_skin, neck_zone
@@ -277,6 +282,25 @@ inv_ = (pos[:, 1] > V_NECK[1] - .04) & (pos[:, 1] < V_TOP) & (pos[:, 2] > -.02) 
 oc = out[ys, xs]; mark = inv_ & (oc.mean(1) < skin_col.mean() - 40)
 out[ys[mark], xs[mark]] = skin_col
 print('chest under the new collar: %d dark texels of the old collar repainted skin' % int(mark.sum()))
+# --- the ankles' wraps (Denis's "niente cose strane"): the drawing's wrap lines, projected on the ankles' round sides,
+# stretched into grey and black smears; there Meshy's own paint (clean white wraps with soft folds): its light, grey
+# texels (min channel over WRAP_LIGHT, spread under WRAP_GREY) below WRAP_Y m, and the drawing's dark marks among them ---
+WRAP_LIGHT, WRAP_GREY, WRAP_Y = 150, 45, .32
+t0 = TEX[ys, xs]; wrapm = (t0.min(1) > WRAP_LIGHT) & (t0.max(1) - t0.min(1) < WRAP_GREY) & (pos[:, 1] < WRAP_Y)
+wrapm = ndimage.binary_dilation(np.zeros((TS, TS), bool) | _mark(ys[wrapm], xs[wrapm], TS), iterations=2)[ys, xs] & (pos[:, 1] < WRAP_Y) & (t0.mean(1) > 90)
+out[ys[wrapm], xs[wrapm]] = TEX[ys[wrapm], xs[wrapm]]
+print('ankle wraps: %d texels in Meshy\'s own clean paint' % int(wrapm.sum()))
+# and every wrap (forearms, ankles) a clean white with only the crisp dark lines kept (soft grey smudges, from Meshy's
+# baked shading and the drawing's blurred edges, read as dirt): white over WRAP_KEEP[0] of luminance, the line's own
+# colour under WRAP_KEEP[1], blended between
+WRAP_KEEP = (175., 95.)
+wr = (t0.min(1) > WRAP_LIGHT) & (t0.max(1) - t0.min(1) < WRAP_GREY) & ((HEADW[I[ks]] * bary).sum(1) < .5)
+# (on the forearms, all of Meshy's light grey too: its baked shading on the wraps; the skin and the wrist's band are not grey)
+wr |= ((FOREW[I[ks]] * bary).sum(1) > .5) & (t0.max(1) - t0.min(1) < 40) & (t0.mean(1) > 95)
+cw = out[ys[wr], xs[wr]]; lw = cw.mean(1); white = np.median(cw[lw > 200], 0) if (lw > 200).any() else np.array([235., 233, 230])
+keep = np.clip((WRAP_KEEP[0] - lw) / (WRAP_KEEP[0] - WRAP_KEEP[1]), 0, 1)[:, None]
+out[ys[wr], xs[wr]] = white * (1 - keep) + cw * keep
+print('wraps: %d texels cleaned to white %s, lines kept' % (int(wr.sum()), np.round(white)))
 # --- padding: every texel outside the triangles takes its nearest triangle texel's colour (the gutters between UV pieces
 # kept Meshy's old colours, which showed as thin cracks along the seams once filtered, the sash's orange most of all) ---
 inside = tid >= 0

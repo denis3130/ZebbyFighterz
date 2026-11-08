@@ -51,6 +51,7 @@ LINE_THUMB = (.08, .92)   # none where the thumb's skin turns into the hand's (t
 LINE_PALM = .2       # nor on the hand's inner side (its normal this far toward the palm's): curled into the fist, it
                      # faces itself, its shell showed as black wedges in the gaps between the fingers (Denis: "lo spigolo")
 FLAT_BODY = 1.       # flat light on the front of the body (the drawing), as on the face
+WRAP_LIGHT, WRAP_GREY = 150, 45   # the wraps in Meshy's texture: every channel over WRAP_LIGHT, their spread under WRAP_GREY
 PERSIST = .015       # a finger stands out at least this far (geodesic, m) from where it joins the hand
 FINGER_SEG = (.45, .30, .25)    # proximal, middle and distal phalanx: shares of a finger's length
 FREE = .80           # the free part of a finger (from the web between the fingers to the tip): share of its length
@@ -844,7 +845,18 @@ def main(pkg, out, drawing):
     flat = np.maximum(flat, mid * smooth(-.2, .1, N[:, 2]))
     whn = wh + ((J == idx['neck']) * W).sum(1); hs = head_skin(P, I, col, whn)
     skc = (col[:, 0] > 120) & (col[:, 1] > 75) & (col[:, 0] - col[:, 2] > 40)
-    flat = np.maximum(flat, np.maximum(hs * smooth(.3, .7, whn), skc & neck_zone(P))).astype(np.float32)   # the head's and the neck's skin all flat
+    flat = np.maximum(flat, np.maximum(hs * smooth(.3, .7, whn), skc & neck_zone(P)))   # the head's and the neck's skin all flat
+    # the white wraps (forearms, ankles) all flat too (Denis, 8/11: "niente cose strane"): the toon light's bands on them,
+    # along Meshy's facets, were grey blocks; the drawing's wraps are white with thin lines (WRAP_*: Meshy's colour there)
+    wraps = (col.min(1) > WRAP_LIGHT) & (col.max(1) - col.min(1) < WRAP_GREY) & (wh < .5)
+    fw = ((J == idx['LeftForeArm']) * W).sum(1) + ((J == idx['RightForeArm']) * W).sum(1)
+    wraps |= (fw > .5) & (col.max(1) - col.min(1) < 40) & (col.mean(1) > 95)   # (and Meshy's grey shading on the forearms' wraps)
+    _, first_, weld_ = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld_ = weld_.ravel()
+    ww = np.zeros(len(first_), bool); np.logical_or.at(ww, weld_, wraps); T_ = weld_[I]
+    ring = np.zeros(len(first_), bool); ring[T_[ww[T_].sum(1) >= 2].ravel()] = True   # (one ring more, where most of a triangle is wrap)
+    wraps = (ww | ring)[weld_] & ((col.max(1) - col.min(1) < 60) | (col.mean(1) < 70)) & (wh < .5)   # (not the skin beside them)
+    flat = np.maximum(flat, wraps.astype(float)).astype(np.float32)
+    print('flat light on the wraps: %d vertices' % int(wraps.sum()))
     nose = (wh > .5) & (np.abs(P[:, 0] - FACE_X) < NOSE_BOX[0]) & (P[:, 1] > NOSE_BOX[1][0]) & (P[:, 1] < NOSE_BOX[1][1]); line[nose] = 0
     print('flat light on', int((flat > .5).sum()), 'vertices (head', int(((flat > .5) & (wh > .5)).sum()), ')')
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
