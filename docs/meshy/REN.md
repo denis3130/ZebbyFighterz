@@ -67,4 +67,6 @@ Rifarla (i GLB stanno in `meshy/meshy_output/20261108_011130_voidrise-ren-testa_
    posizione sul corpo, ossa, occhi a filo del viso, frangia vicina al viso, colori del foglio; scrive `ren_head.json`,
    `.bin`, `.jpg` (i punti di riferimento di ogni busto stanno in `BUSTS`).
 3. `python3 tools/paint_from_drawing.py assets/ren docs/ref/personaggi/ren.png viewer_assets/ren/ren_painted.jpg` (pulisce
-   il petto sotto il colletto nuovo), poi `bash mk.sh`.
+   il petto sotto il colletto nuovo), poi `python3 tools/paint_views.py assets/ren viewer_assets/ren/ren_painted.jpg` (la schiena dal foglio da dietro,
+   i fianchi di gilet, pantaloni e stivali dai fogli di tre quarti), poi di nuovo il passo 2 (il colletto prende la
+   pittura del gilet), poi `bash mk.sh`.
