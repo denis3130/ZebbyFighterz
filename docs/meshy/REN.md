@@ -47,3 +47,23 @@ Foglio di controllo di tutte le pose: `python3 tools/pose_sheet.py out.png [move
   spostate lungo le dita) e il pollice sopra indice e medio. Solo dove
   `CFG.looks.ren.fists` è acceso (per ora nell'anteprima).
 
+
+## Testa nuova dal foglio delle 3 viste (8/11/2026)
+Denis ha dato il foglio `docs/ref/personaggi/ren_testa_3viste.png` (destra, fronte, sinistra): "fallo IDENTICO da
+tripla A". La testa vecchia di Meshy (fatta dal disegno del corpo intero) non aveva capelli, mento, orecchie e colletto
+come il foglio, quindi la testa è nuova; corpo, scheletro e animazioni restano.
+
+| Passo | Task | Crediti |
+|---|---|---|
+| Prova 1: multi-image-to-3d con le 3 viste intere (fino al petto), texture 2k — scartata (viso meno definito) | `01a1b8b6-0401-7601-96e5-44ae018760ec` | 30 |
+| Prova 2: le 3 viste ritagliate su testa e colletto, texture 4k — usata | `01a1b8c5-75d7-778c-b63e-38a5817727a9` | 30 |
+| **Totale** (saldo da 1190 a 1130) | | **60** |
+
+Rifarla (i GLB stanno in `meshy/meshy_output/20261108_011130_voidrise-ren-testa_4183/`, fuori dal repository):
+1. `python3 tools/mesh_prep/decimate_glb.py testa_v2.glb meshy/head/testa_v2_face.glb 16000 4500 -0.3 0.3 -0.16 0.34 0.1`
+   — 16.000 triangoli, di cui 4.500 nel viso (il riquadro del viso nelle unità del GLB): occhi e mascella precisi.
+2. `python3 tools/ren_head.py meshy/head/testa_v2_face.glb assets/ren viewer_assets/ren` — taglio sopra le spalle,
+   posizione sul corpo, ossa, occhi a filo del viso, frangia vicina al viso, colori del foglio; scrive `ren_head.json`,
+   `.bin`, `.jpg` (i punti di riferimento di ogni busto stanno in `BUSTS`).
+3. `python3 tools/paint_from_drawing.py assets/ren docs/ref/personaggi/ren.png viewer_assets/ren/ren_painted.jpg` (pulisce
+   il petto sotto il colletto nuovo), poi `bash mk.sh`.
