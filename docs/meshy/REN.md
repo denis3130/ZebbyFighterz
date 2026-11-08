@@ -66,7 +66,9 @@ Rifarla (i GLB stanno in `meshy/meshy_output/20261108_011130_voidrise-ren-testa_
 2. `python3 tools/ren_head.py meshy/head/testa_v2_face.glb assets/ren viewer_assets/ren` — taglio sopra le spalle,
    posizione sul corpo, ossa, occhi a filo del viso, frangia vicina al viso, colori del foglio; scrive `ren_head.json`,
    `.bin`, `.jpg` (i punti di riferimento di ogni busto stanno in `BUSTS`).
-3. `python3 tools/paint_from_drawing.py assets/ren docs/ref/personaggi/ren.png viewer_assets/ren/ren_painted.jpg` (pulisce
-   il petto sotto il colletto nuovo), poi `python3 tools/paint_views.py assets/ren viewer_assets/ren/ren_painted.jpg` (la schiena dal foglio da dietro,
-   i fianchi di gilet, pantaloni e stivali dai fogli di tre quarti), poi di nuovo il passo 2 (il colletto prende la
-   pittura del gilet), poi `bash mk.sh`.
+3. La pittura del corpo (dal 8/11 sera: quella di Meshy, più pulita, con le righe dei fogli ricalcate leggere):
+   `python3 tools/paint_from_drawing.py assets/ren docs/ref/personaggi/ren.png /tmp/ren_drawn.jpg`, poi
+   `python3 tools/paint_views.py assets/ren /tmp/ren_drawn.jpg` (i fogli dipinti sul modello: davanti, dietro, tre
+   quarti; da qui si prendono solo le righe sottili), poi `python3 tools/paint_meshy.py assets/ren /tmp/ren_drawn.jpg
+   viewer_assets/ren/ren_painted.jpg` (la texture di Meshy, via l'arancione delle vecchie code sotto la fascia, le
+   righe ricalcate); poi di nuovo il passo 2 (il colletto prende la pittura del gilet), poi `bash mk.sh`.

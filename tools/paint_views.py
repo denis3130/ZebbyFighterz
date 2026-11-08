@@ -106,10 +106,8 @@ def seen_ids(P, I, sel, u, v, depth, H, Wd):
     a = np.asarray(idimg).astype(np.int64); return a[..., 0] + (a[..., 1] << 8) + (a[..., 2] << 16) - 1
 
 
-def main(pkg, painted, debug=None):
-    name, P, N, UV, I, HEADW, HANDW, FOREW, ARMW = load(pkg)
-    TEX = np.asarray(Image.open(painted).convert('RGB')).astype(np.float64); TS = TEX.shape[0]
-    # the texels: their triangle, barycentrics, 3D point and normal
+def texel_table(P, N, UV, I, TS):
+    """Every texel inside a triangle's piece: (rows, cols, its triangle, barycentrics, 3D point, normal)."""
     uvimg = Image.new('RGB', (TS, TS), (0, 0, 0)); dr = ImageDraw.Draw(uvimg)
     for k, t in enumerate(I):
         c = k + 1; dr.polygon([(UV[q, 0] * TS, UV[q, 1] * TS) for q in t], fill=(c & 255, (c >> 8) & 255, (c >> 16) & 255))
@@ -122,6 +120,13 @@ def main(pkg, painted, debug=None):
     bv = (d11 * d20 - d01 * d21) / den; bw_ = (d00 * d21 - d01 * d20) / den
     bary = np.clip(np.stack([1 - bv - bw_, bv, bw_], 1), 0, 1); bary /= bary.sum(1, keepdims=True)
     pos = (P[I[ks]] * bary[..., None]).sum(1); nor = (N[I[ks]] * bary[..., None]).sum(1); nor /= np.maximum(np.linalg.norm(nor, axis=1, keepdims=True), 1e-9)
+    return ys, xs, ks, bary, pos, nor
+
+
+def main(pkg, painted, debug=None):
+    name, P, N, UV, I, HEADW, HANDW, FOREW, ARMW = load(pkg)
+    TEX = np.asarray(Image.open(painted).convert('RGB')).astype(np.float64); TS = TEX.shape[0]
+    ys, xs, ks, bary, pos, nor = texel_table(P, N, UV, I, TS)   # (the texels: their triangle, barycentrics, 3D point and normal)
     from collections import defaultdict
     vt = defaultdict(set)
     for k, t in enumerate(I):
