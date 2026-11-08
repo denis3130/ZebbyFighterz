@@ -57,7 +57,8 @@ come il foglio, quindi la testa è nuova; corpo, scheletro e animazioni restano.
 |---|---|---|
 | Prova 1: multi-image-to-3d con le 3 viste intere (fino al petto), texture 2k — scartata (viso meno definito) | `01a1b8b6-0401-7601-96e5-44ae018760ec` | 30 |
 | Prova 2: le 3 viste ritagliate su testa e colletto, texture 4k — usata | `01a1b8c5-75d7-778c-b63e-38a5817727a9` | 30 |
-| **Totale** (saldo da 1190 a 1130) | | **60** |
+| Prova 3: viste strette sulla testa (le punte dei capelli più grandi nell'immagine), texture 4k — scartata: punte più lunghe in miniatura, ma misurata sul foglio sopra il colletto la sagoma non è più vicina (sovrapposizione media 0,863 contro 0,876 della prova 2) | `01a1b942-88c8-74d9-aafc-4598f8478250` | 30 |
+| **Totale** (saldo da 1190 a 1100; il tetto approvato da Denis era 90, cioè 3 prove) | | **90** |
 
 Rifarla (i GLB stanno in `meshy/meshy_output/20261108_011130_voidrise-ren-testa_4183/`, fuori dal repository):
 1. `python3 tools/mesh_prep/decimate_glb.py testa_v2.glb meshy/head/testa_v2_face.glb 16000 4500 -0.3 0.3 -0.16 0.34 0.1`
