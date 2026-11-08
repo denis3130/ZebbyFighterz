@@ -249,8 +249,11 @@ def main(bust, pkg, out, texture=None):
         covered[k] = (ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0) & (t < HIDE_RAY)).any()
     tcol = col[I[cand]].mean(1); old_neck = skin_of(tcol) | (np.hypot(cen[:, 0] - BODY_X, cen[:, 2] - circle_body[1]) < HIDE_NECK_R)   # (the old neck: the new one replaces it)
     covered |= old_neck
+    old_collar = tips = np.zeros(len(cand), bool)   # (hiding more of the old collar opened holes into the outline's black)
+    # (the old collar below HIDE_Y stays: the vest over the chest is the same piece, hidden it left holes)
     hide = np.sort(np.concatenate([np.nonzero(up & (hw3 >= .5))[0], cand[covered]])).astype(np.uint32)
-    print('hidden: %d of the old head, %d of %d others under the new head (%d kept: not covered)' % (int((up & (hw3 >= .5)).sum()), int(covered.sum()), len(cand), int((~covered).sum())))
+    print('hidden: %d of the old head, %d of %d others under the new head or of the old collar (%d of it, %d by its pulled points; %d kept: not covered)' % (
+        int((up & (hw3 >= .5)).sum()), int(covered.sum()), len(cand), int(old_collar.sum()), int(tips.sum()), int((~covered).sum())))
     blob = bytearray()
     def put(arr):
         while len(blob) % 4: blob.append(0)

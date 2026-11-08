@@ -1841,7 +1841,7 @@ function modelBuild(key) {
   const sash = look && lk.sash && look.sash ? look.sash.ribbons.map(r => r.j.slice(0, -1).map((p, k) => {
     const o = new THREE.Bone(); o.name = 'Sash' + k; o.position.fromArray(k ? p.map((v, i) => v - r.j[k - 1][i]) : p); return o; })) : [];
   sash.forEach(ch => ch.forEach((o, k) => (k ? ch[k - 1] : B('Hips')).add(o)));
-  const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, shape = look && lk.faceShape && look.move;
+  const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, shape = look && lk.faceShape && !head && look.move;   // (with the new head: the old head is hidden and the old collar keeps its own shape, its pulled points stuck out beside the new collar)
   const geo = fingers.length || per || flat || shape || head ? new THREE.BufferGeometry() : md.geo;
   if (geo !== md.geo) {   // the package's geometry, its attributes shared (not copied), with the look's skin and outline widths
     for (const a in md.geo.attributes) geo.setAttribute(a, md.geo.attributes[a]);
