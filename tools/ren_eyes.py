@@ -37,7 +37,14 @@ IRIS = ((.0168, .0488), (1.5852, 1.602))    # the +x iris searched in: x - axis,
 BRIDGE = (.0105, 1.5715, .0068, .0013, 1.5785)   # |x - axis| under, y over; the brows' ends kept beyond; the nose's line kept
                                             # within (its x found) under that y
 UNDER = (.019, 1.584)                       # and under the eyes' inner corners: |x - axis| under, y under (the locks' tips there)
+STREAK = (.0007, 35., (.030, .066), (1.590, 1.617))   # the locks' lines painted between the brows' outer halves and the eyes'
+                                            # outer corners: dark, thinner than that (m), steeper than that (deg), in that
+                                            # zone (|x - axis|, y; m); the lashes' and the brows' own lines kept
 FEATHER = .0005                             # the region's edge (m)
+TEMPLE_VIEW = (55., -.07, .07, 1.53, 1.63, .0001)   # the temples seen turned by that (deg) about the vertical axis: x', y window (m), m per px
+TEMPLE_ZONE = ((.050, .090), 1.553, ((.060, 1.589), (.064, 1.604)), .028, .001)   # the window under the temples' locks: |x - axis|;
+                                            # y from; up to 1.589 within .060 of the axis, to 1.604 beyond .064 (past the eye's
+                                            # wing), between them a ramp; z over (the ear behind it out); its feathering (m)
 PLUG_BACK, PLUG_GRID, PLUG_MIN, PLUG_DZ = .0004, .001, 50, .05   # the plug: behind the face (m); its grid (m); holes from that
                                             # many px, where the surface seen is that far behind (the back of the head)
 
@@ -66,6 +73,34 @@ def texels_wide(uv, A, TS, ring=1.5):
     for m in (ins, near):
         q = np.floor(px[m]).astype(int); g = (q >= 0).all(1) & (q < TS).all(1); out.append((q[g], (w[m] @ A)[g]))
     return out[0], out[1]
+
+
+def write_back(P, UV, I, tex, cand, fin, alpha, zs, frame):
+    """The texels of the triangles cand (and those within 1.5 texels of them: the pieces' edges) take the cleaned view
+    fin (h x w x 3) at their points (P: the vertices in the view's frame, looking down -z; frame: x0, y1, R), averaged
+    over their footprint, blended by alpha; not behind the face's smoothed depth zs by more than BACK_DZ. Returns the
+    texels written (inside the triangles)."""
+    x0, y1, R = frame; H, W = alpha.shape; TS = tex.shape[0]
+    blur = {}; n_tx = 0; src = tex.copy(); jobs = []
+    for k in cand:
+        A = P[I[k]]; e1, e2 = A[1, :2] - A[0, :2], A[2, :2] - A[0, :2]; fa = abs(e1[0] * e2[1] - e1[1] * e2[0]) / 2 / R ** 2
+        u = UV[I[k]] * TS; f1, f2 = u[1] - u[0], u[2] - u[0]; ta = abs(f1[0] * f2[1] - f1[1] * f2[0]) / 2
+        s = round(np.clip(.45 * np.sqrt(fa / max(ta, 1e-9)), .5, 6.) * 2) / 2   # (the texel's footprint in band px)
+        if s not in blur: blur[s] = np.stack([ndimage.gaussian_filter(fin[..., c], s) for c in range(3)], -1)
+        jobs.append((s, texels_wide(u, A, TS)))
+    for part in (1, 0):   # (the rings first: a texel inside a triangle takes that triangle's colour)
+        for s, tx in jobs:
+            q, p3 = tx[part]
+            if not len(q): continue
+            j = (p3[:, 0] - x0) / R - .5; i = (y1 - p3[:, 1]) / R - .5
+            v = (j >= 0) & (j < W - 1) & (i >= 0) & (i < H - 1)
+            iq, jq = np.clip(np.round(i).astype(int), 0, H - 1), np.clip(np.round(j).astype(int), 0, W - 1)
+            v &= p3[:, 2] > zs[iq, jq] - BACK_DZ   # (all its texels: the pieces of the locks sunk through the face take its colours)
+            if not v.any(): continue
+            col = np.stack([ndimage.map_coordinates(blur[s][..., c], [i[v], j[v]], order=1) for c in range(3)], 1)
+            a_ = ndimage.map_coordinates(alpha, [i[v], j[v]], order=1)[:, None]; qq = q[v]
+            tex[qq[:, 1], qq[:, 0]] = src[qq[:, 1], qq[:, 0]] * (1 - a_) + col * a_; n_tx += len(qq) * (part == 0)
+    return n_tx
 
 
 def render_uv(P, UV, I, x0, x1, y0, y1, px):
@@ -143,6 +178,57 @@ def classes(img):
     return lum, skin, purple, lum < 80, (img.min(2) > 175) & (sat < 50)
 
 
+def turned(P, ang, xc):
+    """The vertices seen turned by ang degrees about the vertical axis through x = xc, z = 0 (ang > 0: the +x side faces
+    the viewer, looking down -z)."""
+    t = np.radians(ang); c, s = np.cos(t), np.sin(t); x, z = P[:, 0] - xc, P[:, 2]
+    Q = P.copy(); Q[:, 0] = c * x - s * z; Q[:, 2] = s * x + c * z; return Q
+
+
+def temples(P, UV, I, tex, xmid):
+    """The skin under the temples' locks, between the eyes' outer corners and the ears (TEMPLE_ZONE), seen turned
+    (TEMPLE_VIEW): plain skin, harmonic from the skin around it (the light streaks of stretched texels, the locks' tips
+    painted or sunk there, the facets' shades out); the locks in front of it (farther than FRONT_DZ) stay theirs."""
+    ang, vx0, vx1, vy0, vy1, R = TEMPLE_VIEW; (a0, a1), zy0, ((ta, ty0), (tb_, ty1)), zz0, zf = TEMPLE_ZONE
+    ptex = padded(tex, UV, I); n_all = 0
+    for sgn in (1, -1):
+        Pr = turned(P, sgn * ang, xmid)
+        uvb, zb, tb = render_uv(Pr, UV, I, vx0, vx1, vy0, vy1, R); H, W = zb.shape; ok = np.isfinite(zb)
+        img = sample(ptex, uvb); lum, skin, purple, dark, white = classes(img)
+        _, (gy, gx) = ndimage.distance_transform_edt(~(ok & skin), return_indices=True); zs = ndimage.gaussian_filter(zb[gy, gx], .002 / R)
+        C = Pr[I].mean(1); cj = ((C[:, 0] - vx0) / R).astype(int); ci = ((vy1 - C[:, 1]) / R).astype(int)
+        inb = (cj >= 0) & (cj < W) & (ci >= 0) & (ci < H); dz = np.full(len(I), np.inf); dz[inb] = C[inb, 2] - zs[ci[inb], cj[inb]]
+        face_t = np.nonzero(inb & (dz < FRONT_DZ) & (dz > -BACK_DZ))[0]
+        uvf, zfb, tf = render_uv(Pr, UV, I[face_t], vx0, vx1, vy0, vy1, R); okf = np.isfinite(zfb)
+        f = sample(ptex, uvf); f[~okf] = 0
+        # each pixel's point back on the head (the zone is in the head's own frame)
+        X_ = vx0 + (np.arange(W) + .5) * R; Y_ = vy1 - (np.arange(H) + .5) * R; XX, YY = np.meshgrid(X_, Y_)
+        t_ = np.radians(sgn * ang); c, s_ = np.cos(t_), np.sin(t_); zz = np.where(okf, zfb, 0.)
+        X3 = c * XX + s_ * zz + xmid; Z3 = -s_ * XX + c * zz; ax = sgn * (X3 - xmid)
+        top = np.interp(ax, [ta, tb_], [ty0, ty1])
+        zone = okf & (ax > a0) & (ax < a1) & (YY > zy0) & (YY < top) & (Z3 > zz0)
+        zone = ndimage.binary_opening(zone, iterations=2)
+        if not zone.any(): continue
+        # harmonic skin over it (its border: light skin; the hair's colours there taken as the skin around)
+        lum, skin, purple, dark, white = classes(f); light = skin & (lum > 172)
+        SK = np.median(f[light & ndimage.binary_dilation(zone, iterations=int(.003 / R)) & ~zone], 0)
+        tmp = f.copy(); ring = ndimage.binary_dilation(zone, iterations=2) & ~zone & ~light; tmp[ring | ~okf] = SK
+        out = fill(tmp, zone)
+        alpha = np.clip(ndimage.gaussian_filter(zone.astype(float), zf / R), 0, 1) * okf
+        fin = f * (1 - alpha[..., None]) + out * alpha[..., None]
+        cf = face_t[alpha[ci[face_t], cj[face_t]] > 0]
+        # (not the locks lying close on the temple: their own paint, the hair's purple or dark, stays)
+        TS = tex.shape[0]; hairy = np.zeros(len(cf), bool)
+        for n_, k in enumerate(cf):
+            q, _ = texels(UV[I[k]] * TS, P[I[k]], TS)
+            if len(q):
+                cm = tex[q[:, 1], q[:, 0]].mean(0)[None, None]; lum_, skin_, purple_, dark_, _ = classes(cm); hairy[n_] = bool((purple_ | dark_)[0, 0])
+        cf = cf[~hairy]
+        n = write_back(Pr, UV, I, tex, cf, fin, alpha, zs, (vx0, vy1, R)); n_all += n
+        print('eyes: the %s temple\'s skin under its locks plain (%d triangles, %d texels; %d of the locks lying on it kept; skin %s)' % ('+x' if sgn > 0 else '-x', len(cf), n, int(hairy.sum()), SK.astype(int)))
+    return n_all
+
+
 def eyes(Q, N, UV, I, tex):
     """See above. Q, N, UV: the head's vertices, normals, uvs; I: its triangles; tex: its texture (h x w x 3 float,
     painted in place). Returns (the triangles kept, the plug: {pos, nor, uv, src: the vertex each copies its skin from,
@@ -211,8 +297,22 @@ def eyes(Q, N, UV, I, tex):
     irises = (np.hypot(jj - cxR, ii - cy) < rad * 1.1) | (np.hypot(jj - cxL, ii - cyL) < rad * 1.1)
     sat = img.max(2) - img.min(2); eyein = ((img.min(2) > 150) & (sat < 70)) | irises
     lab, n = ndimage.label(eyein); eyein = np.isin(lab, np.nonzero(ndimage.sum(eyein, lab, range(1, n + 1)) > (.001 / R) ** 2)[0] + 1)
-    keepf = ndimage.binary_dilation((big & ~(bridge & (np.abs(ax_) < bkeep))) | eyein | (dark & (np.abs(XX - xn) < nw) & (YY < nya)), iterations=1)
     speck = dark & (boxL | boxR) & ~big & ~irises
+    # the locks' painted lines by the brows' outer ends (joined to the brows and the lashes: one dark piece with them): the
+    # dark thinner than STREAK[0], in pieces steeper than STREAK[1] and not touching the eyes' insides
+    sw, sang, (sa0, sa1), (sy0, sy1) = STREAK; rr_ = max(1, int(round(sw / 2 / R)))
+    disk = np.hypot(*np.mgrid[-rr_:rr_ + 1, -rr_:rr_ + 1]) <= rr_
+    zoneS = (np.abs(ax_) > sa0) & (np.abs(ax_) < sa1) & (YY > sy0) & (YY < sy1)
+    thin = dark & zoneS & ~ndimage.binary_dilation(ndimage.binary_opening(dark, structure=disk), iterations=1)
+    lab, n = ndimage.label(thin); streak = np.zeros_like(thin); near_eye = ndimage.binary_dilation(eyein, iterations=3)
+    for k_ in range(1, n + 1):
+        ys_, xs_ = np.nonzero(lab == k_)
+        if len(ys_) < 20 or near_eye[ys_, xs_].any(): continue
+        ev, evec = np.linalg.eigh(np.cov(np.vstack([xs_, ys_]).astype(float)))
+        ang = np.degrees(np.arctan2(abs(evec[1, -1]), abs(evec[0, -1])))   # (its long axis from the horizontal)
+        if ang > sang: streak[ys_, xs_] = True
+    speck |= streak
+    keepf = ndimage.binary_dilation((big & ~streak & ~(bridge & (np.abs(ax_) < bkeep))) | eyein | (dark & (np.abs(XX - xn) < nw) & (YY < nya)), iterations=1)
     unk = (bridge | ndimage.binary_dilation(speck, iterations=4)) & ~keepf
     light = skin & (lum > 172)
     ring = ndimage.binary_dilation(bridge, iterations=int(.0015 / R)) & ~bridge & ~light & ~keepf
@@ -220,7 +320,7 @@ def eyes(Q, N, UV, I, tex):
     SK = np.median(img[light & ndimage.binary_dilation(bridge, iterations=int(.003 / R)) & ~bridge], 0)
     tmp = img.copy(); tmp[keepf & ndimage.binary_dilation(unk, iterations=3)] = SK
     out = fill(tmp, unk); out[~unk] = img[~unk]
-    print('eyes: the bridge and %d px of specks as skin (%s), the nose\'s line at x %.4f m kept' % (int(speck.sum()), SK.astype(int), xn))
+    print('eyes: the bridge and %d px of specks as skin (%d of them the locks\' lines by the brows\' ends; %s), the nose\'s line at x %.4f m kept' % (int(speck.sum()), int(streak.sum()), SK.astype(int), xn))
     # written back: the region (the boxes and the bridge), feathered
     alpha = np.clip(ndimage.gaussian_filter((boxL | boxR | bridge).astype(float), FEATHER / R), 0, 1)
     fin = img0 * (1 - alpha[..., None]) + out * alpha[..., None]
@@ -229,26 +329,9 @@ def eyes(Q, N, UV, I, tex):
     cand = cand[alpha[ci[cand], cj[cand]] > 0]; dz = C[cand, 2] - zs[ci[cand], cj[cand]]
     # (on the bridge only the fringe is hair, and the holes' rims bulge out: in front up to RIM_DZ there)
     cand = cand[((dz < FRONT_DZ) | ((dz < RIM_DZ) & bridge[ci[cand], cj[cand]])) & (dz > -BACK_DZ)]
-    blur = {}; n_tx = 0; src = tex.copy(); jobs = []
-    for k in cand:
-        A = P[I[k]]; e1, e2 = A[1, :2] - A[0, :2], A[2, :2] - A[0, :2]; fa = abs(e1[0] * e2[1] - e1[1] * e2[0]) / 2 / R ** 2
-        u = UV[I[k]] * TS; f1, f2 = u[1] - u[0], u[2] - u[0]; ta = abs(f1[0] * f2[1] - f1[1] * f2[0]) / 2
-        s = round(np.clip(.45 * np.sqrt(fa / max(ta, 1e-9)), .5, 6.) * 2) / 2   # (the texel's footprint in band px)
-        if s not in blur: blur[s] = np.stack([ndimage.gaussian_filter(fin[..., c], s) for c in range(3)], -1)
-        jobs.append((s, texels_wide(u, A, TS)))
-    for part in (1, 0):   # (the rings first: a texel inside a triangle takes that triangle's colour)
-        for s, tx in jobs:
-            q, p3 = tx[part]
-            if not len(q): continue
-            j = (p3[:, 0] - x0) / R - .5; i = (y1 - p3[:, 1]) / R - .5
-            v = (j >= 0) & (j < W - 1) & (i >= 0) & (i < H - 1)
-            iq, jq = np.clip(np.round(i).astype(int), 0, H - 1), np.clip(np.round(j).astype(int), 0, W - 1)
-            v &= p3[:, 2] > zs[iq, jq] - BACK_DZ   # (all its texels: the pieces of the locks sunk through the face take its colours)
-            if not v.any(): continue
-            col = np.stack([ndimage.map_coordinates(blur[s][..., c], [i[v], j[v]], order=1) for c in range(3)], 1)
-            a_ = ndimage.map_coordinates(alpha, [i[v], j[v]], order=1)[:, None]; qq = q[v]
-            tex[qq[:, 1], qq[:, 0]] = src[qq[:, 1], qq[:, 0]] * (1 - a_) + col * a_; n_tx += len(qq) * (part == 0)
+    n_tx = write_back(P, UV, I, tex, cand, fin, alpha, zs, (x0, y1, R))
     print('eyes: %d triangles of the face repainted (%d texels)' % (len(cand), n_tx))
+    temples(P, UV, I, tex, XMID)
     # the plug: under each hole of the face in the region (the back of the head seen through it)
     holes = (~ok | (zb < zs - PLUG_DZ)) & (alpha > .5); lab, n = ndimage.label(holes); sz = ndimage.sum(holes, lab, range(1, n + 1))
     holes = np.isin(lab, np.nonzero(sz >= PLUG_MIN)[0] + 1)
