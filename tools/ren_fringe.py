@@ -17,7 +17,7 @@ outline (pushed back to stop it splintering between them and the skin, fringe_ba
     brows (BROW_Y) and below, its texture the sheet's front view, its alpha the locks' shape.
 Writes OUT_DIR/<name>_fringe.json, .bin, .png ({v, verts, tris, pos, uv: float32, idx: uint16/32; each [byte offset,
 count]}; all on the Head bone, e_model.js mdFringeData); returns the head's triangles kept and paints the forehead in
-its texture (in place).
+its texture (in place), and the sheet's registration (for tools/ren_face.py).
 """
 import json, os
 import numpy as np
@@ -92,7 +92,7 @@ def register(head_rgb, sheet):
 
 def fringe(Q, N, UV, I, tex, name, out):
     """See above. Q, N, UV, I: the head (its vertices, normals, uvs, triangles); tex: its texture (h x w x 3, float or
-    uint8; the forehead painted in place). Returns the triangles kept."""
+    uint8; the forehead painted in place). Returns the triangles kept and the registration (K, U0, V0)."""
     P = Q.astype(float); UV = UV.astype(float); I = np.asarray(I).astype(np.int64); TS = tex.shape[0]
     t8 = np.clip(tex, 0, 255).astype(np.uint8)
     c = t8[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)].astype(int)
@@ -214,4 +214,4 @@ def fringe(Q, N, UV, I, tex, name, out):
         tex[q[:, 1], q[:, 0]] = np.where(isk[:, None], sc, skin_col); n_t += 1; n_px += len(q)
     print('fringe: Meshy\'s fringe over the forehead removed (%d triangles), the forehead painted from the sheet (%d triangles), '
           'the sheet\'s locks: %d verts, %d tris, texture %dx%d' % (int(drop.sum()), n_t, nv, len(idx), TW, TH))
-    return I[keep]
+    return I[keep], (K, U0, V0)

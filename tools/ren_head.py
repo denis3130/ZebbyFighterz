@@ -415,7 +415,10 @@ def main(bust, pkg, out, texture=None):
     print('temple spot: %d brown texels painted as skin' % temple_spot(t, Q, UVq, Iq))
     # the face's locks from the sheet (tools/ren_fringe.py): Meshy's fringe over the forehead out, the sheet's locks in
     from ren_fringe import fringe as sheet_fringe
-    Ik = sheet_fringe(Q, Nq, UVq, Iq, t, name, out)
+    Ik, reg = sheet_fringe(Q, Nq, UVq, Iq, t, name, out)
+    # the face painted from the sheet's front view, the cheeks' sides cleaned (tools/ren_face.py)
+    from ren_face import face_paint
+    print('face: %d texels from the sheet, %d of Meshy\'s marks on the cheeks cleaned' % face_paint(t, Q, Nq, UVq, Ik, reg))
     nv = len(Q)
     head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
             'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb.astype(np.float32))}
