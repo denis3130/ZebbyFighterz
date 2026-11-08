@@ -283,7 +283,7 @@ const CFG={
   // faceShape = the shape as drawn (tools/ren_look.py drawn_shape: the face smooth below the eyes with a small nose,
   // the fringe off the eyes, the collar's points) and the drawn face's features, the jaw's line and the neck's shadow
   // under it as a decal of their own (e_model mdFaceMat).
-  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false}},
+  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
@@ -1833,6 +1833,7 @@ function modelBuild(key) {
   const bones = md.bones.map(b => { const o = new THREE.Bone(); o.name = b.n; o.position.fromArray(b.t); o.quaternion.fromArray(b.q); return o; });
   md.bones.forEach((b, i) => (b.p < 0 ? body : bones[b.p]).add(bones[i]));
   const B = n => bones[md.index[n]], lk = CFG.looks[key] || {}, look = (lk.fists || lk.spikes || lk.faceLine || lk.flatFace || lk.sash || lk.faceShape) && mdLookData(md, key);
+  const head = lk.head && mdHeadData(md, key);   // the new head (its old one, neck and collar's top hidden)
   // fists: the fingers' bones under the hands (after the package's in the skeleton, as the look's skin counts them)
   const fingers = look && lk.fists ? look.fingers.map(f => { const o = new THREE.Bone(); o.name = f.n; o.position.fromArray(f.t); return o; }) : [];
   fingers.forEach((o, k) => (B(look.fingers[k].p) || fingers.find(g => g.name === look.fingers[k].p)).add(o));
@@ -1841,10 +1842,16 @@ function modelBuild(key) {
     const o = new THREE.Bone(); o.name = 'Sash' + k; o.position.fromArray(k ? p.map((v, i) => v - r.j[k - 1][i]) : p); return o; })) : [];
   sash.forEach(ch => ch.forEach((o, k) => (k ? ch[k - 1] : B('Hips')).add(o)));
   const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, shape = look && lk.faceShape && look.move;
-  const geo = fingers.length || per || flat || shape ? new THREE.BufferGeometry() : md.geo;
+  const geo = fingers.length || per || flat || shape || head ? new THREE.BufferGeometry() : md.geo;
   if (geo !== md.geo) {   // the package's geometry, its attributes shared (not copied), with the look's skin and outline widths
     for (const a in md.geo.attributes) geo.setAttribute(a, md.geo.attributes[a]);
     geo.setIndex(md.geo.index);
+    if (head) {   // without the triangles the new head replaces
+      const src = md.geo.index.array, drop = new Uint8Array(src.length / 3), keep = [];
+      head.hide.forEach(t => { drop[t] = 1; });
+      for (let t = 0; t < drop.length; t++) if (!drop[t]) keep.push(src[3 * t], src[3 * t + 1], src[3 * t + 2]);
+      geo.setIndex(new THREE.BufferAttribute(src instanceof Uint32Array ? Uint32Array.from(keep) : Uint16Array.from(keep), 1));
+    }
     if (fingers.length) { geo.setAttribute('skinIndex', look.skin[0]); geo.setAttribute('skinWeight', look.skin[1]); }
     if (per) geo.setAttribute('aLine', look.line);
     if (flat) geo.setAttribute('aFlat', look.flat);
@@ -1894,11 +1901,26 @@ function modelBuild(key) {
   root.updateMatrixWorld(true);
   const skel = new THREE.Skeleton(bones.concat(fingers, ...sash));
   mesh.bind(skel); outline.bind(skel);
+  if (head) {   // the new head: its own toon mesh and outline on the same skeleton (bound in the body, as the body's)
+    const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = head.jpg;
+    tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
+    const hm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true});
+    hm.onBeforeCompile = sh => {   // flat light: the sheet's own shading is in its texture (the hit flash's emissive kept)
+      sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_HEAD_FLAT.toFixed(2) + ');');
+    };
+    hm.customProgramCacheKey = () => 'head';
+    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE / s).toFixed(5), back: ol.back}));
+    hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
+    hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
+    head.mesh = hmesh; head.line = hline; head.mat = hm;
+  }
   const limbs = {};
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = look.fingers.map(f => new THREE.Quaternion().fromArray(f.fist)); }
+  if (head) { it.head = head.mesh; it.mats.head = head.mat; }
   if (face) it.face = face;
   if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash
     let at = bones.length + fingers.length;
@@ -1918,7 +1940,7 @@ function modelBuild(key) {
     }), blend: mdBlendData(look.sash.blend, geo, skel, mesh)};
   }
   if (!md.hitT) mdMeasure(md, it);
-  if (look && lk.spikes) B('Head').add(mdSpikes(look.spikes, ol.back));
+  if (look && lk.spikes && !head) B('Head').add(mdSpikes(look.spikes, ol.back));
   return it;
 }
 
@@ -2255,6 +2277,26 @@ function mdSpikes(list, back) {
 // The look data of package key ('<key>/<key>_look.json' and '.bin', tools/ren_look.py), decoded once onto md, or null:
 // {fingers: the finger bones, skin: [skinIndex, skinWeight] with them, line: the outline widths, flat: the flat light's
 // share, spikes, sash: {ribbons, body: the shapes the sash stays out of, blend: the vertices between them}}.
+const MD_HEAD_FLAT = 1, MD_HEAD_LINE = .004;   // the new head's light (its share left flat: its texture, from the sheet, has the shading) and outline (m: the sheet's lines are thin)
+// The new head (ASSETS '<key>/<key>_head.json|bin|jpg', tools/ren_head.py): its geometry, skinned to the package's bones
+// in the package's bind space, its texture and the package's triangles it replaces (hide); null without it.
+function mdHeadData(md, key) {
+  const j = ASSETS[key + '/' + key + '_head.json'], b64 = ASSETS[key + '/' + key + '_head.bin'], jpg = ASSETS[key + '/' + key + '_head.jpg'];
+  if (!j || !b64 || !jpg) return null;
+  if (md.head && md.head.j === j) return {j, geo: md.head.geo, hide: md.head.hide, jpg};
+  const s = atob(b64), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(f32(j.pos), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(f32(j.nor), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(f32(j.uv), 2));
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint8Array(buf, j.jnt[0], j.jnt[1]), 4));
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(j.wgt), 4));
+  geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
+  md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1])};
+  return {j, geo, hide: md.head.hide, jpg};
+}
+
 function mdLookData(md, key) {
   if (md.look !== undefined) return md.look;
   const j = ASSETS[key + '/' + key + '_look.json'], b64 = ASSETS[key + '/' + key + '_look.bin'];

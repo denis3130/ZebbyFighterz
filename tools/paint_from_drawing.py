@@ -268,6 +268,15 @@ dcol = two.copy(); dcol[inb] = D[np.clip(v[inb], 0, H - 1), np.clip(u[inb], 0, W
 fw = np.clip((nor[ring, 2] - .25) / .35, 0, 1); fw = fw * fw * (3 - 2 * fw)
 out[ys[ring], xs[ring]] = dcol * fw[:, None] + two * (1 - fw[:, None])
 print('band: drawing rows %d-%d on the model at %.2f-%.2f m, %d texels (%d from the drawing), %d stray orange texels and %d of old tail tops repainted' % (r0, r1, Y0, Y1, int(ring.sum()), int((inb & (fw > .5)).sum()), int(stray.sum()), int(low_.sum())))
+# --- under the new head (tools/ren_head.py: its own neck and collar, Denis's 3-view sheet): inside the shirt's V on the
+# chest's top (V_NECK: its edges from (x, y) half width and height at the collarbones to its point's height, about x
+# FACE_X; up to V_TOP) the drawing's old collar left dark marks: the skin's colour there ---
+V_NECK, V_TOP = (.073, 1.433, 1.343), 1.46
+cxv = FACE_X - .006; hwv = V_NECK[0] * np.clip((pos[:, 1] - V_NECK[2]) / (V_NECK[1] - V_NECK[2]), 0, 1)
+inv_ = (pos[:, 1] > V_NECK[1] - .04) & (pos[:, 1] < V_TOP) & (pos[:, 2] > -.02) & (np.abs(pos[:, 0] - cxv) < hwv - .004) & ((HEADW[I[ks]] * bary).sum(1) < .5) & ((HANDW[I[ks]] * bary).sum(1) < .5)
+oc = out[ys, xs]; mark = inv_ & (oc.mean(1) < skin_col.mean() - 40)
+out[ys[mark], xs[mark]] = skin_col
+print('chest under the new collar: %d dark texels of the old collar repainted skin' % int(mark.sum()))
 # --- padding: every texel outside the triangles takes its nearest triangle texel's colour (the gutters between UV pieces
 # kept Meshy's old colours, which showed as thin cracks along the seams once filtered, the sash's orange most of all) ---
 inside = tid >= 0
