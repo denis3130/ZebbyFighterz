@@ -48,6 +48,8 @@ HEAD_PALETTE = [((68, 55, 70), (75, 64, 73)), ((52, 41, 53), (58, 48, 58)), ((10
                 ((249, 190, 151), (248, 184, 137)), ((184, 140, 113), (162, 107, 78)), ((109, 59, 44), (101, 68, 50)),   # skin, its shadow, the darkest
                 ((42, 87, 93), (57, 97, 102)), ((39, 35, 44), (30, 28, 34)), ((239, 219, 204), (206, 190, 162))]   # collar teal, dark cloth, trim
 HEAD_SPREAD = 28.
+TEMPLE = (.05, .095, 1.556, 1.581, -.004, .058)   # the temples (|x| from the middle in, out; y; z; m): see temples()
+TEMPLE_SKIN, TEMPLE_SINK = .5, .012
 HEAD_TEX = 2048   # the texture's size at most (px; 4096 looked the same at the viewer's nearest zoom and took 4 times the memory)
 
 
@@ -60,6 +62,60 @@ def circle(x, z):
 
 def skin_of(col):
     return (col[:, 0] > 120) & (col[:, 1] > 75) & (col[:, 0] - col[:, 2] > 40)
+
+
+def _texels(uv, A, TS):
+    """A triangle's texels (rows, cols as an (n, 2) array of col, row) with their 3D points. uv: its corners in texels."""
+    lo = np.floor(uv.min(0)).astype(int); hi = np.ceil(uv.max(0)).astype(int)
+    xs, ys = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1)); px = np.stack([xs.ravel() + .5, ys.ravel() + .5], 1)
+    T = np.array([uv[1] - uv[0], uv[2] - uv[0]]).T
+    if abs(np.linalg.det(T)) < 1e-9: return np.zeros((0, 2), int), np.zeros((0, 3))
+    b = np.linalg.solve(T, (px - uv[0]).T).T; w = np.c_[1 - b.sum(1), b]; ins = (w >= -1e-3).all(1)
+    q = np.floor(px[ins]).astype(int); g = (q >= 0).all(1) & (q < TS).all(1)
+    return q[g], (w[ins] @ A)[g]
+
+
+def _in_temple(p):
+    x0, x1, y0, y1, z0, z1 = TEMPLE; ax = np.abs(p[:, 0] - BODY_X)
+    return (ax > x0) & (ax < x1) & (p[:, 1] > y0) & (p[:, 1] < y1) & (p[:, 2] > z0) & (p[:, 2] < z1)
+
+
+def _skin_px(t):
+    return (t[..., 0] > 200) & (t[..., 0] - t[..., 2] > 70) & (t[..., 1] > 140)
+
+
+def temple_locks(Q, UV, I, tex):
+    """Meshy laid the sheet's sideburns flat on the temples (thin locks from the eyes to the ears, dark: from the side a
+    bruise; the sheet has skin there): the triangles with their middle within TEMPLE whose texels are mostly not skin
+    (under TEMPLE_SKIN) sink TEMPLE_SINK m toward the head's axis, under the face's skin (their corners on the face's own
+    triangles stay: no dents). Moves Q in place; returns how many points."""
+    TS = tex.shape[0]; sk = _skin_px(tex); C = Q[I].mean(1); A = Q[I]
+    lock = np.zeros(len(I), bool); face = np.zeros(len(I), bool)
+    for k in np.nonzero(_in_temple(C) | _in_temple(A[:, 0]) | _in_temple(A[:, 1]) | _in_temple(A[:, 2]))[0]:
+        q, _ = _texels(UV[I[k]] * TS, A[k], TS)
+        if not len(q): continue
+        f = sk[q[:, 1], q[:, 0]].mean(); face[k] = f >= TEMPLE_SKIN; lock[k] = (f < TEMPLE_SKIN) and _in_temple(C[k:k + 1])[0]
+    key = np.round(Q / 1e-6).astype(np.int64); _, weld = np.unique(key, axis=0, return_inverse=True); weld = weld.ravel()
+    on_face = np.zeros(weld.max() + 1, bool); on_face[weld[I[face].ravel()]] = True
+    mv = np.zeros(weld.max() + 1, bool); mv[weld[I[lock].ravel()]] = True; mv &= ~on_face
+    v = mv[weld] & _in_temple(Q)
+    d = Q[v][:, [0, 2]] - np.array([BODY_X, 0.]); d /= np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-9)
+    Q[v, 0] -= d[:, 0] * TEMPLE_SINK; Q[v, 2] -= d[:, 1] * TEMPLE_SINK
+    return int(v.sum()), int(lock.sum())
+
+
+def temples(t, Q, UV, I):
+    """The texels whose 3D point is within TEMPLE and that are not skin take the skin's colour (the face is flat: one
+    colour, the median of its skin texels there): what is left of the sideburns' paint (see temple_locks). Returns how many."""
+    TS = t.shape[0]; A = Q[I]; C = A.mean(1); x0, x1, y0, y1, z0, z1 = TEMPLE
+    ac = np.abs(C[:, 0] - BODY_X); near = (ac > x0 - .012) & (ac < x1 + .012) & (C[:, 1] > y0 - .012) & (C[:, 1] < y1 + .012) & (C[:, 2] > z0 - .012) & (C[:, 2] < z1 + .012)
+    box = np.zeros(t.shape[:2], bool)
+    for k in np.nonzero(near)[0]:
+        q, p3 = _texels(UV[I[k]] * TS, A[k], TS); q = q[_in_temple(p3)]; box[q[:, 1], q[:, 0]] = True
+    sk = _skin_px(t); good = box & sk; bad = box & ~sk
+    if not good.any(): return 0
+    t[bad] = np.median(t[good], 0)
+    return int(bad.sum())
 
 
 def load_bust(path):
@@ -226,6 +282,7 @@ def main(bust, pkg, out, texture=None):
     for k in range(4): np.add.at(Wf, (np.nonzero(rest)[0], J[near, k]), W[near, k] * (J[near, k] != hb))
     Wf[rest] /= np.maximum(Wf[rest].sum(1, keepdims=True), 1e-12)
     print('skin: head %d, neck %d, collar and shirt %d vertices' % (head.sum(), neck.sum(), rest.sum()))
+    print('temples: %d points of %d locks laid flat sunk under the skin' % temple_locks(Q, UVq, Iq, tb))
     _, first, weld = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel(); nw = len(first)
     T = weld[Iq]; E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
     from scipy.sparse import csr_matrix
@@ -269,6 +326,7 @@ def main(bust, pkg, out, texture=None):
     flat = t.reshape(-1, 3); d2 = ((flat[:, None, :] - src[None]) ** 2).sum(2); w = np.exp(-d2 / (2 * HEAD_SPREAD ** 2)); ws = w.sum(1, keepdims=True)
     flat = flat + (w @ (dst - src)) / np.maximum(ws, 1e-9) * np.clip(ws, 0, 1)   # (far from every palette colour: unchanged)
     t = np.clip(flat.reshape(t.shape), 0, 255)
+    print('temples: %d texels of Meshy\'s sideburns painted as skin' % temples(t, Q, UVq, Iq))
     # the texels between the UV pieces take their nearest piece's colour (the texture's filtering, at a distance, pulled
     # Meshy's packing colours into the pieces' edges: specks and lines along the seams)
     from PIL import ImageDraw
