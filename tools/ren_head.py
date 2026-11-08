@@ -52,7 +52,9 @@ HEAD_PALETTE = [((68, 55, 70), (75, 64, 73)), ((52, 41, 53), (58, 48, 58)), ((10
                 ((42, 87, 93), (57, 97, 102)), ((39, 35, 44), (30, 28, 34)), ((239, 219, 204), (206, 190, 162))]   # collar teal, dark cloth, trim
 HEAD_SPREAD = 28.
 TEMPLE = (.05, .095, 1.556, 1.581, -.004, .058)   # the temples (|x| from the middle in, out; y; z; m): see temples()
-TEMPLE_SKIN, TEMPLE_SINK = .5, .012
+TEMPLE_SKIN, TEMPLE_SINK, TEMPLE_STRETCH = .5, .012, .5
+TEMPLE_LINE = (.045, .1, 1.555, 1.62, -.03, .075, .1, .004)   # see main(): the temples' outline pushed back
+CHEEKS = (.03, 1.525, 1.595, .015, 1.583, .07)   # see cheek_marks(): |x| over, y between, z over, the eyes' band (over y, within |x|)
 TEMPLE_SPOT = (-.078, -.052, 1.570, 1.592, -.012, .016)   # (x, y, z ranges, m) a brown spot on one temple: see temple_spot()
 FRINGE_PAINT = (.0008, 120., (60, 50, 60))   # see fringe_paint(): in front of the face by (m), lighter than (mean rgb), the colour they take
 FRINGE_NEAR, FRINGE_MAX = .01, .05
@@ -121,8 +123,23 @@ def temples(t, Q, UV, I):
         q, p3 = _texels(UV[I[k]] * TS, A[k], TS); q = q[_in_temple(p3)]; box[q[:, 1], q[:, 0]] = True
     sk = _skin_px(t); good = box & sk; bad = box & ~sk
     if not good.any(): return 0
-    t[bad] = np.median(t[good], 0)
-    return int(bad.sum())
+    skin = np.median(t[good], 0); t[bad] = skin
+    # the sunk locks' triangles stretched over the temple (under TEMPLE_STRETCH texels per mm2: their few texels' stripes
+    # spread over 3-16 mm2 each, brown and white streaks by the eye's outer corner) all skin, with the texels around them
+    # in the texture that no other triangle covers (the filtering reaches them)
+    from PIL import ImageDraw
+    from scipy import ndimage
+    a3 = np.linalg.norm(np.cross(A[:, 1] - A[:, 0], A[:, 2] - A[:, 0]), axis=1) / 2 * 1e6
+    uv = UV[I] * TS; auv = np.abs((uv[:, 1, 0] - uv[:, 0, 0]) * (uv[:, 2, 1] - uv[:, 0, 1]) - (uv[:, 1, 1] - uv[:, 0, 1]) * (uv[:, 2, 0] - uv[:, 0, 0])) / 2
+    st = near & (auv < TEMPLE_STRETCH * a3)
+    if st.any():
+        ms, mo = Image.new('L', (TS, TS), 0), Image.new('L', (TS, TS), 0); ds, do = ImageDraw.Draw(ms), ImageDraw.Draw(mo)
+        for k in np.nonzero(st)[0]: ds.polygon([tuple(v) for v in uv[k]], fill=255)
+        for k in np.nonzero(~st)[0]: do.polygon([tuple(v) for v in uv[k]], fill=255)
+        ms, mo = np.asarray(ms) > 0, np.asarray(mo) > 0
+        paint = ndimage.binary_dilation(ms, iterations=2) & ~(mo & ~ms)
+        t[paint] = skin
+    return int(bad.sum()), int(st.sum())
 
 
 def temple_spot(t, Q, UV, I):
@@ -196,6 +213,28 @@ def fringe_paint(t, Q, UV, I, lb, grid):
         v = t[q[:, 1], q[:, 0]]; m = v.mean(1) > light
         if m.any(): t[q[m, 1], q[m, 0]] = col; n += int(m.sum())
     return n
+
+
+def cheek_marks(t, Q, UV, I):
+    """Meshy's marks on the cheeks' sides (light grey scratches, purple and black specks and strokes: the sheet has clean
+    skin there): on the skin's triangles (two corners or more) in CHEEKS (|x| from the middle over CHEEKS[0], y between
+    CHEEKS[1] and [2], z over [3], m; not the eyes: under the eyes' band or outside it), those texels take the colour of
+    the nearest unmarked skin texel. Returns how many."""
+    from scipy import ndimage
+    TS = t.shape[0]; A = Q[I]; C = A.mean(1); ax0, y0, y1, z0, eye_y, eye_x = CHEEKS
+    c = np.clip(t[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)], 0, 255)
+    sk3 = _skin_px(c[None])[0][I].sum(1) >= 2
+    ac = np.abs(C[:, 0] - BODY_X)
+    sel = sk3 & (ac > ax0) & (C[:, 1] > y0) & (C[:, 1] < y1) & (C[:, 2] > z0) & ~((C[:, 1] > eye_y) & (ac < eye_x))
+    mask = np.zeros(t.shape[:2], bool)
+    for k in np.nonzero(sel)[0]:
+        q, _ = _texels(UV[I[k]] * TS, A[k], TS); mask[q[:, 1], q[:, 0]] = True
+    v = np.clip(t, 0, 255); lum = v.mean(2); r, g, b = v[..., 0], v[..., 1], v[..., 2]
+    bad = mask & (((lum > 140) & (r - b < 60)) | ((lum < 150) & (b >= g - 2)) | (lum < 70))
+    good = mask & ~bad
+    if not bad.any() or not good.any(): return 0
+    _, (iy, ix) = ndimage.distance_transform_edt(~good, return_indices=True); t[bad] = t[iy[bad], ix[bad]]
+    return int(bad.sum())
 
 
 def load_bust(path):
@@ -403,6 +442,13 @@ def main(bust, pkg, out, texture=None):
         while len(blob) % 4: blob.append(0)
         o = len(blob); blob.extend(np.ascontiguousarray(arr).tobytes()); return [o, int(arr.size)]
     lb, grid = fringe_back(Q, Nq, Iq, skin, dark, ax)
+    # the temples and the ears' tops: the outline further back too (TEMPLE_LINE: |x| from the middle, y, z ranges, m; the push,
+    # m; its ramp at the edges, m): under the sideburns and the sunk locks the surface folds and faces down, its outline
+    # showed through the skin as black splinters by the eyes' outer corners and over the cheeks at the ears
+    x0_, x1_, y0_, y1_, z0_, z1_, push_, ramp_ = TEMPLE_LINE; ax_ = np.abs(Q[:, 0] - BODY_X)
+    inside_ = np.minimum.reduce([ax_ - x0_, x1_ - ax_, Q[:, 1] - y0_, y1_ - Q[:, 1], Q[:, 2] - z0_, z1_ - Q[:, 2]])
+    lb_line = np.maximum(lb, push_ * np.clip(inside_ / ramp_, 0, 1))   # (the outline's only: lb itself says which is hair over the face)
+    print('temples: %d vertices with their outline %.0f mm back' % (int((inside_ > 0).sum()), 1000 * push_))
     print('fringe: %d vertices of the hair over the face, their outline %.0f to %.0f mm further back' % (int((lb > .5 * FRINGE[0]).sum()), 1000 * FRINGE[0], 1000 * lb.max()))
     im = Image.open(texture).convert('RGB') if texture else texb
     pal = bp.get('palette', HEAD_PALETTE); t = np.asarray(im).astype(np.float64); src = np.array([a for a, _ in pal], float); dst = np.array([b for _, b in pal], float)
@@ -411,14 +457,15 @@ def main(bust, pkg, out, texture=None):
     t = np.clip(flat.reshape(t.shape), 0, 255)
     # (before the temples': there the locks sunk under the skin, painted as skin, must stay so: dark, they showed through it)
     print('fringe: %d light texels on the locks over the face painted as hair' % fringe_paint(t, Q, UVq, Iq, lb, grid))
-    print('temples: %d texels of Meshy\'s sideburns painted as skin' % temples(t, Q, UVq, Iq))
+    print('temples: %d texels of Meshy\'s sideburns painted as skin, %d of their stretched triangles all skin' % temples(t, Q, UVq, Iq))
     print('temple spot: %d brown texels painted as skin' % temple_spot(t, Q, UVq, Iq))
+    print('cheeks: %d texels of Meshy\'s marks painted as the skin around them' % cheek_marks(t, Q, UVq, Iq))
     # the face's locks from the sheet (tools/ren_fringe.py): Meshy's fringe over the forehead out, the sheet's locks in
     from ren_fringe import fringe as sheet_fringe
     Ik = sheet_fringe(Q, Nq, UVq, Iq, t, name, out)
     nv = len(Q)
     head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
-            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb.astype(np.float32))}
+            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb_line.astype(np.float32))}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_head.bin'), 'wb').write(bytes(blob))
     json.dump(head, open(os.path.join(out, name + '_head.json'), 'w'), separators=(',', ':'))

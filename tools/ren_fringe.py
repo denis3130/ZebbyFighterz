@@ -36,6 +36,8 @@ DROP_DZ, DROP_Y = .0015, 1.57             # Meshy's fringe: in front of the face
 GAP, TUCK, BROW_Y, HANG = .0025, .0015, 1.598, 1.6   # the locks' depth (see above); HANG: their curve's power
 LOCK_TH, LOCK_EDGE, LOCK_BACK, GRID = .0018, .0015, .4, 8   # the pillow: thickness, its ramp from the edge (m), its back's share; mesh grid (px)
 CUT_MIN = 2500                            # pieces of the locks the sides' limits cut off, smaller than that (px): left out
+BRIDGE, BRIDGE_SKIN = (.022, 1.575, 1.605, .004), (248, 182, 135)   # see fringe(): Meshy's lock tips on the nose's bridge; the skin's colour
+SPIKES = (.068, 1.572, 1.614, 0, .004)   # see fringe(): the eyes' band (x from the middle, y, -, depth to the face; m)
 
 
 def texels(uv, A, TS):
@@ -138,6 +140,38 @@ def fringe(Q, N, UV, I, tex, name, out):
     dz = np.full(len(I), -9.); dz[ok] = C[ok, 2] - zsm[ci[ok], cj[ok]]; ye = np.zeros(len(I)); ye[ok] = ycut[cj[ok]]
     drop = over & (C[:, 1] < ye) & (C[:, 1] > DROP_Y) & (dz > DROP_DZ) & ((hairv[I].sum(1) >= 2) | ((dz > .004) & ~skinv[I].all(1) & (C[:, 1] > BROW_Y + .006)))
     keep = ~drop
+    # Meshy's lock tips lying on the nose's bridge between the eyes (within BRIDGE[0] m of the middle, between BRIDGE[1]
+    # and BRIDGE[2] m high, within BRIDGE[3] m of the face): painted as skin, but for black (the sheet's lock tip there
+    # is the new locks'; two tips, one on the other, were a dark smudge between the eyes; the brows' black kept)
+    bx, by0, by1, bz = BRIDGE
+    bridge = keep & ok & (np.abs(C[:, 0] - BODY_X) < bx) & (C[:, 1] > by0) & (C[:, 1] < by1) & (np.abs(dz) < bz) & (hairv[I].sum(1) >= 2)
+    n_bridge = 0
+    for k_ in np.nonzero(bridge)[0]:
+        q, _ = texels(UV[I[k_]] * TS, P[I[k_]], TS)
+        if not len(q): continue
+        v_ = np.clip(tex[q[:, 1], q[:, 0]], 0, 255).astype(int); purp = v_.mean(1) >= 38   # (all but black: their light streaks too)
+        tex[q[purp, 1], q[purp, 0]] = BRIDGE_SKIN; n_bridge += int(purp.sum())
+    if bridge.any():   # (and the texels along their UV edges, outside every other triangle: filtered in at the edges, purple lines)
+        mb = Image.new('L', (TS, TS), 0); mo = Image.new('L', (TS, TS), 0); db, do = ImageDraw.Draw(mb), ImageDraw.Draw(mo)
+        for k_ in np.nonzero(bridge)[0]: db.polygon([tuple(v) for v in UV[I[k_]] * TS], fill=255)
+        for tri in UV[I[keep & ~bridge]] * TS: do.polygon([tuple(v) for v in tri], fill=255)
+        mb, mo = np.asarray(mb) > 0, np.asarray(mo) > 0
+        ring = ndimage.binary_dilation(mb, iterations=2) & ~mb & ~mo
+        rv = np.clip(tex[ring], 0, 255).astype(int); dark_ = rv.mean(1) < 38
+        rr, cc = np.nonzero(ring); tex[rr[~dark_], cc[~dark_]] = BRIDGE_SKIN
+    # around the eyes, Meshy's lock tips painted flat on the face (dark purple spikes between the brows and the lashes, at
+    # the eyes' outer corners, under their inner corners; the sheet has skin there): on the face's own triangles (within
+    # SPIKES[4] m of it) in SPIKES' band, the texels in the hair's purple (not the black of the lashes and the brows, not
+    # the lids' brown) painted as skin
+    sx, sy0, sy1, sxb, sz = SPIKES
+    band_t = keep & ok & (np.abs(C[:, 0] - BODY_X) < sx) & (C[:, 1] > sy0) & (C[:, 1] < sy1) & (np.abs(dz) < sz) & ~bridge
+    n_spk = 0
+    for k_ in np.nonzero(band_t)[0]:
+        q, _ = texels(UV[I[k_]] * TS, P[I[k_]], TS)
+        if not len(q): continue
+        v_ = np.clip(tex[q[:, 1], q[:, 0]], 0, 255).astype(int); m_ = v_.mean(1)
+        purp = (m_ >= 38) & (m_ < 110) & (v_[:, 0] >= v_[:, 1] + 4) & (v_[:, 2] >= v_[:, 1] + 2) & (v_[:, 0] - v_[:, 2] < 25)
+        tex[q[purp, 1], q[purp, 0]] = BRIDGE_SKIN; n_spk += int(purp.sum())
     rgb_r, z_r, _, t_r = front_view(P, UV, I[keep], t8, N)
     # the crown's front just above the hairline: the locks' roots tuck behind it
     zedge = np.full(W, np.nan)
@@ -160,7 +194,8 @@ def fringe(Q, N, UV, I, tex, name, out):
     L &= ~(eyes & ~purple_s) & ~ndimage.binary_dilation(white_s, iterations=1)
     lab, n = ndimage.label(L); sz = ndimage.sum(L, lab, range(1, n + 1))
     touch = ndimage.sum(((np.abs(jj - bl[:, None]) < 3) | (np.abs(jj - br[:, None]) < 3)) & L, lab, range(1, n + 1)) > 0
-    L = np.isin(lab, np.nonzero((sz >= 80) & ~(touch & (sz < CUT_MIN)))[0] + 1)
+    top = ndimage.maximum(np.broadcast_to(Y, L.shape), lab, range(1, n + 1))   # (each piece's top: the pieces under the brows, a
+    L = np.isin(lab, np.nonzero((sz >= 80) & ~(touch & (sz < CUT_MIN)) & (top > BROW_Y + .002))[0] + 1)   # lock's tip the eye's mask cut off, float)
     # their depth: from the crown's edge (TUCK behind it) down to GAP in front of the face at the brows (and below;
     # where the hairline comes down to the brows, at the sides, close to the face all along)
     tt = np.where(ycut[None, :] > BROW_Y + .008, np.clip((Y - BROW_Y) / np.maximum(ycut[None, :] - BROW_Y, 1e-4), 0, 1), 0.)
@@ -212,6 +247,7 @@ def fringe(Q, N, UV, I, tex, name, out):
         sc = np.stack([ndimage.map_coordinates(fs[..., m], [(Y1 - p3[:, 1]) / K + V0 - .5, (p3[:, 0] - X0) / K + U0 - .5], order=1) for m in range(3)], 1)
         isk = (sc[:, 0] > 60) & (sc[:, 0] - sc[:, 2] > 25)
         tex[q[:, 1], q[:, 0]] = np.where(isk[:, None], sc, skin_col); n_t += 1; n_px += len(q)
+    print('fringe: Meshy\'s lock tips on the nose\'s bridge painted as skin (%d triangles, %d texels); their spikes around the eyes (%d texels)' % (int(bridge.sum()), n_bridge, n_spk))
     print('fringe: Meshy\'s fringe over the forehead removed (%d triangles), the forehead painted from the sheet (%d triangles), '
           'the sheet\'s locks: %d verts, %d tris, texture %dx%d' % (int(drop.sum()), n_t, nv, len(idx), TW, TH))
     return I[keep]
