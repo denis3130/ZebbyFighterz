@@ -12,7 +12,7 @@ T.test('model draws before its texture is ready', () => { const it=__VF.F3D[0], 
 T.test('missing model falls back to the placeholder', () => { const a=__VF.ASSETS, j=a['ren/ren.json']; delete a['ren/ren.json']; try { T.eq(__VF.modelBuild('ren'),null); T.eq(__VF.mdData('nobody'),null); } finally { a['ren/ren.json']=j; } });
 T.test('idle feet on the floor, head at standing height', () => { const S=__VF.simCreate({seed:1,mode:'versus',chars:['ren','kael']}); __VF.renderFrame(S,0);
   for(const l of ['footL','footR']) T.near(__VF.limbWorld(0,l).y,.06,.05,l); const h=__VF.headTop(0); T.ok(h>1.4&&h<1.9,'head top '+h.toFixed(2)); });
-T.test('a hit flashes the model', () => { const it=__VF.F3D[0]; T.ok(it.mats.main.emissive&&Object.keys(it.mats).length===1); });
+T.test('a hit flashes the model', () => { const it=__VF.F3D[0]; T.ok(it.mats.main.emissive&&Object.values(it.mats).every(m=>m.emissive)); });   // (all its materials: with the look, the sash's and the new head's too)
 T.test('every limb is inside its hitbox on every active frame, both facings', () => { const S=__VF.simCreate({seed:1,mode:'versus',chars:['ren','kael']}), f=F(S,0);
   for(const face of [1,-1]) for(const [id,m] of Object.entries(__VF.CFG.moves)) for(let af=m.s+1;af<=m.s+m.a;af++){ Object.assign(f,{x:0,face,act:id,af,air:id[0]==='j',y:id[0]==='j'?900:0}); __VF.renderFrame(S,0);
     const e=__VF.CFG.clips[id], limb=(e&&e.limb)||m.limb;   // the Meshy clip may strike with another limb than the placeholder

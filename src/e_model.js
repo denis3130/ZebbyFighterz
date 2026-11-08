@@ -547,7 +547,8 @@ function mdPoseOf(F, S) {
     case 'rollF': case 'rollB': e = C.roll; break;
   }
   const p = mdEval(md, e || C.idle, c), lk = CFG.looks[F.char];
-  if (lk && lk.headUp) mdBoneTurn(p, md.index.Head, MD_X, -lk.headUp);
+  // the look's raised head, not when crouched (as the sim's hurtboxes: there it lifted the head above the crouching one)
+  if (lk && lk.headUp && !(CROUCHED[F.act] || (F.act === 'block' && (F.prev & BTN.D)))) mdBoneTurn(p, md.index.Head, MD_X, -lk.headUp);
   return p;
 }
 function mdUp(u) { return Math.max(0, Math.min(1, u)); }
