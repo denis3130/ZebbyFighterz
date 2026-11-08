@@ -111,7 +111,7 @@ async def main(out_dir):
             sash = await pg.evaluate("""async () => { const it = VW.it, sa = it.sash, r = {};
               if (!sa) return {ribbons: false};
               const tip = () => sa.ribbons.map(q => q.P[q.P.length - 1].clone()), off = () => Math.max(...sa.ribbons.map(q => q.P[q.P.length - 1].distanceTo(q.T[q.T.length - 1])));
-              VW.speed = 0; document.getElementById('play0').click(); VW.tick(100);   // the guard, still (game frames, not the clock)
+              VW.speed = 0; document.getElementById('play0').click(); sa.F = null; VW.tick(100);   // the guard, still (game frames, not the clock; the sash anew: it kept the swing of the checks before)
               const a = tip(); VW.tick(12); const b = tip(); VW.speed = 1;
               r.ribbons = sa.ribbons.length === 2 && sa.ribbons.every(q => q.bones.length >= 4);
               r.calm = a.every((p, i) => p.distanceTo(b[i]) < .02);
