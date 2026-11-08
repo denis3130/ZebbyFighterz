@@ -51,6 +51,7 @@ HEAD_PALETTE = [((68, 55, 70), (75, 64, 73)), ((52, 41, 53), (58, 48, 58)), ((10
 HEAD_SPREAD = 28.
 TEMPLE = (.05, .095, 1.556, 1.581, -.004, .058)   # the temples (|x| from the middle in, out; y; z; m): see temples()
 TEMPLE_SKIN, TEMPLE_SINK = .5, .012
+TEMPLE_SPOT = (-.078, -.052, 1.570, 1.592, -.012, .016)   # (x, y, z ranges, m) a brown spot on one temple: see temple_spot()
 HEAD_TEX = 2048   # the texture's size at most (px; 4096 looked the same at the viewer's nearest zoom and took 4 times the memory)
 
 
@@ -114,6 +115,21 @@ def temples(t, Q, UV, I):
     for k in np.nonzero(near)[0]:
         q, p3 = _texels(UV[I[k]] * TS, A[k], TS); q = q[_in_temple(p3)]; box[q[:, 1], q[:, 0]] = True
     sk = _skin_px(t); good = box & sk; bad = box & ~sk
+    if not good.any(): return 0
+    t[bad] = np.median(t[good], 0)
+    return int(bad.sum())
+
+
+def temple_spot(t, Q, UV, I):
+    """A brown oval spot Meshy painted on one temple only (the -x one, at the hairline): its texels in TEMPLE_SPOT that are
+    brown, light or dark (the skin's shadow and the spot's core; not the hair, the brows or the lines: purple or black) take the skin's colour. Returns how many."""
+    TS = t.shape[0]; A = Q[I]; C = A.mean(1); lo = np.array(TEMPLE_SPOT[0::2]); hi = np.array(TEMPLE_SPOT[1::2])
+    near = ((C > lo - .012) & (C < hi + .012)).all(1); box = np.zeros(t.shape[:2], bool)
+    for k in np.nonzero(near)[0]:
+        q, p3 = _texels(UV[I[k]] * TS, A[k], TS); q = q[((p3 > lo) & (p3 < hi)).all(1)]; box[q[:, 1], q[:, 0]] = True
+    sk = _skin_px(t); r, g, b = t[..., 0], t[..., 1], t[..., 2]
+    brown = (r > 60) & (r - b > 12) & ~sk   # (the hair's purples and the black lines have r - b under 12)
+    good = box & sk; bad = box & brown
     if not good.any(): return 0
     t[bad] = np.median(t[good], 0)
     return int(bad.sum())
@@ -335,6 +351,7 @@ def main(bust, pkg, out, texture=None):
     flat = flat + (w @ (dst - src)) / np.maximum(ws, 1e-9) * np.clip(ws, 0, 1)   # (far from every palette colour: unchanged)
     t = np.clip(flat.reshape(t.shape), 0, 255)
     print('temples: %d texels of Meshy\'s sideburns painted as skin' % temples(t, Q, UVq, Iq))
+    print('temple spot: %d brown texels painted as skin' % temple_spot(t, Q, UVq, Iq))
     # the texels between the UV pieces take their nearest piece's colour (the texture's filtering, at a distance, pulled
     # Meshy's packing colours into the pieces' edges: specks and lines along the seams)
     from PIL import ImageDraw
