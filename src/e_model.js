@@ -83,7 +83,7 @@ function modelBuild(key) {
     main.customProgramCacheKey = () => 'flat';
   }
   // the face decal (look data face, ASSETS '<char>/<char>_face.png'): shown once decoded (an empty texture reads black)
-  const face = shape && look.face && ASSETS[key + '/' + key + '_face.png'] ? {tex: new THREE.Texture(new Image()), on: {value: 0}, want: true, ready: false} : null;
+  const face = shape && look.face && !head && ASSETS[key + '/' + key + '_face.png'] ? {tex: new THREE.Texture(new Image()), on: {value: 0}, want: true, ready: false} : null;   // (not under the new head: the old face is hidden)
   if (face) {
     const fd = look.face, dp = fd.depth;   // the face's and the neck's surface seen from the front, as a small texture (mdFaceMat)
     face.depth = new THREE.DataTexture(Uint8Array.from({length: dp.n[0] * dp.n[1] * 4}, (_, i) => i % 4 === 0 ? dp.map[i >> 2] : i % 4 === 3 ? 255 : 0), dp.n[0], dp.n[1], THREE.RGBAFormat);
