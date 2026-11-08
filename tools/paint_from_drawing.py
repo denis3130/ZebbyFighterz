@@ -282,25 +282,31 @@ inv_ = (pos[:, 1] > V_NECK[1] - .04) & (pos[:, 1] < V_TOP) & (pos[:, 2] > -.02) 
 oc = out[ys, xs]; mark = inv_ & (oc.mean(1) < skin_col.mean() - 40)
 out[ys[mark], xs[mark]] = skin_col
 print('chest under the new collar: %d dark texels of the old collar repainted skin' % int(mark.sum()))
-# --- the ankles' wraps (Denis's "niente cose strane"): the drawing's wrap lines, projected on the ankles' round sides,
-# stretched into grey and black smears; there Meshy's own paint (clean white wraps with soft folds): its light, grey
-# texels (min channel over WRAP_LIGHT, spread under WRAP_GREY) below WRAP_Y m, and the drawing's dark marks among them ---
-WRAP_LIGHT, WRAP_GREY, WRAP_Y = 150, 45, .32
-t0 = TEX[ys, xs]; wrapm = (t0.min(1) > WRAP_LIGHT) & (t0.max(1) - t0.min(1) < WRAP_GREY) & (pos[:, 1] < WRAP_Y)
-wrapm = ndimage.binary_dilation(np.zeros((TS, TS), bool) | _mark(ys[wrapm], xs[wrapm], TS), iterations=2)[ys, xs] & (pos[:, 1] < WRAP_Y) & (t0.mean(1) > 90)
-out[ys[wrapm], xs[wrapm]] = TEX[ys[wrapm], xs[wrapm]]
-print('ankle wraps: %d texels in Meshy\'s own clean paint' % int(wrapm.sum()))
-# and every wrap (forearms, ankles) a clean white with only the crisp dark lines kept (soft grey smudges, from Meshy's
-# baked shading and the drawing's blurred edges, read as dirt): white over WRAP_KEEP[0] of luminance, the line's own
-# colour under WRAP_KEEP[1], blended between
-WRAP_KEEP = (175., 95.)
-wr = (t0.min(1) > WRAP_LIGHT) & (t0.max(1) - t0.min(1) < WRAP_GREY) & ((HEADW[I[ks]] * bary).sum(1) < .5)
-# (on the forearms, all of Meshy's light grey too: its baked shading on the wraps; the skin and the wrist's band are not grey)
-wr |= ((FOREW[I[ks]] * bary).sum(1) > .5) & (t0.max(1) - t0.min(1) < 40) & (t0.mean(1) > 95)
-cw = out[ys[wr], xs[wr]]; lw = cw.mean(1); white = np.median(cw[lw > 200], 0) if (lw > 200).any() else np.array([235., 233, 230])
-keep = np.clip((WRAP_KEEP[0] - lw) / (WRAP_KEEP[0] - WRAP_KEEP[1]), 0, 1)[:, None]
-out[ys[wr], xs[wr]] = white * (1 - keep) + cw * keep
-print('wraps: %d texels cleaned to white %s, lines kept' % (int(wr.sum()), np.round(white)))
+# --- the wraps (forearms, ankles) and the boots' light parts (Denis, 8/11: "identico", "niente cose strane"): the
+# drawing's wraps, projected on their round sides, stretched into grey and black smears, and the toon light's bands made
+# grey blocks (ren_look.py gives them flat light). Now: the wrap's colour (WRAP_COL, the drawing's warm white) with the
+# drawing's lines only where the wrap faces the front (WRAP_FRONT: the normal's z where they start and where they are
+# whole; only lines darker than the wrap by WRAP_LINE are kept, soft smudges go); the boots' trim and soles (light in
+# Meshy's texture, under the top of the boots' teal straps) the drawing's beige (BOOT_COL). Meshy's wraps: its light grey
+# texels (every channel over WRAP_LIGHT, spread under WRAP_GREY) on the forearms and on the ankles (under WRAP_Y m, above
+# the boots), and its grey shading on the forearms.
+WRAP_LIGHT, WRAP_GREY, WRAP_Y, WRAP_FRONT, WRAP_LINE = 150, 45, .32, (.55, .75), 8.
+WRAP_COL, BOOT_COL = np.array([230., 210, 202]), np.array([226., 198, 184])
+t0 = TEX[ys, xs]; lightm = (t0.min(1) > WRAP_LIGHT) & (t0.max(1) - t0.min(1) < WRAP_GREY)
+forem = (FOREW[I[ks]] * bary).sum(1) > .5; lowm = pos[:, 1] < WRAP_Y
+tealm = (t0[:, 1] > t0[:, 0] + 10) & (t0[:, 2] > t0[:, 0] + 10)
+boot_top = float(np.percentile(pos[lowm & tealm, 1], 98))
+wr = ((lightm & (forem | (lowm & (pos[:, 1] > boot_top)))) | (forem & (t0.max(1) - t0.min(1) < 40) & (t0.mean(1) > 95))) & ((HEADW[I[ks]] * bary).sum(1) < .5)
+bootm = lightm & lowm & (pos[:, 1] <= boot_top)
+fw = np.clip((nor[:, 2] - WRAP_FRONT[0]) / (WRAP_FRONT[1] - WRAP_FRONT[0]), 0, 1) * vis
+# (where it does not face the front, Meshy's own wrap with its folds' lines, its white turned into the wrap's colour)
+mw = np.median(t0[wr & (t0.mean(1) > 200)], 0) if (wr & (t0.mean(1) > 200)).any() else np.array([240., 240, 240])
+src = col * fw[:, None] + np.clip(t0 * (WRAP_COL / mw), 0, 255) * (1 - fw[:, None])
+keep = np.clip((WRAP_COL.mean() - src.mean(1) - WRAP_LINE) / (WRAP_COL.mean() - 110), 0, 1)[:, None]
+out[ys[wr], xs[wr]] = (WRAP_COL * (1 - keep) + src * keep)[wr]
+out[ys[bootm], xs[bootm]] = BOOT_COL
+print('wraps: %d texels in the drawing\'s wrap colour (%d with its lines, facing the front); boots: %d light texels beige (their straps\' top at %.3f m)' % (
+    int(wr.sum()), int((wr & (fw > .5)).sum()), int(bootm.sum()), boot_top))
 # --- padding: every texel outside the triangles takes its nearest triangle texel's colour (the gutters between UV pieces
 # kept Meshy's old colours, which showed as thin cracks along the seams once filtered, the sash's orange most of all) ---
 inside = tid >= 0
