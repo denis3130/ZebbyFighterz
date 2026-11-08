@@ -43,7 +43,7 @@ BODY_NECK = (1.44, 1.47)                   # the body's neck: its skin between t
 HIDE_Y = 1.445                             # the body's triangles above it are hidden
 BODY_X = .006                              # the body's middle (x)
 HIDE_RAY, HIDE_NECK_R = .08, .075   # (and all of them that are skin, or within that of the neck's axis: the old neck)
-HEAD_SMOOTH, HEAD_JAW = 3, 1.515
+HEAD_SMOOTH, HEAD_JAW, HEAD_TOP = 3, 1.515, 1.535   # (HEAD_TOP: above it all on the Head bone; the collar ends at 1.529)
 COLLAR_STIFF = (1.46, 1.50, .8)   # see main(): the collar's top on the spine, not on the shoulders
 # Meshy's colours to the sheet's (its texture a little lighter and greyer: pink skin, light shadows): each texel moves by
 # the offsets of the palette colours near it (HEAD_SPREAD: how near, rgb), its shades within a colour kept
@@ -394,6 +394,9 @@ def main(bust, pkg, out, texture=None):
     shirt = dark & (Q[:, 1] < HEAD_JAW - .015) & (Q[:, 2] > ax[1])
     trim = (c.min(1) > 140) & (c[:, 0] - c[:, 2] > 15) & (c[:, 0] - c[:, 2] < 60) & ~skin
     head = (dark & ~shirt) | ((Q[:, 1] >= HEAD_JAW) & ~teal & ~trim)   # (above the jaw all of it: the eyes' whites and irises too)
+    head |= Q[:, 1] >= HEAD_TOP   # (above the collar's top all of it, whatever its colour: hair and face in light or teal-ish
+    # tints, taken for the collar's trim or teal, had a quarter of their weight on the spine and the shoulders and came off
+    # the head when it turned, up to 7 cm on the ground)
     print('above the jaw left to the collar (its teal and trim): %d vertices' % int(((Q[:, 1] >= HEAD_JAW) & ~head).sum()))
     neck = skin & ~head
     rest = ~head & ~neck   # the collar, its trim, the shirt
