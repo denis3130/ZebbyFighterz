@@ -8,7 +8,8 @@ usage: python3 tools/ren_head.py BUST.glb PACKAGE_DIR OUT_DIR [TEXTURE.jpg]
   PACKAGE_DIR  the body's tools/meshy_pack.py package (the skin weights are taken from it)
   TEXTURE.jpg  the bust's texture painted from the sheet (tools/paint_head.py); without it, Meshy's own
   writes OUT_DIR/<name>_head.json, .bin, .jpg (name = the package's): {v, verts, tris, pos, nor, uv: float32, jnt: uint8 x4,
-  wgt: float32 x4, idx: uint16/32, hide: uint32 (the package's triangles it replaces); each [byte offset, count]}
+  wgt: float32 x4, idx: uint16/32, hide: uint32 (the package's triangles it replaces), lb: float32 (the outline's
+  extra push back per vertex, m: fringe_back); each [byte offset, count]}
 
 Placing (BUSTS, measured on the bust, in its own units): its eyes' line and its chin on the drawing's (ren.png rows 168
 and 238 through drawing_fit: the head as big as before, the sheet's proportions), its neck's axis on the body's (both fit
@@ -52,6 +53,9 @@ HEAD_SPREAD = 28.
 TEMPLE = (.05, .095, 1.556, 1.581, -.004, .058)   # the temples (|x| from the middle in, out; y; z; m): see temples()
 TEMPLE_SKIN, TEMPLE_SINK = .5, .012
 TEMPLE_SPOT = (-.078, -.052, 1.570, 1.592, -.012, .016)   # (x, y, z ranges, m) a brown spot on one temple: see temple_spot()
+FRINGE_PAINT = (.0008, 120., (60, 50, 60))   # see fringe_paint(): in front of the face by (m), lighter than (mean rgb), the colour they take
+FRINGE_NEAR, FRINGE_MAX = .01, .05
+FRINGE = (.02, .008, .004, 3, .002)   # the hair over the face: its outline's push back (m), the face's reach around it, the depth slack (m), smoothing rounds, grid (m): see fringe_back()
 HEAD_TEX = 2048   # the texture's size at most (px; 4096 looked the same at the viewer's nearest zoom and took 4 times the memory)
 
 
@@ -133,6 +137,64 @@ def temple_spot(t, Q, UV, I):
     if not good.any(): return 0
     t[bad] = np.median(t[good], 0)
     return int(bad.sum())
+
+
+def fringe_back(Q, N, I, skin, dark, ax):
+    """The hair over the face (the fringe, the locks at the temples) with its outline pushed FRINGE[0] m further back
+    (Denis, 8/11: "i capelli sulla faccia" were still badly made: there its outline, 4 mm wide and only 6 mm back for the
+    jaw's line over the neck, came out of the locks' creases and between them and the skin as black splinters around
+    the eyes and brows; the sheet's locks are clean). Seen from the front, the face is its skin above the jaw facing
+    forward on a FRINGE[4] m grid (its frontmost depth per cell), widened FRINGE[1] m; the hair (dark) in it, in front of
+    the face or within FRINGE[2] m of it, gets the push, smoothed over FRINGE[3] rounds of neighbours. The locks' outline
+    still shows against what is further back (the background, at the head's sides). The same for the hair on the face's
+    sides (FRINGE_NEAR). Returns the push per vertex (m) and
+    the face's depth grid (for fringe_paint)."""
+    from scipy import ndimage
+    fr, wide, slack, rounds, g = FRINGE
+    face = skin & (Q[:, 1] > HEAD_JAW) & (N[:, 2] > .2)
+    lo = Q[:, :2].min(0) - .02; ij = np.floor((Q[:, :2] - lo) / g).astype(int); shp = tuple(ij.max(0) + 2)
+    zf = np.full(shp, -9.); np.maximum.at(zf, (ij[face, 0], ij[face, 1]), Q[face, 2])
+    k = int(round(wide / g)); z1 = ndimage.grey_dilation(zf, size=(3, 3)); zf = ndimage.grey_dilation(zf, size=(2 * k + 1, 2 * k + 1))
+    zf = np.where(z1 > -9, z1, zf)   # (the face's own depth where it is, its widened edge only around it: by the nose, the nose's height did not count)
+    front = dark & (zf[ij[:, 0], ij[:, 1]] > -9) & (Q[:, 2] > zf[ij[:, 0], ij[:, 1]] - slack)
+    # (and the locks on the face's sides, the sideburns over the cheeks and the temples, seen from three quarters: the
+    # hair within FRINGE_NEAR m of the skin above the jaw in front of the neck's axis, outside it: its outline made black
+    # splinters on the cheeks there)
+    from scipy.spatial import cKDTree
+    fs = np.nonzero(skin & (Q[:, 1] > HEAD_JAW) & (Q[:, 2] > ax[1]))[0]; hv = np.nonzero(dark)[0]
+    d, nn = cKDTree(Q[fs]).query(Q[hv], distance_upper_bound=FRINGE_NEAR); ok = np.isfinite(d)
+    side = np.zeros(len(Q), bool); hv, nn = hv[ok], fs[nn[ok]]
+    side[hv[((Q[hv] - Q[nn]) * N[nn]).sum(1) > -slack]] = True
+    # the push: FRINGE[0], or more for the locks standing further off the face (a lock 3 cm in front of the forehead kept
+    # its outline over it), up to FRINGE_MAX m
+    dz = np.where(front, Q[:, 2] - zf[ij[:, 0], ij[:, 1]], 0.)
+    w = np.where(front | side, np.clip(dz + fr / 2, fr, FRINGE_MAX), 0.)
+    key = np.round(Q / 1e-6).astype(np.int64); _, weld = np.unique(key, axis=0, return_inverse=True); weld = weld.ravel(); nw = weld.max() + 1
+    T = weld[I]; E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
+    ww = np.zeros(nw); np.maximum.at(ww, weld, w); deg = np.bincount(E.ravel(), minlength=nw).astype(float)
+    for _ in range(rounds):
+        acc = np.zeros(nw); np.add.at(acc, E[:, 0], ww[E[:, 1]]); np.add.at(acc, E[:, 1], ww[E[:, 0]])
+        ww = np.maximum(ww, .5 * ww + .5 * acc / np.maximum(deg, 1))
+    return ww[weld], (zf, lo, g)
+
+
+def fringe_paint(t, Q, UV, I, lb, grid):
+    """Meshy painted what the sheet shows behind the locks over the face on the locks themselves: the eye's white and
+    the skin as white and grey splinters at their tips in front of the eyes, a skin speck at the tip between them. On
+    the locks (two corners or more fringe hair, lb, and their middle more than FRINGE_PAINT[0] m in front of the face) the
+    texels lighter than FRINGE_PAINT[1] (mean rgb) take the hair's dark colour (FRINGE_PAINT[2]). Returns how many."""
+    zf, lo, g = grid; dz, light, col = FRINGE_PAINT
+    TS = t.shape[0]; A = Q[I]; C = A.mean(1)
+    ij = np.clip(np.floor((C[:, :2] - lo) / g).astype(int), 0, np.array(zf.shape) - 1)
+    zc = zf[ij[:, 0], ij[:, 1]]
+    lock = ((lb[I] > .5 * FRINGE[0]).sum(1) >= 2) & (zc > -9) & (C[:, 2] > zc + dz)
+    n = 0
+    for k in np.nonzero(lock)[0]:
+        q, _ = _texels(UV[I[k]] * TS, A[k], TS)
+        if not len(q): continue
+        v = t[q[:, 1], q[:, 0]]; m = v.mean(1) > light
+        if m.any(): t[q[m, 1], q[m, 0]] = col; n += int(m.sum())
+    return n
 
 
 def load_bust(path):
@@ -339,9 +401,11 @@ def main(bust, pkg, out, texture=None):
     def put(arr):
         while len(blob) % 4: blob.append(0)
         o = len(blob); blob.extend(np.ascontiguousarray(arr).tobytes()); return [o, int(arr.size)]
+    lb, grid = fringe_back(Q, Nq, Iq, skin, dark, ax)
+    print('fringe: %d vertices of the hair over the face, their outline %.0f to %.0f mm further back' % (int((lb > .5 * FRINGE[0]).sum()), 1000 * FRINGE[0], 1000 * lb.max()))
     nv = len(Q)
     head = {'v': 1, 'verts': nv, 'tris': len(Iq), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
-            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Iq.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide)}
+            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Iq.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb.astype(np.float32))}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_head.bin'), 'wb').write(bytes(blob))
     json.dump(head, open(os.path.join(out, name + '_head.json'), 'w'), separators=(',', ':'))
@@ -350,6 +414,8 @@ def main(bust, pkg, out, texture=None):
     flat = t.reshape(-1, 3); d2 = ((flat[:, None, :] - src[None]) ** 2).sum(2); w = np.exp(-d2 / (2 * HEAD_SPREAD ** 2)); ws = w.sum(1, keepdims=True)
     flat = flat + (w @ (dst - src)) / np.maximum(ws, 1e-9) * np.clip(ws, 0, 1)   # (far from every palette colour: unchanged)
     t = np.clip(flat.reshape(t.shape), 0, 255)
+    # (before the temples': there the locks sunk under the skin, painted as skin, must stay so: dark, they showed through it)
+    print('fringe: %d light texels on the locks over the face painted as hair' % fringe_paint(t, Q, UVq, Iq, lb, grid))
     print('temples: %d texels of Meshy\'s sideburns painted as skin' % temples(t, Q, UVq, Iq))
     print('temple spot: %d brown texels painted as skin' % temple_spot(t, Q, UVq, Iq))
     # the texels between the UV pieces take their nearest piece's colour (the texture's filtering, at a distance, pulled

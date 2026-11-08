@@ -1915,7 +1915,7 @@ function modelBuild(key) {
         '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_HEAD_FLAT.toFixed(2) + ');');
     };
     hm.customProgramCacheKey = () => 'head';
-    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), back: MD_HEAD_LINE[1]}));
+    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), back: MD_HEAD_LINE[1], perBack: !!head.geo.attributes.aBack}));
     hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
     hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
     head.mesh = hmesh; head.line = hline; head.mat = hm;
@@ -1998,15 +1998,16 @@ function mdFaceShow(face, show) { face.want = show; face.on.value = face.ready &
 // An outline shell's material (the back faces drawn in the outline colour): o = {skinning, w (model units: the push
 // along the normals, '' for none), per (' * aLine': times the per-vertex width), back (m: pushed away from the camera,
 // so the shell shows around the silhouette and not through the body's folds)}.
-function mdLineMat(o) {
-  const m = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide, skinning: !!o.skinning}), per = o.per || '';
+function mdLineMat(o) {   // (perBack: a per-vertex extra push back, m, in the attribute aBack)
+  const m = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide, skinning: !!o.skinning}), per = o.per || '', pb = o.perBack ? ' + aBack' : '';
   m.onBeforeCompile = sh => {
-    let v = (per ? 'attribute float aLine;\n' : '') + sh.vertexShader;
+    let v = (per ? 'attribute float aLine;\n' : '') + (pb ? 'attribute float aBack;\n' : '') + sh.vertexShader;
     if (o.w) v = v.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normal * ' + o.w + per + ';');
-    if (o.back) v = v.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.z -= ' + o.back.toFixed(4) + ';\n\tgl_Position = projectionMatrix * mvPosition;');
+    // (the per-vertex push goes along the line of sight: where it is drawn on the screen does not move, only its depth)
+    if (o.back) v = v.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.z -= ' + o.back.toFixed(4) + ';' + (pb ? '\n\tmvPosition.xyz *= 1.0 + aBack / length(mvPosition.xyz);' : '') + '\n\tgl_Position = projectionMatrix * mvPosition;');
     sh.vertexShader = v;
   };
-  m.customProgramCacheKey = () => [o.w, per, o.back].join('|');
+  m.customProgramCacheKey = () => [o.w, per, o.back, pb].join('|');
   return m;
 }
 
@@ -2301,6 +2302,7 @@ function mdHeadData(md, key) {
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint8Array(buf, j.jnt[0], j.jnt[1]), 4));
   geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(j.wgt), 4));
   geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
+  if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
   md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1])};
   return {j, geo, hide: md.head.hide, jpg};
 }
