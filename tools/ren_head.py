@@ -55,6 +55,7 @@ TEMPLE = (.05, .095, 1.556, 1.581, -.004, .058)   # the temples (|x| from the mi
 TEMPLE_SKIN, TEMPLE_SINK, TEMPLE_STRETCH = .5, .012, .5
 TEMPLE_LINE = (.045, .1, 1.555, 1.62, -.03, .075, .1, .004)   # see main(): the temples' outline pushed back
 CHEEKS = (.03, 1.525, 1.595, .015, 1.583, .07)   # see cheek_marks(): |x| over, y between, z over, the eyes' band (over y, within |x|)
+EARS = (.045, .1, 1.545, 1.615, -.035, .03)   # see cheek_marks(): |x|, y, z ranges (m)
 TEMPLE_SPOT = (-.078, -.052, 1.570, 1.592, -.012, .016)   # (x, y, z ranges, m) a brown spot on one temple: see temple_spot()
 FRINGE_PAINT = (.0008, 120., (60, 50, 60))   # see fringe_paint(): in front of the face by (m), lighter than (mean rgb), the colour they take
 FRINGE_NEAR, FRINGE_MAX = .01, .05
@@ -216,21 +217,24 @@ def fringe_paint(t, Q, UV, I, lb, grid):
 
 
 def cheek_marks(t, Q, UV, I):
-    """Meshy's marks on the cheeks' sides (light grey scratches, purple and black specks and strokes: the sheet has clean
-    skin there): on the skin's triangles (two corners or more) in CHEEKS (|x| from the middle over CHEEKS[0], y between
-    CHEEKS[1] and [2], z over [3], m; not the eyes: under the eyes' band or outside it), those texels take the colour of
-    the nearest unmarked skin texel. Returns how many."""
+    """Meshy's marks on the cheeks' sides and the ears (light grey scratches, purple and black specks and strokes: the
+    sheet has clean skin there, the ears' brown shadow inside): on the skin's triangles (two corners or more) in CHEEKS
+    (|x| from the middle over CHEEKS[0], y between CHEEKS[1] and [2], z over [3], m; not the eyes: under the eyes' band
+    or outside it) and in EARS (|x|, y, z ranges: behind the eyes), those texels take the colour of the nearest unmarked
+    skin texel. Returns how many."""
     from scipy import ndimage
     TS = t.shape[0]; A = Q[I]; C = A.mean(1); ax0, y0, y1, z0, eye_y, eye_x = CHEEKS
     c = np.clip(t[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)], 0, 255)
     sk3 = _skin_px(c[None])[0][I].sum(1) >= 2
     ac = np.abs(C[:, 0] - BODY_X)
     sel = sk3 & (ac > ax0) & (C[:, 1] > y0) & (C[:, 1] < y1) & (C[:, 2] > z0) & ~((C[:, 1] > eye_y) & (ac < eye_x))
+    ex0, ex1, ey0, ey1, ez0, ez1 = EARS   # (and the ears and the sideburns' skin, behind the eyes)
+    sel |= sk3 & (ac > ex0) & (ac < ex1) & (C[:, 1] > ey0) & (C[:, 1] < ey1) & (C[:, 2] > ez0) & (C[:, 2] < ez1)
     mask = np.zeros(t.shape[:2], bool)
     for k in np.nonzero(sel)[0]:
         q, _ = _texels(UV[I[k]] * TS, A[k], TS); mask[q[:, 1], q[:, 0]] = True
     v = np.clip(t, 0, 255); lum = v.mean(2); r, g, b = v[..., 0], v[..., 1], v[..., 2]
-    bad = mask & (((lum > 140) & (r - b < 60)) | ((lum < 150) & (b >= g - 2)) | (lum < 70))
+    bad = mask & (((lum > 140) & (r - b < 60)) | ((lum > 160) & (g - b < 35)) | ((lum < 150) & (b >= g - 2)) | (lum < 70))   # (light grey or pink, purple, black)
     good = mask & ~bad
     if not bad.any() or not good.any(): return 0
     _, (iy, ix) = ndimage.distance_transform_edt(~good, return_indices=True); t[bad] = t[iy[bad], ix[bad]]
