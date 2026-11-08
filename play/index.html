@@ -1920,7 +1920,7 @@ function modelBuild(key) {
         '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_HEAD_FLAT.toFixed(2) + ');');
     };
     hm.customProgramCacheKey = () => 'head';
-    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE / s).toFixed(5), back: ol.back}));
+    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), back: MD_HEAD_LINE[1]}));
     hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
     hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
     head.mesh = hmesh; head.line = hline; head.mat = hm;
@@ -2287,7 +2287,10 @@ function mdSpikes(list, back) {
 // The look data of package key ('<key>/<key>_look.json' and '.bin', tools/ren_look.py), decoded once onto md, or null:
 // {fingers: the finger bones, skin: [skinIndex, skinWeight] with them, line: the outline widths, flat: the flat light's
 // share, spikes, sash: {ribbons, body: the shapes the sash stays out of, blend: the vertices between them}}.
-const MD_HEAD_FLAT = 1, MD_HEAD_LINE = .004;   // the new head's light (its share left flat: its texture, from the sheet, has the shading) and outline (m: the sheet's lines are thin)
+// the new head's light (its share left flat: its texture, from the sheet, has the shading) and outline: [width, pushed back
+// from the camera] m (thin as the sheet's lines; pushed back less than the body's, so the jaw's line shows over the neck
+// as on the sheet; less still, the hair's locks drew black shards over the eyes)
+const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
 // The new head (ASSETS '<key>/<key>_head.json|bin|jpg', tools/ren_head.py): its geometry, skinned to the package's bones
 // in the package's bind space, its texture and the package's triangles it replaces (hide); null without it.
 function mdHeadData(md, key) {
