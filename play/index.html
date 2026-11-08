@@ -1927,13 +1927,21 @@ function modelBuild(key) {
     hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
     hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
     head.mesh = hmesh; head.line = hline; head.mat = hm;
+    if (head.fringe) {   // (flat as the head; alpha-tested: the locks' edges are the sheet's lines; no outline: drawn in it)
+      const ft = new THREE.Texture(new Image()); ft.flipY = false; ft.image.src = head.fringe.png;
+      ft.image.decode().then(() => { ft.needsUpdate = true; }, () => {});
+      const fm = new THREE.MeshToonMaterial({map: ft, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide, alphaTest: .5});
+      fm.onBeforeCompile = hm.onBeforeCompile; fm.customProgramCacheKey = () => 'headFringe';
+      const fmesh = new THREE.SkinnedMesh(head.fringe.geo, fm); fmesh.frustumCulled = false; body.add(fmesh); fmesh.bind(skel, mesh.matrixWorld);
+      head.fringeMesh = fmesh; head.fringeMat = fm;
+    }
   }
   const limbs = {};
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = look.fingers.map(f => new THREE.Quaternion().fromArray(f.fist)); }
-  if (head) { it.head = head.mesh; it.mats.head = head.mat; }
+  if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
   if (face) it.face = face;
   if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash
     let at = bones.length + fingers.length;
@@ -2300,7 +2308,7 @@ const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
 function mdHeadData(md, key) {
   const j = ASSETS[key + '/' + key + '_head.json'], b64 = ASSETS[key + '/' + key + '_head.bin'], jpg = ASSETS[key + '/' + key + '_head.jpg'];
   if (!j || !b64 || !jpg) return null;
-  if (md.head && md.head.j === j) return {j, geo: md.head.geo, hide: md.head.hide, jpg};
+  if (md.head && md.head.j === j) return {j, geo: md.head.geo, hide: md.head.hide, jpg, fringe: md.head.fringe};
   const s = atob(b64), u8 = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
   const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry();
@@ -2311,8 +2319,27 @@ function mdHeadData(md, key) {
   geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(j.wgt), 4));
   geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
   if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
-  md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1])};
-  return {j, geo, hide: md.head.hide, jpg};
+  md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), fringe: mdFringeData(md, key)};
+  return {j, geo, hide: md.head.hide, jpg, fringe: md.head.fringe};
+}
+
+// The face's locks drawn from the sheet (<key>_fringe.*, tools/ren_fringe.py): a thin pillow hanging from the crown's
+// front edge down to the brows, its texture the sheet's own front view (line art and sheen), its alpha the locks' shape;
+// all on the Head bone.
+function mdFringeData(md, key) {
+  const j = ASSETS[key + '/' + key + '_fringe.json'], b64 = ASSETS[key + '/' + key + '_fringe.bin'], png = ASSETS[key + '/' + key + '_fringe.png'];
+  if (!j || !b64 || !png) return null;
+  const s = atob(b64), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry(), n = j.verts;
+  geo.setAttribute('position', new THREE.BufferAttribute(f32(j.pos), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(f32(j.uv), 2));
+  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) { si[i * 4] = md.index.Head; sw[i * 4] = 1; }
+  geo.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+  geo.setIndex(new THREE.BufferAttribute(n > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
+  geo.computeVertexNormals();
+  return {geo, png};
 }
 
 function mdLookData(md, key) {

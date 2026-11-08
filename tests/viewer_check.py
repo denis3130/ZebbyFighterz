@@ -22,7 +22,7 @@ WRAP = ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" 
 # point 1 m in front: 0) and per button [share of points inside, deepest (m, along the rays)].
 INSIDE = """async ([plays, frames, every]) => {
   const it = VW.it, mesh = it.mesh, g = mesh.geometry, I = g.index.array, nt = I.length / 3, CELL = .02, v = new THREE.Vector3();
-  const rib = []; it.body.traverse(o => { if (o.isSkinnedMesh && o.geometry !== g && o !== it.head && o.material.isMeshToonMaterial) rib.push(o); });   /* the tails (not the new head) */
+  const rib = []; it.body.traverse(o => { if (o.isSkinnedMesh && o.geometry !== g && o !== it.head && o !== it.fringe && o.material.isMeshToonMaterial) rib.push(o); });   /* the tails (not the new head, nor its locks from the sheet) */
   const X = new Float32Array(g.attributes.position.count * 3);
   const skin = (m, out) => { const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); m.boneTransform(i, v); v.applyMatrix4(m.matrixWorld); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; } return out; };
   const grid = (a, b) => { const G = new Map();
@@ -106,6 +106,7 @@ async def main(out_dir):
               r.open = it.curl === 0 && it.fingers.every(o => Math.abs(o.quaternion.w) > .9999);
               r.spikes = it.joints.head.children.some(g => g.isGroup && g.children.length >= 8) || !!it.head;   // (the new head has its own hair)
               r.head = !!it.head && it.head.isSkinnedMesh && it.head.geometry.index.count > 30000;   // the new head (the viewer turns it on)
+              r.fringe = !!it.fringe && it.fringe.isSkinnedMesh && it.fringe.geometry.index.count > 6000 && it.fringe.material.alphaTest > 0;   // its locks from the sheet (over 2000 triangles)
               r.line = !!it.mesh.geometry.attributes.aLine && !!it.mesh.geometry.attributes.aFlat; return r; }""")
             # the sash: two ribbons on chains of bones; calm in the guard, swinging after a jump, never NaN
             sash = await pg.evaluate("""async () => { const it = VW.it, sa = it.sash, r = {};

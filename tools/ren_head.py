@@ -10,6 +10,7 @@ usage: python3 tools/ren_head.py BUST.glb PACKAGE_DIR OUT_DIR [TEXTURE.jpg]
   writes OUT_DIR/<name>_head.json, .bin, .jpg (name = the package's): {v, verts, tris, pos, nor, uv: float32, jnt: uint8 x4,
   wgt: float32 x4, idx: uint16/32, hide: uint32 (the package's triangles it replaces), lb: float32 (the outline's
   extra push back per vertex, m: fringe_back); each [byte offset, count]}
+  and OUT_DIR/<name>_fringe.json, .bin, .png: the face's locks drawn from the sheet (tools/ren_fringe.py)
 
 Placing (BUSTS, measured on the bust, in its own units): its eyes' line and its chin on the drawing's (ren.png rows 168
 and 238 through drawing_fit: the head as big as before, the sheet's proportions), its neck's axis on the body's (both fit
@@ -403,12 +404,6 @@ def main(bust, pkg, out, texture=None):
         o = len(blob); blob.extend(np.ascontiguousarray(arr).tobytes()); return [o, int(arr.size)]
     lb, grid = fringe_back(Q, Nq, Iq, skin, dark, ax)
     print('fringe: %d vertices of the hair over the face, their outline %.0f to %.0f mm further back' % (int((lb > .5 * FRINGE[0]).sum()), 1000 * FRINGE[0], 1000 * lb.max()))
-    nv = len(Q)
-    head = {'v': 1, 'verts': nv, 'tris': len(Iq), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
-            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Iq.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb.astype(np.float32))}
-    os.makedirs(out, exist_ok=True)
-    open(os.path.join(out, name + '_head.bin'), 'wb').write(bytes(blob))
-    json.dump(head, open(os.path.join(out, name + '_head.json'), 'w'), separators=(',', ':'))
     im = Image.open(texture).convert('RGB') if texture else texb
     pal = bp.get('palette', HEAD_PALETTE); t = np.asarray(im).astype(np.float64); src = np.array([a for a, _ in pal], float); dst = np.array([b for _, b in pal], float)
     flat = t.reshape(-1, 3); d2 = ((flat[:, None, :] - src[None]) ** 2).sum(2); w = np.exp(-d2 / (2 * HEAD_SPREAD ** 2)); ws = w.sum(1, keepdims=True)
@@ -418,12 +413,21 @@ def main(bust, pkg, out, texture=None):
     print('fringe: %d light texels on the locks over the face painted as hair' % fringe_paint(t, Q, UVq, Iq, lb, grid))
     print('temples: %d texels of Meshy\'s sideburns painted as skin' % temples(t, Q, UVq, Iq))
     print('temple spot: %d brown texels painted as skin' % temple_spot(t, Q, UVq, Iq))
+    # the face's locks from the sheet (tools/ren_fringe.py): Meshy's fringe over the forehead out, the sheet's locks in
+    from ren_fringe import fringe as sheet_fringe
+    Ik = sheet_fringe(Q, Nq, UVq, Iq, t, name, out)
+    nv = len(Q)
+    head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
+            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb.astype(np.float32))}
+    os.makedirs(out, exist_ok=True)
+    open(os.path.join(out, name + '_head.bin'), 'wb').write(bytes(blob))
+    json.dump(head, open(os.path.join(out, name + '_head.json'), 'w'), separators=(',', ':'))
     # the texels between the UV pieces take their nearest piece's colour (the texture's filtering, at a distance, pulled
     # Meshy's packing colours into the pieces' edges: specks and lines along the seams)
     from PIL import ImageDraw
     from scipy import ndimage
     TS = t.shape[0]; mimg = Image.new('L', (TS, TS), 0); dr = ImageDraw.Draw(mimg)
-    for tri in UVq[Iq] * TS: dr.polygon([tuple(v) for v in tri], fill=255)
+    for tri in UVq[Ik] * TS: dr.polygon([tuple(v) for v in tri], fill=255)
     inside = ndimage.binary_dilation(np.asarray(mimg) > 0, iterations=2)
     _, (gy, gx) = ndimage.distance_transform_edt(~inside, return_indices=True); t = t[gy, gx]
     print('texture: %d%% of its texels in the head\'s pieces, the rest padded' % round(100 * inside.mean()))
@@ -432,7 +436,7 @@ def main(bust, pkg, out, texture=None):
     im.save(os.path.join(out, name + '_head.jpg'), quality=88, optimize=True)
     main_b = np.bincount(top[:, 0], minlength=nb)
     print('head: %d verts, %d tris (of %d; under the cut left out), from y %.3f to %.3f m; the body\'s triangles hidden: %d of %d; main bones %s' % (
-        nv, len(Iq), len(Ib), Q[:, 1].min(), Q[:, 1].max(), len(hide), len(I), {bones[i]: int(c) for i, c in enumerate(main_b) if c}))
+        nv, len(Ik), len(Ib), Q[:, 1].min(), Q[:, 1].max(), len(hide), len(I), {bones[i]: int(c) for i, c in enumerate(main_b) if c}))
 
 
 if __name__ == '__main__':
