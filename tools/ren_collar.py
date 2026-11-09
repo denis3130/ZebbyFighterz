@@ -38,7 +38,7 @@ PAINT_TEAL, PAINT_INSIDE = np.array([44., 91, 98]), np.array([30., 64, 70])
 # spikes under it left out) pushed SHELL_OUT m out, both smoothed (SHELL_SMOOTH: columns, rows); SHELL_THICK m thick; from
 # SHELL_BASE m (in the body) up; in flat colours: teal outside, its shade inside, cream on the top (SHELL_TRIM: the band
 # outside and inside, m) and on the front edges
-SHELL_PHI, SHELL_COLS, SHELL_ROWS, SHELL_WIN, SHELL_DY, SHELL_DATA_Y = 47., 90, 10, 7., .005, 1.445
+SHELL_PHI, SHELL_COLS, SHELL_ROWS, SHELL_WIN, SHELL_DY, SHELL_DATA_Y = 41., 92, 10, 7., .005, 1.445
 SHELL_SMOOTH, SHELL_OUT, SHELL_THICK, SHELL_BASE, SHELL_TRIM = (2.5, 1.), .002, .005, 1.418, (.003, .006)
 # its base flared out over the shoulders (SHELL_FLARE: under that height, m, that much m out per m down), and the body's old
 # collar walls in it or near it hidden (ren_head.py: the body's triangles not skin from OLD_WALL[0] m up, within the
@@ -48,6 +48,13 @@ SHELL_FLARE, OLD_WALL = (1.465, .8), (1.455, .02, .03)
 # bust's neck under it left out (ren_head.py), its edge was jagged
 SHELL_FLOOR, SHELL_NECK_IN = 1.452, .003
 SHELL_SKIN = (.015, .045)   # its skin: the bust's collar's around each point (a gaussian of [0] m, those within [1] m)
+# (9/11/2026, Denis's close-up of the chest: "migliora tutto": green shards at the base of the neck, through the collar's
+# front opening): the skirt in the neck's skin within SKIRT_SKIN degrees of the front (it showed teal at the neck's sides),
+# the floor in skin within FLOOR_SKIN degrees (the trapezius between the neck and the collar), the head's neck texels
+# that kept the bust's teal in skin (ren_head.py), and the body's old pieces poking up through the floor hidden (OLD_IN: from
+# that much m under the floor, that much m into the collar's inner side)
+SKIRT_SKIN, FLOOR_SKIN, OLD_IN = 100., 75., (.012, .004)
+NECK_KEEP_R = .058   # (ren_head.py: the bust's triangles within that of the neck's axis, above the floor, are the neck's: kept)
 OLD_TOP = (1.465, .22)   # (and all of the body's not skin above that height, m, within that of the neck's axis: the old collar's tips)
 SAMPLE = .0015             # the body's surface sampled every that many m (the nearest points)
 
@@ -63,12 +70,12 @@ def _texels(uv, A, TS):
     return q[g], (w[ins] @ A)[g]
 
 
-def collar_join(Q, N, UV, I, J, W, lb, tex, PB, IB, UVB, JB, WB, keep, paint):
+def collar_join(Q, N, UV, I, J, W, lb, tex, PB, IB, UVB, JB, WB, keep, paint, skin_rgb=None):
     """See above. Q, N, UV, I, J, W, lb: the head (vertices, normals, uvs, triangles, skin joints and weights, outline
     push); tex: its texture (h x w x 3 float, painted in place: the band); PB, IB, UVB, JB, WB: the body's package
     (positions, triangles, uvs, skin); keep: the body's triangles kept (not hidden); paint: the body's paint (h x w x 3) or
-    None. Returns (Q, N, UV, I, J, W, lb with the skirt added, the flat block: (row, col, half size) to paint SKIRT_RGB in
-    the texture once it is padded)."""
+    None; skin_rgb: the neck's skin (the skirt's colour in front). Returns (Q, N, UV, I, J, W, lb with the skirt added, the
+    flat blocks: [(row, col, half size, rgb)] to paint in the texture once it is padded)."""
     TS = tex.shape[0]; IK = IB[keep]; Cb = PB[IK].mean(1)
     near = IK[(Cb[:, 1] > SKIRT_Y - .14) & (Cb[:, 1] < SKIRT_Y + .06)]
     pts, tri, bar = [], [], []
@@ -93,11 +100,13 @@ def collar_join(Q, N, UV, I, J, W, lb, tex, PB, IB, UVB, JB, WB, keep, paint):
     free = ~ndimage.binary_dilation(np.asarray(mask) > 0, iterations=6)
     dt = ndimage.distance_transform_cdt(free, metric='chessboard'); r0, c0 = np.unravel_index(np.argmax(dt), dt.shape); blk = int(min(dt[r0, c0] - 2, 24))
     uv_flat = np.array([(c0 + .5) / TS, (r0 + .5) / TS])
+    (rs, cs, bs), = free_blocks(UV, I, TS, 1, half=12, taken=((int(r0), int(c0), blk),))   # (and one for the skin: the skirt in front)
+    uv_skin = np.array([(cs + .5) / TS, (rs + .5) / TS])
     n0, nb, rep = len(Q), len(bv), first[bv]
     # (in the front's opening, between the new collar's sides, the skirt joins the neck's skin to the chest's: in the skin's
     # own colour, its edge's; elsewhere, in the collar, the flat colour)
-    phb = np.degrees(np.arctan2(Q[rep, 0] - NECK_AXIS[0], Q[rep, 2] - NECK_AXIS[1])); front = np.abs(phb) < SHELL_PHI + 8
-    uvs = np.where(front[:, None], UV[rep], uv_flat[None, :])
+    phb = np.degrees(np.arctan2(Q[rep, 0] - NECK_AXIS[0], Q[rep, 2] - NECK_AXIS[1])); front = np.abs(phb) < SKIRT_SKIN
+    uvs = np.where(front[:, None], uv_skin[None, :], uv_flat[None, :])   # (the neck's edge's own uvs fell on the bust's teal there)
     Q2 = np.r_[Q, Q[rep], pts[j] - fn[tri[j]] * SKIRT_IN]; N2 = np.r_[N, N[rep], fn[tri[j]]]; UV2 = np.r_[UV, uvs, uvs]
     J2 = np.r_[J, J[rep], JB[nearest_v]]; W2 = np.r_[W, W[rep], WB[nearest_v]]; lb2 = np.r_[lb, np.full(2 * nb, SKIRT_LINE)]
     tris = []
@@ -122,7 +131,7 @@ def collar_join(Q, N, UV, I, J, W, lb, tex, PB, IB, UVB, JB, WB, keep, paint):
             tex[q[m, 1], q[m, 0]] = paint[np.clip((uvb[:, 1] * PS).astype(int), 0, PS - 1), np.clip((uvb[:, 0] * PS).astype(int), 0, PS - 1)]; n_tx += int(m.sum())
     print('collar: a skirt of %d triangles from the head\'s bottom edge (%d points, %.0f mm from the vest on average) to the '
           'vest; %d texels of the collar\'s band on the vest in its paint' % (len(tris), nb, 1000 * d[ok].mean() if ok.any() else 0, n_tx))
-    return Q2, N2, UV2, I2, J2, W2, lb2, (r0, c0, blk)
+    return Q2, N2, UV2, I2, J2, W2, lb2, [(int(r0), int(c0), blk, np.array(SKIRT_RGB, float)), (rs, cs, bs, np.array(skin_rgb if skin_rgb is not None else SKIRT_RGB, float))]
 
 
 def free_blocks(UV, I, TS, n, half=16, taken=()):
@@ -140,10 +149,10 @@ def free_blocks(UV, I, TS, n, half=16, taken=()):
     return out
 
 
-def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None):
+def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None, skin_rgb=None):
     """A new collar (see SHELL_*), its shape from the bust's (rest: its collar's vertices): (positions, normals, uvs,
     skin joints, skin weights, triangles (from 0), the flat blocks [(row, col, half, rgb)] to paint, within(points,
-    out_m, in_m): which points lie in its wall widened by those margins)."""
+    out_m, in_m): which points lie in its wall widened by those margins, the outline's push per vertex)."""
     from paint_meshy import LINING_RGB
     ax = np.array([NECK_AXIS[0], NECK_AXIS[1]])
     phi = np.degrees(np.arctan2(Q[:, 0] - ax[0], Q[:, 2] - ax[1])) % 360; rad = np.hypot(Q[:, 0] - ax[0], Q[:, 2] - ax[1]); y = Q[:, 1]
@@ -166,11 +175,12 @@ def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None):
         oki = np.isfinite(R[:, j])
         if oki.any(): R[:, j] = np.interp(cols, cols[oki], R[oki, j])
     R = ndimage.gaussian_filter(R, SHELL_SMOOTH, mode='nearest') + SHELL_OUT
-    blocks = free_blocks(UV, I, TS, 3, taken=taken); rgb = [PAINT_TEAL, PAINT_INSIDE, LINING_RGB]
+    blocks = free_blocks(UV, I, TS, 4, taken=taken); rgb = [PAINT_TEAL, PAINT_INSIDE, LINING_RGB, np.array(skin_rgb if skin_rgb is not None else PAINT_INSIDE, float)]
     uvb = [np.array([(c0 + .5) / TS, (r0 + .5) / TS]) for r0, c0, _ in blocks]
     P_, UV_, T_ = [], [], []
-    def grid(pts, kind):   # pts: (nc, nr, 3) a quad grid; kind: its flat colour (0 teal, 1 inside, 2 cream)
-        nc, nr = pts.shape[:2]; base = sum(len(p) for p in P_); P_.append(pts.reshape(-1, 3)); UV_.append(np.tile(uvb[kind], (nc * nr, 1)))
+    LB_ = []
+    def grid(pts, kind, push=0.):   # pts: (nc, nr, 3) a quad grid; kind: its flat colour (0 teal, 1 inside, 2 cream, 3 skin); push: its outline's
+        nc, nr = pts.shape[:2]; base = sum(len(p) for p in P_); P_.append(pts.reshape(-1, 3)); UV_.append(np.tile(uvb[kind], (nc * nr, 1))); LB_.append(np.full(nc * nr, push))
         for a in range(nc - 1):
             for b in range(nr - 1):
                 v00, v01, v10, v11 = base + a * nr + b, base + a * nr + b + 1, base + (a + 1) * nr + b, base + (a + 1) * nr + b + 1
@@ -200,7 +210,10 @@ def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None):
             if m.sum() > 2: rneck[i] = np.percentile(rad[m], 30)
     okn = np.isfinite(rneck); rneck = np.interp(cols, cols[okn], rneck[okn]) if okn.any() else np.full(SHELL_COLS, .05)
     rneck = np.minimum(ndimage.gaussian_filter1d(rneck, SHELL_SMOOTH[0], mode='nearest') - SHELL_NECK_IN, r_at(yf) - SHELL_THICK - .002)
-    floor = np.stack([ring(rneck, yf - .004), inner[:, 0]], 1); grid(floor, 1)
+    floor = np.stack([ring(rneck, yf - .004), inner[:, 0]], 1)
+    fr = np.abs(dphi(cols, 0)) < FLOOR_SKIN; k1 = int(np.argmin(fr)); k2 = SHELL_COLS - int(np.argmin(fr[::-1]))   # (the front columns: skin)
+    if 0 < k1 < k2 < SHELL_COLS: grid(floor[:k1 + 1], 3, SKIRT_LINE); grid(floor[k1:k2], 1, SKIRT_LINE); grid(floor[k2 - 1:], 3, SKIRT_LINE)
+    else: grid(floor, 1, SKIRT_LINE)   # (its outline pushed back: seen edge-on from the front it drew a black line across the chest)
     for e, flip in ((0, True), (SHELL_COLS - 1, False)):   # the front edges: outer to inner, base to top, in the trim
         col_o = np.r_[outer[e], outer_t[e, 1:]]; col_i = np.r_[inner[e], inner_t[e, 1:]]
         hy = np.linspace(0, 1, 14); yo = col_o[:, 1]; yi = col_i[:, 1]   # (both resampled on as many rows, by height)
@@ -209,7 +222,7 @@ def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None):
         # (and under the floor, the outer side's front down to the base, teal: in the body)
         yb_ = np.linspace(SHELL_BASE, SHELL_FLOOR, 4); cb = np.stack([np.interp(yb_, yo, col_o[:, k]) for k in range(3)], 1); cbi = np.repeat(ci_[:1], 4, 0)
         g2 = np.stack([cb, cbi], 0) if not flip else np.stack([cbi, cb], 0); grid(g2, 0)
-    P_ = np.concatenate(P_); UV_ = np.concatenate(UV_); T_ = np.array(T_, np.int64)
+    P_ = np.concatenate(P_); UV_ = np.concatenate(UV_); T_ = np.array(T_, np.int64); LB_ = np.concatenate(LB_)
     # the triangles facing outward from the wall (the grids' winding: check against the centre of the wall)
     C = P_[T_].mean(1); fn = np.cross(P_[T_[:, 1]] - P_[T_[:, 0]], P_[T_[:, 2]] - P_[T_[:, 0]])
     # normals: per welded position, the area-weighted mean of its faces' (smooth, so the outline is whole)
@@ -232,11 +245,13 @@ def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None):
         # in_m inside (floor: where under its floor, inside its inner side, by the angles it spans less 5 degrees)
         ph = np.degrees(np.arctan2(X[:, 0] - ax[0], X[:, 2] - ax[1])) % 360; rr = np.hypot(X[:, 0] - ax[0], X[:, 2] - ax[1])
         ci = np.clip(np.round((ph - SHELL_PHI) / (360 - 2 * SHELL_PHI) * (SHELL_COLS - 1)).astype(int), 0, SHELL_COLS - 1)
+        if floor == 'above':   # (inside its inner side, from just under its floor up, within the angles it spans)
+            return (ph >= SHELL_PHI - 2) & (ph <= 360 - SHELL_PHI + 2) & (X[:, 1] > SHELL_FLOOR - out_m) & (X[:, 1] <= ytop[ci]) & (rr < r_at(X[:, 1], ci) - SHELL_THICK + in_m)
         if floor:
             return (ph >= SHELL_PHI + 5) & (ph <= 360 - SHELL_PHI - 5) & (X[:, 1] < SHELL_FLOOR - .003) & (rr < r_at(np.full(len(X), SHELL_FLOOR), ci) - SHELL_THICK)
         on = (ph >= SHELL_PHI - 5) & (ph <= 360 - SHELL_PHI + 5) & (X[:, 1] >= SHELL_BASE) & (X[:, 1] <= ytop[ci] + .01)
         ro = r_at(X[:, 1], ci); return on & (rr < ro + out_m) & (rr > ro - SHELL_THICK - in_m)
-    return P_, N_, UV_, J_.astype(top.dtype), W_.astype(tw.dtype), T_, [(r0, c0, b, rgb[k]) for k, (r0, c0, b) in enumerate(blocks)], within
+    return P_, N_, UV_, J_.astype(top.dtype), W_.astype(tw.dtype), T_, [(r0, c0, b, rgb[k]) for k, (r0, c0, b) in enumerate(blocks)], within, LB_
 
 
 def load_body(pkg):

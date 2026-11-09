@@ -560,23 +560,39 @@ def main(bust, pkg, out, texture=None):
     # the neck's bottom edge then joined to the vest by the skirt, a floor inside the collar)
     rest_all = np.zeros(len(Q), bool); rest_all[:len(rest)] = rest
     neck_all = np.zeros(len(Q), bool); neck_all[:len(neck)] = neck
-    SP, SN, SUV_unused, SJ, SW, STri, _, within = collar_shell(Q, rest_all, top, tw, UVq, Ik, t.shape[0], (), neck_all)
+    # the neck's skin (its texels by the floor, in front): the floor's colour there; and its texels that kept the bust's
+    # teal (by the collar it lost) in the skin's colour around them
+    from paint_views import texel_table
+    from paint_meshy import parts, SKIN_, TEAL_, MIXED_, LIGHT_
+    nk_t = np.nonzero(neck_all[Ik].sum(1) >= 2)[0]; TSq = t.shape[0]
+    ysn, xsn, ksn, _, posn, _ = texel_table(Q, Nq, UVq, Ik[nk_t], TSq); cn = t[ysn, xsn]; kn = parts(cn)
+    skin_rgb = np.median(cn[(kn == SKIN_) & (posn[:, 1] < 1.47) & (posn[:, 2] > -.01)], 0) if ((kn == SKIN_) & (posn[:, 1] < 1.47)).sum() > 50 else np.median(cn[kn == SKIN_], 0)
+    bad = (kn == TEAL_) | (kn == MIXED_) | (kn == LIGHT_)
+    if bad.any() and (kn == SKIN_).any():
+        sk_ = np.nonzero(kn == SKIN_)[0]; _, jn = cKDTree(posn[sk_]).query(posn[bad]); t[ysn[bad], xsn[bad]] = cn[sk_[jn]]
+    print('neck: %d texels of the bust\'s teal and light in its skin; its skin %s' % (int(bad.sum()), np.round(skin_rgb).astype(int).tolist()))
+    SP, SN, SUV_unused, SJ, SW, STri, _, within, _ = collar_shell(Q, rest_all, top, tw, UVq, Ik, t.shape[0], (), neck_all, skin_rgb)
     Cq_ = Q[Ik].mean(1); phq_ = np.degrees(np.arctan2(Cq_[:, 0] - NECK_AXIS_X, Cq_[:, 2] - NECK_AXIS_Z)) % 360
-    from ren_collar import SHELL_PHI
+    from ren_collar import SHELL_PHI, SHELL_FLOOR, NECK_KEEP_R
     sides_ = (phq_ > SHELL_PHI + 3) & (phq_ < 360 - SHELL_PHI - 3)   # (in the front's opening only the collar's own: the neck's skin there meets the chest)
-    n_old = len(Ik); Ik = Ik[np.where(sides_, rest_all[Ik].sum(1) < 1, rest_all[Ik].sum(1) < 2) & ~within(Cq_, 0, 0, floor=True)]   # (and the neck under its floor)
+    rq_ = np.hypot(Cq_[:, 0] - NECK_AXIS_X, Cq_[:, 2] - NECK_AXIS_Z)
+    on_neck = (rq_ < NECK_KEEP_R) & (Cq_[:, 1] > SHELL_FLOOR + .002)   # (the neck's own surface: its drawn lines, dark, were taken for the bust's shirt; left out they were holes)
+    if os.environ.get('NECK_DEBUG'): np.save(os.environ['NECK_DEBUG'], np.nonzero(on_neck & (rest_all[Ik].sum(1) >= 1))[0])
+    n_old = len(Ik); Ik = Ik[(np.where(sides_, rest_all[Ik].sum(1) < 1, rest_all[Ik].sum(1) < 2) | on_neck) & ~within(Cq_, 0, 0, floor=True)]   # (and the neck under its floor)
     from ren_collar import OLD_WALL, OLD_TOP
     kept_ = np.ones(len(I), bool); kept_[hide.astype(np.int64)] = False; Cb_ = P[I].mean(1); rb_ = np.hypot(Cb_[:, 0] - NECK_AXIS_X, Cb_[:, 2] - NECK_AXIS_Z)
-    walls = np.nonzero(kept_ & ~skin_of(col[I].mean(1)) & (((Cb_[:, 1] > OLD_WALL[0]) & within(Cb_, OLD_WALL[1], OLD_WALL[2])) | ((Cb_[:, 1] > OLD_TOP[0]) & (rb_ < OLD_TOP[1]))))[0]
+    from ren_collar import OLD_IN
+    walls = np.nonzero(kept_ & ~skin_of(col[I].mean(1)) & (((Cb_[:, 1] > OLD_WALL[0]) & within(Cb_, OLD_WALL[1], OLD_WALL[2])) | ((Cb_[:, 1] > OLD_TOP[0]) & (rb_ < OLD_TOP[1]))
+                                                          | within(Cb_, OLD_IN[0], OLD_IN[1], floor='above')))[0]
     hide = np.unique(np.concatenate([hide, walls])).astype(np.uint32)
     print('collar: the bust\'s left out (%d triangles); a new one of %d triangles made around the neck; %d of the body\'s old collar walls hidden in it' % (n_old - len(Ik), len(STri), len(walls)))
     PB_, IB_, UVB_, JB_, WB_ = load_body(pkg); keep_b = np.ones(len(IB_), bool); keep_b[hide.astype(np.int64)] = False
     pp = os.path.join(out, name + '_painted.jpg'); paint_b = np.asarray(Image.open(pp).convert('RGB')).astype(np.float64) if os.path.exists(pp) else None
-    Q, Nq, UVq, Ik, top, tw, lb_line, flat_blk = collar_join(Q, Nq, UVq, Ik, top, tw, lb_line, t, PB_, IB_, UVB_, JB_, WB_, keep_b, paint_b)
+    Q, Nq, UVq, Ik, top, tw, lb_line, flat_blk = collar_join(Q, Nq, UVq, Ik, top, tw, lb_line, t, PB_, IB_, UVB_, JB_, WB_, keep_b, paint_b, skin_rgb)
     # (the new collar after the skirt: its flat colours in blocks of the texture outside every piece and the skirt's)
-    SP, SN, SUV, SJ, SW, STri, shell_blk, _ = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], (flat_blk,), np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)])
+    SP, SN, SUV, SJ, SW, STri, shell_blk, _, SLB = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], [b_[:3] for b_ in flat_blk], np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)], skin_rgb)
     n0 = len(Q); Q = np.r_[Q, SP]; Nq = np.r_[Nq, SN]; UVq = np.r_[UVq, SUV]; top = np.r_[top, SJ]; tw = np.r_[tw, SW]
-    lb_line = np.r_[lb_line, np.zeros(len(SP))]; Ik = np.r_[Ik, STri + n0]
+    lb_line = np.r_[lb_line, SLB]; Ik = np.r_[Ik, STri + n0]
     nv = len(Q)
     head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
             'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb_line.astype(np.float32))}
@@ -593,7 +609,7 @@ def main(bust, pkg, out, texture=None):
     _, (gy, gx) = ndimage.distance_transform_edt(~inside, return_indices=True); t = t[gy, gx]
     print('texture: %d%% of its texels in the head\'s pieces, the rest padded' % round(100 * inside.mean()))
     from ren_collar import SKIRT_RGB
-    r0, c0, blk = flat_blk; t[r0 - blk:r0 + blk + 1, c0 - blk:c0 + blk + 1] = SKIRT_RGB   # (the skirt's flat colour: after the padding)
+    for r0, c0, blk, rgb in flat_blk: t[r0 - blk:r0 + blk + 1, c0 - blk:c0 + blk + 1] = rgb   # (the skirt's flat colours: after the padding)
     for r0, c0, blk, rgb in shell_blk: t[r0 - blk:r0 + blk + 1, c0 - blk:c0 + blk + 1] = rgb   # (the new collar's)
     im = Image.fromarray(t.round().astype(np.uint8))
     if max(im.size) > HEAD_TEX: im = im.resize((HEAD_TEX, HEAD_TEX), Image.LANCZOS)
