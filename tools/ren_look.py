@@ -11,6 +11,7 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
   skin: [[byte offset, count] uint8 x4, [byte offset, count] float32 x4] per vertex: the package's skin with the
         fingers on their bones (bone index: the package's bones, then the fingers in the order above) and the band's
         back on the Hips (band_on_hips)
+  nor: [byte offset, count] float32 x3 per vertex: the normals the light uses (smoothed, smooth_normals)
   flat: [byte offset, count] float32 per vertex: how much of the light the toon shading leaves out there (1 on the front
         of the head, FLAT_BODY on the rest of the front, fading to 0 by the sides, where tools/paint_from_drawing.py
         paints the drawing): the drawing has its own shading (the anime muscles too), the light only darkened it in
@@ -95,6 +96,12 @@ BLEND_W, BLEND_D, BLEND_Y = .2, .025, (.25, 1.1)
 # BAND_T m above and below; behind (all of it under BAND_Z[0] m, none over [1]: the front keeps its skin, the thighs
 # rising into it in the crouch, the ribbons' tops on it).
 BAND_T, BAND_TRUNK, BAND_Z = .03, (.8, .95), (-.04, .04)
+# The toon light's normals smoothed (9/11/2026, Denis's close-up of the shoulder: "devi assolutamente aggiustare tutto quello
+# che c'è nell'immagine"): on Meshy's lumpy surface and across its texture seams the light's bands broke into angular
+# patches on the vest and the arms; the light follows the broad form instead (as the drawings' shadows): the vertices'
+# normals (the mesh welded across its seams) averaged with their neighbours' NOR_ITER times (half each time), the hands'
+# kept (their weight, up to all of it: the fingers' small forms)
+NOR_ITER = 12
 
 
 def qm(q):
@@ -715,6 +722,26 @@ def ribbon_of(t, P, sc, cx, by, mid, y0):
             'cut': float(t['cut']), 'out': 1 if a[0] * x0 > 0 else -1, 'a': a, 'n': n, 'c': t['c']}
 
 
+def smooth_normals(P, I, keep_w):
+    """Per vertex the normal of the welded surface smoothed (see NOR_ITER); keep_w (per vertex, 0-1): how much of its
+    own smoothed-once normal it keeps instead (the hands)."""
+    from scipy.sparse import coo_matrix
+    _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel(); nw = len(first)
+    T = weld[I]; fn = np.cross(P[I[:, 1]] - P[I[:, 0]], P[I[:, 2]] - P[I[:, 0]])   # (area-weighted)
+    Nw = np.zeros((nw, 3))
+    for k in range(3): np.add.at(Nw, T[:, k], fn)
+    Nw /= np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12)
+    E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
+    A = coo_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr()
+    deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1)
+    own = Nw.copy(); S = Nw.copy()
+    for _ in range(NOR_ITER):
+        S = .5 * S + .5 * (A @ S) / deg[:, None]; S /= np.maximum(np.linalg.norm(S, axis=1, keepdims=True), 1e-12)
+    kw = np.zeros(nw); np.maximum.at(kw, weld, keep_w)
+    out = S * (1 - kw)[:, None] + own * kw[:, None]; out /= np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-12)
+    return out[weld].astype(np.float32)
+
+
 def sash_band(P, col):
     """The band's heights (m): (bottom, top), where the sash's orange (col: Meshy's texture at each vertex) goes around
     the waist (200 degrees and more of it, in 15 degree sectors, per cm)."""
@@ -899,12 +926,15 @@ def main(pkg, out, drawing):
     blob = line.tobytes(); oj = len(blob); blob += jn.astype(np.uint8).tobytes(); ow = len(blob); blob += wn.astype(np.float32).tobytes()
     of = len(blob); blob += flat.tobytes(); op = len(blob); blob += P[moved].astype(np.float32).tobytes(); on = len(blob); blob += N[moved].astype(np.float32).tobytes()
     ob = len(blob); blob += blend.tobytes(); om = len(blob); blob += moved.astype(np.uint16).tobytes()
+    handw = sum(((J == idx[s_ + 'Hand']) * W).sum(1) for s_ in ('Left', 'Right'))
+    nsm = smooth_normals(P, I, np.clip(handw / .5, 0, 1)); blob += b'\0' * (-len(blob) % 4); onor = len(blob); blob += nsm.tobytes()   # (float32: 4-aligned)
+    print('normals smoothed for the light: %d vertices (%d rounds; the hands kept)' % (len(nsm), NOR_ITER))
     fn = face_and_neck(face_mask, hs, col, P)
     dbox, dz, dnx, dny, ddata = face_depth(P, I, fn)
     odm = len(blob); blob += ddata
     jh, jd, _ = jaw_ring(P, I, fn)
     ojr = len(blob); blob += np.stack([np.round((jh - JAW_SCAN[1]) / (JAW_SCAN[0] - JAW_SCAN[1]) * 255), np.round(jd / JAW_DEEP[0] * 255)], 1).astype(np.uint8).tobytes()
-    look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)],
+    look = {'v': 3, 'fingers': fingers, 'skin': [[oj, int(jn.size)], [ow, int(wn.size)]], 'line': [0, int(line.size)], 'nor': [onor, int(nsm.size)],
             'flat': [of, int(flat.size)], 'spikes': spikes, 'sash': {'ribbons': ribbons, 'body': body, 'blend': [ob, int(blend.size)]},
             'move': {'idx': [om, len(moved)], 'pos': [op, 3 * len(moved)], 'nor': [on, 3 * len(moved)]},
             'face': {'fit': [round(float(v), 5) for v in fit[1:]], 'decal': list(FACE_DECAL), 'front': list(FACE_FRONT), 'seen': FACE_SEEN,

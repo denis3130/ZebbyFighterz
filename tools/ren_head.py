@@ -554,7 +554,8 @@ def main(bust, pkg, out, texture=None):
         lb_line = np.r_[lb_line, np.full(len(plug['pos']), PLUG_LINE)]; Ik = np.r_[Ik, plug['tri'] + n0]
     # the collar joined to the vest (tools/ren_collar.py): a skirt from the head's bottom edge to the vest, the collar's band
     # on the vest in the vest's paint
-    from ren_collar import collar_join, load_body
+    from ren_collar import collar_join, load_body, collar_paint
+    print('collar: %d texels of its teal smoothed, %d of its lining in cream, %d of specks in its teal' % collar_paint(Q, Nq, UVq, Ik, top, tw, hb, t))
     PB_, IB_, UVB_, JB_, WB_ = load_body(pkg); keep_b = np.ones(len(IB_), bool); keep_b[hide.astype(np.int64)] = False
     pp = os.path.join(out, name + '_painted.jpg'); paint_b = np.asarray(Image.open(pp).convert('RGB')).astype(np.float64) if os.path.exists(pp) else None
     Q, Nq, UVq, Ik, top, tw, lb_line, flat_blk = collar_join(Q, Nq, UVq, Ik, top, tw, lb_line, t, PB_, IB_, UVB_, JB_, WB_, keep_b, paint_b)

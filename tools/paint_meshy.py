@@ -21,8 +21,10 @@ usage: python3 tools/paint_meshy.py PACKAGE_DIR DRAWN.jpg OUT.jpg
   into the wristbands, the vest's green into the skin at the armholes), and along the texture's seams the zigzag of the
   triangles; each texel near a border takes the colour of the part the model has there, smoothed on the model itself;
   in the armholes (ARMHOLE) the skin wins over the vest's half-green fold above the deltoids;
+- the collar's lining in one cream (LINING_*), the vest's armholes edged in ink (ARM_LINE), as in the drawings;
 - the tracing: the drawings' dark lines (darker than TRACE_LUM, thinner than about 2 TRACE_W + 1 texels: not the big
-  black shapes of the folds; in pieces of TRACE_MIN texels or more: lines, not specks) over Meshy's paint in TRACE_INK,
+  black shapes of the folds; in pieces of TRACE_MIN texels or more and TRACE_LEN long: lines, not specks nor dashes) over
+  Meshy's paint in TRACE_INK,
   TRACE_ALPHA opaque; not on the hands (drawn spread differently) nor on the head;
 - the texels between the pieces take their nearest piece's colour (as the other paints).
 """
@@ -37,6 +39,14 @@ from paint_views import load, texel_table
 from ren_look import sash_tails, SASH_BAND, TAILS_TOUCH
 
 TRACE_LUM, TRACE_W, TRACE_ALPHA, TRACE_INK, TRACE_MIN = 50., 2, .6, np.array([22., 20, 26]), 30
+TRACE_LEN = .03   # a traced piece on the vest or the sash this long (m, on the model) or more: a line; shorter, a dash (9/11: scratches on the vest's shoulders)
+# Denis's close-up of the shoulder (9/11/2026: "devi assolutamente aggiustare tutto quello che c'è nell'immagine"):
+# LINING_*: the collar's light lining (the light part above LINING_Y m, off the arms, within LINING_X m of the middle) in
+# one cream, the sheets' (Meshy's was white with grey streaks, like metal); ARM_LINE: the vest's armholes edged in the
+# drawings' ink, this wide (m) on the vest's side of its border with the skin (the light's angular patches there:
+# ren_look.smooth_normals; Meshy's shading smoothed in the texture too took the muscles' own strokes away: not done)
+LINING_RGB, LINING_Y, LINING_X = np.array([206., 190, 162]), 1.36, .2
+ARM_LINE = .0035
 TAIL_LOW, FILL_K = .12, 48   # the old tails' paint: from this height (m) up to the band; its fill: the median of that many texels
 TAIL_NEAR = .02   # the clothes under the old tails: this near (m) their hidden shapes, every colour but the vest's and the trousers'
 # the borders between the clothes, the skin and the sash clean (9/11/2026, Denis: "dove si sovrappongono i colori"): see
@@ -225,13 +235,31 @@ def main(pkg, drawn, out):
     # the borders between the parts clean (before the tracing: its lines stay as drawn)
     redo = clean_borders(out_img, ys, xs, pos, nor, (aw >= ARMHOLE[0]) & (aw <= ARMHOLE[1]) & (pos[:, 1] > ARMHOLE[2]) & (hw < .5))
     if os.environ.get('BORDER_DEBUG'): np.savez(os.environ['BORDER_DEBUG'], ys=ys[redo], xs=xs[redo])
+    # the collar's lining in one cream; the armholes edged in ink
+    k2 = parts(out_img[ys, xs])
+    lin = (k2 == LIGHT_) & (pos[:, 1] > LINING_Y) & (aw < .3) & (np.abs(pos[:, 0]) < LINING_X) & (hw < .5)
+    out_img[ys[lin], xs[lin]] = LINING_RGB
+    arm = (aw >= .05) & (aw <= .85) & (pos[:, 1] > 1.2) & (hw < .5)
+    sk = arm & (k2 == SKIN_); te = np.nonzero(arm & ((k2 == TEAL_) | (k2 == MIXED_)))[0]
+    ink = te[cKDTree(pos[sk]).query(pos[te])[0] < ARM_LINE] if sk.any() and len(te) else np.zeros(0, int)
+    out_img[ys[ink], xs[ink]] = TRACE_INK
+    print('collar: %d texels of its lining in cream; armholes: %d texels of ink along the vest\'s edge' % (int(lin.sum()), len(ink)))
     # the tracing: the drawings' thin dark lines
     inside = np.zeros((TS, TS), bool); inside[ys, xs] = True
     dark = (Dw.mean(2) < TRACE_LUM) & inside
     disk = np.hypot(*np.mgrid[-TRACE_W:TRACE_W + 1, -TRACE_W:TRACE_W + 1]) <= TRACE_W + .01
     thin = dark & ~ndimage.binary_opening(dark, structure=disk)
-    lab, n = ndimage.label(thin, structure=np.ones((3, 3)))   # (lines, not specks: the pieces of TRACE_MIN texels or more)
-    thin = np.isin(lab, np.nonzero(ndimage.sum(thin, lab, range(1, n + 1)) >= TRACE_MIN)[0] + 1)
+    lab, n = ndimage.label(thin, structure=np.ones((3, 3)))   # (lines, not specks: the pieces of TRACE_MIN texels or more, TRACE_LEN long)
+    pid = lab[ys, xs]; on = pid > 0; cnt = np.bincount(pid[on], minlength=n + 1).astype(float)
+    S1 = np.stack([np.bincount(pid[on], pos[on, i], minlength=n + 1) for i in range(3)], 1) / np.maximum(cnt, 1)[:, None]
+    S2 = np.stack([np.bincount(pid[on], pos[on, i] * pos[on, j], minlength=n + 1) for i in range(3) for j in range(3)], 1).reshape(-1, 3, 3) / np.maximum(cnt, 1)[:, None, None]
+    length = np.sqrt(12 * np.clip(np.linalg.eigvalsh(S2 - S1[:, :, None] * S1[:, None, :])[:, -1], 0, None))
+    kt = parts(out_img[ys, xs]); cloth = np.bincount(pid[on], ((kt == TEAL_) | (kt == ORANGE_))[on].astype(float), minlength=n + 1) / np.maximum(cnt, 1)
+    big = np.bincount(lab.ravel(), minlength=n + 1) >= TRACE_MIN
+    dash = big & (cloth > .5) & (length < TRACE_LEN)   # (on the vest and the sash only: the skin's muscle lines come in short pieces)
+    good = big & ~dash; good[0] = False
+    print('tracing: %d pieces of lines, %d dashes on the vest and the sash shorter than %.0f mm left out' % (int(good.sum()), int(dash[1:].sum()), 1000 * TRACE_LEN))
+    thin = good[lab]
     ok = np.zeros((TS, TS), bool); ok[ys, xs] = (hdw < .5) & (hw < .5) & ~on_tail
     a = np.clip(ndimage.gaussian_filter((thin & ok).astype(float), .6) * 1.6, 0, 1) * ok * TRACE_ALPHA
     out_img = out_img * (1 - a[..., None]) + TRACE_INK * a[..., None]

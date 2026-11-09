@@ -104,7 +104,7 @@ const CFG={
   // under it as a decal of their own (e_model mdFaceMat); head = the new head from Denis's 3-view sheet (tools/ren_head.py:
   // its old head, neck and collar's top hidden); paint = the drawing painted on the model (tools/paint_from_drawing.py,
   // ASSETS '<char>/<char>_painted.jpg') instead of Meshy's own paint; clips = CFG.clips entries of its own (by act).
-  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false,
+  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false, smoothNormals:false,
     paint:false, clips:null}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,

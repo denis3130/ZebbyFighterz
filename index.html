@@ -285,7 +285,7 @@ const CFG={
   // under it as a decal of their own (e_model mdFaceMat); head = the new head from Denis's 3-view sheet (tools/ren_head.py:
   // its old head, neck and collar's top hidden); paint = the drawing painted on the model (tools/paint_from_drawing.py,
   // ASSETS '<char>/<char>_painted.jpg') instead of Meshy's own paint; clips = CFG.clips entries of its own (by act).
-  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false,
+  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false, smoothNormals:false,
     paint:false, clips:null}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
@@ -1835,7 +1835,7 @@ function modelBuild(key) {
   body.scale.setScalar(s); root.add(body);
   const bones = md.bones.map(b => { const o = new THREE.Bone(); o.name = b.n; o.position.fromArray(b.t); o.quaternion.fromArray(b.q); return o; });
   md.bones.forEach((b, i) => (b.p < 0 ? body : bones[b.p]).add(bones[i]));
-  const B = n => bones[md.index[n]], lk = CFG.looks[key] || {}, look = (lk.fists || lk.spikes || lk.faceLine || lk.flatFace || lk.sash || lk.faceShape) && mdLookData(md, key);
+  const B = n => bones[md.index[n]], lk = CFG.looks[key] || {}, look = (lk.fists || lk.spikes || lk.faceLine || lk.flatFace || lk.sash || lk.faceShape || lk.smoothNormals) && mdLookData(md, key);
   const head = lk.head && mdHeadData(md, key);   // the new head (its old one, neck and collar's top hidden)
   // fists: the fingers' bones under the hands (after the package's in the skeleton, as the look's skin counts them)
   const fingers = look && lk.fists ? look.fingers.map(f => { const o = new THREE.Bone(); o.name = f.n; o.position.fromArray(f.t); return o; }) : [];
@@ -1845,7 +1845,8 @@ function modelBuild(key) {
     const o = new THREE.Bone(); o.name = 'Sash' + k; o.position.fromArray(k ? p.map((v, i) => v - r.j[k - 1][i]) : p); return o; })) : [];
   sash.forEach(ch => ch.forEach((o, k) => (k ? ch[k - 1] : B('Hips')).add(o)));
   const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, shape = look && lk.faceShape && !head && look.move;   // (with the new head: the old head is hidden and the old collar keeps its own shape, its pulled points stuck out beside the new collar)
-  const geo = fingers.length || per || flat || shape || head ? new THREE.BufferGeometry() : md.geo;
+  const smoothN = look && lk.smoothNormals && look.nor;   // (the light's normals smoothed: clean bands, not Meshy's lumps)
+  const geo = fingers.length || per || flat || shape || head || smoothN ? new THREE.BufferGeometry() : md.geo;
   if (geo !== md.geo) {   // the package's geometry, its attributes shared (not copied), with the look's skin and outline widths
     for (const a in md.geo.attributes) geo.setAttribute(a, md.geo.attributes[a]);
     geo.setIndex(md.geo.index);
@@ -1856,10 +1857,11 @@ function modelBuild(key) {
       geo.setIndex(new THREE.BufferAttribute(src instanceof Uint32Array ? Uint32Array.from(keep) : Uint16Array.from(keep), 1));
     }
     if (fingers.length) { geo.setAttribute('skinIndex', look.skin[0]); geo.setAttribute('skinWeight', look.skin[1]); }
+    if (smoothN) { geo.userData.bindNormal = md.geo.attributes.normal; geo.setAttribute('normal', look.nor); }
     if (per) geo.setAttribute('aLine', look.line);
     if (flat) geo.setAttribute('aFlat', look.flat);
     if (shape) {   // the face's shape: copies of the positions and normals, the moved vertices changed
-      const p = new Float32Array(md.geo.attributes.position.array), n = new Float32Array(md.geo.attributes.normal.array), m = look.move;
+      const p = new Float32Array(md.geo.attributes.position.array), n = new Float32Array((smoothN || md.geo.attributes.normal).array), m = look.move;
       m.idx.forEach((v, i) => { p.set(m.pos.subarray(i * 3, i * 3 + 3), v * 3); n.set(m.nor.subarray(i * 3, i * 3 + 3), v * 3); });
       geo.setAttribute('position', new THREE.BufferAttribute(p, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(n, 3));
     }
@@ -2208,7 +2210,7 @@ function mdBodyR(sh, t, rad) {
 // are drawn now and were drawn last frame (world), and a hash grid of them.
 const MD_GRID = 1024;
 function mdBlendData(idx, geo, skel, mesh) {
-  const n = idx.length, P = geo.attributes.position.array, N = geo.attributes.normal.array, J = geo.attributes.skinIndex.array, W = geo.attributes.skinWeight.array;
+  const n = idx.length, P = geo.attributes.position.array, N = (geo.userData.bindNormal || geo.attributes.normal).array, J = geo.attributes.skinIndex.array, W = geo.attributes.skinWeight.array;   // (the mesh's own normals: the sash keeps off its real surface, not the light's smoothed one)
   const S = {n, B: new Float32Array(n * 3), N0: new Float32Array(n * 3), J: new Uint16Array(n * 4), W: new Float32Array(n * 4), X: new Float32Array(n * 3),
     N: new Float32Array(n * 3), PX: new Float32Array(n * 3), PN: new Float32Array(n * 3), head: new Int32Array(MD_GRID), next: new Int32Array(n), used: [], slot: {},
     lo: new THREE.Vector3(), hi: new THREE.Vector3()};
@@ -2346,7 +2348,7 @@ function mdLookData(md, key) {
     face: j.face && Object.assign({}, j.face, {depth: Object.assign({}, j.face.depth, {map: new Uint8Array(u8.buffer, j.face.depth.map[0], j.face.depth.map[1])}),
       jaw: Object.assign({}, j.face.jaw, {map: new Uint8Array(u8.buffer, j.face.jaw.map[0], j.face.jaw.map[1])})}),
     skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
-    line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1)};
+    line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1), nor: j.nor && new THREE.BufferAttribute(f32(j.nor), 3)};
 }
 
 // --- Poses: {q: local rotations, nb x 4, h: the Hips' local position} ---

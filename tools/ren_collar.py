@@ -12,7 +12,8 @@ band, in the head's own teal, sat on the vest in another. Here:
     light being flat) from a block of the texture outside every piece; skinned at the top as the edge, at the bottom as
     the body's nearest vertex; its outline pushed back (SKIRT_LINE);
   - the head's texels within BAND_D of the vest (under SKIRT_Y + .01 m) take the body's own paint at the nearest point
-    (the drawing's, OUT_DIR/<name>_painted.jpg): the collar's bottom band is the vest's colour, its jagged edge gone.
+    (the drawing's, OUT_DIR/<name>_painted.jpg): the collar's bottom band is the vest's colour, its jagged edge gone;
+  - collar_paint: the collar's teal without the bust's facets, its lining in the body's cream (PAINT_*).
 """
 import json, os
 import numpy as np
@@ -24,6 +25,12 @@ SKIRT_Y, SKIRT_IN, SKIRT_MAX, SKIRT_LINE = 1.50, .0015, .04, .1
 SKIRT_RGB = (56, 90, 92)
 BAND_D = .010
 NECK_AXIS = (.006, -.01)   # (x, z) of the neck's axis: the skirt faces away from it
+# the collar's paint (9/11/2026, Denis's close-up of the shoulder: "devi assolutamente aggiustare tutto quello che c'è
+# nell'immagine"): the bust's collar came painted in facets (lighter and darker triangles of teal, straight-edged) and its
+# lining white with grey streaks; its teal (little Head weight: not the face, the hair, the neck) smoothed on the model (a
+# gaussian of PAINT_SIGMA m) and PAINT_KEEP of its shading kept around its own colour; its lining in the body's cream
+# (paint_meshy.LINING_RGB)
+PAINT_SIGMA, PAINT_KEEP, PAINT_SPECK = .008, .6, 80   # (PAINT_SPECK: the specks of other colours in it, up to that many texels: its teal)
 SAMPLE = .0015             # the body's surface sampled every that many m (the nearest points)
 
 
@@ -36,6 +43,39 @@ def _texels(uv, A, TS):
     b = np.linalg.solve(T, (px - uv[0]).T).T; w = np.c_[1 - b.sum(1), b]; ins = (w >= -1e-3).all(1)
     q = np.floor(px[ins]).astype(int); g = (q >= 0).all(1) & (q < TS).all(1)
     return q[g], (w[ins] @ A)[g]
+
+
+def collar_paint(Q, N, UV, I, J, W, head_bone, tex):
+    """The collar's paint (see PAINT_*): tex (h x w x 3 float) changed in place; returns (texels smoothed, of the lining,
+    of specks)."""
+    from paint_views import texel_table
+    from paint_meshy import parts, TEAL_, LIGHT_, DARK_, LINING_RGB
+    TS = tex.shape[0]; ys, xs, ks, bary, pos, nor = texel_table(Q, N, UV, I, TS)
+    collar = ((J == head_bone) * W).sum(1) < .15; on = collar[I[ks]].sum(1) >= 2   # (its top rim's triangles share a vertex with the head)
+    c = tex[ys, xs]; k = parts(c)
+    S = np.nonzero(on & (k == TEAL_))[0]; n_teal = 0
+    if len(S) > 100:
+        tree = cKDTree(pos[S]); base = np.median(c[S], 0); m = np.zeros((len(S), 3))
+        for i0 in range(0, len(S), 100000):
+            q = S[i0:i0 + 100000]
+            d, j = tree.query(pos[q], k=64, distance_upper_bound=3 * PAINT_SIGMA); ok = np.isfinite(d); j = np.where(ok, j, 0)
+            w = np.exp(-.5 * (np.where(ok, d, 0) / PAINT_SIGMA) ** 2) * ok * np.clip((nor[S][j] * nor[q][:, None, :]).sum(2), 0, 1)
+            m[i0:i0 + len(q)] = (w[..., None] * c[S][j]).sum(1) / np.maximum(w.sum(1), 1e-9)[:, None]
+        tex[ys[S], xs[S]] = base + PAINT_KEEP * (m - base); n_teal = len(S)
+    L = on & (k == LIGHT_); tex[ys[L], xs[L]] = LINING_RGB
+    # the specks of other colours in it (a purple dot at the back, the hair's): up to PAINT_SPECK texels, mostly teal around: its teal
+    oth = np.zeros((TS, TS), bool); oth[ys, xs] = on & (k != TEAL_) & (k != LIGHT_)   # (the hair's purple too, run onto its top)
+    tl = np.zeros((TS, TS), bool); tl[ys, xs] = on & (k == TEAL_)
+    lab, n = ndimage.label(oth, structure=np.ones((3, 3))); n_sp = 0
+    if n:
+        sz = np.bincount(lab.ravel()); ring = ndimage.binary_dilation(oth, iterations=2) & ~oth
+        rl = ndimage.maximum_filter(lab, size=5); rt = np.bincount(rl[ring], tl[ring].astype(float), minlength=n + 1) / np.maximum(np.bincount(rl[ring], minlength=n + 1), 1)
+        sp = (sz <= PAINT_SPECK) & (rt >= .7); sp[0] = False; q = np.nonzero(sp[lab[ys, xs]])[0]
+        if len(q) and len(S): tex[ys[q], xs[q]] = tex[ys[S], xs[S]][cKDTree(pos[S]).query(pos[q])[1]]; n_sp = len(q)
+    # the hair's purple run onto it (the triangles of its top rim share the hair's texture there): its teal
+    q = np.nonzero(on & (k == DARK_) & (c[:, 0] - c[:, 1] > 8) & (c[:, 2] - c[:, 1] > 8))[0]
+    if len(q) and len(S): tex[ys[q], xs[q]] = tex[ys[S], xs[S]][cKDTree(pos[S]).query(pos[q])[1]]; n_sp += len(q)
+    return n_teal, int(L.sum()), n_sp
 
 
 def collar_join(Q, N, UV, I, J, W, lb, tex, PB, IB, UVB, JB, WB, keep, paint):
