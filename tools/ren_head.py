@@ -42,8 +42,8 @@ DRAW_EYE, DRAW_CHIN = 168., 238.           # the drawing's rows (ren.png) of the
 BODY_NECK = (1.44, 1.47)                   # the body's neck: its skin between these heights fits its axis
 HIDE_Y = 1.445                             # the body's triangles above it are hidden
 BODY_X = .006                              # the body's middle (x)
-HIDE_RAY, HIDE_NECK_R = .08, .075
-TAILS_PIECE, TAILS_Y = 200, (.5, 1.1)   # see main(): the old tails' floating pieces (triangles), where (y, m)   # (and all of them that are skin, or within that of the neck's axis: the old neck)
+HIDE_RAY, HIDE_NECK_R = .08, .075   # (and all of them that are skin, or within that of the neck's axis: the old neck)
+TAILS_PIECE, TAILS_Y = 200, (.5, 1.1)   # see main(): the old tails' floating pieces (triangles), where (y, m)
 HEAD_SMOOTH, HEAD_JAW, HEAD_TOP = 3, 1.515, 1.535   # (HEAD_TOP: above it all on the Head bone; the collar ends at 1.529)
 COLLAR_STIFF = (1.46, 1.50, .8)   # see main(): the collar's top on the spine, not on the shoulders
 # Meshy's colours to the sheet's (its texture a little lighter and greyer: pink skin, light shadows): each texel moves by
@@ -484,12 +484,13 @@ def main(bust, pkg, out, texture=None):
     hide = np.sort(np.concatenate([np.nonzero(up & (hw3 >= .5))[0], cand[covered]])).astype(np.uint32)
     # the sash's old tails (8/11, Denis: "rimuovere dal corpo la vecchia fascia ... le fasce che abbiamo sostituito con quelle
     # che si muovono"): Meshy's two tails hanging at the hips (ren_look.sash_tails: its orange under the band; the ribbons
-    # of the look replace them), hidden too, with the pieces their removal leaves floating (under TAILS_PIECE triangles,
-    # their dark edges); they lie on the trousers, which are whole under them (no holes)
-    from ren_look import sash_tails
+    # of the look replace them), hidden too (every triangle with ren_look.TAILS_TOUCH of their vertices: the row that joined
+    # them to the vest too, 9/11), with the pieces their removal leaves floating (under TAILS_PIECE triangles, their dark
+    # edges); they lie on the trousers and the vest, which are whole under them (no holes)
+    from ren_look import sash_tails, TAILS_TOUCH
     tv = np.zeros(len(P), bool)
     for tl in sash_tails(P, col, I): tv[tl] = True
-    gone = tv[I].sum(1) >= 2; kept = np.ones(len(I), bool); kept[hide] = False; kept &= ~gone
+    gone = tv[I].sum(1) >= TAILS_TOUCH; kept = np.ones(len(I), bool); kept[hide] = False; kept &= ~gone
     from scipy.sparse import csr_matrix as _csr
     from scipy.sparse.csgraph import connected_components as _cc
     _, wb = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_inverse=True); wb = wb.ravel(); K = np.nonzero(kept)[0]

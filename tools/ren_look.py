@@ -72,6 +72,10 @@ NAMES = ('Thumb', 'Index', 'Middle', 'Ring', 'Pinky')
 # down to SASH_LIE m under the band (lying on the vest's flaps, which follow the thighs).
 SASH_BAND, SASH_MIN, SASH_SEG, SASH_GAP, SASH_W = 1.06, 200, 9, .018, (.02, .1)
 SASH_TUCK, SASH_FIX, SASH_OUT, SASH_TH, SASH_PIECE, SASH_SKIN, SASH_LIE = .015, .05, .002, .012, 1000, 8, .15
+# Meshy's old tails (sash_tails) hidden on the body (tools/ren_head.py) and their paint left out (tools/paint_meshy.py): the
+# triangles with TAILS_TOUCH of their vertices or more (with 2, the row that joined them to the vest stayed: teeth along
+# its edge)
+TAILS_TOUCH = 1
 # The body the sash stays out of: around each of these bones (to its child), the volume of the mesh's vertices that
 # follow it (weight BODY_W and more: the trousers, the vest's front flaps on the thighs, the hips with the crotch and the
 # belly), full

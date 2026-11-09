@@ -12,7 +12,10 @@ usage: python3 tools/paint_meshy.py PACKAGE_DIR DRAWN.jpg OUT.jpg
 - the old tails' paint: Meshy painted the sash's tails on the trousers and the vest's flaps under them too (orange specks
   and streaks under the band, where the tails hung; the tails' own shapes are hidden, tools/ren_head.py): those texels
   (orange or its brown mixes, under the band, not on the arms nor on the tails' hidden shapes) take the colour of the
-  nearest texel (on the model, in 3D) that is not, softened among themselves;
+  nearest texel (on the model, in 3D) that is not, softened among themselves; within TAIL_NEAR of the tails' hidden
+  shapes (the clothes they covered, painted in greys and tans by Meshy: grey shards along the vest's edge once the tails
+  were gone, 9/11/2026, Denis: "ce ancora un pezzo di fascia rimuovilo") every colour but the vest's teal and the
+  trousers' purple, in one of the two: the one most of the nearest texels are;
 - the tracing: the drawings' dark lines (darker than TRACE_LUM, thinner than about 2 TRACE_W + 1 texels: not the big
   black shapes of the folds; in pieces of TRACE_MIN texels or more: lines, not specks) over Meshy's paint in TRACE_INK,
   TRACE_ALPHA opaque; not on the hands (drawn spread differently) nor on the head;
@@ -26,10 +29,11 @@ from scipy.spatial import cKDTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paint_views import load, texel_table
-from ren_look import sash_tails, SASH_BAND
+from ren_look import sash_tails, SASH_BAND, TAILS_TOUCH
 
 TRACE_LUM, TRACE_W, TRACE_ALPHA, TRACE_INK, TRACE_MIN = 50., 2, .6, np.array([22., 20, 26]), 30
 TAIL_LOW, FILL_K = .12, 48   # the old tails' paint: from this height (m) up to the band; its fill: the median of that many texels
+TAIL_NEAR = .02   # the clothes under the old tails: this near (m) their hidden shapes, every colour but the vest's and the trousers'
 
 
 def orangeish(c):
@@ -37,6 +41,19 @@ def orangeish(c):
     brightness (not the trousers' purple grey, nor the boots' beige trim, nor the wraps' warm white)."""
     r, g, b = c[:, 0], c[:, 1], c[:, 2]
     return (r > 20) & (r - b > 16) & (r - g > 10) & ((r - b) > .25 * r)
+
+
+def teal(c):
+    """The vest's teal, light or dark (n x 3): green and blue over red, and clearly so for its brightness (not the
+    light blue greys Meshy left under the tails)."""
+    r, g, b = c[:, 0], c[:, 1], c[:, 2]
+    return (g - r > np.maximum(8, .2 * g)) & (b - r > 0)
+
+
+def purple(c):
+    """The trousers' dark purple grey (n x 3): dark, red and blue not under green."""
+    r, g, b = c[:, 0], c[:, 1], c[:, 2]
+    return (c.mean(1) < 95) & (r >= g - 2) & (b >= g - 4) & ~orangeish(c)
 
 
 def main(pkg, drawn, out):
@@ -52,13 +69,25 @@ def main(pkg, drawn, out):
     vcol = T[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)]
     tv = np.zeros(len(P), bool)
     for tl in sash_tails(P, vcol, I): tv[tl] = True
-    tail_t = tv[I].sum(1) >= 2; on_tail = tail_t[ks]
+    tail_t = tv[I].sum(1) >= TAILS_TOUCH; on_tail = tail_t[ks]
     out_img = T.copy(); c0 = T[ys, xs]
     low = (pos[:, 1] < SASH_BAND) & (pos[:, 1] > TAIL_LOW) & (aw < .5) & (hw < .5)
-    bad = low & (orangeish(c0) | on_tail)
+    # the clothes under the tails (hidden by them in Meshy's model, painted in greys and tans there: grey shards along the
+    # vest's edge once the tails were gone): near the tails' hidden shapes, every colour but the vest's and the trousers'
+    tri_t = np.nonzero(tail_t)[0]; wq = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1], [4, 1, 1], [1, 4, 1], [1, 1, 4]], float)
+    tp = np.einsum('kj,tjc->tkc', wq / wq.sum(1, keepdims=True), P[I[tri_t]]).reshape(-1, 3)
+    near = np.zeros(len(pos), bool); near[low] = cKDTree(tp).query(pos[low])[0] < TAIL_NEAR
+    is_teal, is_purple = teal(c0), purple(c0)
+    bad = low & (orangeish(c0) | on_tail | (near & ~is_teal & ~is_purple))
     src = low & ~bad
     tree = cKDTree(pos[src]); _, j = tree.query(pos[bad], k=FILL_K)
     fill = np.median(c0[src][j], axis=1)   # (the median of the nearest clothes' texels: not one of Meshy's light streaks)
+    # under the tails, one material's colour: the vest's or the trousers', whichever most of the nearest texels are (the
+    # median of both together was a muddy grey)
+    nb = near[bad]; cs = c0[src][j[nb]]; tq, pq = is_teal[src][j[nb]], is_purple[src][j[nb]]
+    mem = np.where((tq.sum(1) >= pq.sum(1))[:, None], tq, pq); mem[~mem.any(1)] = True
+    fill[nb] = np.nanmedian(np.where(mem[..., None], cs, np.nan), axis=1)
+    print('under the old tails: %d texels not the vest\'s nor the trousers\' colour, in theirs' % int((near & bad & ~orangeish(c0) & ~on_tail).sum()))
     # (softened among themselves: the nearest colours make patches)
     acc = np.zeros((TS, TS, 3)); cnt = np.zeros((TS, TS)); acc[ys[bad], xs[bad]] = fill; cnt[ys[bad], xs[bad]] = 1
     sm = np.stack([ndimage.gaussian_filter(acc[..., k], 1.5) for k in range(3)], -1) / np.maximum(ndimage.gaussian_filter(cnt, 1.5), 1e-6)[..., None]
