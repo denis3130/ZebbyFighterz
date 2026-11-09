@@ -20,6 +20,7 @@ usage: python3 tools/paint_meshy.py PACKAGE_DIR DRAWN.jpg OUT.jpg
   left each part's colour in ragged teeth, specks and mixes over the next one (the sash's orange on the vest, the skin
   into the wristbands, the vest's green into the skin at the armholes), and along the texture's seams the zigzag of the
   triangles; each texel near a border takes the colour of the part the model has there, smoothed on the model itself;
+  in the armholes (ARMHOLE) the skin wins over the vest's half-green fold above the deltoids;
 - the tracing: the drawings' dark lines (darker than TRACE_LUM, thinner than about 2 TRACE_W + 1 texels: not the big
   black shapes of the folds; in pieces of TRACE_MIN texels or more: lines, not specks) over Meshy's paint in TRACE_INK,
   TRACE_ALPHA opaque; not on the hands (drawn spread differently) nor on the head;
@@ -42,10 +43,20 @@ TAIL_NEAR = .02   # the clothes under the old tails: this near (m) their hidden 
 # clean_borders. BORDER_SIGMA (m), BORDER_STEP (texels), BORDER_NN: the parts' shares around each texel, a gaussian of
 # that width over a sample every that many texels, its that many nearest; BORDER_NEAR: another part with that share or
 # more is a border near; BORDER_K: the colour of a texel redone is the median of that many of its part's nearest texels
-# away from the borders; BORDER_MIX: a texel of no part this near (rgb) the line between the colours of the two parts it
-# lies between is their mix (redone); BORDER_SPECK: a speck of one part inside another, up to that many texels (redone)
-BORDER_SIGMA, BORDER_STEP, BORDER_NN, BORDER_NEAR, BORDER_K, BORDER_MIX, BORDER_SPECK = .004, 2, 32, .12, 24, 45., 60
+# away from the borders; BORDER_MIX: a texel whose hue (its colour over its brightness) has moved [0] or more of the way
+# from its part's toward the other part's there, within [1] of the line between the two, is a mix of the two (redone;
+# 9/11, Denis: "quella macchia verde del vestito che sfiora il braccio colorandolo": the vest's grey-green at the
+# shoulders' tops, half skin), if brighter than [2] (darker, the hue is noise); BORDER_SPECK: a speck of one part inside
+# another, up to that many texels (redone)
+BORDER_SIGMA, BORDER_STEP, BORDER_NN, BORDER_NEAR, BORDER_K, BORDER_MIX, BORDER_SPECK = .004, 2, 32, .12, 24, (.2, .03, 40.), 60
+# the armholes (9/11/2026, Denis: "quella macchia verde del vestito che sfiora il braccio colorandolo", circled on the top
+# of the shoulder seen from the side): the fold under the vest's edge, between it and the deltoid, Meshy painted half green
+# half skin; the arm wins there, as in the sheets (the vest's green ends at its edge's dark line): texels of the arms'
+# weight ARMHOLE[0] to [1], above ARMHOLE[2] m, in a mix of the vest's and the skin's hue (BORDER_MIX's test, from the
+# skin's side: at least ARMHOLE[3] of the way to the vest's) take the skin's colour
+ARMHOLE = (.1, .75, 1.25, .1, 12)   # ([4]: then the specks left there, up to that many texels, inside the skin: skin too)
 TEAL_, SKIN_, LIGHT_, DARK_, ORANGE_, MIXED_ = range(6)
+DEBUG = {}   # (clean_borders' inner values, for tests)
 
 
 def orangeish(c):
@@ -78,19 +89,19 @@ def parts(c):
     k[(mn > 120) & (mx - mn < 50)] = LIGHT_
     k[(lum < 75) & (np.abs(r - b) < 45) & (g <= np.maximum(r, b) + 6)] = DARK_
     k[(r > 120) & (b < .32 * r) & (g > .3 * r) & (g < .75 * r)] = ORANGE_
-    k[(g - r > np.maximum(6, .15 * g)) & (b - r > 0) & (lum > 12)] = TEAL_
+    k[(g - r > np.maximum(6, .15 * g)) & (b - r > .1 * (r + g + b)) & (lum > 12)] = TEAL_   # (the vest's grey-greens half skin are mixes)
     return k
 
 
-def clean_borders(img, ys, xs, pos, nor):
+def clean_borders(img, ys, xs, pos, nor, armhole=None):
     """The borders between the parts (parts()) clean, as drawn: Meshy painted them with a brush, ragged, each part's
     colour in teeth and specks over the other's and mixes of the two between, and along the texture's seams its pieces
     meet in the triangles' zigzag. On the model (in 3D, across the seams): each part's share around every texel (its
     texels, without the thin lines and specks: opened in the texture; a sample every BORDER_STEP texels, weighted by a
     gaussian of BORDER_SIGMA m and by facing the same way) gives the texel its part, the one with the most; where another
     part has BORDER_NEAR of it or more (a border near), a texel painted in that part's colour or in a mix of the two
-    (BORDER_MIX) takes its own part's colour; so does a speck (up to BORDER_SPECK texels) of a part inside another's;
-    dark lines are kept. The new colours: the median of the BORDER_K nearest texels of the part (in 3D) away from the
+    (BORDER_MIX: by hue, so a part's own shading stays) takes its own part's colour; so does a speck (up to BORDER_SPECK
+    texels) of a part inside another's; dark lines are kept. The new colours: the median of the BORDER_K nearest texels of the part (in 3D) away from the
     borders, softened among themselves. img (h x w x 3 float) is changed in place; returns the texels redone (a mask over
     ys, xs)."""
     TS = img.shape[0]; c = img[ys, xs]; k = parts(c)
@@ -127,7 +138,9 @@ def clean_borders(img, ys, xs, pos, nor):
         _, j = trees[p_].query(pos[q], k=BORDER_K); return np.median(c[src[p_][j]], axis=1)
     redo = np.zeros(len(k), bool); new = c.copy()
     a = (near & (k == o_) & (k != s_)) | speck   # (another part's colour near its border; a speck)
-    mix = near & (k == MIXED_)
+    # a mix of the two parts near their border (in hue): not the dark lines (but the dark part's own fringe)
+    mix = near & ~a & ((k != DARK_) | (s_ == DARK_) | (o_ == DARK_)) & (c.mean(1) > BORDER_MIX[2])
+    hue = lambda x: x / np.maximum(x.sum(1, keepdims=True), 1e-9)
     for p_ in range(5):
         if p_ not in trees: continue
         q = np.nonzero((a | mix) & (s_ == p_))[0]
@@ -137,16 +150,37 @@ def clean_borders(img, ys, xs, pos, nor):
             sel = mq & (o_[q] == o2)
             if not sel.any(): continue
             if o2 not in trees: keep_q[sel] = False; continue
-            oth = median_of(o2, q[sel]); x = c[q[sel]]; e = oth - own[sel]
-            t = np.clip(((x - own[sel]) * e).sum(1) / np.maximum((e * e).sum(1), 1e-9), 0, 1)
-            dseg = np.linalg.norm(x - (own[sel] + t[:, None] * e), axis=1); keep_q[np.nonzero(sel)[0][dseg > BORDER_MIX]] = False
+            ho, hx, ht = hue(own[sel]), hue(c[q[sel]]), hue(median_of(o2, q[sel])); e = ht - ho
+            t = ((hx - ho) * e).sum(1) / np.maximum((e * e).sum(1), 1e-12)
+            dl = np.linalg.norm(hx - (ho + np.clip(t, 0, 1)[:, None] * e), axis=1)
+            keep_q[np.nonzero(sel)[0][(t < BORDER_MIX[0]) | (dl > BORDER_MIX[1])]] = False
         q = q[keep_q]; new[q] = own[keep_q]; redo[q] = True
+    # the armholes: the mixes of the vest and the skin take the skin's colour (armhole: a mask over the texels, ARMHOLE)
+    n_arm = 0
+    if armhole is not None and SKIN_ in trees and TEAL_ in trees:
+        q = np.nonzero(armhole & (k != DARK_) & (k != SKIN_) & (k != TEAL_) & (c.mean(1) > BORDER_MIX[2]))[0]
+        if len(q):
+            sk, ve = median_of(SKIN_, q), median_of(TEAL_, q); hs, hv, hx = hue(sk), hue(ve), hue(c[q]); e = hv - hs
+            t = ((hx - hs) * e).sum(1) / np.maximum((e * e).sum(1), 1e-12); dl = np.linalg.norm(hx - (hs + np.clip(t, 0, 1)[:, None] * e), axis=1)
+            ok = (t >= ARMHOLE[3]) & (t <= 1.1) & (dl <= 2 * BORDER_MIX[1]); q = q[ok]; new[q] = sk[ok]; redo[q] = True; n_arm = len(q)
+        # the specks left there (the vest's teal and dark dots in a row along the fold), inside the skin: skin
+        kk = parts(new); m = np.zeros((TS, TS), bool); m[ys, xs] = armhole & (kk != SKIN_)
+        sk_img = np.zeros((TS, TS), bool); sk_img[ys, xs] = kk == SKIN_
+        lb, nb = ndimage.label(m, structure=np.ones((3, 3)))
+        if nb:
+            sz = np.bincount(lb.ravel()); ring = ndimage.binary_dilation(m, iterations=2) & ~m
+            rl = ndimage.maximum_filter(np.where(m, lb, 0), size=5)   # (each ring texel: the speck next to it)
+            rs = np.bincount(rl[ring], weights=sk_img[ring].astype(float), minlength=nb + 1) / np.maximum(np.bincount(rl[ring], minlength=nb + 1), 1)
+            small = (sz <= ARMHOLE[4]) & (rs >= .7); small[0] = False
+            q = np.nonzero(small[lb[ys, xs]])[0]
+            if len(q): new[q] = median_of(SKIN_, q); redo[q] = True; n_arm += len(q)
     acc = np.zeros((TS, TS, 3)); cnt = np.zeros((TS, TS)); acc[ys[redo], xs[redo]] = new[redo]; cnt[ys[redo], xs[redo]] = 1
     sm = np.stack([ndimage.gaussian_filter(acc[..., i], 1.) for i in range(3)], -1) / np.maximum(ndimage.gaussian_filter(cnt, 1.), 1e-6)[..., None]
     img[ys[redo], xs[redo]] = sm[ys[redo], xs[redo]]
+    DEBUG.update(k=k, s=s_, o=o_, f2=f2, near=near, a=a, mix=mix, redo=redo, F=F, has=has)
     names = ['vest', 'skin', 'light', 'dark', 'orange']
-    print('borders: %d texels redone (%d of another part near its border, %d mixes, %d specks); by part: %s' % (
-        int(redo.sum()), int((redo & a & ~speck).sum()), int((redo & mix).sum()), int((redo & speck).sum()),
+    print('borders: %d texels redone (%d of another part near its border, %d mixes, %d specks, %d in the armholes); by part: %s' % (
+        int(redo.sum()), int((redo & a & ~speck).sum()), int((redo & mix).sum()), int((redo & speck).sum()), n_arm,
         ', '.join('%s %d' % (names[p_], int((redo & (s_ == p_)).sum())) for p_ in range(5))))
     return redo
 
@@ -189,7 +223,7 @@ def main(pkg, drawn, out):
     out_img[ys[bad], xs[bad]] = sm[ys[bad], xs[bad]]
     print('old tails\' paint: %d texels under the band (orange or brown) in the colour of the clothes around them' % int(bad.sum()))
     # the borders between the parts clean (before the tracing: its lines stay as drawn)
-    redo = clean_borders(out_img, ys, xs, pos, nor)
+    redo = clean_borders(out_img, ys, xs, pos, nor, (aw >= ARMHOLE[0]) & (aw <= ARMHOLE[1]) & (pos[:, 1] > ARMHOLE[2]) & (hw < .5))
     if os.environ.get('BORDER_DEBUG'): np.savez(os.environ['BORDER_DEBUG'], ys=ys[redo], xs=xs[redo])
     # the tracing: the drawings' thin dark lines
     inside = np.zeros((TS, TS), bool); inside[ys, xs] = True
