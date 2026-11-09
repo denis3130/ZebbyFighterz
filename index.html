@@ -1912,11 +1912,15 @@ function modelBuild(key) {
     // (both sides: the bust is cut above the shoulders, its coat open there; seen into it, the outline's inner shell
     // showed as black patches on the shoulders: now the coat's own colour, as a lining)
     const hm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
-    hm.onBeforeCompile = sh => {   // flat light: the sheet's own shading is in its texture (the hit flash's emissive kept)
-      sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_HEAD_FLAT.toFixed(2) + ');');
+    // flat light: the sheet's own shading is in its texture (the hit flash's emissive kept); per vertex where the head
+    // says so (aFlat: its collar's outside lit as the body, one teal with the vest)
+    const headFlat = perV => sh => {
+      if (perV) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
+      sh.fragmentShader = (perV ? 'varying float vFlat;\n' : '') + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + (perV ? 'vFlat * ' : '') + MD_HEAD_FLAT.toFixed(2) + ');');
     };
-    hm.customProgramCacheKey = () => 'head';
+    const perV = !!head.geo.attributes.aFlat;
+    hm.onBeforeCompile = headFlat(perV); hm.customProgramCacheKey = () => perV ? 'headV' : 'head';
     const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), back: MD_HEAD_LINE[1], perBack: !!head.geo.attributes.aBack}));
     hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
     hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
@@ -1925,7 +1929,7 @@ function modelBuild(key) {
       const ft = new THREE.Texture(new Image()); ft.flipY = false; ft.image.src = head.fringe.png;
       ft.image.decode().then(() => { ft.needsUpdate = true; }, () => {});
       const fm = new THREE.MeshToonMaterial({map: ft, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide, alphaTest: .5});
-      fm.onBeforeCompile = hm.onBeforeCompile; fm.customProgramCacheKey = () => 'headFringe';
+      fm.onBeforeCompile = headFlat(false); fm.customProgramCacheKey = () => 'headFringe';
       const fmesh = new THREE.SkinnedMesh(head.fringe.geo, fm); fmesh.frustumCulled = false; body.add(fmesh); fmesh.bind(skel, mesh.matrixWorld);
       head.fringeMesh = fmesh; head.fringeMat = fm;
     }
@@ -2313,6 +2317,7 @@ function mdHeadData(md, key) {
   geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(j.wgt), 4));
   geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
   if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
+  if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
   md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), fringe: mdFringeData(md, key)};
   return {j, geo, hide: md.head.hide, jpg, fringe: md.head.fringe};
 }

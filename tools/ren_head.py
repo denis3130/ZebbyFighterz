@@ -69,6 +69,8 @@ PLUG_LINE = .1                             # the outline of the plug under the f
 FRINGE_PAINT = (.0008, 120., (60, 50, 60))   # see fringe_paint(): in front of the face by (m), lighter than (mean rgb), the colour they take
 FRINGE_NEAR, FRINGE_MAX = .01, .05
 FRINGE = (.02, .008, .004, 3, .002)   # the hair over the face: its outline's push back (m), the face's reach around it, the depth slack (m), smoothing rounds, grid (m): see fringe_back()
+# the neck's marks clean: see main() (9/11/2026, "sistemi i colori dentro al colletto sul collo")
+NECK_CLEAN, NECK_SHADE = (1.53, .62, .0007, .062, 1.40), np.array([.82, .74, .72])
 HEAD_TEX = 2048   # the texture's size at most (px; 4096 looked the same at the viewer's nearest zoom and took 4 times the memory)
 
 
@@ -514,8 +516,10 @@ def main(bust, pkg, out, texture=None):
     Aw = _csr((np.ones(3 * len(K)), (np.repeat(np.arange(len(K)), 3), wb[I[K]].ravel())), shape=(len(K), wb.max() + 1))
     _, lab = _cc(Aw @ Aw.T, directed=False); szc = np.bincount(lab)
     Ck = P[I[K]].mean(1); bits = K[(szc[lab] < TAILS_PIECE) & (Ck[:, 1] > TAILS_Y[0]) & (Ck[:, 1] < TAILS_Y[1])]
-    hide = np.unique(np.concatenate([hide, np.nonzero(gone)[0], bits])).astype(np.uint32)
-    print('old sash tails: %d triangles hidden, and %d of the pieces their removal left floating' % (int(gone.sum()), len(bits)))
+    from ren_look import tail_stubs
+    stubs = tail_stubs(P, col, I, tv)   # (and their tops under the band, 9/11: torn ends beside the ribbons)
+    hide = np.unique(np.concatenate([hide, np.nonzero(gone)[0], bits, stubs])).astype(np.uint32)
+    print('old sash tails: %d triangles hidden, %d of the pieces their removal left floating, %d of their tops under the band' % (int(gone.sum()), len(bits), len(stubs)))
     print('hidden: %d of the old head, %d of %d others under the new head or of the old collar (%d of it, %d by its pulled points; %d kept: not covered)' % (
         int((up & (hw3 >= .5)).sum()), int(covered.sum()), len(cand), int(old_collar.sum()), int(tips.sum()), int((~covered).sum())))
     blob = bytearray()
@@ -565,12 +569,31 @@ def main(bust, pkg, out, texture=None):
     from paint_views import texel_table
     from paint_meshy import parts, SKIN_, TEAL_, MIXED_, LIGHT_
     nk_t = np.nonzero(neck_all[Ik].sum(1) >= 2)[0]; TSq = t.shape[0]
-    ysn, xsn, ksn, _, posn, _ = texel_table(Q, Nq, UVq, Ik[nk_t], TSq); cn = t[ysn, xsn]; kn = parts(cn)
+    ysn, xsn, ksn, _, posn, norn = texel_table(Q, Nq, UVq, Ik[nk_t], TSq); cn = t[ysn, xsn]; kn = parts(cn)
+    if os.environ.get('NECK_TEX'): np.savez(os.environ['NECK_TEX'], pos=posn, c=cn, ys=ysn, xs=xsn)
     skin_rgb = np.median(cn[(kn == SKIN_) & (posn[:, 1] < 1.47) & (posn[:, 2] > -.01)], 0) if ((kn == SKIN_) & (posn[:, 1] < 1.47)).sum() > 50 else np.median(cn[kn == SKIN_], 0)
     bad = (kn == TEAL_) | (kn == MIXED_) | (kn == LIGHT_)
     if bad.any() and (kn == SKIN_).any():
         sk_ = np.nonzero(kn == SKIN_)[0]; _, jn = cKDTree(posn[sk_]).query(posn[bad]); t[ysn[bad], xsn[bad]] = cn[sk_[jn]]
     print('neck: %d texels of the bust\'s teal and light in its skin; its skin %s' % (int(bad.sum()), np.round(skin_rgb).astype(int).tolist()))
+    # the neck's marks clean (9/11/2026, Denis on a close-up of the neck inside the collar: "sistemi i colori dentro al
+    # colletto sul collo"): Meshy's brown marks there (the neck's lines, the trapezius' shadows, the notch) blurry and
+    # stair-stepped, with light patches and a grain over the skin. On the neck (the head's triangles within NECK_CLEAN[3] m
+    # of its axis, between [4] and [0] m): the skin flat, the marks crisp: their darkness (from the skin's down to [1] of
+    # its brightness) averaged on the model (a gaussian of [2] m) and cut at its half, in the sheets' shadow tone
+    # (NECK_SHADE of the skin), their darkest cores toward the ink
+    Cn_ = Q[Ik].mean(1); rn_ = np.hypot(Cn_[:, 0] - NECK_AXIS_X, Cn_[:, 2] - NECK_AXIS_Z)
+    tri_c = np.nonzero((rn_ < NECK_CLEAN[3]) & (Cn_[:, 1] < NECK_CLEAN[0]) & (Cn_[:, 1] > NECK_CLEAN[4]))[0]
+    ysc, xsc, _, _, posc, _ = texel_table(Q, Nq, UVq, Ik[tri_c], TSq)
+    if len(ysc):
+        c1 = t[ysc, xsc]; Ls = skin_rgb.mean(); dk = np.clip((Ls - c1.mean(1)) / (Ls * (1 - NECK_CLEAN[1])), 0, 1)
+        dd, jj = cKDTree(posc).query(posc, k=48, distance_upper_bound=3 * NECK_CLEAN[2]); okk = np.isfinite(dd); jj = np.where(okk, jj, 0)
+        gw = np.exp(-.5 * (np.where(okk, dd, 0) / NECK_CLEAN[2]) ** 2) * okk; ds = (gw * dk[jj]).sum(1) / np.maximum(gw.sum(1), 1e-9)
+        sm3 = lambda a, b, x: (lambda u: u * u * (3 - 2 * u))(np.clip((x - a) / (b - a), 0, 1))
+        am, core = sm3(.42, .52, ds), sm3(.8, .95, ds)
+        new = skin_rgb[None, :] * (1 - am[:, None]) + (skin_rgb * NECK_SHADE)[None, :] * am[:, None]
+        t[ysc, xsc] = new * (1 - .5 * core[:, None]) + np.array([22., 20, 26])[None, :] * .5 * core[:, None]
+        print('neck: %d texels redrawn: flat skin, %d in the marks\' shadow tone, %d toward ink' % (len(ysc), int((am > .5).sum()), int((core > .5).sum())))
     # (and shifted to the body's lit chest's skin down to the floor: ren_collar.SKIN_TO_CHEST)
     from ren_collar import SHELL_FLOOR, SKIN_TO_CHEST
     PB_, IB_, UVB_, JB_, WB_ = load_body(pkg)
@@ -586,7 +609,12 @@ def main(bust, pkg, out, texture=None):
             print('neck: its skin shifted to the chest\'s %s from %d mm above the floor (%d texels, %d of the chest\'s vertices)' % (
                 np.round(chest_rgb).astype(int).tolist(), round(1000 * SKIN_TO_CHEST[0]), int((w > 0).sum()), int(mc.sum())))
             skin_rgb = chest_rgb
-    SP, SN, SUV_unused, SJ, SW, STri, _, within, _ = collar_shell(Q, rest_all, top, tw, UVq, Ik, t.shape[0], (), neck_all, skin_rgb)
+    # the new collar's teal: the vest's own paint around it (lit as the body, ren_collar.SHELL_BACK: the same colour as the vest)
+    teal_rgb = None
+    if paint_b is not None:
+        rv_ = np.hypot(PB_[:, 0] - NECK_AXIS_X, PB_[:, 2] - NECK_AXIS_Z); mt = (rv_ < .17) & (PB_[:, 1] > 1.38) & (PB_[:, 1] < 1.47) & (parts(cb_) == TEAL_)
+        if mt.sum() > 10: teal_rgb = np.median(cb_[mt], 0); print('collar: the vest\'s teal around it %s (%d vertices)' % (np.round(teal_rgb).astype(int).tolist(), int(mt.sum())))
+    SP, SN, SUV_unused, SJ, SW, STri, _, within, _, _ = collar_shell(Q, rest_all, top, tw, UVq, Ik, t.shape[0], (), neck_all, skin_rgb, teal_rgb)
     Cq_ = Q[Ik].mean(1); phq_ = np.degrees(np.arctan2(Cq_[:, 0] - NECK_AXIS_X, Cq_[:, 2] - NECK_AXIS_Z)) % 360
     from ren_collar import SHELL_PHI, SHELL_FLOOR, NECK_KEEP_R
     sides_ = (phq_ > SHELL_PHI + 3) & (phq_ < 360 - SHELL_PHI - 3)   # (in the front's opening only the collar's own: the neck's skin there meets the chest)
@@ -604,12 +632,19 @@ def main(bust, pkg, out, texture=None):
     keep_b = np.ones(len(IB_), bool); keep_b[hide.astype(np.int64)] = False
     Q, Nq, UVq, Ik, top, tw, lb_line, flat_blk = collar_join(Q, Nq, UVq, Ik, top, tw, lb_line, t, PB_, IB_, UVB_, JB_, WB_, keep_b, paint_b, skin_rgb)
     # (the new collar after the skirt: its flat colours in blocks of the texture outside every piece and the skirt's)
-    SP, SN, SUV, SJ, SW, STri, shell_blk, _, SLB = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], [b_[:3] for b_ in flat_blk], np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)], skin_rgb)
+    SP, SN, SUV, SJ, SW, STri, shell_blk, _, SLB, SK = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], [b_[:3] for b_ in flat_blk], np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)], skin_rgb, teal_rgb)
     n0 = len(Q); Q = np.r_[Q, SP]; Nq = np.r_[Nq, SN]; UVq = np.r_[UVq, SUV]; top = np.r_[top, SJ]; tw = np.r_[tw, SW]
     lb_line = np.r_[lb_line, SLB]; Ik = np.r_[Ik, STri + n0]
     nv = len(Q)
+    # the light: flat (its texture's own colour, the sheet's shading) but on the new collar's outside and trim, lit as the
+    # body is (ren_look: flat in front, FLAT_BODY by the normal, toon by the sides and the back): one teal with the vest's
+    from ren_look import FLAT_BODY
+    sm_ = lambda a, b, x: (lambda u: u * u * (3 - 2 * u))(np.clip((x - a) / (b - a), 0, 1))
+    flat_v = np.ones(nv); lit = (SK == 0) | (SK == 2)
+    flat_v[n0:][lit] = FLAT_BODY * sm_(.1, .45, SN[lit, 2])
+    print('collar: %d of its vertices lit as the body (%d toon on the sides and the back)' % (int(lit.sum()), int((flat_v[n0:][lit] < .5).sum())))
     head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
-            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb_line.astype(np.float32))}
+            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb_line.astype(np.float32)), 'flat': put(flat_v.astype(np.float32))}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_head.bin'), 'wb').write(bytes(blob))
     json.dump(head, open(os.path.join(out, name + '_head.json'), 'w'), separators=(',', ':'))

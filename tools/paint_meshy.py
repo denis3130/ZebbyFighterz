@@ -38,7 +38,7 @@ from scipy.spatial import cKDTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paint_views import load, texel_table
-from ren_look import sash_tails, SASH_BAND, TAILS_TOUCH
+from ren_look import sash_tails, SASH_BAND, TAILS_TOUCH, TAILS_STUB
 
 TRACE_LUM, TRACE_W, TRACE_ALPHA, TRACE_INK, TRACE_MIN = 50., 2, .6, np.array([22., 20, 26]), 30
 TRACE_LEN = .03   # a traced piece on the vest or the sash this long (m, on the model) or more: a line; shorter, a dash (9/11: scratches on the vest's shoulders)
@@ -50,6 +50,9 @@ TRACE_LEN = .03   # a traced piece on the vest or the sash this long (m, on the 
 LINING_RGB, LINING_Y, LINING_X = np.array([206., 190, 162]), 1.36, .2
 ARM_LINE = .0035
 TAIL_LOW, FILL_K = .12, 48   # the old tails' paint: from this height (m) up to the band; its fill: the median of that many texels
+UNDER_TAILS = (.02, .032, 8, .0025, .8)   # see under_tails()
+HEM = (.82, .93, 140., 70., .015)   # see under_tails()
+MAROON = (.045, 18., 130., .012)   # see under_tails()
 TAIL_NEAR = .02   # the clothes under the old tails: this near (m) their hidden shapes, every colour but the vest's and the trousers'
 # the borders between the clothes, the skin and the sash clean (9/11/2026, Denis: "dove si sovrappongono i colori"): see
 # clean_borders. BORDER_SIGMA (m), BORDER_STEP (texels), BORDER_NN: the parts' shares around each texel, a gaussian of
@@ -197,6 +200,52 @@ def clean_borders(img, ys, xs, pos, nor, armhole=None):
     return redo
 
 
+def harmonic_fill(img, ys, xs, pos, nor, U, K):
+    """The texels U (indices into the texel table) filled smooth from the texels K: harmonic, each the mean of its
+    UNDER_TAILS[2] nearest within UNDER_TAILS[3] m on the same surface (normals within UNDER_TAILS[4]); with a light pull
+    to K's median (pieces not reaching K take it)."""
+    from scipy.sparse import coo_matrix, diags
+    from scipy.sparse.linalg import spsolve
+    if not len(U) or not len(K): return 0
+    c = img[ys, xs]; A_ = np.r_[U, K]; dd, jj = cKDTree(pos[A_]).query(pos[U], k=UNDER_TAILS[2] + 1, distance_upper_bound=UNDER_TAILS[3])
+    ok = np.isfinite(dd) & (jj < len(A_)); jj = np.where(ok, jj, 0)
+    ok &= (jj != np.arange(len(U))[:, None]) & ((nor[U][:, None, :] * nor[A_][jj]).sum(2) > UNDER_TAILS[4])
+    rows = np.repeat(np.arange(len(U)), jj.shape[1])[ok.ravel()]; cols = jj.ravel()[ok.ravel()]
+    Wm = coo_matrix((np.ones(len(rows)), (rows, cols)), shape=(len(U), len(A_))).tocsr(); WU, WK = Wm[:, :len(U)], Wm[:, len(U):]
+    Lm = (diags(ok.sum(1) + 1e-3) - WU).tocsc(); xK = c[K]; base = np.median(xK, 0)
+    for ch in range(3): img[ys[U], xs[U], ch] = np.clip(spsolve(Lm, WK @ xK[:, ch] + 1e-3 * base[ch]), 0, 255)
+    return len(U)
+
+
+def under_tails(img, ys, xs, pos, nor, tp, region):
+    """(9/11/2026, Denis: "rimuovi le parti rimanenti della fascia vecchia", with a photo of the vest under the knot) where
+    the old tails lay on the clothes, Meshy's paint under them filled in patches (the median of the nearest texels) and the
+    drawings' lines traced over them (the tails' own outlines, on the vest): blotches and ghost lines along the tails' path.
+    The texels of region within UNDER_TAILS[0] m of the tails' shapes (tp: points on them) are filled smooth from the
+    clean ones around them (from there to [1] m; not ink; harmonic_fill: the vest's flaps from the vest, the trousers from
+    the trousers). And the vest's hem: Meshy's light trim on its bottom edge (HEM: its light texels, brighter than [2] and
+    less saturated than [3], between [0] and [1] m), not in the sheets, filled from the vest around it ([4] m)."""
+    d = np.full(len(pos), np.inf); d[region] = cKDTree(tp).query(pos[region], distance_upper_bound=UNDER_TAILS[1])[0]
+    c = img[ys, xs]
+    U = np.nonzero(region & (d < UNDER_TAILS[0]))[0]; K = np.nonzero(region & (d >= UNDER_TAILS[0]) & (d < UNDER_TAILS[1]) & (c.mean(1) > 40))[0]
+    n = harmonic_fill(img, ys, xs, pos, nor, U, K)
+    print('under the old tails: %d texels filled smooth from the clothes around them (within %.0f mm of their shapes)' % (n, 1000 * UNDER_TAILS[0]))
+    c = img[ys, xs]; inr = (pos[:, 1] > HEM[0]) & (pos[:, 1] < HEM[1]) & region
+    lt = inr & (c.mean(1) > HEM[2]) & (c.max(1) - c.min(1) < HEM[3])
+    if lt.any():
+        dl = cKDTree(pos[lt]).query(pos[inr & ~lt], distance_upper_bound=HEM[4])[0]
+        Kh = np.nonzero(inr & ~lt)[0][np.isfinite(dl) & (c[inr & ~lt].mean(1) > 40)]
+        print('the vest\'s hem: %d texels of its light trim filled from the vest around them' % harmonic_fill(img, ys, xs, pos, nor, np.nonzero(lt)[0], Kh))
+    # (and the dark red flecks left near the tails' path, on surfaces farther than UNDER_TAILS[0]: within MAROON[0] m of
+    # the tails, red over green by [1] and over blue, darker than [2]; filled from their surroundings, [3] m)
+    c = img[ys, xs]; d2 = np.full(len(pos), np.inf); d2[region] = cKDTree(tp).query(pos[region], distance_upper_bound=MAROON[0])[0]; near2 = region & (d2 < MAROON[0])
+    mr = near2 & (c[:, 0] - c[:, 1] > MAROON[1]) & (c[:, 0] > c[:, 2]) & (c.mean(1) < MAROON[2])
+    if mr.any():
+        dm = cKDTree(pos[mr]).query(pos[near2 & ~mr], distance_upper_bound=MAROON[3])[0]
+        Km = np.nonzero(near2 & ~mr)[0][np.isfinite(dm) & (c[near2 & ~mr].mean(1) > 40)]
+        print('near the old tails: %d dark red texels filled from around them' % harmonic_fill(img, ys, xs, pos, nor, np.nonzero(mr)[0], Km))
+
+
 def main(pkg, drawn, out):
     name, P, N, UV, I, HEADW, HANDW, FOREW, ARMW = load(pkg)
     T = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(np.float64); TS = T.shape[0]
@@ -210,7 +259,10 @@ def main(pkg, drawn, out):
     vcol = T[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)]
     tv = np.zeros(len(P), bool)
     for tl in sash_tails(P, vcol, I): tv[tl] = True
-    tail_t = tv[I].sum(1) >= TAILS_TOUCH; on_tail = tail_t[ks]
+    tail_t = tv[I].sum(1) >= TAILS_TOUCH
+    from ren_look import tail_stubs
+    tail_t[tail_stubs(P, vcol, I, tv)] = True   # (their tops under the band: hidden too, tools/ren_head.py)
+    on_tail = tail_t[ks]
     out_img = T.copy(); c0 = T[ys, xs]
     low = (pos[:, 1] < SASH_BAND) & (pos[:, 1] > TAIL_LOW) & (aw < .5) & (hw < .5)
     # the clothes under the tails (hidden by them in Meshy's model, painted in greys and tans there: grey shards along the
@@ -270,6 +322,8 @@ def main(pkg, drawn, out):
     from ren_chest import chest, CHEST_SHEET
     sheet = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', CHEST_SHEET.get(name, ''))
     if name in CHEST_SHEET and os.path.exists(sheet): chest(out_img, ys, xs, pos, nor, sheet, TRACE_INK)
+    # where the old tails lay (and their tops), the clothes under them filled smooth from the clean clothes around
+    under_tails(out_img, ys, xs, pos, nor, tp, (pos[:, 1] < TAILS_STUB[1]) & (pos[:, 1] > TAIL_LOW) & (aw < .5) & (hw < .5) & (hdw < .5) & ~on_tail)
     # every texel outside the pieces (their centres, as the texel table has them) takes its nearest piece texel's colour:
     # around a thin piece the texels just outside it kept Meshy's old colours (the tails' orange next to a texel of the
     # trousers), and the filtering drew them in

@@ -78,6 +78,7 @@ SASH_TUCK, SASH_FIX, SASH_OUT, SASH_TH, SASH_PIECE, SASH_SKIN, SASH_LIE = .015, 
 # triangles with TAILS_TOUCH of their vertices or more (with 2, the row that joined them to the vest stayed: teeth along
 # its edge)
 TAILS_TOUCH = 1
+TAILS_STUB = (.01, 1.088, .04)   # see tail_stubs()
 # The body the sash stays out of: around each of these bones (to its child), the volume of the mesh's vertices that
 # follow it (weight BODY_W and more: the trousers, the vest's front flaps on the thighs, the hips with the crotch and the
 # belly), full
@@ -612,6 +613,19 @@ def sash_tails(P, col, I):
     lab = connected_components(coo_matrix((np.ones(len(E)), (E[:, 0], E[:, 1])), shape=(nw, nw)), directed=False)[1]
     ids, n = np.unique(lab[tail], return_counts=True)
     return [np.nonzero(tail[weld] & (lab[weld] == ids[k]))[0] for k in np.argsort(-n) if n[k] >= SASH_MIN]
+
+
+def tail_stubs(P, col, I, tails):
+    """The tails' tops (9/11/2026, Denis: "rimuovi le parti rimanenti della fascia vecchia"): the triangles in Meshy's
+    orange between SASH_BAND - TAILS_STUB[0] m and TAILS_STUB[1] m (under the band's bottom edge), within TAILS_STUB[2] m of
+    the tails (tails: their vertices, sash_tails): hidden with them (tools/ren_head.py), their torn ends hung from the band
+    beside the look's ribbons; the vest is whole under them. col: the texture's colour at each vertex."""
+    from scipy.spatial import cKDTree
+    oc = col[I].mean(1); C = P[I].mean(1)
+    orange = (oc[:, 0] > 170) & (oc[:, 1] > 70) & (oc[:, 1] < 170) & (oc[:, 2] < 90) & (oc[:, 0] - oc[:, 1] > 50)
+    cand = np.nonzero(orange & (C[:, 1] > SASH_BAND - TAILS_STUB[0]) & (C[:, 1] < TAILS_STUB[1]))[0]
+    if not len(cand) or not tails.any(): return cand[:0]
+    return cand[cKDTree(P[tails]).query(C[cand])[0] < TAILS_STUB[2]]
 
 
 def sash_orange(D):
