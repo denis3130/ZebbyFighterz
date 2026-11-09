@@ -62,6 +62,7 @@ TEMPLE = (.05, .095, 1.556, 1.581, -.004, .058)   # the temples (|x| from the mi
 TEMPLE_SKIN, TEMPLE_SINK, TEMPLE_STRETCH = .5, .012, .5
 TEMPLE_SMOOTH, TEMPLE_GROW, TEMPLE_RINGS = True, .008, 2   # see temple_smooth() (False: temple_locks(), the locks sunk)
 TEMPLE_LINE = (.045, .1, 1.555, 1.62, -.03, .075, .1, .004)   # see main(): the temples' outline pushed back
+CHIN_LINE = (0, .045, 1.497, 1.527, .035, .095, .006, .004)   # see main(): the chin's lower part's outline pushed back (as TEMPLE_LINE; [0] unused)
 CHEEKS = (.03, 1.525, 1.595, .015, 1.583, .07)   # see cheek_marks(): |x| over, y between, z over, the eyes' band (over y, within |x|)
 EARS = (.045, .1, 1.545, 1.615, -.035, .03)   # see cheek_marks(): |x|, y, z ranges (m)
 TEMPLE_SPOT = (-.078, -.052, 1.570, 1.592, -.012, .016)   # (x, y, z ranges, m) a brown spot on one temple: see temple_spot()
@@ -534,6 +535,15 @@ def main(bust, pkg, out, texture=None):
     inside_ = np.minimum.reduce([ax_ - x0_, x1_ - ax_, Q[:, 1] - y0_, y1_ - Q[:, 1], Q[:, 2] - z0_, z1_ - Q[:, 2]])
     lb_line = np.maximum(lb, push_ * np.clip(inside_ / ramp_, 0, 1))   # (the outline's only: lb itself says which is hair over the face)
     print('temples: %d vertices with their outline %.0f mm back' % (int((inside_ > 0).sum()), 1000 * push_))
+    # and the chin's lower part (9/11/2026, Denis on a close-up in guard: "questo pezzo nero sulla faccia"): with the head
+    # bent down in guard and seen from the front, the chin's bottom is near the line of sight and its small waves turn
+    # some triangles away from the camera: their outline showed as a second black stroke beside the jaw line, on the
+    # chin; pushed back (CHIN_LINE, as TEMPLE_LINE) it stays behind the chin's skin, the jaw line over the neck (3 cm
+    # and more behind it) stays
+    x0_, x1_, y0_, y1_, z0_, z1_, push_, ramp_ = CHIN_LINE
+    inside_ = np.minimum.reduce([x1_ - ax_, Q[:, 1] - y0_, y1_ - Q[:, 1], Q[:, 2] - z0_, z1_ - Q[:, 2]])
+    lb_line = np.maximum(lb_line, push_ * np.clip(inside_ / ramp_, 0, 1))
+    print('chin: %d vertices with their outline %.0f mm back' % (int((inside_ > 0).sum()), 1000 * push_))
     print('fringe: %d vertices of the hair over the face, their outline %.0f to %.0f mm further back' % (int((lb > .5 * FRINGE[0]).sum()), 1000 * FRINGE[0], 1000 * lb.max()))
     im = Image.open(texture).convert('RGB') if texture else texb
     pal = bp.get('palette', HEAD_PALETTE); t = np.asarray(im).astype(np.float64); src = np.array([a for a, _ in pal], float); dst = np.array([b for _, b in pal], float)
