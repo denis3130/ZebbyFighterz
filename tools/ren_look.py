@@ -9,7 +9,8 @@ usage: python3 tools/ren_look.py PACKAGE_DIR OUT_DIR DRAWING
           both hands, under the hand bones. Meshy's skeleton has no fingers: they are found on each hand's mesh (the
           branches of the geodesic distance from the wrist), with the joints at a hand's usual proportions.
   skin: [[byte offset, count] uint8 x4, [byte offset, count] float32 x4] per vertex: the package's skin with the
-        fingers on their bones (bone index: the package's bones, then the fingers in the order above)
+        fingers on their bones (bone index: the package's bones, then the fingers in the order above) and the band's
+        back on the Hips (band_on_hips)
   flat: [byte offset, count] float32 per vertex: how much of the light the toon shading leaves out there (1 on the front
         of the head, FLAT_BODY on the rest of the front, fading to 0 by the sides, where tools/paint_from_drawing.py
         paints the drawing): the drawing has its own shading (the anime muscles too), the light only darkened it in
@@ -87,6 +88,13 @@ BODY_W, BODY_BINS, BODY_SECT = {'*': .5, 'Hips': .25}, 12, 24   # the hips' with
 # BLEND_W and more of their weight on a second part, one about every BLEND_D m between the heights BLEND_Y (m). They
 # stretch between the parts as the legs move, so no part's shape holds them: the sash keeps off them as drawn each frame.
 BLEND_W, BLEND_D, BLEND_Y = .2, .025, (.25, 1.1)
+# The band's back on the hips (9/11/2026, Denis: "la fascia si distorce quando si abbassa"): Meshy skinned the band a third
+# to the thighs and its top to the spine, so crouching (the thighs up, the spine bent forward) stretched its back to three
+# times its height. A belt follows the pelvis: the trunk's vertices (BAND_TRUNK of their weight on the trunk's bones and the
+# thighs, all of them from [1]) between the band's heights (sash_band) all on the Hips, blending into their own skin over
+# BAND_T m above and below; behind (all of it under BAND_Z[0] m, none over [1]: the front keeps its skin, the thighs
+# rising into it in the crouch, the ribbons' tops on it).
+BAND_T, BAND_TRUNK, BAND_Z = .03, (.8, .95), (-.04, .04)
 
 
 def qm(q):
@@ -707,6 +715,32 @@ def ribbon_of(t, P, sc, cx, by, mid, y0):
             'cut': float(t['cut']), 'out': 1 if a[0] * x0 > 0 else -1, 'a': a, 'n': n, 'c': t['c']}
 
 
+def sash_band(P, col):
+    """The band's heights (m): (bottom, top), where the sash's orange (col: Meshy's texture at each vertex) goes around
+    the waist (200 degrees and more of it, in 15 degree sectors, per cm)."""
+    ring = []
+    for y0 in np.arange(.9, 1.3, .01):
+        sel = (col[:, 0] > 170) & (col[:, 0] - col[:, 1] > 50) & (col[:, 2] < 90) & (P[:, 1] >= y0) & (P[:, 1] < y0 + .01) & (np.abs(P[:, 0]) < .3)
+        if sel.any() and len(np.unique((np.degrees(np.arctan2(P[sel, 0], P[sel, 2])) % 360 // 15).astype(int))) * 15 >= 200: ring.append(y0 + .005)
+    return min(ring) - .005, max(ring) + .005
+
+
+def band_on_hips(P, J, W, idx, band):
+    """The skin J, W (n x 4: bones, weights) with the band's back on the Hips (see BAND_*; band: its heights, sash_band): new J
+    (int64) and W (float64), 4 bones a vertex summing to 1."""
+    J = np.asarray(J).astype(np.int64).copy(); W = np.asarray(W).astype(np.float64).copy()
+    trunk = (np.isin(J, [idx[b] for b in ('Hips', 'Spine02', 'Spine01', 'Spine', 'LeftUpLeg', 'RightUpLeg')]) * W).sum(1)
+    y = P[:, 1]; s = smooth(band[0] - BAND_T, band[0], y) * (1 - smooth(band[1], band[1] + BAND_T, y)) * smooth(BAND_TRUNK[0], BAND_TRUNK[1], trunk) * (np.abs(P[:, 0]) < .3) * (1 - smooth(BAND_Z[0], BAND_Z[1], P[:, 2]))
+    ch = np.nonzero(s > 0)[0]
+    if not len(ch): return J, W
+    Wd = np.zeros((len(ch), max(int(J.max()) + 1, len(idx))))
+    for k in range(4): np.add.at(Wd, (np.arange(len(ch)), J[ch, k]), W[ch, k])
+    Wd *= (1 - s[ch])[:, None]; Wd[:, idx['Hips']] += s[ch]
+    top = np.argsort(-Wd, 1, kind='stable')[:, :4]; tw = np.take_along_axis(Wd, top, 1)
+    J[ch] = top; W[ch] = tw / tw.sum(1, keepdims=True)
+    return J, W
+
+
 def skin_near(p, P, ok, J, W):
     """The skin of the body's front at p (model space): the bones and weights (up to 4, summing to 1) of the SASH_SKIN
     vertices ok (the front of the trunk and the legs) nearest to p seen from the front (x, y), of those at most 6 cm
@@ -767,6 +801,9 @@ def main(pkg, out, drawing):
             jn[v] = [a for a, _ in top] + [0] * (4 - len(top)); wn[v] = [b / tot for _, b in top] + [0] * (4 - len(top))
         print(side, 'hand: thumb side', thumb, 'fingers', [int((lab == F['k']).sum()) for F in fg], 'vertices on them')
     if len(bones) + len(fingers) > 255: sys.exit('too many bones for uint8 skin indices')
+    # --- the band's back on the hips (band_on_hips): it no longer stretches when the thighs and the spine bend ---
+    band = sash_band(P, col); jn, wn = band_on_hips(P, jn, wn, idx, band)
+    print('the band\'s back on the hips: from %.2f to %.2f m, blending over %.0f cm' % (band[0], band[1], 100 * BAND_T))
     # --- hair spikes ---
     hi = idx['Head']; wh = ((J == hi) * W).sum(1); Th = I[(wh[I] >= .5).all(1)]
     head = P[wh >= .5]; c = np.median(head, 0); c[1] = head[:, 1].min() + (head[:, 1].max() - head[:, 1].min()) * .55
@@ -804,11 +841,7 @@ def main(pkg, out, drawing):
     UVs = f(me['uv']).reshape(-1, 2); tex0 = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int)
     col0 = tex0[np.clip((UVs[:, 1] * tex0.shape[0]).astype(int), 0, tex0.shape[0] - 1), np.clip((UVs[:, 0] * tex0.shape[1]).astype(int), 0, tex0.shape[1] - 1)]
     hp = idx['Hips']; Gh = G[hp]; ih = np.linalg.inv(Gh); ribbons = []
-    ring = []   # the band: the heights where the sash's orange goes all around the waist
-    for y0 in np.arange(.9, 1.3, .01):
-        sel = (col0[:, 0] > 170) & (col0[:, 0] - col0[:, 1] > 50) & (col0[:, 2] < 90) & (P[:, 1] >= y0) & (P[:, 1] < y0 + .01) & (np.abs(P[:, 0]) < .3)
-        if sel.any() and len(np.unique((np.degrees(np.arctan2(P[sel, 0], P[sel, 2])) % 360 // 15).astype(int))) * 15 >= 200: ring.append(y0 + .005)
-    mid, y0 = (min(ring) + max(ring)) / 2, min(ring) - .005
+    b0, b1 = sash_band(P, col0); mid, y0 = (b0 + b1) / 2, b0   # the band: the heights where the sash's orange goes all around the waist
     # placed as tools/paint_from_drawing.py paints the drawing (its band, with the tails' tops, on the model's band)
     from scipy import ndimage
     fit = drawing_fit(P, ndimage.binary_opening(mask, iterations=1)); Nv = f(me['nor']).reshape(-1, 3).astype(np.float64)
@@ -821,7 +854,7 @@ def main(pkg, out, drawing):
                         'a': [round(float(v), 5) for v in ih[:3, :3] @ r['a']], 'n': [round(float(v), 5) for v in ih[:3, :3] @ r['n']], 'c': r['c']})
         print('ribbon from x %.3f (y %.3f) to the tip (%.3f, %.3f), widths %s, cut %.2f, fixed %d, its top on the skin of %s' % (r['j'][1][0], y0, r['j'][-1][0], r['j'][-1][1],
               np.round(r['wp'], 3).tolist(), r['cut'], r['fix'], [[(bones[b]['n'], w) for b, w in s] for s in ribbons[-1]['sk']]))
-    print('sash band from %.2f to %.2f m (the drawing fit: %s)' % (y0, max(ring) + .005, np.round(fit, 3).tolist()))
+    print('sash band from %.2f to %.2f m (the drawing fit: %s)' % (y0, b1, np.round(fit, 3).tolist()))
     r0, r1 = drawing_band(D); od = sash_orange(D)
     for r in ribbons: r['c'] = [int(v) for v in np.median(D[r0:r1 + 1][od[r0:r1 + 1]], 0)]   # the band's orange, as painted
     body = [body_shape(P, J, W, G, idx, b, c) for b, c in BODY.items()]

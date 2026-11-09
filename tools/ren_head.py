@@ -46,6 +46,12 @@ HIDE_RAY, HIDE_NECK_R = .08, .075   # (and all of them that are skin, or within 
 TAILS_PIECE, TAILS_Y = 200, (.5, 1.1)   # see main(): the old tails' floating pieces (triangles), where (y, m)
 HEAD_SMOOTH, HEAD_JAW, HEAD_TOP = 3, 1.515, 1.535   # (HEAD_TOP: above it all on the Head bone; the collar ends at 1.529)
 COLLAR_STIFF = (1.46, 1.50, .8)   # see main(): the collar's top on the spine, not on the shoulders
+# the collar's back wall pushed back (9/11/2026, Denis: "vestito crea sta specie di gobba sulla schiena sotto al colletto"): the
+# bust's collar met the vest at its base (1.44-1.46 m) but stood 3 cm further in above it, and in the guard (the spine bent
+# forward) the vest's back rose behind it as a hump; as in the sheets (ren_retro.png) it stands on the back: the collar's
+# vertices (not the head's nor the neck's) from COLLAR_FLARE[0] m up (all of it from [1]) and behind the neck (z under [2],
+# all of it under [3]) go back [4] m, their normals turned with them
+COLLAR_FLARE = (1.455, 1.475, -.04, -.08, .03)
 # Meshy's colours to the sheet's (its texture a little lighter and greyer: pink skin, light shadows): each texel moves by
 # the offsets of the palette colours near it (HEAD_SPREAD: how near, rgb), its shades within a colour kept
 HEAD_PALETTE = [((68, 55, 70), (75, 64, 73)), ((52, 41, 53), (58, 48, 58)), ((100, 81, 90), (113, 94, 102)),   # hair, its dark, its light
@@ -464,6 +470,17 @@ def main(bust, pkg, out, texture=None):
     hw_ = np.zeros(nw, bool); hw_[weld[head]] = True
     for _ in range(HEAD_SMOOTH): Ww = np.where(hw_[:, None], Ww, .5 * Ww + .5 * (A @ Ww) / deg[:, None])
     Wv = Ww[weld]; top = np.argsort(-Wv, 1)[:, :4]; tw = np.take_along_axis(Wv, top, 1); tw /= np.maximum(tw.sum(1, keepdims=True), 1e-12)
+    # the collar's back wall pushed back (COLLAR_FLARE): z -= push f(y) g(z); the normals by the inverse transpose of the
+    # displacement's gradient (only d z/d y and d z/d z: n' = (nx, ny - a nz / (1 + b), nz / (1 + b)))
+    fy0, fy1, fz0, fz1, push = COLLAR_FLARE
+    def _sm(e0, e1, x):
+        u = np.clip((x - e0) / (e1 - e0), 0, 1); return u * u * (3 - 2 * u), np.where((u > 0) & (u < 1), 6 * u * (1 - u) / (e1 - e0), 0)
+    fy, dfy = _sm(fy0, fy1, Q[:, 1]); gz, dgz = _sm(fz0, fz1, Q[:, 2])
+    _, wq = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_inverse=True); wq = wq.ravel()   # (the copies of a vertex
+    on = (np.bincount(wq, rest.astype(float)) / np.bincount(wq))[wq]   # on the texture's seams move as one: the collar's share of them)
+    a = -push * dfy * gz * on; b = -push * fy * dgz * on; Q[:, 2] -= push * fy * gz * on
+    Nq = np.c_[Nq[:, 0], Nq[:, 1] - a * Nq[:, 2] / (1 + b), Nq[:, 2] / (1 + b)]; Nq /= np.maximum(np.linalg.norm(Nq, axis=1, keepdims=True), 1e-12)
+    print('collar: %d vertices of its back wall pushed back (all %.0f mm: %d)' % (int((fy * gz * on > 0).sum()), 1000 * push, int((fy * gz * on > .999).sum())))
     # hidden: the body's triangles all above HIDE_Y that the new head covers: its old head (the Head bone's), and the rest
     # (the old collar, the vest's top, the neck) where a ray out of the triangle along its normal meets the new head within
     # HIDE_RAY m (the shoulders' tops it does not cover stay: hidden, their holes showed the outline's black inside)
