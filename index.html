@@ -1900,7 +1900,11 @@ function modelBuild(key) {
     mdFaceMat(main, face);
   }
   const ol = lk.line || {w: MD_OUTLINE, back: 0}, line = mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per, back: ol.back});
-  const mesh = new THREE.SkinnedMesh(geo, main), outline = new THREE.SkinnedMesh(geo, line);
+  // (with the new head's lining: the vest's lapels also drawn from behind in their paint, not their outline's black; and
+  // their folded corners, noline, left out of the outline: pushed out past the lining it drew a black Z over the shirt,
+  // and only pushed back, slid aside, as black dashes beside them)
+  const src = md.geo.index.array, ln = head && head.lining, nl = head && head.noline;
+  const mesh = new THREE.SkinnedMesh(ln ? mdTris(geo, src, head.hide, [], ln) : geo, main), outline = new THREE.SkinnedMesh(nl ? mdTris(geo, src, head.hide, nl) : geo, line);
   mesh.frustumCulled = outline.frustumCulled = false;
   body.add(mesh, outline);
   root.updateMatrixWorld(true);
@@ -2302,11 +2306,12 @@ function mdSpikes(list, back) {
 // as on the sheet; less still, the hair's locks drew black shards over the eyes)
 const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
 // The new head (ASSETS '<key>/<key>_head.json|bin|jpg', tools/ren_head.py): its geometry, skinned to the package's bones
-// in the package's bind space, its texture and the package's triangles it replaces (hide); null without it.
+// in the package's bind space, its texture, the package's triangles it replaces (hide), those lined (lining: drawn from
+// behind too, mdTris) and those left out of the outline (noline); null without it.
 function mdHeadData(md, key) {
   const j = ASSETS[key + '/' + key + '_head.json'], b64 = ASSETS[key + '/' + key + '_head.bin'], jpg = ASSETS[key + '/' + key + '_head.jpg'];
   if (!j || !b64 || !jpg) return null;
-  if (md.head && md.head.j === j) return {j, geo: md.head.geo, hide: md.head.hide, jpg, fringe: md.head.fringe};
+  if (md.head && md.head.j === j) return {j, geo: md.head.geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
   const s = atob(b64), u8 = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
   const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry();
@@ -2318,8 +2323,22 @@ function mdHeadData(md, key) {
   geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
   if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
   if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
-  md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), fringe: mdFringeData(md, key)};
-  return {j, geo, hide: md.head.hide, jpg, fringe: md.head.fringe};
+  md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
+    noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null, fringe: mdFringeData(md, key)};
+  return {j, geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
+}
+
+// A geometry with the body's attributes (g's, shared) and the package's triangles (of its index src) but those of hide and
+// skip, in their order, then those of rev again, reversed: drawn from behind in the same material (the lining).
+function mdTris(g, src, hide, skip, rev) {
+  const l = new THREE.BufferGeometry(), drop = new Uint8Array(src.length / 3), out = [];
+  for (const k in g.attributes) l.setAttribute(k, g.attributes[k]);
+  l.userData = g.userData;
+  hide.forEach(t => { drop[t] = 1; }); skip.forEach(t => { drop[t] = 1; });
+  for (let t = 0; t < drop.length; t++) if (!drop[t]) out.push(src[3 * t], src[3 * t + 1], src[3 * t + 2]);
+  if (rev) rev.forEach(t => out.push(src[3 * t], src[3 * t + 2], src[3 * t + 1]));
+  l.setIndex(new THREE.BufferAttribute(src instanceof Uint32Array ? Uint32Array.from(out) : Uint16Array.from(out), 1));
+  return l;
 }
 
 // The face's locks drawn from the sheet (<key>_fringe.*, tools/ren_fringe.py): a thin pillow hanging from the crown's

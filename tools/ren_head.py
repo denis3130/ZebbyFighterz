@@ -63,6 +63,9 @@ TEMPLE_SKIN, TEMPLE_SINK, TEMPLE_STRETCH = .5, .012, .5
 TEMPLE_SMOOTH, TEMPLE_GROW, TEMPLE_RINGS = True, .008, 2   # see temple_smooth() (False: temple_locks(), the locks sunk)
 TEMPLE_LINE = (.045, .1, 1.555, 1.62, -.03, .075, .1, .004)   # see main(): the temples' outline pushed back
 CHIN_LINE = (0, .045, 1.497, 1.527, .035, .095, .006, .004)   # see main(): the chin's lower part's outline pushed back (as TEMPLE_LINE; [0] unused)
+LAPEL_TOPS = (38., 52., 1.432, .105, .15)   # see main()
+LAPEL_LINING = (20., 70., 1.33, .16)   # see main(): |angle from the front| between [0] and [1] degrees, above [2] m, within [3] m of the neck's axis
+LAPEL_NOLINE = (30., 60., 1.40, .09, .15)   # see main(): as LAPEL_TOPS
 CHEEKS = (.03, 1.525, 1.595, .015, 1.583, .07)   # see cheek_marks(): |x| over, y between, z over, the eyes' band (over y, within |x|)
 EARS = (.045, .1, 1.545, 1.615, -.035, .03)   # see cheek_marks(): |x|, y, z ranges (m)
 TEMPLE_SPOT = (-.078, -.052, 1.570, 1.592, -.012, .016)   # (x, y, z ranges, m) a brown spot on one temple: see temple_spot()
@@ -611,6 +614,11 @@ def main(bust, pkg, out, texture=None):
     # (and shifted to the body's lit chest's skin down to the floor: ren_collar.SKIN_TO_CHEST)
     from ren_collar import SHELL_FLOOR, SKIN_TO_CHEST
     PB_, IB_, UVB_, JB_, WB_ = load_body(pkg)
+    lp_ = os.path.join(out, name + '_look.json')
+    if os.path.exists(lp_):   # (the look's skin of the body, as the viewer has it: tools/ren_look.py)
+        lj_ = json.load(open(lp_)); lb_ = open(os.path.join(out, name + '_look.bin'), 'rb').read()
+        (oj_, nj_), (ow_, nw_) = lj_['skin']
+        JB_ = np.frombuffer(lb_, np.uint8, nj_, oj_).reshape(-1, 4).astype(JB_.dtype); WB_ = np.frombuffer(lb_, np.float32, nw_, ow_).reshape(-1, 4).astype(WB_.dtype)
     pp = os.path.join(out, name + '_painted.jpg'); paint_b = np.asarray(Image.open(pp).convert('RGB')).astype(np.float64) if os.path.exists(pp) else None
     if paint_b is not None:
         PSb = paint_b.shape[0]; cb_ = paint_b[np.clip((UVB_[:, 1] * PSb).astype(int), 0, PSb - 1), np.clip((UVB_[:, 0] * PSb).astype(int), 0, PSb - 1)]
@@ -641,7 +649,22 @@ def main(bust, pkg, out, texture=None):
     from ren_collar import OLD_IN
     walls = np.nonzero(kept_ & ~skin_of(col[I].mean(1)) & (((Cb_[:, 1] > OLD_WALL[0]) & within(Cb_, OLD_WALL[1], OLD_WALL[2])) | ((Cb_[:, 1] > OLD_TOP[0]) & (rb_ < OLD_TOP[1]))
                                                           | within(Cb_, OLD_IN[0], OLD_IN[1], floor='above')))[0]
-    hide = np.unique(np.concatenate([hide, walls])).astype(np.uint32)
+    # (and the vest's lapels' top corners by the collar's front edges, LAPEL_TOPS: |angle from the front| between [0] and
+    # [1] degrees, above [2] m, [3] to [4] m from the neck's axis: in guard the shoulders fold them up in front of the collar's
+    # front edges, a dark wedge and crossed lines seen from the side; the collar's front edges stand over them)
+    phb2_ = np.abs(np.degrees(np.arctan2(Cb_[:, 0] - NECK_AXIS_X, Cb_[:, 2] - NECK_AXIS_Z)))
+    lap_ = np.nonzero(kept_ & ~skin_of(col[I].mean(1)) & (phb2_ > LAPEL_TOPS[0]) & (phb2_ < LAPEL_TOPS[1]) & (Cb_[:, 1] > LAPEL_TOPS[2]) & (rb_ > LAPEL_TOPS[3]) & (rb_ < LAPEL_TOPS[4]))[0]
+    print('collar: %d of the vest\'s lapels\' top corners hidden' % len(lap_))
+    hide = np.unique(np.concatenate([hide, walls, lap_])).astype(np.uint32)
+    # (and the lapels' lining, LAPEL_LINING: the body's triangles there also drawn from behind, in their paint: in guard,
+    # seen from the side into the vest's opening, their back faces were the outline's black triangles)
+    kept2_ = np.ones(len(I), bool); kept2_[hide.astype(np.int64)] = False
+    lining = np.nonzero(kept2_ & (phb2_ > LAPEL_LINING[0]) & (phb2_ < LAPEL_LINING[1]) & (Cb_[:, 1] > LAPEL_LINING[2]) & (rb_ < LAPEL_LINING[3]))[0].astype(np.uint32)
+    print('collar: %d of the vest\'s lapels\' triangles lined (drawn from behind too)' % len(lining))
+    # (and their folded corners, LAPEL_NOLINE (as LAPEL_TOPS), left out of the outline: pushed out past their lining, it drew
+    # a black Z over the shirt seen from the side in guard; only pushed back, it slid aside as black dashes beside them)
+    noline = lining[(phb2_[lining] > LAPEL_NOLINE[0]) & (phb2_[lining] < LAPEL_NOLINE[1]) & (Cb_[lining, 1] > LAPEL_NOLINE[2]) & (rb_[lining] > LAPEL_NOLINE[3]) & (rb_[lining] < LAPEL_NOLINE[4])].astype(np.uint32)
+    print('collar: %d triangles of the lapels\' folded corners left out of the outline' % len(noline))
     print('collar: the bust\'s left out (%d triangles); a new one of %d triangles made around the neck; %d of the body\'s old collar walls hidden in it' % (n_old - len(Ik), len(STri), len(walls)))
     keep_b = np.ones(len(IB_), bool); keep_b[hide.astype(np.int64)] = False
     Q, Nq, UVq, Ik, top, tw, lb_line, flat_blk = collar_join(Q, Nq, UVq, Ik, top, tw, lb_line, t, PB_, IB_, UVB_, JB_, WB_, keep_b, paint_b, skin_rgb)
@@ -649,7 +672,8 @@ def main(bust, pkg, out, texture=None):
     Q, Nq, UVq, Ik, top, tw, lb_line, hole_blk = fill_holes(Q, Nq, UVq, Ik, top, tw, lb_line, t, [b_[:3] for b_ in flat_blk], side_skin)
     flat_blk = flat_blk + hole_blk
     # (the new collar after the skirt: its flat colours in blocks of the texture outside every piece and the skirt's)
-    SP, SN, SUV, SJ, SW, STri, shell_blk, _, SLB, SK = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], [b_[:3] for b_ in flat_blk], np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)], skin_rgb, teal_rgb)
+    SP, SN, SUV, SJ, SW, STri, shell_blk, _, SLB, SK = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], [b_[:3] for b_ in flat_blk], np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)], skin_rgb, teal_rgb,
+                                                                     body=(PB_, IB_[keep_b], JB_, WB_))
     n0 = len(Q); Q = np.r_[Q, SP]; Nq = np.r_[Nq, SN]; UVq = np.r_[UVq, SUV]; top = np.r_[top, SJ]; tw = np.r_[tw, SW]
     lb_line = np.r_[lb_line, SLB]; Ik = np.r_[Ik, STri + n0]
     nv = len(Q)
@@ -661,7 +685,7 @@ def main(bust, pkg, out, texture=None):
     flat_v[n0:][lit] = FLAT_BODY * sm_(.1, .45, SN[lit, 2])
     print('collar: %d of its vertices lit as the body (%d toon on the sides and the back)' % (int(lit.sum()), int((flat_v[n0:][lit] < .5).sum())))
     head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
-            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lb': put(lb_line.astype(np.float32)), 'flat': put(flat_v.astype(np.float32))}
+            'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lining': put(lining), 'noline': put(noline), 'lb': put(lb_line.astype(np.float32)), 'flat': put(flat_v.astype(np.float32))}
     os.makedirs(out, exist_ok=True)
     open(os.path.join(out, name + '_head.bin'), 'wb').write(bytes(blob))
     json.dump(head, open(os.path.join(out, name + '_head.json'), 'w'), separators=(',', ':'))

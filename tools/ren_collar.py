@@ -39,11 +39,12 @@ PAINT_TEAL, PAINT_INSIDE = np.array([44., 91, 98]), np.array([30., 64, 70])
 # SHELL_BASE m (in the body) up; in flat colours: teal outside, its shade inside, cream on the top (SHELL_TRIM: the band
 # outside and inside, m) and on the front edges
 SHELL_PHI, SHELL_COLS, SHELL_ROWS, SHELL_WIN, SHELL_DY, SHELL_DATA_Y = 41., 92, 10, 7., .005, 1.445
-SHELL_SMOOTH, SHELL_OUT, SHELL_THICK, SHELL_BASE, SHELL_TRIM = (2.5, 1.), .002, .005, 1.418, (.003, .006)
+SHELL_SMOOTH, SHELL_OUT, SHELL_THICK, SHELL_BASE, SHELL_TRIM = (3., 2.), .002, .005, 1.418, (.003, .006)
 # its base flared out over the shoulders (SHELL_FLARE: under that height, m, that much m out per m down), and the body's old
 # collar walls in it or near it hidden (ren_head.py: the body's triangles not skin from OLD_WALL[0] m up, within the
 # collar's wall widened OLD_WALL[1] m outside and [2] m inside: in the moves, skinned to the shoulders, they came through it)
 SHELL_FLARE, OLD_WALL = (1.465, .8), (1.455, .02, .03)
+SHELL_FLARE_W, SHELL_NSMOOTH = .006, 6   # (the flare's knee rounded over that much m; the normals smoothed that many rounds)
 # the floor inside it, from its inner side in to the neck (the bust's neck skin there, SHELL_NECK_IN m in), at SHELL_FLOOR m: the
 # bust's neck under it left out (ren_head.py), its edge was jagged
 SHELL_FLOOR, SHELL_NECK_IN = 1.452, .003
@@ -67,6 +68,18 @@ OLD_TOP = (1.465, .22)   # (and all of the body's not skin above that height, m,
 # the body's is, by its normal; flat in front): in its flat light it was another teal than the vest's, the vest's jagged
 # top edge drawn over it
 SHELL_BACK = (.026, 85., .5, .008)
+# (9/11/2026, Denis on a side view in guard: the collar's lower part, in the body, came out over the vest: with the arms up
+# the vest's shoulders and chest move in, the collar's base, skinned as the bust's collar, stayed out; its jagged edge
+# showed on the vest, its outline across the lapels) its points skinned as the vest's nearest (a gaussian of SHELL_BODY[2]
+# m over the 16 nearest of the vest's kept points) under SHELL_BODY[0] m, as the bust's collar above [1] m, between them
+# blended (smoothstep)
+SHELL_BODY = (1.452, 1.49, .012)
+# (and the gap between it and the vest's cut rim, 2 to 4 cm wide at the back since the collar is narrower there: from the
+# side, a black notch where it met the vest) its wall flares out to the rim: SHELL_RIM: the rim's points within [0] degrees
+# of each column, above [1] m, [2] to [3] m from the neck's axis; past it by [4] m up to its height, back to its own over
+# [6] m above it; not within [5] degrees of its front edges
+SHELL_RIM = (6., 1.43, .06, .2, .003, 12., .015)
+SHELL_LINE = (1.462, 1.478)
 SAMPLE = .0015             # the body's surface sampled every that many m (the nearest points)
 
 
@@ -162,7 +175,7 @@ def free_blocks(UV, I, TS, n, half=16, taken=()):
     return out
 
 
-def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None, skin_rgb=None, teal_rgb=None):
+def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None, skin_rgb=None, teal_rgb=None, body=None):
     """A new collar (see SHELL_*), its shape from the bust's (rest: its collar's vertices): (positions, normals, uvs,
     skin joints, skin weights, triangles (from 0), the flat blocks [(row, col, half, rgb)] to paint, within(points,
     out_m, in_m): which points lie in its wall widened by those margins, the outline's push per vertex, the flat colour's
@@ -209,19 +222,47 @@ def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None, skin_rgb=None, t
     def ring(r, yv):   # (nc,) radii and heights -> (nc, 3) points
         return np.stack([ax[0] + dirs[:, 0] * r, yv, ax[1] + dirs[:, 1] * r], 1)
     # heights of the rows: from SHELL_BASE (in the body) up to the top; the data's radii below SHELL_DATA_Y held
+    # the vest's cut rim around it (the body's kept triangles' open edges near the neck, ren_head.py's hiding): per column
+    # its outermost point within SHELL_RIM[0] degrees (radius, height); the wall flares out to it (see SHELL_RIM)
+    rim_r = np.full(SHELL_COLS, np.nan); rim_y = np.full(SHELL_COLS, np.nan)
+    if body is not None:
+        PBr, IBr = body[0], body[1]
+        _, fr_, wr_ = np.unique(np.round(PBr / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); wr_ = wr_.ravel()
+        Tr = wr_[IBr]; Er = np.sort(np.concatenate([Tr[:, [0, 1]], Tr[:, [1, 2]], Tr[:, [2, 0]]]), 1)
+        Eu_, cnt_ = np.unique(Er, axis=0, return_counts=True); bd_ = Eu_[cnt_ == 1]; Pr = PBr[fr_]
+        mr = (Pr[bd_[:, 0]] + Pr[bd_[:, 1]]) / 2; rr_ = np.hypot(mr[:, 0] - ax[0], mr[:, 2] - ax[1]); pr_ = np.degrees(np.arctan2(mr[:, 0] - ax[0], mr[:, 2] - ax[1])) % 360
+        near_ = (mr[:, 1] > SHELL_RIM[1]) & (rr_ > SHELL_RIM[2]) & (rr_ < SHELL_RIM[3])
+        for i, c in enumerate(cols):
+            m_ = near_ & (np.abs(dphi(pr_, c)) < SHELL_RIM[0])
+            if m_.any(): k_ = np.argmax(rr_[m_]); rim_r[i], rim_y[i] = rr_[m_][k_], mr[m_][k_, 1]
+        # (not at its front edges: the vest's lapels there, cut far out on the chest, are not under it: SHELL_RIM[5] degrees)
+        rim_r[np.abs(dphi(cols, 0)) < SHELL_PHI + SHELL_RIM[5]] = np.nan
+        okr = np.isfinite(rim_r)
+        if okr.any():
+            rim_r = ndimage.gaussian_filter1d(np.where(okr, rim_r, np.interp(cols, cols[okr], rim_r[okr])), 1.5, mode='nearest') * np.where(okr, 1, np.nan)
+            rim_y = np.where(okr, ndimage.gaussian_filter1d(np.where(okr, rim_y, np.interp(cols, cols[okr], rim_y[okr])), 1.5, mode='nearest'), np.nan)
+        print('collar: the vest\'s cut rim under it at %d of its %d columns (%.0f to %.0f mm from the neck\'s axis)' % (int(okr.sum()), SHELL_COLS, 1000 * np.nanmin(rim_r) if okr.any() else 0, 1000 * np.nanmax(rim_r) if okr.any() else 0))
     def r_at(u_abs, ci=None):   # u_abs: heights (per column, or at columns ci) -> the outer radius there (flared at the base)
         ci = np.arange(SHELL_COLS) if ci is None else ci
         u = np.clip((u_abs - SHELL_DATA_Y) / np.maximum(ytop[ci] - SHELL_DATA_Y, 1e-6), 0, 1); jj = u * (SHELL_ROWS - 1); j0 = np.clip(np.floor(jj).astype(int), 0, SHELL_ROWS - 2); w = jj - j0
-        return R[ci, j0] * (1 - w) + R[ci, j0 + 1] * w + SHELL_FLARE[1] * np.clip(SHELL_FLARE[0] - u_abs, 0, None)
+        r0 = R[ci, j0] * (1 - w) + R[ci, j0 + 1] * w + SHELL_FLARE[1] * SHELL_FLARE_W * np.logaddexp(0, (SHELL_FLARE[0] - u_abs) / SHELL_FLARE_W)   # (a smooth knee)
+        rr0, ry0 = rim_r[ci], rim_y[ci]; okk = np.isfinite(rr0)
+        if okk.any():   # (out to the rim and past it by SHELL_RIM[4] m, up to its height; above it back to its own over SHELL_RIM[6] m)
+            v = np.clip((u_abs - np.where(okk, ry0, 0)) / SHELL_RIM[6], 0, 1); k = 1 - v * v * (3 - 2 * v)
+            r0 = np.where(okk, r0 + np.maximum(0, np.where(okk, rr0, 0) + SHELL_RIM[4] - r0) * k, r0)
+        return r0
     hs = lambda a, b, n: [a + (b - a) * k / (n - 1) for k in range(n)]
     ylo = np.full(SHELL_COLS, SHELL_BASE); yo1 = ytop - SHELL_TRIM[0]; yi1 = ytop - SHELL_TRIM[1]; yf = np.full(SHELL_COLS, SHELL_FLOOR)
     # outer: teal from the base to under the top's trim, then the trim; inner (THICK in, down to the floor): its shade, then
     # the trim; the floor: from the inner side in to the neck (its radius there: the bust's neck skin's), in the shade
     outer = np.stack([ring(r_at(yy), yy) for yy in hs(ylo, yo1, 12)], 1); outer_t = np.stack([ring(r_at(yy), yy) for yy in hs(yo1, ytop, 2)], 1)
     inner = np.stack([ring(r_at(yy) - SHELL_THICK, yy) for yy in hs(yf, yi1, 10)], 1); inner_t = np.stack([ring(r_at(yy) - SHELL_THICK, yy) for yy in hs(yi1, ytop, 2)], 1)
-    grid(outer, 0); grid(outer_t, 2); grid(inner[:, ::-1], 1); grid(inner_t[:, ::-1], 2)
+    # (the outer side's lower part, in and on the vest: its outline pushed back, SHELL_LINE: fully under [0] m, none from
+    # [1]; it drew a black tooth into the vest where the wall came out of it, seen from the side)
+    lo_push = lambda pts: SKIRT_LINE * (1 - (lambda u: u * u * (3 - 2 * u))(np.clip((pts[..., 1] - SHELL_LINE[0]) / (SHELL_LINE[1] - SHELL_LINE[0]), 0, 1))).reshape(-1)
+    grid(outer, 0); LB_[-1] = lo_push(outer); grid(outer_t, 2); grid(inner[:, ::-1], 1); grid(inner_t[:, ::-1], 2)
     rim = np.stack([outer_t[:, -1], inner_t[:, -1]], 1); grid(rim, 2)   # (the top, outer to inner)
-    bot = np.stack([inner[:, 0], outer[:, 0]], 1); grid(bot, 0)   # (the bottom: from the floor's edge down into the body)
+    bot = np.stack([inner[:, 0], outer[:, 0]], 1); grid(bot, 0, SKIRT_LINE)   # (the bottom: from the floor's edge down into the body)
     rneck = np.full(SHELL_COLS, np.nan)
     if neck is not None:
         nk = neck & (np.abs(y - SHELL_FLOOR) < .006)
@@ -250,7 +291,15 @@ def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None, skin_rgb=None, t
     _, first, weld = np.unique(np.round(P_ / 1e-7).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel()
     Nw = np.zeros((len(first), 3))
     for k in range(3): np.add.at(Nw, weld[T_[:, k]], fn)
-    N_ = Nw[weld]; N_ /= np.maximum(np.linalg.norm(N_, axis=1, keepdims=True), 1e-12)
+    # (and smoothed over the welded mesh, SHELL_NSMOOTH rounds: its rows' small kinks drew the toon light's band edge as
+    # dark dashes across its outside, seen from the side and the back)
+    Tw = weld[T_]; nw = len(first); Ew = np.concatenate([Tw[:, [0, 1]], Tw[:, [1, 2]], Tw[:, [2, 0]]])
+    from scipy.sparse import coo_matrix
+    Aw = coo_matrix((np.ones(2 * len(Ew)), (np.r_[Ew[:, 0], Ew[:, 1]], np.r_[Ew[:, 1], Ew[:, 0]])), shape=(nw, nw)).tocsr()
+    Nn = Nw / np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12); deg_ = np.maximum(np.asarray(Aw.sum(1)).ravel(), 1)
+    for _ in range(SHELL_NSMOOTH):
+        Nn = .5 * Nn + .5 * (Aw @ Nn) / deg_[:, None]; Nn /= np.maximum(np.linalg.norm(Nn, axis=1, keepdims=True), 1e-12)
+    N_ = Nn[weld]
     # skin: the bust's collar's around each point (a gaussian of SHELL_SKIN[0] m over those within [1] m), the 4 most: smooth
     # (the nearest one's alone tore the collar into teeth in the moves: its neighbours on the body differ)
     src = np.nonzero(rest)[0]; nbn = int(top.max()) + 1; tree = cKDTree(Q[src])
@@ -261,6 +310,17 @@ def collar_shell(Q, rest, top, tw, UV, I, TS, taken, neck=None, skin_rgb=None, t
     lone = wg.sum(1) < 1e-9
     if lone.any():   # (none near: the nearest one's)
         _, j1 = tree.query(P_[lone]); acc[np.nonzero(lone)[0][:, None], top[src][j1]] += tw[src][j1]
+    acc /= np.maximum(acc.sum(1, keepdims=True), 1e-12)
+    if body is not None:   # (its lower part skinned as the vest it sits in: see SHELL_BODY)
+        PB, IBk, JB, WB = body; vb = np.unique(IBk); tb = cKDTree(PB[vb])
+        db, jb = tb.query(P_, k=16); gb = np.exp(-.5 * (db / SHELL_BODY[2]) ** 2) + 1e-12
+        accb = np.zeros((len(P_), max(nbn, int(JB.max()) + 1)))
+        for k in range(4): np.add.at(accb, (np.repeat(np.arange(len(P_)), jb.shape[1]), JB[vb][jb.ravel(), k]), (gb * WB[vb][jb, k]).ravel())
+        accb /= np.maximum(accb.sum(1, keepdims=True), 1e-12)
+        if accb.shape[1] > acc.shape[1]: acc = np.pad(acc, ((0, 0), (0, accb.shape[1] - acc.shape[1])))
+        u = np.clip((P_[:, 1] - SHELL_BODY[0]) / (SHELL_BODY[1] - SHELL_BODY[0]), 0, 1); bw = 1 - u * u * (3 - 2 * u)
+        acc = acc * (1 - bw[:, None]) + accb[:, :acc.shape[1]] * bw[:, None]
+        print('collar: its lower part skinned as the vest (%d of its %d points fully, %d partly)' % (int((bw > .999).sum()), len(P_), int(((bw > .001) & (bw <= .999)).sum())))
     J_ = np.argsort(-acc, 1)[:, :4]; W_ = np.take_along_axis(acc, J_, 1); W_ /= np.maximum(W_.sum(1, keepdims=True), 1e-12)
     def within(X, out_m, in_m, floor=False):   # X: points -> True where within the collar's wall widened by out_m outside and
         # in_m inside (floor: where under its floor, inside its inner side, by the angles it spans less 5 degrees)

@@ -21,7 +21,8 @@ usage: python3 tools/paint_meshy.py PACKAGE_DIR DRAWN.jpg OUT.jpg
   into the wristbands, the vest's green into the skin at the armholes), and along the texture's seams the zigzag of the
   triangles; each texel near a border takes the colour of the part the model has there, smoothed on the model itself;
   in the armholes (ARMHOLE) the skin wins over the vest's half-green fold above the deltoids;
-- the collar's lining in one cream (LINING_*), the vest's armholes edged in ink (ARM_LINE), as in the drawings;
+- the collar's lining in one cream (LINING_*), the vest's armholes edged in ink (ARM_LINE; not its specks, ARM_SPECK,
+  nor around the skin's specks left in the teal, ARM_PALE), as in the drawings;
 - the tracing: the drawings' dark lines (darker than TRACE_LUM, thinner than about 2 TRACE_W + 1 texels: not the big
   black shapes of the folds; in pieces of TRACE_MIN texels or more and TRACE_LEN long: lines, not specks nor dashes) over
   Meshy's paint in TRACE_INK,
@@ -49,6 +50,8 @@ TRACE_LEN = .03   # a traced piece on the vest or the sash this long (m, on the 
 # ren_look.smooth_normals; Meshy's shading smoothed in the texture too took the muscles' own strokes away: not done)
 LINING_RGB, LINING_Y, LINING_X = np.array([206., 190, 162]), 1.36, .2
 ARM_LINE = .0035
+ARM_SPECK = 10   # its pieces in the texture of fewer texels: left out (9/11, Denis's side view in guard: black dots by the line)
+ARM_PALE = (12, .6)   # see main(): the pale specks by the armholes (texels, share of teal around them)
 TAIL_LOW, FILL_K = .12, 48   # the old tails' paint: from this height (m) up to the band; its fill: the median of that many texels
 UNDER_TAILS = (.02, .032, 8, .0025, .8)   # see under_tails()
 HEM = (.82, .93, 140., 70., .015)   # see under_tails()
@@ -294,10 +297,26 @@ def main(pkg, drawn, out):
     lin = (k2 == LIGHT_) & (pos[:, 1] > LINING_Y) & (aw < .3) & (np.abs(pos[:, 0]) < LINING_X) & (hw < .5)
     out_img[ys[lin], xs[lin]] = LINING_RGB
     arm = (aw >= .05) & (aw <= .85) & (pos[:, 1] > 1.2) & (hw < .5)
+    # (the pale specks there, ARM_PALE: up to [0] texels of skin or light alone, the ring around them mostly the vest's
+    # teal: in that teal before the ink, which ringed them as black eyelets on the armholes' line)
+    cls_ = np.full((TS, TS), -1); cls_[ys, xs] = k2
+    pale_ = np.zeros((TS, TS), bool); pale_[ys, xs] = arm & ((k2 == SKIN_) | (k2 == LIGHT_))
+    lab_, n_ = ndimage.label(pale_, structure=np.ones((3, 3))); sz_ = np.bincount(lab_.ravel(), minlength=n_ + 1)
+    small_ = np.where(pale_ & (sz_[lab_] <= ARM_PALE[0]), lab_, 0); grown_ = ndimage.grey_dilation(small_, size=(5, 5))
+    ring_ = (grown_ > 0) & (small_ == 0) & (cls_ >= 0); tl_ = ring_ & ((cls_ == TEAL_) | (cls_ == MIXED_))
+    share_ = np.bincount(grown_[ring_], minlength=n_ + 1); tn_ = np.bincount(grown_[tl_], minlength=n_ + 1)
+    tc_ = np.stack([np.bincount(grown_[tl_], out_img[..., c][tl_], minlength=n_ + 1) for c in range(3)], 1) / np.maximum(tn_, 1)[:, None]
+    ok_ = (tn_ >= ARM_PALE[1] * np.maximum(share_, 1)) & (tn_ > 0); ok_[0] = False
+    sp_ = np.nonzero(ok_[small_[ys, xs]] & (small_[ys, xs] > 0))[0]
+    out_img[ys[sp_], xs[sp_]] = tc_[small_[ys[sp_], xs[sp_]]]; k2[sp_] = TEAL_
+    print('armholes: %d texels of skin or light specks in the vest\'s teal' % len(sp_))
     sk = arm & (k2 == SKIN_); te = np.nonzero(arm & ((k2 == TEAL_) | (k2 == MIXED_)))[0]
     ink = te[cKDTree(pos[sk]).query(pos[te])[0] < ARM_LINE] if sk.any() and len(te) else np.zeros(0, int)
+    im_ = np.zeros((TS, TS), bool); im_[ys[ink], xs[ink]] = True   # (the few texels alone, on UV islands' borders, as dots)
+    lab_, n_ = ndimage.label(im_, structure=np.ones((3, 3))); big_ = np.bincount(lab_.ravel(), minlength=n_ + 1) >= ARM_SPECK; big_[0] = False
+    specks = ink[~big_[lab_[ys[ink], xs[ink]]]]; ink = ink[big_[lab_[ys[ink], xs[ink]]]]
     out_img[ys[ink], xs[ink]] = TRACE_INK
-    print('collar: %d texels of its lining in cream; armholes: %d texels of ink along the vest\'s edge' % (int(lin.sum()), len(ink)))
+    print('collar: %d texels of its lining in cream; armholes: %d texels of ink along the vest\'s edge (%d in specks left out)' % (int(lin.sum()), len(ink), len(specks)))
     # the tracing: the drawings' thin dark lines
     inside = np.zeros((TS, TS), bool); inside[ys, xs] = True
     dark = (Dw.mean(2) < TRACE_LUM) & inside
@@ -310,7 +329,10 @@ def main(pkg, drawn, out):
     length = np.sqrt(12 * np.clip(np.linalg.eigvalsh(S2 - S1[:, :, None] * S1[:, None, :])[:, -1], 0, None))
     kt = parts(out_img[ys, xs]); cloth = np.bincount(pid[on], ((kt == TEAL_) | (kt == ORANGE_))[on].astype(float), minlength=n + 1) / np.maximum(cnt, 1)
     big = np.bincount(lab.ravel(), minlength=n + 1) >= TRACE_MIN
-    dash = big & (cloth > .5) & (length < TRACE_LEN)   # (on the vest and the sash only: the skin's muscle lines come in short pieces)
+    # (and at the armholes, on the border between the vest and the arm, 9/11/2026: Denis on a side view in guard: the
+    # drawings' thick armhole line, its thin ends traced, left black dashes with brown fringes along the armholes' top)
+    at_arm = np.bincount(pid[on], arm[on].astype(float), minlength=n + 1) / np.maximum(cnt, 1)
+    dash = big & ((cloth > .5) | (at_arm > .5)) & (length < TRACE_LEN)   # (on the vest and the sash only: the skin's muscle lines come in short pieces)
     good = big & ~dash; good[0] = False
     print('tracing: %d pieces of lines, %d dashes on the vest and the sash shorter than %.0f mm left out' % (int(good.sum()), int(dash[1:].sum()), 1000 * TRACE_LEN))
     thin = good[lab]
