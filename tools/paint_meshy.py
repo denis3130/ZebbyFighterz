@@ -16,6 +16,10 @@ usage: python3 tools/paint_meshy.py PACKAGE_DIR DRAWN.jpg OUT.jpg
   shapes (the clothes they covered, painted in greys and tans by Meshy: grey shards along the vest's edge once the tails
   were gone, 9/11/2026, Denis: "ce ancora un pezzo di fascia rimuovilo") every colour but the vest's teal and the
   trousers' purple, in one of the two: the one most of the nearest texels are;
+- the borders between the parts clean (clean_borders; 9/11/2026, Denis: "dove si sovrappongono i colori"): Meshy's brush
+  left each part's colour in ragged teeth, specks and mixes over the next one (the sash's orange on the vest, the skin
+  into the wristbands, the vest's green into the skin at the armholes), and along the texture's seams the zigzag of the
+  triangles; each texel near a border takes the colour of the part the model has there, smoothed on the model itself;
 - the tracing: the drawings' dark lines (darker than TRACE_LUM, thinner than about 2 TRACE_W + 1 texels: not the big
   black shapes of the folds; in pieces of TRACE_MIN texels or more: lines, not specks) over Meshy's paint in TRACE_INK,
   TRACE_ALPHA opaque; not on the hands (drawn spread differently) nor on the head;
@@ -34,6 +38,14 @@ from ren_look import sash_tails, SASH_BAND, TAILS_TOUCH
 TRACE_LUM, TRACE_W, TRACE_ALPHA, TRACE_INK, TRACE_MIN = 50., 2, .6, np.array([22., 20, 26]), 30
 TAIL_LOW, FILL_K = .12, 48   # the old tails' paint: from this height (m) up to the band; its fill: the median of that many texels
 TAIL_NEAR = .02   # the clothes under the old tails: this near (m) their hidden shapes, every colour but the vest's and the trousers'
+# the borders between the clothes, the skin and the sash clean (9/11/2026, Denis: "dove si sovrappongono i colori"): see
+# clean_borders. BORDER_SIGMA (m), BORDER_STEP (texels), BORDER_NN: the parts' shares around each texel, a gaussian of
+# that width over a sample every that many texels, its that many nearest; BORDER_NEAR: another part with that share or
+# more is a border near; BORDER_K: the colour of a texel redone is the median of that many of its part's nearest texels
+# away from the borders; BORDER_MIX: a texel of no part this near (rgb) the line between the colours of the two parts it
+# lies between is their mix (redone); BORDER_SPECK: a speck of one part inside another, up to that many texels (redone)
+BORDER_SIGMA, BORDER_STEP, BORDER_NN, BORDER_NEAR, BORDER_K, BORDER_MIX, BORDER_SPECK = .004, 2, 32, .12, 24, 45., 60
+TEAL_, SKIN_, LIGHT_, DARK_, ORANGE_, MIXED_ = range(6)
 
 
 def orangeish(c):
@@ -54,6 +66,89 @@ def purple(c):
     """The trousers' dark purple grey (n x 3): dark, red and blue not under green."""
     r, g, b = c[:, 0], c[:, 1], c[:, 2]
     return (c.mean(1) < 95) & (r >= g - 2) & (b >= g - 4) & ~orangeish(c)
+
+
+def parts(c):
+    """The part each colour belongs to (n x 3): the vest's teal (its shadows too), the skin (its shadows too), light (the
+    wraps and their grey folds, the trims), dark (the trousers' purple grey, the undershirt, the boots, the wristbands,
+    lines), the sash's orange, or a mix of none."""
+    r, g, b = c[:, 0], c[:, 1], c[:, 2]; lum = c.mean(1); mx, mn = c.max(1), c.min(1)
+    k = np.full(len(c), MIXED_)
+    k[(r > 100) & (b > .36 * r) & (b < .8 * r) & (g > .5 * r) & (g < .9 * r) & (r - b > 30)] = SKIN_
+    k[(mn > 120) & (mx - mn < 50)] = LIGHT_
+    k[(lum < 75) & (np.abs(r - b) < 45) & (g <= np.maximum(r, b) + 6)] = DARK_
+    k[(r > 120) & (b < .32 * r) & (g > .3 * r) & (g < .75 * r)] = ORANGE_
+    k[(g - r > np.maximum(6, .15 * g)) & (b - r > 0) & (lum > 12)] = TEAL_
+    return k
+
+
+def clean_borders(img, ys, xs, pos, nor):
+    """The borders between the parts (parts()) clean, as drawn: Meshy painted them with a brush, ragged, each part's
+    colour in teeth and specks over the other's and mixes of the two between, and along the texture's seams its pieces
+    meet in the triangles' zigzag. On the model (in 3D, across the seams): each part's share around every texel (its
+    texels, without the thin lines and specks: opened in the texture; a sample every BORDER_STEP texels, weighted by a
+    gaussian of BORDER_SIGMA m and by facing the same way) gives the texel its part, the one with the most; where another
+    part has BORDER_NEAR of it or more (a border near), a texel painted in that part's colour or in a mix of the two
+    (BORDER_MIX) takes its own part's colour; so does a speck (up to BORDER_SPECK texels) of a part inside another's;
+    dark lines are kept. The new colours: the median of the BORDER_K nearest texels of the part (in 3D) away from the
+    borders, softened among themselves. img (h x w x 3 float) is changed in place; returns the texels redone (a mask over
+    ys, xs)."""
+    TS = img.shape[0]; c = img[ys, xs]; k = parts(c)
+    cls = np.full((TS, TS), -1); cls[ys, xs] = k
+    big = np.full((TS, TS), -1)
+    for p_ in range(5):
+        r_ = 2 if p_ == DARK_ else 1
+        disk = np.hypot(*np.mgrid[-r_:r_ + 1, -r_:r_ + 1]) <= r_ + .01
+        big[ndimage.binary_opening(cls == p_, structure=disk)] = p_
+    kb = big[ys, xs]
+    smp = np.nonzero((kb >= 0) & (ys % BORDER_STEP == 0) & (xs % BORDER_STEP == 0))[0]
+    tree = cKDTree(pos[smp]); F = np.zeros((len(k), 5))
+    for i0 in range(0, len(k), 200000):
+        q = slice(i0, min(i0 + 200000, len(k)))
+        d, j = tree.query(pos[q], k=BORDER_NN, distance_upper_bound=3 * BORDER_SIGMA)
+        ok = np.isfinite(d); j = np.where(ok, j, 0)
+        w = np.exp(-.5 * (np.where(ok, d, 0) / BORDER_SIGMA) ** 2) * ok * np.clip((nor[smp][j] * nor[q][:, None, :]).sum(2), 0, 1)
+        for p_ in range(5): F[q, p_] = (w * (kb[smp][j] == p_)).sum(1)
+    tot = F.sum(1); F /= np.maximum(tot, 1e-9)[:, None]
+    has = tot > 1e-6
+    order = np.argsort(-F, 1); s_ = np.where(has, order[:, 0], -1); o_ = order[:, 1]
+    f2 = np.take_along_axis(F, o_[:, None], 1)[:, 0]
+    near = has & (f2 >= BORDER_NEAR)
+    speck = np.zeros(len(k), bool)
+    for p_ in (TEAL_, SKIN_, LIGHT_, ORANGE_):
+        lb, nb = ndimage.label(cls == p_, structure=np.ones((3, 3)))
+        if not nb: continue
+        sz = np.bincount(lb.ravel())[lb[ys, xs]]
+        speck |= (k == p_) & (sz <= BORDER_SPECK) & has & (s_ != p_)
+    pure = has & (k == s_) & (F.max(1) > .97)
+    src = {p_: np.nonzero(pure & (k == p_))[0] for p_ in range(5)}
+    trees = {p_: cKDTree(pos[v]) for p_, v in src.items() if len(v) >= BORDER_K}
+    def median_of(p_, q):
+        _, j = trees[p_].query(pos[q], k=BORDER_K); return np.median(c[src[p_][j]], axis=1)
+    redo = np.zeros(len(k), bool); new = c.copy()
+    a = (near & (k == o_) & (k != s_)) | speck   # (another part's colour near its border; a speck)
+    mix = near & (k == MIXED_)
+    for p_ in range(5):
+        if p_ not in trees: continue
+        q = np.nonzero((a | mix) & (s_ == p_))[0]
+        if not len(q): continue
+        own = median_of(p_, q); keep_q = np.ones(len(q), bool); mq = mix[q]
+        for o2 in range(5):
+            sel = mq & (o_[q] == o2)
+            if not sel.any(): continue
+            if o2 not in trees: keep_q[sel] = False; continue
+            oth = median_of(o2, q[sel]); x = c[q[sel]]; e = oth - own[sel]
+            t = np.clip(((x - own[sel]) * e).sum(1) / np.maximum((e * e).sum(1), 1e-9), 0, 1)
+            dseg = np.linalg.norm(x - (own[sel] + t[:, None] * e), axis=1); keep_q[np.nonzero(sel)[0][dseg > BORDER_MIX]] = False
+        q = q[keep_q]; new[q] = own[keep_q]; redo[q] = True
+    acc = np.zeros((TS, TS, 3)); cnt = np.zeros((TS, TS)); acc[ys[redo], xs[redo]] = new[redo]; cnt[ys[redo], xs[redo]] = 1
+    sm = np.stack([ndimage.gaussian_filter(acc[..., i], 1.) for i in range(3)], -1) / np.maximum(ndimage.gaussian_filter(cnt, 1.), 1e-6)[..., None]
+    img[ys[redo], xs[redo]] = sm[ys[redo], xs[redo]]
+    names = ['vest', 'skin', 'light', 'dark', 'orange']
+    print('borders: %d texels redone (%d of another part near its border, %d mixes, %d specks); by part: %s' % (
+        int(redo.sum()), int((redo & a & ~speck).sum()), int((redo & mix).sum()), int((redo & speck).sum()),
+        ', '.join('%s %d' % (names[p_], int((redo & (s_ == p_)).sum())) for p_ in range(5))))
+    return redo
 
 
 def main(pkg, drawn, out):
@@ -93,6 +188,9 @@ def main(pkg, drawn, out):
     sm = np.stack([ndimage.gaussian_filter(acc[..., k], 1.5) for k in range(3)], -1) / np.maximum(ndimage.gaussian_filter(cnt, 1.5), 1e-6)[..., None]
     out_img[ys[bad], xs[bad]] = sm[ys[bad], xs[bad]]
     print('old tails\' paint: %d texels under the band (orange or brown) in the colour of the clothes around them' % int(bad.sum()))
+    # the borders between the parts clean (before the tracing: its lines stay as drawn)
+    redo = clean_borders(out_img, ys, xs, pos, nor)
+    if os.environ.get('BORDER_DEBUG'): np.savez(os.environ['BORDER_DEBUG'], ys=ys[redo], xs=xs[redo])
     # the tracing: the drawings' thin dark lines
     inside = np.zeros((TS, TS), bool); inside[ys, xs] = True
     dark = (Dw.mean(2) < TRACE_LUM) & inside

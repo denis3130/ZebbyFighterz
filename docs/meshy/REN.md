@@ -71,5 +71,5 @@ Rifarla (i GLB stanno in `meshy/meshy_output/20261108_011130_voidrise-ren-testa_
    `python3 tools/paint_views.py assets/ren /tmp/ren_drawn.jpg` (i fogli dipinti sul modello: davanti, dietro, tre
    quarti; da qui si prendono solo le righe sottili), poi `python3 tools/paint_meshy.py assets/ren /tmp/ren_drawn.jpg
    viewer_assets/ren/ren_painted.jpg` (la texture di Meshy, via l'arancione delle vecchie code sotto la fascia e i grigi
-   del gilet che stava sotto di loro, le righe ricalcate); poi di nuovo il passo 2 (il colletto prende la pittura del
+   del gilet che stava sotto di loro, i bordi tra le parti netti, le righe ricalcate); poi di nuovo il passo 2 (il colletto prende la pittura del
    gilet; nasconde le vecchie code con la fila che le univa al gilet, `ren_look.TAILS_TOUCH`), poi `bash mk.sh`.
