@@ -55,6 +55,10 @@ SHELL_SKIN = (.015, .045)   # its skin: the bust's collar's around each point (a
 # that much m under the floor, that much m into the collar's inner side)
 SKIRT_SKIN, FLOOR_SKIN, OLD_IN = 100., 75., (.012, .004)
 NECK_KEEP_R = .058   # (ren_head.py: the bust's triangles within that of the neck's axis, above the floor, are the neck's: kept)
+# (ren_head.py) the neck's skin shifted to the body's lit chest's from SKIN_TO_CHEST[0] m above the floor down to it (the
+# head's flat skin is darker: a straight seam where the neck, the floor and the skirt met the chest), the chest's skin taken
+# from the body's paint in front, from SKIN_TO_CHEST[1] m up to the floor; the skirt and the floor in front in it
+SKIN_TO_CHEST = (.035, 1.40)
 OLD_TOP = (1.465, .22)   # (and all of the body's not skin above that height, m, within that of the neck's axis: the old collar's tips)
 SAMPLE = .0015             # the body's surface sampled every that many m (the nearest points)
 

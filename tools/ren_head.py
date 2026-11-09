@@ -571,6 +571,21 @@ def main(bust, pkg, out, texture=None):
     if bad.any() and (kn == SKIN_).any():
         sk_ = np.nonzero(kn == SKIN_)[0]; _, jn = cKDTree(posn[sk_]).query(posn[bad]); t[ysn[bad], xsn[bad]] = cn[sk_[jn]]
     print('neck: %d texels of the bust\'s teal and light in its skin; its skin %s' % (int(bad.sum()), np.round(skin_rgb).astype(int).tolist()))
+    # (and shifted to the body's lit chest's skin down to the floor: ren_collar.SKIN_TO_CHEST)
+    from ren_collar import SHELL_FLOOR, SKIN_TO_CHEST
+    PB_, IB_, UVB_, JB_, WB_ = load_body(pkg)
+    pp = os.path.join(out, name + '_painted.jpg'); paint_b = np.asarray(Image.open(pp).convert('RGB')).astype(np.float64) if os.path.exists(pp) else None
+    if paint_b is not None:
+        PSb = paint_b.shape[0]; cb_ = paint_b[np.clip((UVB_[:, 1] * PSb).astype(int), 0, PSb - 1), np.clip((UVB_[:, 0] * PSb).astype(int), 0, PSb - 1)]
+        phb_ = np.degrees(np.arctan2(PB_[:, 0] - NECK_AXIS_X, PB_[:, 2] - NECK_AXIS_Z))
+        mc = (PB_[:, 1] > SKIN_TO_CHEST[1]) & (PB_[:, 1] < SHELL_FLOOR) & (np.abs(phb_) < 35) & (parts(cb_) == SKIN_)
+        if mc.sum() > 10:
+            chest_rgb = np.median(cb_[mc], 0)
+            w = np.clip(1 - (posn[:, 1] - SHELL_FLOOR) / SKIN_TO_CHEST[0], 0, 1); w = w * w * (3 - 2 * w)
+            t[ysn, xsn] = np.clip(t[ysn, xsn] + w[:, None] * (chest_rgb - skin_rgb), 0, 255)
+            print('neck: its skin shifted to the chest\'s %s from %d mm above the floor (%d texels, %d of the chest\'s vertices)' % (
+                np.round(chest_rgb).astype(int).tolist(), round(1000 * SKIN_TO_CHEST[0]), int((w > 0).sum()), int(mc.sum())))
+            skin_rgb = chest_rgb
     SP, SN, SUV_unused, SJ, SW, STri, _, within, _ = collar_shell(Q, rest_all, top, tw, UVq, Ik, t.shape[0], (), neck_all, skin_rgb)
     Cq_ = Q[Ik].mean(1); phq_ = np.degrees(np.arctan2(Cq_[:, 0] - NECK_AXIS_X, Cq_[:, 2] - NECK_AXIS_Z)) % 360
     from ren_collar import SHELL_PHI, SHELL_FLOOR, NECK_KEEP_R
@@ -586,8 +601,7 @@ def main(bust, pkg, out, texture=None):
                                                           | within(Cb_, OLD_IN[0], OLD_IN[1], floor='above')))[0]
     hide = np.unique(np.concatenate([hide, walls])).astype(np.uint32)
     print('collar: the bust\'s left out (%d triangles); a new one of %d triangles made around the neck; %d of the body\'s old collar walls hidden in it' % (n_old - len(Ik), len(STri), len(walls)))
-    PB_, IB_, UVB_, JB_, WB_ = load_body(pkg); keep_b = np.ones(len(IB_), bool); keep_b[hide.astype(np.int64)] = False
-    pp = os.path.join(out, name + '_painted.jpg'); paint_b = np.asarray(Image.open(pp).convert('RGB')).astype(np.float64) if os.path.exists(pp) else None
+    keep_b = np.ones(len(IB_), bool); keep_b[hide.astype(np.int64)] = False
     Q, Nq, UVq, Ik, top, tw, lb_line, flat_blk = collar_join(Q, Nq, UVq, Ik, top, tw, lb_line, t, PB_, IB_, UVB_, JB_, WB_, keep_b, paint_b, skin_rgb)
     # (the new collar after the skirt: its flat colours in blocks of the texture outside every piece and the skirt's)
     SP, SN, SUV, SJ, SW, STri, shell_blk, _, SLB = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], [b_[:3] for b_ in flat_blk], np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)], skin_rgb)
