@@ -556,6 +556,10 @@ def main(bust, pkg, out, texture=None):
         n0 = len(Q); Q = np.r_[Q, plug['pos']]; Nq = np.r_[Nq, plug['nor']]; UVq = np.r_[UVq, plug['uv']]
         top = np.r_[top, top[plug['src']]]; tw = np.r_[tw, tw[plug['src']]]
         lb_line = np.r_[lb_line, np.full(len(plug['pos']), PLUG_LINE)]; Ik = np.r_[Ik, plug['tri'] + n0]
+    # the sides and the back of the head drawn clean (tools/ren_hair.py): the hair in its tones, the thin locks Meshy
+    # painted in skin in the hair's, the scalp between the locks in its dark, the skin flat with crisp marks; not the face
+    from ren_hair import head_sides, fill_holes
+    side_skin = head_sides(t, Q, Nq, UVq, Ik)
     # the collar joined to the vest (tools/ren_collar.py): a skirt from the head's bottom edge to the vest, the collar's band
     # on the vest in the vest's paint
     from ren_collar import collar_join, load_body, collar_shell, NECK_AXIS
@@ -631,6 +635,9 @@ def main(bust, pkg, out, texture=None):
     print('collar: the bust\'s left out (%d triangles); a new one of %d triangles made around the neck; %d of the body\'s old collar walls hidden in it' % (n_old - len(Ik), len(STri), len(walls)))
     keep_b = np.ones(len(IB_), bool); keep_b[hide.astype(np.int64)] = False
     Q, Nq, UVq, Ik, top, tw, lb_line, flat_blk = collar_join(Q, Nq, UVq, Ik, top, tw, lb_line, t, PB_, IB_, UVB_, JB_, WB_, keep_b, paint_b, skin_rgb)
+    # (and its small holes on the sides and the back closed, ren_hair.fill_holes: flat colours in their own blocks)
+    Q, Nq, UVq, Ik, top, tw, lb_line, hole_blk = fill_holes(Q, Nq, UVq, Ik, top, tw, lb_line, t, [b_[:3] for b_ in flat_blk], side_skin)
+    flat_blk = flat_blk + hole_blk
     # (the new collar after the skirt: its flat colours in blocks of the texture outside every piece and the skirt's)
     SP, SN, SUV, SJ, SW, STri, shell_blk, _, SLB, SK = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], [b_[:3] for b_ in flat_blk], np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)], skin_rgb, teal_rgb)
     n0 = len(Q); Q = np.r_[Q, SP]; Nq = np.r_[Nq, SN]; UVq = np.r_[UVq, SUV]; top = np.r_[top, SJ]; tw = np.r_[tw, SW]

@@ -65,7 +65,8 @@ Rifarla (i GLB stanno in `meshy/meshy_output/20261108_011130_voidrise-ren-testa_
    — 16.000 triangoli, di cui 4.500 nel viso (il riquadro del viso nelle unità del GLB): occhi e mascella precisi.
 2. `python3 tools/ren_head.py meshy/head/testa_v2_face.glb assets/ren viewer_assets/ren` — taglio sopra le spalle,
    posizione sul corpo, ossa, occhi a filo del viso, frangia vicina al viso, colori del foglio; scrive `ren_head.json`,
-   `.bin`, `.jpg` (i punti di riferimento di ogni busto stanno in `BUSTS`).
+   `.bin`, `.jpg` (i punti di riferimento di ogni busto stanno in `BUSTS`; i lati della testa ridipinti puliti e i suoi
+   piccoli buchi chiusi da `tools/ren_hair.py`).
 3. La pittura del corpo (dal 8/11 sera: quella di Meshy, più pulita, con le righe dei fogli ricalcate leggere):
    `python3 tools/paint_from_drawing.py assets/ren docs/ref/personaggi/ren.png /tmp/ren_drawn.jpg`, poi
    `python3 tools/paint_views.py assets/ren /tmp/ren_drawn.jpg` (i fogli dipinti sul modello: davanti, dietro, tre
