@@ -26,6 +26,8 @@ usage: python3 tools/paint_meshy.py PACKAGE_DIR DRAWN.jpg OUT.jpg
   black shapes of the folds; in pieces of TRACE_MIN texels or more and TRACE_LEN long: lines, not specks nor dashes) over
   Meshy's paint in TRACE_INK,
   TRACE_ALPHA opaque; not on the hands (drawn spread differently) nor on the head;
+- the chest in the vest's front opening drawn as in the sheet: flat skin, the sheet's lines, the V's edges inked
+  (tools/ren_chest.py);
 - the texels between the pieces take their nearest piece's colour (as the other paints).
 """
 import os, sys
@@ -264,6 +266,10 @@ def main(pkg, drawn, out):
     a = np.clip(ndimage.gaussian_filter((thin & ok).astype(float), .6) * 1.6, 0, 1) * ok * TRACE_ALPHA
     out_img = out_img * (1 - a[..., None]) + TRACE_INK * a[..., None]
     print('tracing: %d texels of the drawings\' thin lines over Meshy\'s paint (%.0f%% opaque)' % (int((thin & ok).sum()), 100 * TRACE_ALPHA))
+    # the chest in the vest's opening drawn as in the sheet (tools/ren_chest.py)
+    from ren_chest import chest, CHEST_SHEET
+    sheet = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', CHEST_SHEET.get(name, ''))
+    if name in CHEST_SHEET and os.path.exists(sheet): chest(out_img, ys, xs, pos, nor, sheet, TRACE_INK)
     # every texel outside the pieces (their centres, as the texel table has them) takes its nearest piece texel's colour:
     # around a thin piece the texels just outside it kept Meshy's old colours (the tails' orange next to a texel of the
     # trousers), and the filtering drew them in
