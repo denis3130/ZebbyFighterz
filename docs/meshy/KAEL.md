@@ -40,7 +40,9 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
 6. `python3 tools/kael_fix.py wip_assets/kael` (dopo `char_look.py`): la pulizia, vedi sotto.
 7. `python3 tools/kael_arms.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_fix.py`): le braccia dipinte dai fogli,
    vedi sotto (circa 1 minuto).
-8. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
+8. `python3 tools/kael_face.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_fix.py`): il viso dipinto dal foglio della
+   testa, vedi sotto (circa 30 secondi). I passi 5-8 si possono rifare sempre da capo: danno sempre lo stesso risultato.
+9. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
 - **Ciocca sull'occhio destro**: Meshy l'aveva fatta scendere sull'occhio, il disegno li mostra tutti e due con una
@@ -54,6 +56,30 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
   grigi sulle cuciture, sfumature scure sui bordi del viola (come fatte con l'aerografo): via; il viola nei due toni del
   disegno (luce e ombra, netti), il nero come l'ha dipinto Meshy.
 - Non toccato: la forma del corpo (è quella di Meshy dal disegno).
+
+## Tuta meno scura (`tools/kael_fix.py`, 10/11)
+Denis: "cambiare il colore del modello 3d di kael da troppo scuro a più come nelle foto". Misurato in 3D contro
+`kael_nero.png`: pelle, capelli e viola uguali; la tuta no (Meshy l'aveva dipinta quasi tutta nera: luminosità media 23
+contro 39 del disegno, dove più di metà della tuta è grigio antracite e le pieghe nere). Ora il nero è nei due toni del
+disegno (antracite 46,45,48 e pieghe 14,13,15, seguendo le pieghe dipinte da Meshy, senza puntini), e il davanti del
+corpo è in luce piatta come quello di Ren (i colori del disegno, senza le bande scure della luce). In guardia la figura
+ha luminosità media 79 (prima 74, disegno 77), la tuta 38.
+
+## Viso dal foglio della testa (`tools/kael_face.py`, 10/11)
+Denis: "la faccia fa ancora schifo", "no per la testa fai tu niente meshy". La testa di Meshy resta com'è; il viso è
+ridipinto dal pannello di fronte di `kael_testa_3viste.png`:
+- allineato sui punti del viso (iridi, punta del naso, bocca, mento): gli occhi del modello cadono già entro 3 pixel
+  da quelli del disegno, il mento del foglio è 17 mm più in basso (viso più lungo sotto la bocca): la corrispondenza è
+  a tratti fra quei punti, poi una deformazione morbida esatta sui punti;
+- pelle pulita come il viso di Ren, con i tratti del disegno (occhi viola, sopracciglia, ombra del naso, bocca e ombra
+  del labbro, l'ombra sotto il mento): le altre ombre del foglio sono quelle delle ciocche disegnate sopra il viso, che
+  sul modello sono altrove (sulle tempie diventavano strisce marroni);
+- la metà destra sopra il naso è il riflesso della sinistra (nel foglio una ciocca copre il sopracciglio e l'occhio
+  destro; senza, l'occhio destro spariva);
+- tutto in luce piatta. Le viste di tre quarti non dipingono: le loro ombre sulle guance cadono in altri punti e dove si
+  incontravano col davanti facevano strisce.
+- Errori trovati e corretti guardando: occhio destro sparito (il suo bianco toccava la ciocca), righe della ciocca sul
+  sopracciglio, strisce marroni sulle tempie, tratti di Meshy rimasti ai lati del viso e sotto il mento.
 
 ## Braccia dai fogli (`tools/kael_arms.py`, 10/11)
 Denis: "tutto il resto cerca di farlo identico come nelle foto, soprattutto viso e capelli e braccia" (tuta, tatuaggi e
@@ -84,3 +110,5 @@ dell'anteprima mostra quella originale).
 - Il nero della tuta resta quello di Meshy (in due toni diventava granuloso).
 - I tatuaggi del disegno di fronte (fiamme) e quelli dei fogli (fulmini) non sono uguali: davanti fiamme, di lato e
   dietro fulmini. Se Denis vuole un solo disegno, si dipinge quello su tutta la spalla.
+- I capelli hanno la forma di Meshy (ciocche a punte), non quella del foglio (massa morbida e larga); le orecchie del
+  foglio con gli orecchini a goccia non ci sono (le copre la forma dei capelli). Senza Meshy si possono solo ridipingere.

@@ -11,7 +11,10 @@ docs/ref/personaggi/kael_nero.png), from looking at him in 3D from every side an
   another colour inside a patch of black or purple, not at its UV piece's edge, under SPECK texels) take their
   surroundings' colour; the purple in the drawing's two tones by its lightness smoothed over PURPLE_BLUR texels (the
   soft dark gradients at its edges were airbrush, not the drawing's flat colours) and the black's purple-tinted
-  gradient texels in the drawing's black (the black itself as Meshy painted it: in two tones its noise became grain);
+  gradient texels in the drawing's black; the black in the drawing's two tones, its lit cloth and its folds (SUIT: Denis,
+  10/11, "cambiare il colore del modello 3d di kael da troppo scuro a più come nelle foto": Meshy's black was nearly
+  all under the drawing's lit tone), by the paint's lightness smoothed over SUIT_BLUR texels (no grain), lit where
+  the drawing's share of it is (SUIT_LIT), no patch of a tone under SUIT_MIN texels, its edges softened;
   the earrings in the drawing's purple (EARRING: their light and purple texels under the lobes); the face's right half
   (his right, under the lifted lock: Meshy painted no eye there) the mirror image of its left half about the nose
   (FACE: on the face's surface, not the hair in front of it; faded in at the middle and where it turns away);
@@ -32,8 +35,10 @@ import glbio
 
 BANGS = {'x': (-.068, -.012), 'top': 1.70, 'tips': 1.575, 'to': 1.632, 'front': (.002, .008)}   # m (see above)
 FLAT_HAIR, FLAT_FACE, FLAT_FACE_N = 1., .75, (.15, .45)   # the flat share: the hair; the face's skin, by its normal's z
+FLAT_BODY, FLAT_BODY_N = 1., (.1, .45)   # and on the body's front (as Ren's, tools/ren_look.py: the drawing's colours)
 SPECK, SKIN_KEEP, TINY = 60, 4, 20   # texels: a speck's size at most; how far from the skin a colour is the skin's own shading; a purple bit's
 BLACK, BLACK_MED = (14, 13, 15), 5         # the drawing's black; the black's median (texels)
+SUIT, SUIT_LIT, SUIT_BLUR, SUIT_MIN = ((14, 13, 15), (46, 45, 48)), .54, 3., 150   # kael_nero.png's black: folds, lit
 PURPLE, PURPLE_BLUR = ((96, 42, 136), (169, 84, 210)), 1.5   # the drawing's purple in shadow and in light
 FACE = {'box': (-.085, .085, 1.545, 1.665), 'surf': .004, 'mid': (.002, .008), 'turn': (.10, .30), 'px': .0004}
 EARRING = {'x': .052, 'y': (1.505, 1.585), 'z': -.012, 'ramp': ((70, 28, 104), (150, 70, 200), (214, 160, 240))}
@@ -133,6 +138,15 @@ def paint(pkg, name, Q, N, UV, I, hw, zfun):
     out[pu] = np.where((Ls[pu] > split)[:, None], t1, t0)
     bk = cloth & (cl == 0) & (out[..., 2] - out[..., 1] > 14)
     out[bk] = BLACK
+    # the black in the drawing's two tones (its lit cloth where the paint is lightest, as much of it as the drawing has)
+    blk = cloth & (cl == 0); L = out.mean(2)
+    Ls = ndimage.gaussian_filter(np.where(blk, L, 0), SUIT_BLUR) / np.maximum(ndimage.gaussian_filter(blk.astype(float), SUIT_BLUR), 1e-6)
+    lit = blk & (Ls > np.percentile(Ls[blk], 100 * (1 - SUIT_LIT)))
+    for tone in (True, False):   # (no small patches of either)
+        lab, n = ndimage.label(blk & (lit == tone)); sz = np.bincount(lab.ravel()); small = sz < SUIT_MIN; small[0] = False
+        lit[small[lab]] = not tone
+    w = ndimage.gaussian_filter(lit.astype(float), .7) / np.maximum(ndimage.gaussian_filter(blk.astype(float), .7), 1e-6)
+    t0, t1 = (np.array(c, float) for c in SUIT); out[blk] = t0 + (t1 - t0) * np.clip(w[blk], 0, 1)[:, None]
     # the earrings: the drawing's purple, its light and shadow from the paint's
     c0 = classes(T0[ys, xs])
     e = (th > .5) & (np.abs(pos[:, 0]) > EARRING['x']) & (pos[:, 1] > EARRING['y'][0]) & (pos[:, 1] < EARRING['y'][1]) & (pos[:, 2] > EARRING['z'])
@@ -177,7 +191,8 @@ def main(pkg):
     flat = np.zeros(len(P)); flat[(hw > .3) & (cv == 3)] = FLAT_HAIR
     face = (hw > .5) & (cv == 2) & (P[:, 1] > 1.52)
     flat[face] = np.maximum(flat[face], FLAT_FACE * sm(*FLAT_FACE_N, nsm[face, 2]))
-    print('flat light: %d hair vertices, %d of the face' % ((flat[(cv == 3)] > 0).sum(), (flat[face] > 0).sum()))
+    body = hw < .3; flat[body] = np.maximum(flat[body], FLAT_BODY * sm(*FLAT_BODY_N, nsm[body, 2]))
+    print('flat light: %d hair vertices, %d of the face, %d of the body\'s front' % ((flat[(cv == 3)] > 0).sum(), (flat[face] > 0).sum(), (flat[body] > .5).sum()))
     paint(pkg, name, Q, nsm.astype(np.float64), UV, I, hw, face_depth(Q, I, hw, *FACE['box']))
     # the look: its line and skin as they are; the light's normals on the new shape, the flat share, the moved vertices
     f32 = lambda a: np.frombuffer(LB, np.float32, a[1], a[0])
