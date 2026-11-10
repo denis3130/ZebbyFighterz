@@ -129,7 +129,7 @@ function modelBuild(key) {
     };
     const perV = !!head.geo.attributes.aFlat;
     hm.onBeforeCompile = headFlat(perV); hm.customProgramCacheKey = () => perV ? 'headV' : 'head';
-    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), back: MD_HEAD_LINE[1], perBack: !!head.geo.attributes.aBack}));
+    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), per: head.geo.attributes.aLine ? ' * aLine' : '', back: MD_HEAD_LINE[1], perBack: !!head.geo.attributes.aBack}));
     hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
     hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
     head.mesh = hmesh; head.line = hline; head.mat = hm;
@@ -527,6 +527,7 @@ function mdHeadData(md, key) {
   geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
   if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
   if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
+  if (j.line) geo.setAttribute('aLine', new THREE.BufferAttribute(f32(j.line), 1));   // (its outline's width per vertex: Kael's earrings' thin)
   md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
     noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null, fringe: mdFringeData(md, key)};
   return {j, geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};

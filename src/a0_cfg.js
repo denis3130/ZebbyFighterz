@@ -113,7 +113,7 @@ const CFG={
     // his package in wip_assets/kael, only in his viewer until his hair and clothes are made): his own finger bones and
     // the outline's widths (tools/char_look.py), the light's normals smoothed, Ren's clips on his skeleton and Ren's guard
     // (his head held as high).
-    kael:{fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
+    kael:{head:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
       clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,

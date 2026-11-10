@@ -65,6 +65,26 @@ disegno (antracite 46,45,48 e pieghe 14,13,15, seguendo le pieghe dipinte da Mes
 corpo è in luce piatta come quello di Ren (i colori del disegno, senza le bande scure della luce). In guardia la figura
 ha luminosità media 79 (prima 74, disegno 77), la tuta 38.
 
+## Proposta (10/11, da approvare): la testa di Ren su Kael (`tools/kael_ren_head.py`)
+Denis, dopo la versione 7 (tolta: "fa schifo dio cane non rifarlo senza il mio permesso"): "prendi solo la testa di ren
+e mettila a kael poi falla nel suo stile", "non è il problema il mento ma tutta la faccia". Fatto senza Meshy e senza
+pubblicare: **le immagini vanno a Denis e si pubblica solo col suo ok**.
+- La testa nuova di Ren (`viewer_assets/ren/ren_head.*`, approvata da Denis) e le sue ciocche sul viso
+  (`ren_fringe.*`) portate sullo scheletro di Kael (le stesse 24 ossa): capelli, viso, orecchie, occhi, collo; non il
+  colletto verde, il bordo crema e la maglia di Ren (Kael tiene il suo colletto alto).
+- Posizione: gli occhi dove erano quelli di Kael (la testa di Ren finiva 1 cm più in basso e 1,3 cm di lato: il
+  mento affondava nel colletto e lo apriva). Il mento cade così dove lo disegna `kael_nero.png`.
+- La testa di Kael è nascosta (i triangoli sull'osso della testa), ma non il suo colletto (nero e viola sotto 1,545 m).
+- Colori di Kael (dal foglio della testa): capelli nei due lavanda del foglio, righe nere solo dove sono sottili
+  (le parti scure larghe dei capelli di Ren diventano l'ombra lavanda), iridi viola (i due cerchi delle iridi di Ren),
+  pelle com'è (è la stessa nei due fogli).
+- Orecchini come nel foglio: gancio d'argento, perlina viola, cristallo viola a sei facce con un riflesso bianco,
+  appesi ai lobi di Ren, contorno sottile (`src/e_model.js`: la testa nuova legge la larghezza del contorno per
+  vertice, `line`; per Ren non cambia niente).
+- Nel look: `CFG.looks.kael.head:true`. Per tornare alla versione 6: togliere `head:true`.
+- Diverso dal foglio: la forma dei capelli è quella di Ren (più corti e a punte, il foglio ha una criniera larga), le
+  orecchie restano sotto i capelli.
+
 ## Versione 6 (10/11): capelli, mascella, tuta uguale davanti e dietro
 Denis: "continua a migliorare il viso ed tutto il resto fino a che non viene quasi identico alle foto di kael".
 Misurato in 3D contro i fogli dalla stessa inquadratura:
