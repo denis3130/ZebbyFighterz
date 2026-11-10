@@ -14,8 +14,11 @@ docs/ref/personaggi/kael_nero.png), from looking at him in 3D from every side an
   gradient texels in the drawing's black; the black in the drawing's two tones, its lit cloth and its folds (SUIT: Denis,
   10/11, "cambiare il colore del modello 3d di kael da troppo scuro a più come nelle foto": Meshy's black was nearly
   all under the drawing's lit tone), by the paint's lightness smoothed over SUIT_BLUR texels (no grain), lit where
-  the drawing's share of it is (SUIT_LIT), no patch of a tone under SUIT_MIN texels, its edges softened;
-  the earrings in the drawing's purple (EARRING: their light and purple texels under the lobes); the face's right half
+  the drawing's share of it is (SUIT_LIT) on the front, the back and the sides alike (SUIT_BINS: Meshy's black is
+  darker behind), no patch of a tone under SUIT_MIN texels, its edges softened;
+  the hair in the head sheet's two tones (HAIR: its light and its lavender shadow, as much of it as the sheet has, by
+  the paint's lightness smoothed: Meshy's hair was nearly white) and its outline thinner (HAIR_LINE: the sheet's locks'
+  lines are thin), the jaw's outline bold as the head sheet's (JAW); the earrings in the drawing's purple (EARRING: their light and purple texels under the lobes); the face's right half
   (his right, under the lifted lock: Meshy painted no eye there) the mirror image of its left half about the nose
   (FACE: on the face's surface, not the hair in front of it; faded in at the middle and where it turns away);
   between the UV pieces, the nearest piece's colour (no seams under filtering).
@@ -39,6 +42,11 @@ FLAT_BODY, FLAT_BODY_N = 1., (.1, .45)   # and on the body's front (as Ren's, to
 SPECK, SKIN_KEEP, TINY = 60, 4, 20   # texels: a speck's size at most; how far from the skin a colour is the skin's own shading; a purple bit's
 BLACK, BLACK_MED = (14, 13, 15), 5         # the drawing's black; the black's median (texels)
 SUIT, SUIT_LIT, SUIT_BLUR, SUIT_MIN = ((14, 13, 15), (46, 45, 48)), .54, 3., 150   # kael_nero.png's black: folds, lit
+SUIT_BINS = 6                              # the lit share the drawing's on the front, the back and between (by the normal)
+HAIR, HAIR_LIT, HAIR_BLUR, HAIR_MIN = ((129, 111, 138), (225, 214, 224)), .6, 5., 120   # the head sheet's hair: shadow, light
+HAIR_LINE = .5                             # the outline's width on the hair (its locks' lines thinner, as the sheet's)
+HAIR_SKIN = .6                             # but not a light texel that much skin surrounds (1.5 cm): a stroke on the skin
+JAW, JAW_LINE = (1.505, 1.535, .075), .7   # m: the jaw under the mouth (y from, to; |x| under); its outline's width
 PURPLE, PURPLE_BLUR = ((96, 42, 136), (169, 84, 210)), 1.5   # the drawing's purple in shadow and in light
 FACE = {'box': (-.085, .085, 1.545, 1.665), 'surf': .004, 'mid': (.002, .008), 'turn': (.10, .30), 'px': .0004}
 EARRING = {'x': .052, 'y': (1.505, 1.585), 'z': -.012, 'ramp': ((70, 28, 104), (150, 70, 200), (214, 160, 240))}
@@ -141,12 +149,31 @@ def paint(pkg, name, Q, N, UV, I, hw, zfun):
     # the black in the drawing's two tones (its lit cloth where the paint is lightest, as much of it as the drawing has)
     blk = cloth & (cl == 0); L = out.mean(2)
     Ls = ndimage.gaussian_filter(np.where(blk, L, 0), SUIT_BLUR) / np.maximum(ndimage.gaussian_filter(blk.astype(float), SUIT_BLUR), 1e-6)
-    lit = blk & (Ls > np.percentile(Ls[blk], 100 * (1 - SUIT_LIT)))
+    nz = np.zeros((TS, TS)); nz[ys, xs] = nor[:, 2]   # (the split by the way the cloth faces: Meshy's black is darker behind)
+    edges = np.linspace(-1, 1, SUIT_BINS + 1); mids = (edges[:-1] + edges[1:]) / 2
+    ts_ = [np.percentile(Ls[blk & (nz >= a) & (nz < b)], 100 * (1 - SUIT_LIT)) if (blk & (nz >= a) & (nz < b)).sum() > 500 else np.nan for a, b in zip(edges[:-1], edges[1:])]
+    ok = ~np.isnan(ts_); thr = np.interp(nz, mids[ok], np.array(ts_)[ok])
+    lit = blk & (Ls > thr)
     for tone in (True, False):   # (no small patches of either)
         lab, n = ndimage.label(blk & (lit == tone)); sz = np.bincount(lab.ravel()); small = sz < SUIT_MIN; small[0] = False
         lit[small[lab]] = not tone
     w = ndimage.gaussian_filter(lit.astype(float), .7) / np.maximum(ndimage.gaussian_filter(blk.astype(float), .7), 1e-6)
     t0, t1 = (np.array(c, float) for c in SUIT); out[blk] = t0 + (t1 - t0) * np.clip(w[blk], 0, 1)[:, None]
+    # the hair in the sheet's two tones (kael_testa_3viste.png: its light and its lavender shadow, about 40% of it), by the
+    # paint's lightness smoothed over HAIR_BLUR texels (Meshy's darker inner layers and gaps between the locks)
+    ch = classes(T0[ys, xs]); cool = T0[ys, xs, 0] - T0[ys, xs, 2] <= 25   # (the hair's light and its lavender: not warm)
+    hd = th > .5; g = np.floor(pos / .003).astype(np.int64); g -= g[hd].min(0); shp = tuple(g[hd].max(0) + 1)
+    Sk = np.zeros(shp, np.float32); Al = np.zeros(shp, np.float32)   # (the share of skin around: a light stroke on the
+    np.add.at(Sk, tuple(g[hd & (ch == 2)].T), 1); np.add.at(Al, tuple(g[hd].T), 1)   # skin is not a lock of hair)
+    Sk = ndimage.uniform_filter(Sk, 5); Al = ndimage.uniform_filter(Al, 5); gi = tuple(np.clip(g, 0, np.array(shp) - 1).T)
+    share = np.where(hd, Sk[gi] / np.maximum(Al[gi], 1e-6), 0)
+    hm = np.zeros((TS, TS), bool); hm[ys, xs] = hd & cool & ((ch == 3) | ((ch == 4) & (T0[ys, xs].mean(1) > 90))) & (share < HAIR_SKIN)
+    L0 = T0.mean(2); Lh = ndimage.gaussian_filter(np.where(hm, L0, 0), HAIR_BLUR) / np.maximum(ndimage.gaussian_filter(hm.astype(float), HAIR_BLUR), 1e-6)
+    hl = hm & (Lh > np.percentile(Lh[hm], 100 * (1 - HAIR_LIT)))
+    for tone in (True, False):
+        lab, n = ndimage.label(hm & (hl == tone)); sz = np.bincount(lab.ravel()); small = sz < HAIR_MIN; small[0] = False; hl[small[lab]] = not tone
+    w = ndimage.gaussian_filter(hl.astype(float), .7) / np.maximum(ndimage.gaussian_filter(hm.astype(float), .7), 1e-6)
+    h0, h1 = (np.array(c, float) for c in HAIR); out[hm] = h0 + (h1 - h0) * np.clip(w[hm], 0, 1)[:, None]
     # the earrings: the drawing's purple, its light and shadow from the paint's
     c0 = classes(T0[ys, xs])
     e = (th > .5) & (np.abs(pos[:, 0]) > EARRING['x']) & (pos[:, 1] > EARRING['y'][0]) & (pos[:, 1] < EARRING['y'][1]) & (pos[:, 2] > EARRING['z'])
@@ -197,7 +224,10 @@ def main(pkg):
     # the look: its line and skin as they are; the light's normals on the new shape, the flat share, the moved vertices
     f32 = lambda a: np.frombuffer(LB, np.float32, a[1], a[0])
     pad = lambda b: b + b'\0' * (-len(b) % 4)
-    look = dict(lj); blob = f32(lj['line']).tobytes(); look['line'] = [0, int(lj['line'][1])]
+    line = f32(lj['line']).copy(); line[(hw > .3) & (cv == 3)] *= HAIR_LINE   # (the hair's outline thinner)
+    jaw = (hw > .5) & (cv == 2) & (Q[:, 1] > JAW[0]) & (Q[:, 1] < JAW[1]) & (np.abs(Q[:, 0]) < JAW[2])   # (the jaw's line
+    line[jaw] = np.maximum(line[jaw], JAW_LINE)                                                     # bold, as drawn)
+    look = dict(lj); blob = line.astype(np.float32).tobytes(); look['line'] = [0, int(lj['line'][1])]
     oj = len(blob); blob += jn.astype(np.uint8).tobytes(); blob = pad(blob); ow = len(blob); blob += wn.astype(np.float32).tobytes()
     look['skin'] = [[oj, int(jn.size)], [ow, int(wn.size)]]
     of = len(blob); blob += flat.astype(np.float32).tobytes(); look['flat'] = [of, int(flat.size)]

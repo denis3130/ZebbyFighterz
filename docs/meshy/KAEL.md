@@ -65,6 +65,19 @@ disegno (antracite 46,45,48 e pieghe 14,13,15, seguendo le pieghe dipinte da Mes
 corpo è in luce piatta come quello di Ren (i colori del disegno, senza le bande scure della luce). In guardia la figura
 ha luminosità media 79 (prima 74, disegno 77), la tuta 38.
 
+## Versione 6 (10/11): capelli, mascella, tuta uguale davanti e dietro
+Denis: "continua a migliorare il viso ed tutto il resto fino a che non viene quasi identico alle foto di kael".
+Misurato in 3D contro i fogli dalla stessa inquadratura:
+- **Capelli**: Meshy li aveva dipinti quasi bianchi (luminosità media 232); nel foglio della testa sono lavanda chiaro
+  (225,214,224) con circa il 40% in ombra lavanda (129,111,138). Ora nei due toni del foglio, seguendo le ciocche
+  dipinte da Meshy, e con il contorno più sottile (`HAIR_LINE`: nel foglio le linee delle ciocche sono fini). I
+  segni chiari di Meshy sulla pelle (mascella, collo) non contano come capelli (`HAIR_SKIN`).
+- **Mascella**: contorno più spesso sulla linea della mascella (`JAW_LINE`) e il sotto della mascella nero col bordo
+  netto (`kael_face.py` `JAW_NY`): la V nera del foglio vista di fronte, l'ombra sul collo di tre quarti.
+- **Tuta**: Meshy l'aveva dipinta più scura dietro che davanti; ora antracite e pieghe nella stessa proporzione del
+  disegno davanti, dietro e di lato (`SUIT_BINS`).
+- Provato e tolto: luce piatta anche sulla schiena (nell'anteprima non cambiava niente: le luci girano col modello).
+
 ## Viso dal foglio della testa (`tools/kael_face.py`, 10/11)
 Denis: "la faccia fa ancora schifo", "no per la testa fai tu niente meshy". La testa di Meshy resta com'è; il viso è
 ridipinto dal pannello di fronte di `kael_testa_3viste.png`:
@@ -112,3 +125,5 @@ dell'anteprima mostra quella originale).
   dietro fulmini. Se Denis vuole un solo disegno, si dipinge quello su tutta la spalla.
 - I capelli hanno la forma di Meshy (ciocche a punte), non quella del foglio (massa morbida e larga); le orecchie del
   foglio con gli orecchini a goccia non ci sono (le copre la forma dei capelli). Senza Meshy si possono solo ridipingere.
+- Gli orecchini: nel foglio sono cristalli a rombo con anellino, perlina e riflesso bianco; quelli di Meshy sono
+  macchie viola attaccate alla mascella, mescolate al viola del colletto (non si separano bene per ridipingerli).

@@ -24,6 +24,8 @@ is (its shape untouched), in flat light (the sheet's own shading, as Ren's head)
   face's sides), where it sees it; by how much it faces it (FACE) over the drawing's skin in light (BASE). Only the
   PANELS paint (now the front: the three quarters ones, fitted and mapped all the same, put their cheeks' shadows
   elsewhere than the front's, in stripes where they met; the face's sides are the skin in light, as Ren's).
+- The jaw's underside black (JAW_NY: where the surface turns under it), the sheet's shadow under the jaw: a V from the
+  front, the neck's shadow in three quarters; with kael_fix's bold outline on the jaw.
 - The whole face flat lit (its shading is the sheet's).
 
 usage: python3 tools/kael_face.py PACKAGE_DIR [DEBUG_DIR]   (after tools/kael_fix.py: paints PACKAGE_DIR/kael_painted.jpg
@@ -52,7 +54,10 @@ MODEL = {'eyes': ((-.0294, 1.5946), (.0385, 1.5947)), 'nose': (.004, 1.560), 'mo
 FACE_BOX, FACE_Y, SURF, EYE_R = (-.09, .09, 1.47, 1.72), 1.508, .004, .013   # m: the raycast's box; the collar's top; on the surface; an eye's white
 HOLE, HOLE_CELL, HOLE_SKIN = .015, .003, .6   # m: a dark texel's neighbourhood, its cells; the share of skin in it
 WARM = 25                                     # red over blue: a warm colour (skin's), not the hair's
-LIGHT_SKIN = .7                               # a light texel that much skin surrounds: Meshy's light strokes, not a lock
+LIGHT_SKIN = .6                               # a light texel that much skin surrounds: Meshy's light strokes, not a lock
+CHIN_LIGHT = (1.54, .075)                      # m: under the mouth (y under, |x| under) no hair: its light texels are skin's
+JAW_NY, JAW_SHADE, JAW_BLACK = (.6, .64), (1.535, .08), (14., 13., 15.)   # the jaw's underside (-n.y from, to: a sharp edge, as the sheet's shadows), where (m), its black
+                                              # (as kael_fix's HAIR_SKIN: the hair is the rest)
 FRONT_BIAS = .2                               # n . d: the front panel's lead (it paints the face until it turns ~35 deg)
 LOCK_EDGE, EYE_KEEP = 5, 22.                  # px: a lock over the drawn face left out with this much around it (its
                                               # outline); but not within this of an eye
@@ -137,7 +142,7 @@ def main(pkg, debug=None):
     kk = int(round(HOLE / HOLE_CELL)) | 1; Sk = ndimage.uniform_filter(Sk, kk); Al = ndimage.uniform_filter(Al, kk)
     gi = tuple(np.clip(g, 0, np.array(shp) - 1).T); share = np.where(head, Sk[gi] / np.maximum(Al[gi], 1e-6), 0)
     tc = T[ys, xs]; warm = tc[:, 0] - tc[:, 2] > WARM   # (Meshy's brown strokes and the skin's light: warm; the hair's lavender and white: not)
-    reg = (onf & (np.isin(cl, (0, 2, 4)) | ((cl == 3) & near_eye))) | sk | (head & (cl == 0) & (share > HOLE_SKIN)) | (head & warm & ((cl == 4) | ((cl == 3) & (share > HOLE_SKIN)))) | (head & (cl == 3) & (share > LIGHT_SKIN))
+    reg = (onf & (np.isin(cl, (0, 2)) | ((cl == 4) & warm) | ((cl == 3) & near_eye))) | sk | (head & (cl == 0) & (share > HOLE_SKIN)) | (head & warm & ((cl == 4) | ((cl == 3) & (share > HOLE_SKIN)))) | (head & (cl == 3) & (share > LIGHT_SKIN)) | (head & (cl == 3) & (pos[:, 1] < CHIN_LIGHT[0]) & (np.abs(pos[:, 0]) < CHIN_LIGHT[1]))
     R = np.nonzero(reg)[0]
     print('the face: %d texels; the model\'s landmarks (m):' % len(R), np.round(M3, 4).tolist())
     nt = len(I)
@@ -225,7 +230,11 @@ def main(pkg, debug=None):
     w = np.where(np.isfinite(Sc), np.exp(SHARP * (Sb - sbm)), 0)
     col = (w[..., None] * Co).sum(0) / np.maximum(w.sum(0), 1e-12)[:, None]
     wt = np.where(seen_any, smooth(*FACE, np.where(seen_any, smax, 0)), 0)[:, None]
-    out = T.copy(); out[ys[R], xs[R]] = BASE * (1 - wt) + col * wt
+    new_ = BASE * (1 - wt) + col * wt
+    # the jaw's underside black, as the sheet's shadow under the jaw (a V from the front, the neck's shadow in three quarters)
+    pr = pos[R]; under = smooth(JAW_NY[0], JAW_NY[1], -nor[R, 1]) * (pr[:, 1] < JAW_SHADE[0]) * (np.abs(pr[:, 0]) < JAW_SHADE[1])
+    new_ = new_ * (1 - under[:, None]) + np.array(JAW_BLACK) * under[:, None]
+    out = T.copy(); out[ys[R], xs[R]] = new_
     if debug:   # (the texture with the face's texels in the colour of the panel painting them: red, green, blue; white: none)
         vt = T.copy(); tint = np.array([[255, 0, 0], [0, 200, 0], [0, 80, 255]], float)
         vt[ys[R], xs[R]] = (w[..., None] * tint[:, None]).sum(0) / np.maximum(w.sum(0), 1e-12)[:, None] * wt + 255 * (1 - wt)
