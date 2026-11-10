@@ -46,6 +46,9 @@ BACK = .01                                # the forehead's painting: not on what
                                           # seen through the holes between the brows, painted skin, showed as a skin V on the nape)
 BRIDGE, BRIDGE_SKIN = (.022, 1.575, 1.605, .004), (248, 182, 135)   # see fringe(): Meshy's lock tips on the nose's bridge; the skin's colour
 SPIKES = (.068, 1.572, 1.614, 0, .004)   # see fringe(): the eyes' band (x from the middle, y, -, depth to the face; m)
+SIDE_CUT = (.052, .066)                   # m: the pillow's pieces further than [0] from the middle and behind [1] (past the eyes'
+                                          # corners, over the temples: unseen from the front; from the side, once ren_side pressed
+                                          # Meshy's temple locks onto the head, a light patch beside the brow) left out
 
 
 def texels(uv, A, TS):
@@ -239,7 +242,9 @@ def fringe(Q, N, UV, I, tex, name, out):
         i_, j_ = min(max(GI[p, q], 0), H - 1), min(max(GJ[p, q], 0), W - 1); x, y = X0 + (GJ[p, q] + .5) * PX, Y1 - (GI[p, q] + .5) * PX
         pos[kk] = (x, y, zl[i_, j_] + hh[i_, j_]); pos[nv + kk] = (x, y, zl[i_, j_] - LOCK_BACK * hh[i_, j_])
         uvs[kk] = uvs[nv + kk] = ((GJ[p, q] - tc0 + .5) / TW, (GI[p, q] - tr0 + .5) / TH)
-    quads = np.array(quads, np.int64); idx = np.concatenate([quads, quads[:, ::-1] + nv]); nv *= 2
+    quads = np.array(quads, np.int64); Cq = pos[quads].mean(1)   # (not the locks' ends over the temples: see SIDE_CUT)
+    quads = quads[~((np.abs(Cq[:, 0] - BODY_X) > SIDE_CUT[0]) & (Cq[:, 2] < SIDE_CUT[1]))]
+    idx = np.concatenate([quads, quads[:, ::-1] + nv]); nv *= 2
     pad = lambda arr: np.pad(arr, ((0, max(0, tr0 + TH - H)), (0, max(0, tc0 + TW - W))) + ((0, 0),) * (arr.ndim - 2), mode='edge')[tr0:tr0 + TH, tc0:tc0 + TW]
     lk = pad(L); _, (py, px) = ndimage.distance_transform_edt(~lk, return_indices=True)
     rgba = np.dstack([pad(w)[py, px], ndimage.gaussian_filter(lk.astype(float), .7) * 255]).clip(0, 255).astype(np.uint8)

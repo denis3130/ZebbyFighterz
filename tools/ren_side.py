@@ -29,13 +29,29 @@ depth, the innermost's depth), its parts SIDE_CORE changed fully, fading over SI
   share along x under SIDE_WALL) without lines; the texels standing SIDE_LIFT m over the skin after the moves (a lock
   not pressed down: seen from the front) in the hair's colours, not the design's skin; not the face's front (normal's
   share along z over SIDE_FRONT, unless moved).
-- the eyes kept: their triangles (whites or iris in their texels, SIDE_EYE_RINGS rings around), a box (SIDE_EYE_BOX)
+- the eyes kept: their triangles (whites or iris in their texels, the iris's only within SIDE_EYE_NEAR m of the whites:
+  the temple's shaded skin has its colours; SIDE_EYE_RINGS rings around), a box (SIDE_EYE_BOX)
   and SIDE_EYE_GUARD m around their whites neither moved nor painted;
 - on the temple to the eye's corner (SIDE_TEMPLE, as ren_head.TEMPLE_LINE, but for the points as they are after the
   moves and further out: its locks came from outside that box) the outline pushed back SIDE_TEMPLE[3] m (inside the head
   the locks' edges seen from three quarters drew black hooks; the silhouette keeps its line), and the locks there
   standing out over the skin in the hair's colours even in front of the window's parts (their light undersides, seen
   from the front: streaks), facing the front or not (the face's front, lying on the skin, stays).
+The temple's locks (10/11 night, Denis: "le ciocche ... falle meglio che puoi"; they hung there as a fringe of thin
+spikes and needles, the black triangle):
+- the eyes' guard no longer takes the temple: the iris's colours, sought for the eyes' triangles, are also the temple's
+  shaded skin (SIDE_EYE_NEAR above); held there, neither moved nor painted, with its neighbours (SIDE_EYE_RINGS) it
+  stopped the whole temple's locks from coming down;
+- no triangle stretched: a point goes in no more than SIDE_STRETCH m per m of mesh from the points that go less or stay
+  (a lock's tip pressed beside its root left where it was drew a needle across the temple), the welded copies together;
+- on the temple a lower cone (SIDE_TEMPLE_CONE: its slope there), and its edge redrawn (SIDE_TEMPLE_EDGE: opened wider,
+  its tips put back as points; blended into the rest by the signed distance over the box's ramp): no drips, no hooks;
+- there the hair one tone (SIDE_TEMPLE_TONE: its colours blurred): Meshy's strokes, painted along x on the locks pressed
+  near the edge, read from three quarters as spikes and light streaks;
+- the locks moved near the eyes painted (their guard's most, not its least: half in, half out of the eyes' box they had
+  been moved but kept Meshy's streaks), and the temple's skin under the design's hair painted facing the front too;
+- a painted triangle's texels within SIDE_EDGE_PX of its edges painted too (between the two pieces of a seam neither had
+  them: dotted light lines along the locks).
 sides() also returns the texels it painted: the neck's marks (ren_head.py, NECK_CLEAN) leave them as they are.
 
 usage (prototyping on a head already made): python3 tools/ren_side.py HEAD_DIR [DEBUG.npz]"""
@@ -63,13 +79,19 @@ SIDE_EAR_LINE = (1.1, 2.0)               # the sheet's px: the ear's outline lin
 SIDE_INK = (.0007, .00015)               # m: the ink line's width, its edges' softness
 SIDE_SKIN_UP, SIDE_RAISE, SIDE_INSINK = .0006, .001, .0012   # m (see above)
 SIDE_CONE, SIDE_DEEP = (.001, 1.2, .002), .004   # see above
+SIDE_TEMPLE_CONE = ((.004, .016, .062, .078), (1.640, 1.655), .35)   # the temple's: z ramps (in from, full from, full to, out at), y (full under, none over), its slope (m per m)
 SIDE_FLAP = ((-.090, .076, 1.520, 1.675), .003)   # see above
 SIDE_FLOOR, SIDE_EDGE_STEPS = 1.515, 3   # see above
 SIDE_MOVED, SIDE_WALL, SIDE_LIFT, SIDE_FRONT = .001, (.2, .45), .002, .6   # see above
 SIDE_EYE_BOX = (.055, 1.570, 1.615, .058, .003)   # the eyes: z over [0], y between [1] and [2], under [3] m from the middle; its margin [4]
 SIDE_EYE_RINGS, SIDE_EYE_GUARD = 2, (.004, .008, .003, .006)   # m from the whites: no paint within [0], fully from [1]; no move: [2], [3]
+SIDE_EYE_NEAR = .008                     # m: the iris's colours count as the eye's within this of a white triangle
 SIDE_LINE, SIDE_GROW = .03, 2.5          # m; px of the painted triangles' texels around them, in the texture's gaps
+SIDE_EDGE_PX = .7                        # px: a painted triangle's texels within this of its edges painted too
+SIDE_STRETCH = .8                        # see above: m a point may go in per m of mesh from its neighbours
 SIDE_TEMPLE = ((.045, .13), (1.555, 1.665), (-.03, .085), .1, .004)   # see above: |x| from the middle, y, z (m); the push (m), its ramp (m)
+SIDE_TEMPLE_EDGE = ((.012, .062, 1.550, 1.640), .002, 16, (16, .2, 16))   # the temple's edge redrawn: z, y box (its ramp, m); the opening (px), the tips (as SIDE_TIP)
+SIDE_TEMPLE_TONE = 14, (.012, .080, 1.550, 1.640)   # px: the hair's colours blurred (one tone: Meshy's strokes, seen on the locks pressed, drew spikes) on z, y (m; to the eye's lock)
 X0 = .006                                # the head's middle (x, m)
 INK = np.array([22., 20, 26]); HAIR = np.array([[22., 20, 26], [58, 48, 58], [75, 64, 73], [113, 94, 102]])   # (ren_hair.HAIR_TONES)
 SHADE = np.array([.82, .74, .72])        # (ren_hair.SKIN_SHADE)
@@ -173,9 +195,9 @@ def disk(r):
     y, x = np.ogrid[-r:r + 1, -r:r + 1]; return x * x + y * y <= r * r
 
 
-def tips(H, O):
+def tips(H, O, tip=SIDE_TIP):
     """Pointed triangles from O's edge out to the tips of H the opening cut (see SIDE_TIP)."""
-    lmin, wfrac, supp = SIDE_TIP
+    lmin, wfrac, supp = tip
     R = H & ~O
     dO, ind = ndimage.distance_transform_edt(~O, return_indices=True)
     d = np.where(R, dO, 0)
@@ -252,7 +274,7 @@ def texels_wide(uv, A, TS, covered, grow=SIDE_GROW):
     G = np.linalg.inv(T); gn = np.r_[np.linalg.norm(G.sum(0)), np.linalg.norm(G[0]), np.linalg.norm(G[1])]
     out = (-w / np.maximum(gn, 1e-12)).max(1)
     q = np.floor(px).astype(int); g = (q >= 0).all(1) & (q < TS).all(1)
-    ins = (w >= -1e-3).all(1) & g
+    ins = (out < SIDE_EDGE_PX) & g   # (and the texels on its edges: between two pieces of a seam, neither had them)
     ring = (out > 0) & (out < grow) & g
     ring[ring] = ~covered[q[ring, 1], q[ring, 0]]
     keep = ins | ring
@@ -281,7 +303,9 @@ def eyes(Q, UV, I, tex):
     U = np.einsum('kb,tbc->tkc', bw, UV[I]) * TS; ct = tex[np.clip(U[..., 1].astype(int), 0, TS - 1), np.clip(U[..., 0].astype(int), 0, TS - 1)]
     m, st = ct.mean(-1), ct.max(-1) - ct.min(-1)
     white, iris = (m > 200) & (st < 45), (ct[..., 0] > 110) & (ct[..., 0] < 215) & (ct[..., 2] < 95) & (m < 150) & (st > 70)
-    eye_t = (C[:, 2] > .045) & (C[:, 1] > 1.565) & (C[:, 1] < 1.625) & (white | iris).any(1)
+    base = (C[:, 2] > .045) & (C[:, 1] > 1.565) & (C[:, 1] < 1.625); wt = base & white.any(1)
+    near = cKDTree(C[wt]).query(C)[0] < SIDE_EYE_NEAR if wt.any() else np.zeros(len(C), bool)   # (the temple's shaded skin
+    eye_t = wt | (base & iris.any(1) & near)                                                  # has the iris's colours)
     for _ in range(SIDE_EYE_RINGS):
         vw = np.zeros(len(first), bool); vw[weld[I[eye_t]].ravel()] = True; eye_t = vw[weld[I]].any(1)
     eye_v = np.zeros(len(Q), bool); eye_v[I[eye_t].ravel()] = True
@@ -341,10 +365,19 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
         M &= ~keep_skin
         lab, n = ndimage.label(M); sz = np.bincount(lab.ravel()); top = np.zeros(n + 1, bool); top[np.unique(lab[:SIDE_TOP_PX])] = True
         M &= (top | (sz >= SIDE_BIG))[lab] & (lab > 0)
+        (ez0, ez1, ey0_, ey1_), er, eo, etip = SIDE_TEMPLE_EDGE   # (the temple's edge redrawn: see above)
+        O = ndimage.binary_opening(M, structure=disk(eo)); Tt = tips(M, O, etip)[0]
+        Ct = ndimage.gaussian_filter((O | (Tt & ndimage.binary_dilation(M, structure=disk(2)))).astype(float), SIDE_SOFT_EDGE) > .5
+        tz = ss(ez0 - er, ez0, gz) * (1 - ss(ez1, ez1 + er, gz)) * ss(ey0_ - er, ey0_, gy) * (1 - ss(ey1_, ey1_ + er, gy))
+        sdist = lambda A: ndimage.distance_transform_edt(A) - ndimage.distance_transform_edt(~A)
+        M = ((tz * sdist(Ct) + (1 - tz) * sdist(M)) > 0) & on & ~keep_skin
         sd = (ndimage.distance_transform_edt(M) - ndimage.distance_transform_edt(~M)) * SIDE_PX   # (+ in the hair, m)
         _, ind = ndimage.distance_transform_edt(~H0, return_indices=True); hair_c = col[ind[0], ind[1]]
         clean_sk = on & ~is_hair(col) & (col[..., 0] > 200) & (col[..., 0] - col[..., 2] > 80) & (col.mean(-1) > 160)
         sk_map = np.stack([ndimage.gaussian_filter(laplace_fill(col[..., c], clean_sk, 150), 6) for c in range(3)], -1) if clean_sk.any() else np.broadcast_to(skin_rgb, col.shape).copy()
+        hair_t = np.stack([ndimage.gaussian_filter(hair_c[..., c], SIDE_TEMPLE_TONE[0]) for c in range(3)], -1)   # (the temple's: one tone)
+        (oz0, oz1, oy0, oy1) = SIDE_TEMPLE_TONE[1]
+        tt = ndimage.gaussian_filter(((gz > oz0) & (gz < oz1) & (gy > oy0) & (gy < oy1)).astype(float), .004 / SIDE_PX)[..., None]; hair_c = hair_c * (1 - tt) + hair_t * tt
         img = np.where(M[..., None], hair_c, sk_map)
         flat = np.stack([ndimage.gaussian_filter(img[..., c], 1.5) for c in range(3)], -1)   # (for the walls: no lines)
         ink = ss(-SIDE_INK[1], SIDE_INK[1], sd) * (1 - ss(SIDE_INK[0] - SIDE_INK[1], SIDE_INK[0] + SIDE_INK[1], sd)) * ss(.0008, .0016, d_ear)
@@ -356,9 +389,11 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
         h_skin = ndimage.gaussian_filter(harmonic(np.where(known, amax, 0), known), 8)
         _, ind2 = ndimage.distance_transform_edt(~on, return_indices=True)
         h_out = ndimage.gaussian_filter(ndimage.median_filter(amax[ind2[0], ind2[1]], 7), 8)
-        cap = SIDE_CONE[0] + SIDE_CONE[1] * np.maximum(sd, 0)
+        (cz0, cz1, cz2, cz3), (cy0, cy1), cs = SIDE_TEMPLE_CONE
+        tw = ss(cz0, cz1, gz) * (1 - ss(cz2, cz3, gz)) * (1 - ss(cy0, cy1, gy)); slope = SIDE_CONE[1] + (cs - SIDE_CONE[1]) * tw
+        cap = SIDE_CONE[0] + slope * np.maximum(sd, 0)
         h = ndimage.gaussian_filter(h_skin + SIDE_SKIN_UP + np.where(M, np.clip(h_out - h_skin - SIDE_SKIN_UP, 0, cap), 0), 4)
-        design[sg] = (img, flat, h_skin, hair_c)
+        design[sg] = (img, flat, h_skin, hair_c, sd)
         a = sg * (Q[:, 0] - X0); u, v = to_g(Q[:, 2], Q[:, 1])
         ing = (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1) & (a > .012) & ~near_collar & ~near_edge & (Q[:, 1] > SIDE_FLOOR)
         k = np.nonzero(ing)[0]; uk, vk = u[k], v[k]; ak = a[k]
@@ -366,7 +401,7 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
         (fz0, fz1, fy0, fy1), fh = SIDE_FLAP
         flap = (Q[k, 2] > fz0) & (Q[k, 2] < fz1) & (Q[k, 1] > fy0) & (Q[k, 1] < fy1) & (sdk < 0) & (ak - sk_k + SIDE_SKIN_UP > fh)
         wv = np.where(flap, np.maximum(wv, egm[k]), wv)
-        hgt = ak - sk_k; capk = SIDE_CONE[0] + SIDE_CONE[1] * np.maximum(sdk, 0)
+        hgt = ak - sk_k; capk = SIDE_CONE[0] + bilinear(slope, uk, vk) * np.maximum(sdk, 0)
         soft = -SIDE_CONE[2] * np.logaddexp(-hgt / SIDE_CONE[2], -capk / SIDE_CONE[2])
         hv = np.where(sdk > SIDE_DEEP, sk_k + np.minimum(soft, hgt), hv)
         win_w[k] = np.maximum(win_w[k], wv)
@@ -375,9 +410,23 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
         newa[k] = ak + wv * (hv - ak); moved[k] = True
         out[sg] = int((np.abs(wv * (hv - ak)) > 2e-4).sum())
         if debug is not None: debug[sg] = dict(H0=H0, M=M, sd=sd, amax=amax, amin=amin, col=col, h=h, h_skin=h_skin, img=img, wg=wg)
+    # (no triangle stretched: a point goes in no more than SIDE_STRETCH m per m of mesh from those that go less, or stay:
+    # pressed alone, a lock's tip beside its unmoved root drew a long needle across the temple; the welded copies of a
+    # point together)
+    inward = np.zeros(len(Q))
     for sg in (1, -1):
-        m = moved & (sg * (Q[:, 0] - X0) > .012); Q[m, 0] = X0 + sg * newa[m]
-    # (the welded copies of a moved point with it; the normals from the triangles)
+        m = moved & (sg * (Q[:, 0] - X0) > .012); inward[m] = sg * (Q[m, 0] - X0) - newa[m]
+    T = np.zeros(len(first)); np.maximum.at(T, weld, np.maximum(inward, 0))
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra
+    Lw = np.linalg.norm(Q[first][E[:, 0]] - Q[first][E[:, 1]], axis=1) * SIDE_STRETCH + 1e-9
+    nw = len(first); src = np.arange(nw)
+    G = coo_matrix((np.r_[Lw, Lw, T + 1e-9], (np.r_[E[:, 0], E[:, 1], np.full(nw, nw)], np.r_[E[:, 1], E[:, 0], src])), shape=(nw + 1, nw + 1)).tocsr()
+    lim = dijkstra(G, indices=nw)[:nw]
+    for sg in (1, -1):
+        m = moved & (sg * (Q[:, 0] - X0) > .012)
+        go = np.where(inward[m] > 0, np.minimum(inward[m], lim[weld[m]]), inward[m])   # (the small raises as they are)
+        Q[m, 0] = X0 + sg * (sg * (Q[m, 0] - X0) - go)
     Wq = np.zeros((len(first), 3)); Wn = np.zeros(len(first)); np.add.at(Wq, weld[moved], Q[moved]); np.add.at(Wn, weld[moved], 1)
     wm = Wn > 0; Wq[wm] /= Wn[wm, None]; sel = wm[weld]; Q[sel] = Wq[weld[sel]]
     fn = np.cross(Q[I[:, 1]] - Q[I[:, 0]], Q[I[:, 2]] - Q[I[:, 0]]); Nw = np.zeros((len(first), 3))
@@ -394,12 +443,15 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
     fnu = fn / np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12)
     tmoved = np.abs(Q[:, 0] - Q0[:, 0])[I].max(1) > SIDE_MOVED
     for sg in (1, -1):
-        img, flat, hsk, hcol = design[sg]
+        img, flat, hsk, hcol, sdd = design[sg]
+        a0 = sg * (Q0[:, 0] - X0); u0, v0 = to_g(Q0[:, 2], Q0[:, 1]); okg = (u0 >= 0) & (u0 < W - 1) & (v0 >= 0) & (v0 < H - 1)
+        blade = np.zeros(len(Q), bool); blade[okg] = a0[okg] - bilinear(hsk, u0[okg], v0[okg]) > SIDE_LIFT
         for t in side_tris(sg):
             if eye_t[t]: continue
             a3 = sg * (Q[I[t], 0] - X0); u3, v3 = to_g(Q[I[t], 2], Q[I[t], 1])
             lifted = temple_v[I[t]].all() and (a3 - bilinear(hsk, u3, v3) > SIDE_LIFT).all()   # (a lock on the temple, standing out)
-            if fnu[t, 2] > SIDE_FRONT and not tmoved[t] and not lifted: continue
+            tin = ((Q[I[t], 2] > ez0) & (Q[I[t], 2] < ez1) & (Q[I[t], 1] > ey0_) & (Q[I[t], 1] < ey1_)).all() and (bilinear(sdd, u3, v3) > .0005).all()
+            if fnu[t, 2] > SIDE_FRONT and not tmoved[t] and not lifted and not tin: continue   # (the temple's skin under its hair: painted)
             fw = ss(SIDE_WALL[0], SIDE_WALL[1], abs(fnu[t, 0]))
             q, P3 = texels_wide(UV[I[t]] * TS, Q[I[t]], TS, covered)
             if not len(q): continue
@@ -409,7 +461,8 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
             up = (sg * (P3[:, 0] - X0) - bilinear(hsk, u, v) > SIDE_LIFT) & (bilinear(ear_f, u, v) < .5)
             w = np.maximum(bilinear(wg, u, v), 1. if tmoved[t] else 0.)
             if lifted: w = np.where(up, 1., w)   # (the temple's locks standing out: hair, in front of the window's parts too)
-            w = w * eg[I[t]].min(); sel = w > 1e-3
+            w = w * (eg[I[t]].max() if tmoved[t] and blade[I[t]].all() else eg[I[t]].min()); sel = w > 1e-3   # (a lock moved near the eye:
+                                                                                            # painted, not left in Meshy's streaks)
             if not sel.any(): continue
             q, u, v, w, P3, up = q[sel], u[sel], v[sel], w[sel], P3[sel], up[sel]
             c0 = tex[q[:, 1], q[:, 0]]; d = bilinear(img, u, v) * fw + bilinear(flat, u, v) * (1 - fw)
