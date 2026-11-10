@@ -38,7 +38,9 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
 5. `python3 tools/char_look.py wip_assets/kael wip_assets/kael`: le ossa delle dita (3 per dito e pollice, dal mesh),
    la pelle sulle dita, il pugno; le larghezze del contorno; le normali della luce lisciate.
 6. `python3 tools/kael_fix.py wip_assets/kael` (dopo `char_look.py`): la pulizia, vedi sotto.
-7. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
+7. `python3 tools/kael_arms.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_fix.py`): le braccia dipinte dai fogli,
+   vedi sotto (circa 1 minuto).
+8. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
 - **Ciocca sull'occhio destro**: Meshy l'aveva fatta scendere sull'occhio, il disegno li mostra tutti e due con una
@@ -53,6 +55,23 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
   disegno (luce e ombra, netti), il nero come l'ha dipinto Meshy.
 - Non toccato: la forma del corpo (è quella di Meshy dal disegno).
 
+## Braccia dai fogli (`tools/kael_arms.py`, 10/11)
+Denis: "tutto il resto cerca di farlo identico come nelle foto, soprattutto viso e capelli e braccia" (tuta, tatuaggi e
+guanti neri come sono). Lo scanner (`tools/sheet_scan.py`, inquadrature in `docs/meshy/kael_scan.json`) mostrava le
+braccia di Meshy pallide e a schizzi, con scarabocchi neri sulle spalle, e un po' più larghe del disegno.
+- La pelle di spalle, braccia e gomiti è tutta ridipinta: dal disegno di fronte (`kael_nero.png`), dal retro
+  (`kael_retro.png`) e dalle viste di tre quarti del busto (`kael_busto_3viste.png`, a ±30°: il lato esterno del
+  braccio, quello che si vede di più in gioco); ogni punto prende la vista che guarda di più, con un passaggio stretto
+  (niente righe doppie). Dove nessun disegno arriva (cima della spalla, sotto il braccio) la pelle in luce del disegno.
+- Ogni braccio è allineato al suo disegno (rotazione, scala e spostamento: sovrapposizione dal 72-86% all'88-94%).
+- I tatuaggi viola dei fogli diventano neri come quelli di `kael_nero.png`. Il bracciale, il guanto, la tuta e la
+  punta del colletto non si toccano.
+- Luce piatta sulla pelle dipinta (le ombre sono quelle disegnate), come la parte davanti del corpo di Ren.
+- Errori trovati e corretti guardando in 3D: righe chiare lungo le cuciture della texture (i vertici doppi sulle
+  cuciture facevano fallire il controllo di visibilità), una macchia marrone al gomito (il colore del bordo del
+  disegno), trattini neri di Meshy vicino ai bracciali, una macchia color pelle sulla punta del colletto (pesata sulle
+  ossa del braccio: ora esclusa).
+
 ## Look nel gioco
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,
 luce lisciata, testa alzata di 12° in guardia, la guardia `a191` che respira di Ren, `faceShape` (la ciocca alzata),
@@ -63,3 +82,5 @@ dell'anteprima mostra quella originale).
 - Le code della fascia sono attaccate ai pantaloni (le ha fatte così Meshy): seguono le gambe, non oscillano. Se Denis
   le vuole libere come quelle di Ren, si fanno coi nastri (`CFG.looks.ren.sash`).
 - Il nero della tuta resta quello di Meshy (in due toni diventava granuloso).
+- I tatuaggi del disegno di fronte (fiamme) e quelli dei fogli (fulmini) non sono uguali: davanti fiamme, di lato e
+  dietro fulmini. Se Denis vuole un solo disegno, si dipinge quello su tutta la spalla.
