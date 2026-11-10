@@ -643,8 +643,14 @@ def main(bust, pkg, out, texture=None):
     # (and as Denis's detail sheet has them, tools/ren_side.py: the ears seen, the hair around them, the temples, the neck
     # and the cheeks clean)
     from ren_side import sides as sheet_sides
-    side_out, side_px, side_painted = sheet_sides(Q, Nq, UVq, Ik, lb_line, t, side_skin)
+    Q_pre = Q.copy()
+    side_out, side_px, side_painted, side_drop = sheet_sides(Q, Nq, UVq, Ik, lb_line, t, side_skin)
+    Ik = Ik[~side_drop]   # (the fins by the eyes: left out)
     print('sides: around the ears, the temples, the neck and the cheeks: Meshy\'s locks cleaned, the flaps pressed onto the head (points moved per side %s); %d texels painted' % (side_out, side_px))
+    # (and the locks on the sides with their black contours, as on top: tools/ren_locks.py)
+    from ren_locks import locks as side_locks
+    lock_px, lock_painted = side_locks(Q, UVq, Ik, t, Q_pre); side_painted |= lock_painted
+    print('locks: their contours on the sides drawn, %d texels' % lock_px)
     # the collar joined to the vest (tools/ren_collar.py): a skirt from the head's bottom edge to the vest, the collar's band
     # on the vest in the vest's paint
     from ren_collar import collar_join, load_body, collar_shell, NECK_AXIS

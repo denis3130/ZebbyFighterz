@@ -52,6 +52,11 @@ spikes and needles, the black triangle):
   been moved but kept Meshy's streaks), and the temple's skin under the design's hair painted facing the front too;
 - a painted triangle's texels within SIDE_EDGE_PX of its edges painted too (between the two pieces of a seam neither had
   them: dotted light lines along the locks).
+By the eyes (10/11 night, Denis's photos: a lock lying flat at the eye's height pointing at its corner, a dark blob
+beside it): the eyes' box keeps the lids, the lashes and the skin, not the hair's flaps in it (SIDE_EYE_FLAP); the locks
+there end at the eye's middle height in points leaning forward, as in the sheet (SIDE_EYE_CUT: the design under a saw's
+edge cut away); and the fins the press could not lay down there (the face turns to the front: seen along x its skin is
+far in) left out (SIDE_EYE_FIN: sides() returns them, ren_head.py drops them).
 sides() also returns the texels it painted: the neck's marks (ren_head.py, NECK_CLEAN) leave them as they are.
 
 usage (prototyping on a head already made): python3 tools/ren_side.py HEAD_DIR [DEBUG.npz]"""
@@ -86,6 +91,10 @@ SIDE_MOVED, SIDE_WALL, SIDE_LIFT, SIDE_FRONT = .001, (.2, .45), .002, .6   # see
 SIDE_EYE_BOX = (.055, 1.570, 1.615, .058, .003)   # the eyes: z over [0], y between [1] and [2], under [3] m from the middle; its margin [4]
 SIDE_EYE_RINGS, SIDE_EYE_GUARD = 2, (.004, .008, .003, .006)   # m from the whites: no paint within [0], fully from [1]; no move: [2], [3]
 SIDE_EYE_NEAR = .008                     # m: the iris's colours count as the eye's within this of a white triangle
+SIDE_EYE_FLAP = (40, .050)               # see eyes(): the hair's flaps in the eyes' box: brighter than [0] (mean rgb: not ink), |x| over [1] m
+SIDE_EYE_CUT = ((.050, .095, .010), (1.594, .0075, .0085, .72))   # see sides(): z from, to, ramp (m); the saw's line (y), its teeth's depth, spacing (m), their points' place across them (forward)
+SIDE_EYE_FIN = ((.035, .095), (1.570, 1.598), .045, .0005)   # see sides(): z, y, |x| over (m); outside the design's hair, inside it by (m)
+SIDE_EYE_FIN_SHARE = .55                 # see sides(): a triangle that far outside the design's hair (its share) left out
 SIDE_LINE, SIDE_GROW = .03, 2.5          # m; px of the painted triangles' texels around them, in the texture's gaps
 SIDE_EDGE_PX = .7                        # px: a painted triangle's texels within this of its edges painted too
 SIDE_STRETCH = .8                        # see above: m a point may go in per m of mesh from its neighbours
@@ -313,7 +322,11 @@ def eyes(Q, UV, I, tex):
     d = cKDTree(Q[wh]).query(Q)[0] if wh.any() else np.full(len(Q), 9.)
     ez, ey0, ey1, ea, em = SIDE_EYE_BOX
     box = ss(ez - em, ez, Q[:, 2]) * ss(ey0 - em, ey0, Q[:, 1]) * (1 - ss(ey1, ey1 + em, Q[:, 1])) * (1 - ss(ea, ea + em, np.abs(Q[:, 0] - X0)))
-    keep = (1 - box) * ~eye_v
+    # (the box keeps the eyes' lids, lashes and skin; not the hair's flaps in it: points in the hair's purple, not its
+    # ink, lateral of the eye (10/11 night, Denis's two photos: a lock lying flat at the eye's height, pointing at its
+    # corner, held up there by the box))
+    vm = vc.mean(1); flap = is_hair(vc) & (vm > SIDE_EYE_FLAP[0]) & (np.abs(Q[:, 0] - X0) > SIDE_EYE_FLAP[1])
+    keep = (1 - box * ~flap) * ~eye_v
     g = SIDE_EYE_GUARD
     return ss(g[0], g[1], d) * keep, ss(g[2], g[3], d) * keep, eye_t
 
@@ -335,7 +348,7 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
     d_ear = ndimage.distance_transform_edt(~ear_g) * SIDE_PX
     keep_skin = (d_ear < SIDE_EAR_PAD) | (near_g & (d_ear < SIDE_NEAR_EAR))
     ear_c = bilinear(ear_img, pu.ravel(), pv.ravel()).reshape(H, W, 3); ear_f = ndimage.gaussian_filter(keep_skin.astype(float), 2)
-    vc = tex[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)]
+    vc = tex[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)]; tex0_ = tex.copy()
     r_, g_, b_ = vc[:, 0], vc[:, 1], vc[:, 2]
     collar = ((g_ > r_ + 5) | ((vc.mean(1) > 165) & (r_ - b_ < 60) & (np.abs(r_ - g_) < 30))) & (Q[:, 1] < 1.555)   # (its teal and cream; higher up, the eyes' light greys)
     tri_ok = ~collar[I].all(1)
@@ -371,6 +384,15 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
         tz = ss(ez0 - er, ez0, gz) * (1 - ss(ez1, ez1 + er, gz)) * ss(ey0_ - er, ey0_, gy) * (1 - ss(ey1_, ey1_ + er, gy))
         sdist = lambda A: ndimage.distance_transform_edt(A) - ndimage.distance_transform_edt(~A)
         M = ((tz * sdist(Ct) + (1 - tz) * sdist(M)) > 0) & on & ~keep_skin
+        # (by the eye: the locks end at the eye's middle height in points, as in the sheet, not hanging over its corner
+        # down to the cheek (10/11 night, Denis's photos: a lock lying flat at the eye's corner, a dark blob beside it):
+        # the hair under a saw's edge cut away, SIDE_EYE_CUT)
+        (cz0, cz1, cr), (cyc, camp, cper, cskew) = SIDE_EYE_CUT
+        k_ = np.floor((gz - cz0) / cper); f_ = (gz - cz0) / cper - k_   # (tooth k_, f_ across it 0-1; its point at cskew)
+        dk = camp * (.6 + .4 * ((k_ * 7919 + (sg > 0) * 104729) % 97) / 96.)   # (each tooth its own depth)
+        saw = cyc - dk * np.where(f_ < cskew, f_ / cskew, (1 - f_) / (1 - cskew))
+        cw = ss(cz0 - cr, cz0, gz) * (1 - ss(cz1, cz1 + cr, gz))
+        M &= ~((gy < saw - (1 - cw) * .012) & (cw > .01) & (gy > cyc - .03))   # (at its ends the line slopes down, no step)
         sd = (ndimage.distance_transform_edt(M) - ndimage.distance_transform_edt(~M)) * SIDE_PX   # (+ in the hair, m)
         _, ind = ndimage.distance_transform_edt(~H0, return_indices=True); hair_c = col[ind[0], ind[1]]
         clean_sk = on & ~is_hair(col) & (col[..., 0] > 200) & (col[..., 0] - col[..., 2] > 80) & (col.mean(-1) > 160)
@@ -469,7 +491,27 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
             if up.any(): d[up] = bilinear(hcol, u[up], v[up])
             tex[q[:, 1], q[:, 0]] = c0 * (1 - w[:, None]) + d * w[:, None]
             painted[q[w > .5, 1], q[w > .5, 0]] = True; n_px += int((w > .5).sum())
-    return out, n_px, painted
+    # (by the eye, the hair's flaps the design cut away (SIDE_EYE_CUT) that the press could not lay down (the face turns
+    # to the front there: seen along x its skin is far in; a fin standing out of the temple at the eye's height, pointing
+    # at its corner, 10/11 night, Denis's photos) left out: the triangles there all in the hair's purple (not its ink),
+    # over SIDE_EYE_FIN_SHARE of them outside the design's hair by SIDE_EYE_FIN[3] m, away from the eyes; the skin is
+    # under them)
+    (fz0, fz1), (fy0, fy1), fx, fin_sd = SIDE_EYE_FIN
+    Ct = UV[I].mean(1) * TS; ct = tex0_[np.clip(Ct[:, 1].astype(int), 0, TS - 1), np.clip(Ct[:, 0].astype(int), 0, TS - 1)]
+    hairish_t = is_hair(ct) & (ct.mean(1) > SIDE_EYE_FLAP[0]) & (is_hair(vc) & (vc.mean(1) > SIDE_EYE_FLAP[0]))[I].all(1)
+    drop = np.zeros(len(I), bool); C3 = Q[I].mean(1)
+    for sg in (1, -1):
+        sdg = design[sg][4]; u_, v_ = to_g(Q[:, 2], Q[:, 1]); okg = (u_ >= 0) & (u_ < W - 1) & (v_ >= 0) & (v_ < H - 1)
+        sdv = np.full(len(Q), 9.); sdv[okg] = bilinear(sdg, u_[okg], v_[okg])
+        zone = (C3[:, 2] > fz0) & (C3[:, 2] < fz1) & (C3[:, 1] > fy0) & (C3[:, 1] < fy1) & (sg * (C3[:, 0] - X0) > fx)
+        cand = np.nonzero(zone & hairish_t & (egm[I] > .999).all(1) & ~eye_t)[0]
+        bw_ = np.array([(a / 4, b / 4, 1 - a / 4 - b / 4) for a in range(5) for b in range(5 - a)])   # (15 points over each)
+        for t in cand:
+            P_ = bw_ @ Q[I[t]]; u3, v3 = to_g(P_[:, 2], P_[:, 1]); ok3 = (u3 >= 0) & (u3 < W - 1) & (v3 >= 0) & (v3 < H - 1)
+            if ok3.sum() < 10: continue
+            drop[t] = (bilinear(sdg, u3[ok3], v3[ok3]) < -fin_sd).mean() > SIDE_EYE_FIN_SHARE
+    out['fins'] = int(drop.sum())
+    return out, n_px, painted, drop
 
 
 if __name__ == '__main__':
@@ -483,7 +525,7 @@ if __name__ == '__main__':
     sk = (vc[:, 0] > 230) & (vc[:, 0] - vc[:, 2] > 90) & (np.abs(Q[:, 0] - X0) > .04) & (Q[:, 1] > 1.5)
     skin_rgb = np.median(vc[sk], 0); print('side skin', skin_rgb)
     dbg = {} if len(sys.argv) > 2 else None
-    out, n, painted = sides(Q, N, UV, I, lb, tex, skin_rgb, debug=dbg)
+    out, n, painted, drop = sides(Q, N, UV, I, lb, tex, skin_rgb, debug=dbg)
     print('sides: points moved per side', out, '; texels painted', n)
     if dbg is not None: np.savez_compressed(sys.argv[2], **{'%s_%d' % (k, s): v for s in dbg for k, v in dbg[s].items()})
     def put(key, arr):
