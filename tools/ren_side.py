@@ -57,6 +57,12 @@ beside it): the eyes' box keeps the lids, the lashes and the skin, not the hair'
 there end at the eye's middle height in points leaning forward, as in the sheet (SIDE_EYE_CUT: the design under a saw's
 edge cut away); and the fins the press could not lay down there (the face turns to the front: seen along x its skin is
 far in) left out (SIDE_EYE_FIN: sides() returns them, ren_head.py drops them).
+Then (10/11 night, two more photos: a dark wedge and a mark behind the eye's corner, a hole in a lock over it): the eyes'
+box no longer keeps the paint off the points far from the whites under the eye's middle (SIDE_EYE_FAR: the skin behind
+and under the corner, and the fins on it); there, under the saw's line, the paint is the design's, its skin too (not the
+hair's colour for what stands off the skin: the skin's estimate is far too deep where the face turns to the front); and
+over the saw's line the notches between the locks are filled (SIDE_EYE_NOTCH) and the skin seen between them where the
+design has hair painted in the hair's colour (the face's front there was not painted: from three quarters, a hole).
 sides() also returns the texels it painted: the neck's marks (ren_head.py, NECK_CLEAN) leave them as they are.
 
 usage (prototyping on a head already made): python3 tools/ren_side.py HEAD_DIR [DEBUG.npz]"""
@@ -71,7 +77,7 @@ SIDE_SHEET = ('docs/ref/personaggi/ren_testa_dettagli.png', (1028, 0, 1536, 490)
 SIDE_EAR = (273, 263, 317, 347)          # the ear in the panel (x0, y0, x1, y1 px)
 SIDE_EAR_M = (-.008, 1.590, .042)        # where the drawn ear goes on the model: its centre (z, y m) and height (m): Meshy's
 SIDE_WIN = (-.090, .095, 1.490, 1.675)   # the window: z from, to; y from, to (m)
-SIDE_CORE = [(-.078, .014, 1.528, 1.660), (.014, .072, 1.572, 1.650)]   # its parts changed fully (z0, z1, y0, y1)
+SIDE_CORE = [(-.078, .014, 1.528, 1.660), (.014, .078, 1.572, 1.650)]   # its parts changed fully (z0, z1, y0, y1)
 SIDE_BAND = .004                         # m: their edges' fade (a gaussian)
 SIDE_PX = .00025                         # the side picture's m per px
 SIDE_OPEN, SIDE_CLOSE, SIDE_TEMPLE_Z = (7, 12), 4, .012   # px; px; m (see above)
@@ -92,6 +98,8 @@ SIDE_EYE_BOX = (.055, 1.570, 1.615, .058, .003)   # the eyes: z over [0], y betw
 SIDE_EYE_RINGS, SIDE_EYE_GUARD = 2, (.004, .008, .003, .006)   # m from the whites: no paint within [0], fully from [1]; no move: [2], [3]
 SIDE_EYE_NEAR = .008                     # m: the iris's colours count as the eye's within this of a white triangle
 SIDE_EYE_FLAP = (40, .050)               # see eyes(): the hair's flaps in the eyes' box: brighter than [0] (mean rgb: not ink), |x| over [1] m
+SIDE_EYE_FAR = (.008, 1.592)             # see eyes(): painted in the eyes' box, the points over [0] m from the whites, under [1] m
+SIDE_EYE_NOTCH = (.022, 16)              # see sides(): over the saw's line by up to [0] m, the notches narrower than 2 * [1] px filled
 SIDE_EYE_CUT = ((.050, .095, .010), (1.594, .0075, .0085, .72))   # see sides(): z from, to, ramp (m); the saw's line (y), its teeth's depth, spacing (m), their points' place across them (forward)
 SIDE_EYE_FIN = ((.035, .095), (1.570, 1.598), .045, .0005)   # see sides(): z, y, |x| over (m); outside the design's hair, inside it by (m)
 SIDE_EYE_FIN_SHARE = .55                 # see sides(): a triangle that far outside the design's hair (its share) left out
@@ -327,8 +335,12 @@ def eyes(Q, UV, I, tex):
     # corner, held up there by the box))
     vm = vc.mean(1); flap = is_hair(vc) & (vm > SIDE_EYE_FLAP[0]) & (np.abs(Q[:, 0] - X0) > SIDE_EYE_FLAP[1])
     keep = (1 - box * ~flap) * ~eye_v
+    # (and for the paint, not the points far from the whites under the eye's middle: the skin behind and under the eye's
+    # corner and the fins on it (10/11 night, Denis's photos: a dark wedge and a mark there); not the brows, above)
+    far = (d > SIDE_EYE_FAR[0]) & (Q[:, 1] < SIDE_EYE_FAR[1])
+    keep_p = (1 - box * ~(flap | far)) * ~eye_v
     g = SIDE_EYE_GUARD
-    return ss(g[0], g[1], d) * keep, ss(g[2], g[3], d) * keep, eye_t
+    return ss(g[0], g[1], d) * keep_p, ss(g[2], g[3], d) * keep, eye_t
 
 
 def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
@@ -393,6 +405,8 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
         saw = cyc - dk * np.where(f_ < cskew, f_ / cskew, (1 - f_) / (1 - cskew))
         cw = ss(cz0 - cr, cz0, gz) * (1 - ss(cz1, cz1 + cr, gz))
         M &= ~((gy < saw - (1 - cw) * .012) & (cw > .01) & (gy > cyc - .03))   # (at its ends the line slopes down, no step)
+        nz = (gz > cz0 - cr) & (gz < cz1) & (gy > cyc) & (gy < cyc + SIDE_EYE_NOTCH[0])   # (above it, the skin's notches between the
+        M |= ndimage.binary_closing(M, structure=disk(SIDE_EYE_NOTCH[1])) & nz & on & ~keep_skin   # locks filled: seen from the front, holes)
         sd = (ndimage.distance_transform_edt(M) - ndimage.distance_transform_edt(~M)) * SIDE_PX   # (+ in the hair, m)
         _, ind = ndimage.distance_transform_edt(~H0, return_indices=True); hair_c = col[ind[0], ind[1]]
         clean_sk = on & ~is_hair(col) & (col[..., 0] > 200) & (col[..., 0] - col[..., 2] > 80) & (col.mean(-1) > 160)
@@ -472,6 +486,7 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
             if eye_t[t]: continue
             a3 = sg * (Q[I[t], 0] - X0); u3, v3 = to_g(Q[I[t], 2], Q[I[t], 1])
             lifted = temple_v[I[t]].all() and (a3 - bilinear(hsk, u3, v3) > SIDE_LIFT).all()   # (a lock on the temple, standing out)
+            lifted = lifted and not (((Q[I[t], 2] > cz0 - cr) & (Q[I[t], 1] < cyc)).all() and (bilinear(sdd, u3, v3) < 0).all())
             tin = ((Q[I[t], 2] > ez0) & (Q[I[t], 2] < ez1) & (Q[I[t], 1] > ey0_) & (Q[I[t], 1] < ey1_)).all() and (bilinear(sdd, u3, v3) > .0005).all()
             if fnu[t, 2] > SIDE_FRONT and not tmoved[t] and not lifted and not tin: continue   # (the temple's skin under its hair: painted)
             fw = ss(SIDE_WALL[0], SIDE_WALL[1], abs(fnu[t, 0]))
@@ -481,6 +496,8 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
             q, u, v, P3 = q[ok], u[ok], v[ok], P3[ok]
             if not len(q): continue
             up = (sg * (P3[:, 0] - X0) - bilinear(hsk, u, v) > SIDE_LIFT) & (bilinear(ear_f, u, v) < .5)
+            eyez = (P3[:, 2] > cz0 - cr) & (P3[:, 1] < cyc)   # (by the eye, under the saw's line: the design, its skin too)
+            up &= ~eyez | (bilinear(sdd, u, v) > 0)
             w = np.maximum(bilinear(wg, u, v), 1. if tmoved[t] else 0.)
             if lifted: w = np.where(up, 1., w)   # (the temple's locks standing out: hair, in front of the window's parts too)
             w = w * (eg[I[t]].max() if tmoved[t] and blade[I[t]].all() else eg[I[t]].min()); sel = w > 1e-3   # (a lock moved near the eye:
@@ -491,6 +508,26 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
             if up.any(): d[up] = bilinear(hcol, u[up], v[up])
             tex[q[:, 1], q[:, 0]] = c0 * (1 - w[:, None]) + d * w[:, None]
             painted[q[w > .5, 1], q[w > .5, 0]] = True; n_px += int((w > .5).sum())
+    # (above the eye's corner, the skin seen between the locks where the design has hair (the face's front, not painted
+    # above: seen from three quarters a hole in the hair, 10/11 night, Denis's photo) in the hair's colour; its skin's
+    # texels only (not the brows' ink), away from the whites (SIDE_EYE_FAR[0] m)
+    whv = (vc.mean(1) > 215) & (vc.max(1) - vc.min(1) < 45) & (Q[:, 1] > 1.57) & (Q[:, 1] < 1.62) & (Q[:, 2] > .05)
+    dwv = cKDTree(Q[whv]).query(Q)[0] if whv.any() else np.full(len(Q), 9.)
+    for sg in (1, -1):
+        img, flat, hsk, hcol, sdd = design[sg]
+        for t in side_tris(sg):
+            if eye_t[t] or (dwv[I[t]] < SIDE_EYE_FAR[0]).any(): continue
+            P_ = Q[I[t]]
+            if not ((P_[:, 2] > cz0 - cr) & (P_[:, 2] < cz1) & (P_[:, 1] > cyc) & (P_[:, 1] < cyc + SIDE_EYE_NOTCH[0])).all(): continue
+            q, P3 = texels_wide(UV[I[t]] * TS, Q[I[t]], TS, covered)
+            if not len(q): continue
+            u, v = to_g(P3[:, 2], P3[:, 1]); ok = (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1)
+            q, u, v = q[ok], u[ok], v[ok]
+            if not len(q): continue
+            c0 = tex[q[:, 1], q[:, 0]]; skinc = (c0[:, 0] > 140) & (c0[:, 0] - c0[:, 2] > 45)
+            sel = skinc & (bilinear(sdd, u, v) > .0005)
+            if not sel.any(): continue
+            tex[q[sel, 1], q[sel, 0]] = bilinear(hcol, u[sel], v[sel]); painted[q[sel, 1], q[sel, 0]] = True; n_px += int(sel.sum())
     # (by the eye, the hair's flaps the design cut away (SIDE_EYE_CUT) that the press could not lay down (the face turns
     # to the front there: seen along x its skin is far in; a fin standing out of the temple at the eye's height, pointing
     # at its corner, 10/11 night, Denis's photos) left out: the triangles there all in the hair's purple (not its ink),

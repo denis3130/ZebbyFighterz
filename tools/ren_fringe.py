@@ -14,7 +14,9 @@ outline (pushed back to stop it splintering between them and the skin, fringe_ba
   - the sheet's locks there (its hair over the face: its purple and the black lines along it, not the brows nor the
     eyes) become one mesh: a pillow (LOCK_TH thick at most, thinner at the edges: from the side a solid lock, its edge
     the sheet's line) hanging from the crown's front edge (tucked TUCK behind it) down to GAP in front of the face at the
-    brows (BROW_Y) and below, its texture the sheet's front view, its alpha the locks' shape.
+    brows (BROW_Y) and below, its texture the sheet's front view, its alpha the locks' shape; under the brows (FLUSH)
+    closer to the face's own depth and thinner (10/11 night: from three quarters the long lock between the eyes stood
+    out of the face's edge as a strand down to the cheek).
 Writes OUT_DIR/<name>_fringe.json, .bin, .png ({v, verts, tris, pos, uv: float32, idx: uint16/32; each [byte offset,
 count]}; all on the Head bone, e_model.js mdFringeData); returns the head's triangles kept and paints the forehead in
 its texture (in place).
@@ -46,6 +48,7 @@ BACK = .01                                # the forehead's painting: not on what
                                           # seen through the holes between the brows, painted skin, showed as a skin V on the nape)
 BRIDGE, BRIDGE_SKIN = (.022, 1.575, 1.605, .004), (248, 182, 135)   # see fringe(): Meshy's lock tips on the nose's bridge; the skin's colour
 SPIKES = (.068, 1.572, 1.614, 0, .004)   # see fringe(): the eyes' band (x from the middle, y, -, depth to the face; m)
+FLUSH = (.006, .0012, .0005)              # see fringe(): under the brows over [0] m, the locks [1] m off the face, [2] m thick
 SIDE_CUT = (.052, .066)                   # m: the pillow's pieces further than [0] from the middle and behind [1] (past the eyes'
                                           # corners, over the temples: unseen from the front; from the side, once ren_side pressed
                                           # Meshy's temple locks onto the head, a light patch beside the brow) left out
@@ -222,6 +225,12 @@ def fringe(Q, N, UV, I, tex, name, out):
     # where the hairline comes down to the brows, at the sides, close to the face all along)
     tt = np.where(ycut[None, :] > BROW_Y + .008, np.clip((Y - BROW_Y) / np.maximum(ycut[None, :] - BROW_Y, 1e-4), 0, 1), 0.)
     zl = zsm + GAP + (np.maximum((zedge - TUCK)[None, :] - zsm, GAP) - GAP) * tt ** HANG
+    # (under the brows the locks closer to the face and thinner, FLUSH: 3-4 mm off it, from three quarters and from the
+    # side the long lock between the eyes stood out of the face's edge as a strand down to the cheek (10/11 night, Denis's
+    # photos); on the face's own depth there (not the smoothed one: over the nose's bridge)
+    sm_ = lambda e0, e1, x: (lambda u: u * u * (3 - 2 * u))(np.clip((x - e0) / (e1 - e0), 0, 1))
+    lowf = 1 - sm_(BROW_Y - FLUSH[0], BROW_Y, Y)
+    zl = np.where(lowf > 0, (zsm * (1 - lowf) + np.maximum(zsm, zfill) * lowf) + GAP + (FLUSH[1] - GAP) * lowf, zl)
     # the mesh: a grid over the locks (widened), front and back (the pillow), the texture's box
     area = ndimage.binary_dilation(L, iterations=6); rows, cl = np.nonzero(area)
     gi = np.arange(rows.min() - rows.min() % GRID, rows.max() + 1 + GRID, GRID); gj = np.arange(cl.min() - cl.min() % GRID, cl.max() + 1 + GRID, GRID)
@@ -234,7 +243,7 @@ def fringe(Q, N, UV, I, tex, name, out):
             for p in q:
                 if vid[p] < 0: vid[p] = nv; nv += 1
             A_, B_, C_, D_ = [vid[p] for p in q]; quads += [(A_, B_, C_), (A_, C_, D_)]
-    hh = LOCK_TH * np.sqrt(np.clip(ndimage.distance_transform_edt(L) * PX / LOCK_EDGE, 0, 1))
+    hh = LOCK_TH * np.sqrt(np.clip(ndimage.distance_transform_edt(L) * PX / LOCK_EDGE, 0, 1)) * (1 - lowf * (1 - FLUSH[2] / LOCK_TH))
     tr0, tc0, TH, TW = gi[0], gj[0], gi[-1] - gi[0] + 1, gj[-1] - gj[0] + 1
     pos = np.zeros((2 * nv, 3)); uvs = np.zeros((2 * nv, 2))
     for (p, q), kk in np.ndenumerate(vid):
