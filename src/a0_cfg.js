@@ -104,8 +104,10 @@ const CFG={
   // under it as a decal of their own (e_model mdFaceMat); head = the new head from Denis's 3-view sheet (tools/ren_head.py:
   // its old head, neck and collar's top hidden); paint = the drawing painted on the model (tools/paint_from_drawing.py,
   // ASSETS '<char>/<char>_painted.jpg') instead of Meshy's own paint; clips = CFG.clips entries of its own (by act).
-  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false, smoothNormals:false,
-    paint:false, clips:null}},
+  // Ren's look on in the game (10/11/2026, Denis: "ok perfetto ren ce lo abbiamo"): as the viewer shows it (v_viewer
+  // vwBoot), the drawing painted on him, and his guard A breathing (a191) in idle and intro.
+  looks:{ren:{fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, spikes:true, faceLine:true, line:{w:.007, back:.02}, flatFace:true, sash:true, faceShape:true, head:true, smoothNormals:true,
+    paint:true, clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
   // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
