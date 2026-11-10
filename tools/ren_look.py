@@ -50,6 +50,7 @@ HAND_W = .3          # vertices with at least this weight on a hand bone belong 
 LINE_FACE = .2       # outline width kept on the front of the face
 LINE_FINGER = .4     # and on the fingers
 LINE_THUMB = (.08, .92)   # none where the thumb's skin turns into the hand's (this share of it on the thumb's bones)
+LINE_RAMP = .02      # m: on the hands the outline grows from none to full over this (see main)
 LINE_PALM = .2       # nor on the hand's inner side (its normal this far toward the palm's): curled into the fist, it
                      # faces itself, its shell showed as black wedges in the gaps between the fingers (Denis: "lo spigolo")
 FLAT_BODY = 1.       # flat light on the front of the body (the drawing), as on the face
@@ -60,6 +61,7 @@ FREE = .80           # the free part of a finger (from the web between the finge
 THUMB_IP = .5        # the thumb's last joint: this share of its free part from the web
 BLEND = .35          # a joint's skin blend reaches this share of the shorter phalanx beside it, on each side
 FIST = (82, 100, 60)    # the fist: bend (degrees) at the knuckle, middle and last joint of a finger
+THUMB_SMOOTH = 20   # rounds the palm's share on the thumb's first bone is spread over its neighbours (see main)
 THUMB_ON = 1.1      # in the fist the thumb lies across the index and middle finger, this many radii in front of them
 NAMES = ('Thumb', 'Index', 'Middle', 'Ring', 'Pinky')
 # The sash's tails: on the model, orange below SASH_BAND (m) in pieces of at least SASH_MIN vertices (painted over,
@@ -103,6 +105,7 @@ BAND_T, BAND_TRUNK, BAND_Z = .03, (.8, .95), (-.04, .04)
 # normals (the mesh welded across its seams) averaged with their neighbours' NOR_ITER times (half each time), the hands'
 # kept (their weight, up to all of it: the fingers' small forms)
 NOR_ITER = 12
+HAND_NOR_ITER = 8    # the hands' light normals: smoothed this many rounds (not NOR_ITER: their knuckles kept)
 
 
 def qm(q):
@@ -738,7 +741,7 @@ def ribbon_of(t, P, sc, cx, by, mid, y0):
 
 def smooth_normals(P, I, keep_w):
     """Per vertex the normal of the welded surface smoothed (see NOR_ITER); keep_w (per vertex, 0-1): how much of its
-    own smoothed-once normal it keeps instead (the hands)."""
+    normal smoothed HAND_NOR_ITER rounds it keeps instead (the hands)."""
     from scipy.sparse import coo_matrix
     _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel(); nw = len(first)
     T = weld[I]; fn = np.cross(P[I[:, 1]] - P[I[:, 0]], P[I[:, 2]] - P[I[:, 0]])   # (area-weighted)
@@ -749,8 +752,9 @@ def smooth_normals(P, I, keep_w):
     A = coo_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr()
     deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1)
     own = Nw.copy(); S = Nw.copy()
-    for _ in range(NOR_ITER):
-        S = .5 * S + .5 * (A @ S) / deg[:, None]; S /= np.maximum(np.linalg.norm(S, axis=1, keepdims=True), 1e-12)
+    for k in range(max(NOR_ITER, HAND_NOR_ITER)):
+        if k == HAND_NOR_ITER: own = S.copy()   # (the hands' normals: HAND_NOR_ITER rounds; unsmoothed, the toon light's
+        S = .5 * S + .5 * (A @ S) / deg[:, None]; S /= np.maximum(np.linalg.norm(S, axis=1, keepdims=True), 1e-12)   # bands on the fists were blocks)
     kw = np.zeros(nw); np.maximum.at(kw, weld, keep_w)
     out = S * (1 - kw)[:, None] + own * kw[:, None]; out /= np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-12)
     return out[weld].astype(np.float32)
@@ -814,7 +818,7 @@ def main(pkg, out, drawing):
     _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True)
     weld = weld.ravel(); T = weld[I]
     E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
-    jn, wn = J.astype(np.int64).copy(), W.astype(np.float64).copy(); fingers = []; palms = []
+    jn, wn = J.astype(np.int64).copy(), W.astype(np.float64).copy(); fingers = []; palms = []; thumb_root = np.zeros(len(P)); on_finger = np.zeros(len(P))
     for side in ('Left', 'Right'):
         hi = idx[side + 'Hand']; w = ((J == hi) * W).sum(1); Gi = G[hi]; inv = np.linalg.inv(Gi)
         L = P @ inv[:3, :3].T + inv[:3, 3]
@@ -840,6 +844,32 @@ def main(pkg, out, drawing):
                 if s > 1e-4: inf[hi if k == 0 else base + k - 1] = inf.get(hi if k == 0 else base + k - 1, 0) + s * w[v]
             top = sorted(inf.items(), key=lambda kv: -kv[1])[:4]; tot = sum(b for _, b in top)
             jn[v] = [a for a, _ in top] + [0] * (4 - len(top)); wn[v] = [b / tot for _, b in top] + [0] * (4 - len(top))
+        # the thumb's root: the palm's share on the thumb's first bone spread over its neighbours (THUMB_SMOOTH rounds of
+        # their mean; the thumb's own vertices and those off the hand stay): turned some 55 degrees in the fist, the palm's
+        # piece that went with it whole stood out of the thumb's side of the fist as a flat fin with a sharp corner (10/11,
+        # Denis: "lo spigolo che ti avevo cerchiato ... rende le mani innaturali"); spread, that side bends round. The
+        # outline keeps its rules on the weights as they were (LINE_THUMB, LINE_FINGER)
+        t1 = base; vv = np.nonzero(w >= HAND_W)[0]
+        thumb_root[vv] = (wn[vv] * np.isin(jn[vv], [base, base + 1, base + 2])).sum(1); on_finger[vv] = (wn[vv] * (jn[vv] >= len(bones))).sum(1)
+        share = np.zeros(len(first)); cnt = np.zeros(len(first)); np.add.at(share, weld[vv], (wn[vv] * (jn[vv] == t1)).sum(1)); np.add.at(cnt, weld[vv], 1)
+        share[cnt > 0] /= cnt[cnt > 0]
+        free_ = ins & (lab != fg[0]['k']); fu = np.nonzero(free_)[0]
+        for _ in range(THUMB_SMOOTH):
+            new = share.copy()
+            for u in fu:
+                if nb[u]: new[u] = .5 * share[u] + .5 * np.mean([share[x] for x, _ in nb[u]])
+            share = new
+        nch = 0
+        for v in vv:
+            if not free_[weld[v]]: continue
+            d_ = share[weld[v]] - (wn[v] * (jn[v] == t1)).sum()
+            if abs(d_) < 1e-4: continue
+            inf = {int(a): float(b) for a, b in zip(jn[v], wn[v]) if b > 0}
+            inf[t1] = inf.get(t1, 0) + d_; inf[hi] = inf.get(hi, 0) - d_
+            inf = {a: max(b, 0.) for a, b in inf.items() if b > 1e-5}
+            top = sorted(inf.items(), key=lambda kv: -kv[1])[:4]; tot = sum(b for _, b in top)
+            jn[v] = [a for a, _ in top] + [0] * (4 - len(top)); wn[v] = [b / tot for _, b in top] + [0] * (4 - len(top)); nch += 1
+        print(side, 'hand: the thumb\'s root spread over', nch, 'palm vertices')
         print(side, 'hand: thumb side', thumb, 'fingers', [int((lab == F['k']).sum()) for F in fg], 'vertices on them')
     if len(bones) + len(fingers) > 255: sys.exit('too many bones for uint8 skin indices')
     # --- the band's back on the hips (band_on_hips): it no longer stretches when the thighs and the spine bend ---
@@ -909,13 +939,23 @@ def main(pkg, out, drawing):
     skin = (col[:, 0] > 150) & (col[:, 1] > 95) & (col[:, 0] - col[:, 2] > 50)
     face = (wh >= .5) & (N[:, 2] > .15) & skin
     line = np.ones(len(P), np.float32); line[face] = LINE_FACE
-    on = (wn * (jn >= len(bones))).sum(1); line = np.minimum(line, 1 - (1 - LINE_FINGER) * on).astype(np.float32)
-    thumbs = [len(bones) + k for k, F in enumerate(fingers) if 'Thumb' in F['n']]
-    tw = (wn * np.isin(jn, thumbs)).sum(1); web = (tw > LINE_THUMB[0]) & (tw < LINE_THUMB[1]); line[web] = 0
+    on = on_finger; line = np.minimum(line, 1 - (1 - LINE_FINGER) * on).astype(np.float32)
+    tw = thumb_root; web = (tw > LINE_THUMB[0]) & (tw < LINE_THUMB[1]); line[web] = 0
     inner = np.zeros(len(P), bool)
     for w, pn in palms: inner |= (w + on > .5) & (N @ pn > LINE_PALM)
     line[inner] = 0
-    print('outline thinned on', int(face.sum()), 'face and', int((on > 0).sum()), 'finger vertices; none on', int(web.sum()), 'of the thumbs\' roots and', int(inner.sum()), 'of the hands\' inner side')
+    # (and on the hands, the outline's width no more than the distance over the mesh to where it is none (the thumb's
+    # root, the palm) over LINE_RAMP: a full width beside none tilted the outline's shell out through the thumb's side of
+    # the fist, a black flag)
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra
+    hw_ = sum(((J == idx[s_ + 'Hand']) * W).sum(1) for s_ in ('Left', 'Right')); nw_ = len(first)
+    hwm = np.zeros(nw_); np.maximum.at(hwm, weld, hw_); lwm = np.full(nw_, 9.); np.minimum.at(lwm, weld, line)
+    z_ = np.nonzero((lwm < .01) & (hwm > .3))[0]; Le = np.linalg.norm(P[first][E[:, 0]] - P[first][E[:, 1]], axis=1)
+    G_ = coo_matrix((np.r_[Le, Le, np.full(len(z_), 1e-9)], (np.r_[E[:, 0], E[:, 1], np.full(len(z_), nw_)], np.r_[E[:, 1], E[:, 0], z_])), shape=(nw_ + 1, nw_ + 1)).tocsr()
+    cap = np.where(hwm > .3, np.clip(dijkstra(G_, indices=nw_)[:nw_] / LINE_RAMP, 0, 1), 1.)
+    ramped = int((cap[weld] < line - 1e-4).sum()); line = np.minimum(line, cap[weld]).astype(np.float32)
+    print('outline thinned on', int(face.sum()), 'face and', int((on > 0).sum()), 'finger vertices; none on', int(web.sum()), 'of the thumbs\' roots and', int(inner.sum()), 'of the hands\' inner side;', ramped, 'ramped to them')
     flat = np.maximum(smooth(.05, .45, N[:, 2]) * smooth(.3, .7, wh), FLAT_BODY * smooth(.1, .45, N[:, 2]))
     # the middle of the face all flat (the nose's sides and underside too: the drawn nose has its shadow in the face
     # decal; the toon light's bands on its few facets read as a pink and a brown patch), and no outline on the nose
@@ -942,7 +982,7 @@ def main(pkg, out, drawing):
     ob = len(blob); blob += blend.tobytes(); om = len(blob); blob += moved.astype(np.uint16).tobytes()
     handw = sum(((J == idx[s_ + 'Hand']) * W).sum(1) for s_ in ('Left', 'Right'))
     nsm = smooth_normals(P, I, np.clip(handw / .5, 0, 1)); blob += b'\0' * (-len(blob) % 4); onor = len(blob); blob += nsm.tobytes()   # (float32: 4-aligned)
-    print('normals smoothed for the light: %d vertices (%d rounds; the hands kept)' % (len(nsm), NOR_ITER))
+    print('normals smoothed for the light: %d vertices (%d rounds; the hands %d)' % (len(nsm), NOR_ITER, HAND_NOR_ITER))
     fn = face_and_neck(face_mask, hs, col, P)
     dbox, dz, dnx, dny, ddata = face_depth(P, I, fn)
     odm = len(blob); blob += ddata
