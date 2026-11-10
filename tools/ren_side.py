@@ -30,7 +30,12 @@ depth, the innermost's depth), its parts SIDE_CORE changed fully, fading over SI
   not pressed down: seen from the front) in the hair's colours, not the design's skin; not the face's front (normal's
   share along z over SIDE_FRONT, unless moved).
 - the eyes kept: their triangles (whites or iris in their texels, SIDE_EYE_RINGS rings around), a box (SIDE_EYE_BOX)
-  and SIDE_EYE_GUARD m around their whites neither moved nor painted.
+  and SIDE_EYE_GUARD m around their whites neither moved nor painted;
+- on the temple to the eye's corner (SIDE_TEMPLE, as ren_head.TEMPLE_LINE, but for the points as they are after the
+  moves and further out: its locks came from outside that box) the outline pushed back SIDE_TEMPLE[3] m (inside the head
+  the locks' edges seen from three quarters drew black hooks; the silhouette keeps its line), and the locks there
+  standing out over the skin in the hair's colours even in front of the window's parts (their light undersides, seen
+  from the front: streaks), facing the front or not (the face's front, lying on the skin, stays).
 sides() also returns the texels it painted: the neck's marks (ren_head.py, NECK_CLEAN) leave them as they are.
 
 usage (prototyping on a head already made): python3 tools/ren_side.py HEAD_DIR [DEBUG.npz]"""
@@ -44,7 +49,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SIDE_SHEET = ('docs/ref/personaggi/ren_testa_dettagli.png', (1028, 0, 1536, 490))   # (the sheet, its profile panel: x0, y0, x1, y1 px)
 SIDE_EAR = (273, 263, 317, 347)          # the ear in the panel (x0, y0, x1, y1 px)
 SIDE_EAR_M = (-.008, 1.590, .042)        # where the drawn ear goes on the model: its centre (z, y m) and height (m): Meshy's
-SIDE_WIN = (-.090, .080, 1.490, 1.675)   # the window: z from, to; y from, to (m)
+SIDE_WIN = (-.090, .095, 1.490, 1.675)   # the window: z from, to; y from, to (m)
 SIDE_CORE = [(-.078, .014, 1.528, 1.660), (.014, .072, 1.572, 1.650)]   # its parts changed fully (z0, z1, y0, y1)
 SIDE_BAND = .004                         # m: their edges' fade (a gaussian)
 SIDE_PX = .00025                         # the side picture's m per px
@@ -54,6 +59,7 @@ SIDE_SPECK, SIDE_HOLE, SIDE_BIG = 160, 2500, 4000   # px (see above)
 SIDE_SOFT_EDGE = 1.5                     # px: the cleaned outline smoothed (a gaussian, cut at its half)
 SIDE_TOP_PX = 12                         # px: the hair is the dark joined to the window's top rows
 SIDE_EAR_PAD, SIDE_NEAR_EAR = .0005, .006   # m (see above)
+SIDE_EAR_LINE = (1.1, 2.0)               # the sheet's px: the ear's outline line's width; its mask softened (see sheet_ear())
 SIDE_INK = (.0007, .00015)               # m: the ink line's width, its edges' softness
 SIDE_SKIN_UP, SIDE_RAISE, SIDE_INSINK = .0006, .001, .0012   # m (see above)
 SIDE_CONE, SIDE_DEEP = (.001, 1.2, .002), .004   # see above
@@ -61,8 +67,9 @@ SIDE_FLAP = ((-.090, .076, 1.520, 1.675), .003)   # see above
 SIDE_FLOOR, SIDE_EDGE_STEPS = 1.515, 3   # see above
 SIDE_MOVED, SIDE_WALL, SIDE_LIFT, SIDE_FRONT = .001, (.2, .45), .002, .6   # see above
 SIDE_EYE_BOX = (.055, 1.570, 1.615, .058, .003)   # the eyes: z over [0], y between [1] and [2], under [3] m from the middle; its margin [4]
-SIDE_EYE_RINGS, SIDE_EYE_GUARD = 2, (.004, .008, .006, .012)   # m from the whites: no paint within [0], fully from [1]; no move: [2], [3]
+SIDE_EYE_RINGS, SIDE_EYE_GUARD = 2, (.004, .008, .003, .006)   # m from the whites: no paint within [0], fully from [1]; no move: [2], [3]
 SIDE_LINE, SIDE_GROW = .03, 2.5          # m; px of the painted triangles' texels around them, in the texture's gaps
+SIDE_TEMPLE = ((.045, .13), (1.555, 1.665), (-.03, .085), .1, .004)   # see above: |x| from the middle, y, z (m); the push (m), its ramp (m)
 X0 = .006                                # the head's middle (x, m)
 INK = np.array([22., 20, 26]); HAIR = np.array([[22., 20, 26], [58, 48, 58], [75, 64, 73], [113, 94, 102]])   # (ren_hair.HAIR_TONES)
 SHADE = np.array([.82, .74, .72])        # (ren_hair.SKIN_SHADE)
@@ -90,7 +97,8 @@ def sheet_classes():
 
 
 def sheet_ear(skin_rgb):
-    """The panel's ear (mask), its skin (mask) and its drawing in the head's colours (float (h, w, 3))."""
+    """The panel's ear (a soft mask, float: over .5 the ear), its skin (mask) and its drawing in the head's colours (float
+    (h, w, 3))."""
     k = sheet_classes()
     sk = (k == 1) | (k == 2); sk = ndimage.binary_closing(sk, iterations=2) | sk
     ex0, ey0, ex1, ey1 = SIDE_EAR
@@ -98,9 +106,21 @@ def sheet_ear(skin_rgb):
     lab, n = ndimage.label(ear); cy, cx = (ey0 + ey1) // 2, (ex0 + ex1) // 2
     ear = lab == lab[cy, cx] if lab[cy, cx] else ear
     ear = ndimage.binary_fill_holes(ear)
-    pal = np.array([HAIR[1], skin_rgb, np.asarray(skin_rgb) * SHADE, INK, HAIR[1], HAIR[2], HAIR[3]], float)
-    img = np.stack([ndimage.gaussian_filter(pal[k][..., c], .8) for c in range(3)], -1)
-    return ear, sk | ((k == 3) & ndimage.binary_dilation(sk, iterations=2)), img
+    # (its outline smooth: the mask softened, SIDE_EAR_LINE[1] px; its drawing the sheet's own colours in the head's skin,
+    # each channel scaled by the head's skin over the sheet's: its lines and shades as crisp as the sheet's, not classes
+    # (their anti-aliased edges, taken for the hair's colours, beaded the outline); a line SIDE_EAR_LINE[0] px wide along
+    # its free edge, inside it (10/11, Denis: "migliora leggermente i contorni dell'orecchio"); not where it joins the face)
+    earf = ndimage.gaussian_filter(ear.astype(float), SIDE_EAR_LINE[1])
+    root = os.path.join(HERE, '..'); x0, y0, x1, y1 = SIDE_SHEET[1]
+    P = np.asarray(Image.open(os.path.join(root, SIDE_SHEET[0])).convert('RGB')).astype(float)[y0:y1, x0:x1]
+    s_skin = np.median(P[ey0:ey1, ex0:ex1][k[ey0:ey1, ex0:ex1] == 1], 0)
+    img = np.clip(np.asarray(skin_rgb, float) * P / s_skin, 0, 255)
+    ins = ndimage.distance_transform_edt(earf > .5) - .5
+    ring = ~(earf > .5) & ndimage.binary_dilation(earf > .5, iterations=2)   # (outside, along the outline: where the sheet has
+    attached = ndimage.binary_dilation(ring & ((k == 1) | (k == 2)), iterations=3)   # skin there, the ear joins the face: no line)
+    ink = (1 - ss(SIDE_EAR_LINE[0] - .5, SIDE_EAR_LINE[0] + .5, ins)) * ~attached
+    img = img * (1 - ink[..., None]) + INK * ink[..., None]
+    return earf, sk | ((k == 3) & ndimage.binary_dilation(sk, iterations=2)), img
 
 
 def to_panel(z, y):
@@ -286,7 +306,7 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
     ear_p, sheet_skin, ear_img = sheet_ear(skin_rgb)
     pu, pv = to_panel(gz, gy); iu, iv = np.round(pu).astype(int), np.round(pv).astype(int)
     inp = (iu >= 0) & (iu < ear_p.shape[1]) & (iv >= 0) & (iv < ear_p.shape[0])
-    ear_g = np.zeros((H, W), bool); ear_g[inp] = ear_p[iv[inp], iu[inp]]
+    ear_g = bilinear(ear_p, pu.ravel(), pv.ravel()).reshape(H, W) > .5   # (the soft mask sampled: a smooth outline)
     near_g = np.zeros((H, W), bool); near_g[inp] = sheet_skin[iv[inp], iu[inp]]
     d_ear = ndimage.distance_transform_edt(~ear_g) * SIDE_PX
     keep_skin = (d_ear < SIDE_EAR_PAD) | (near_g & (d_ear < SIDE_NEAR_EAR))
@@ -364,6 +384,9 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
     for c in range(3): np.add.at(Nw, weld[I[:, c]], fn)
     Nw /= np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12); N[sel] = Nw[weld[sel]]
     lb[:] = np.maximum(lb, SIDE_LINE * ss(.3, .7, win_w))
+    (tx0, tx1), (ty0, ty1), (tz0, tz1), tpush, tramp = SIDE_TEMPLE; ax = np.abs(Q[:, 0] - X0)
+    inside = np.minimum.reduce([ax - tx0, tx1 - ax, Q[:, 1] - ty0, ty1 - Q[:, 1], Q[:, 2] - tz0, tz1 - Q[:, 2]])
+    temple_v = inside > 0; lb[:] = np.maximum(lb, tpush * np.clip(inside / tramp, 0, 1))
     # the paint (see above)
     cov = Image.new('L', (TS, TS), 0); dr = ImageDraw.Draw(cov)
     for tr_ in UV[I] * TS: dr.polygon([tuple(v) for v in tr_], fill=255)
@@ -373,18 +396,23 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
     for sg in (1, -1):
         img, flat, hsk, hcol = design[sg]
         for t in side_tris(sg):
-            if (fnu[t, 2] > SIDE_FRONT and not tmoved[t]) or eye_t[t]: continue
+            if eye_t[t]: continue
+            a3 = sg * (Q[I[t], 0] - X0); u3, v3 = to_g(Q[I[t], 2], Q[I[t], 1])
+            lifted = temple_v[I[t]].all() and (a3 - bilinear(hsk, u3, v3) > SIDE_LIFT).all()   # (a lock on the temple, standing out)
+            if fnu[t, 2] > SIDE_FRONT and not tmoved[t] and not lifted: continue
             fw = ss(SIDE_WALL[0], SIDE_WALL[1], abs(fnu[t, 0]))
             q, P3 = texels_wide(UV[I[t]] * TS, Q[I[t]], TS, covered)
             if not len(q): continue
             u, v = to_g(P3[:, 2], P3[:, 1]); ok = (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1)
             q, u, v, P3 = q[ok], u[ok], v[ok], P3[ok]
             if not len(q): continue
-            w = np.maximum(bilinear(wg, u, v), 1. if tmoved[t] else 0.) * eg[I[t]].min(); sel = w > 1e-3
-            if not sel.any(): continue
-            q, u, v, w, P3 = q[sel], u[sel], v[sel], w[sel], P3[sel]
-            c0 = tex[q[:, 1], q[:, 0]]; d = bilinear(img, u, v) * fw + bilinear(flat, u, v) * (1 - fw)
             up = (sg * (P3[:, 0] - X0) - bilinear(hsk, u, v) > SIDE_LIFT) & (bilinear(ear_f, u, v) < .5)
+            w = np.maximum(bilinear(wg, u, v), 1. if tmoved[t] else 0.)
+            if lifted: w = np.where(up, 1., w)   # (the temple's locks standing out: hair, in front of the window's parts too)
+            w = w * eg[I[t]].min(); sel = w > 1e-3
+            if not sel.any(): continue
+            q, u, v, w, P3, up = q[sel], u[sel], v[sel], w[sel], P3[sel], up[sel]
+            c0 = tex[q[:, 1], q[:, 0]]; d = bilinear(img, u, v) * fw + bilinear(flat, u, v) * (1 - fw)
             if up.any(): d[up] = bilinear(hcol, u[up], v[up])
             tex[q[:, 1], q[:, 0]] = c0 * (1 - w[:, None]) + d * w[:, None]
             painted[q[w > .5, 1], q[w > .5, 0]] = True; n_px += int((w > .5).sum())
