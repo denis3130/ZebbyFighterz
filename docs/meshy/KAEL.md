@@ -10,7 +10,7 @@ pronto in `wip_assets/kael/`: `mk.sh` lo mette solo nell'anteprima di Kael (`vie
 gioco usa un pacchetto Meshy appena lo trova in `assets/` o `viewer_assets/`: `src/d_render.js`, `modelBuild(c) ||
 fighterBuild(c)`). Per metterlo nel gioco: spostare `wip_assets/kael/` in `viewer_assets/kael/`, test, pubblicare.
 
-## Task Meshy e crediti (saldo prima: 1100, dopo: 1030)
+## Task Meshy e crediti (saldo prima: 1100, dopo: 1000)
 | Passo | Task | Crediti |
 |---|---|---|
 | Corpo senza capelli né vestiti (`kael_base.png`) — superato | image-to-3d `01a1c4dd-548a-70d1-9dad-05e513084c49` | 30 |
@@ -18,7 +18,8 @@ fighterBuild(c)`). Per metterlo nel gioco: spostare `wip_assets/kael/` in `viewe
 | **Kael vestito** (`kael_nero.png`; meshy-7 standard, texture 2K, A-pose, image enhancement off, luci tolte) | image-to-3d `01a1c53b-d7ee-776a-9170-273efbf5504f` | 30 |
 | **Scheletro** (1,8 m) sul modello alleggerito | rigging `01a1c53f-c3ef-76e8-82bd-4186736248a3` | 5 |
 | Animazioni: le 25 di Ren, riportate sul suo scheletro | nessun task | 0 |
-| **Totale** | | **70** |
+| **Testa e capelli** dalle 4 immagini di Denis (vedi "Testa da Meshy") | multi-image-to-3d `01a1c6e9-6c56-778a-a146-b95efc0bfed6` | 30 |
+| **Totale** | | **100** |
 
 Il primo corpo (senza vestiti, per vestirlo in codice) è stato lasciato: la forma gonfiata per i pantaloni larghi non
 andava (Denis: "perché l'hai ingrossato così tanto?"), i vestiti solo dipinti sul corpo aderente sembravano una tuta e
@@ -65,25 +66,46 @@ disegno (antracite 46,45,48 e pieghe 14,13,15, seguendo le pieghe dipinte da Mes
 corpo è in luce piatta come quello di Ren (i colori del disegno, senza le bande scure della luce). In guardia la figura
 ha luminosità media 79 (prima 74, disegno 77), la tuta 38.
 
-## Proposta (10/11, da approvare): la testa di Ren su Kael (`tools/kael_ren_head.py`)
-Denis, dopo la versione 7 (tolta: "fa schifo dio cane non rifarlo senza il mio permesso"): "prendi solo la testa di ren
-e mettila a kael poi falla nel suo stile", "non è il problema il mento ma tutta la faccia". Fatto senza Meshy e senza
-pubblicare: **le immagini vanno a Denis e si pubblica solo col suo ok**.
-- La testa nuova di Ren (`viewer_assets/ren/ren_head.*`, approvata da Denis) e le sue ciocche sul viso
-  (`ren_fringe.*`) portate sullo scheletro di Kael (le stesse 24 ossa): capelli, viso, orecchie, occhi, collo; non il
-  colletto verde, il bordo crema e la maglia di Ren (Kael tiene il suo colletto alto).
-- Posizione: gli occhi dove erano quelli di Kael (la testa di Ren finiva 1 cm più in basso e 1,3 cm di lato: il
-  mento affondava nel colletto e lo apriva). Il mento cade così dove lo disegna `kael_nero.png`.
-- La testa di Kael è nascosta (i triangoli sull'osso della testa), ma non il suo colletto (nero e viola sotto 1,545 m).
-- Colori di Kael (dal foglio della testa): capelli nei due lavanda del foglio, righe nere solo dove sono sottili
-  (le parti scure larghe dei capelli di Ren diventano l'ombra lavanda), iridi viola (i due cerchi delle iridi di Ren),
-  pelle com'è (è la stessa nei due fogli).
-- Orecchini come nel foglio: gancio d'argento, perlina viola, cristallo viola a sei facce con un riflesso bianco,
-  appesi ai lobi di Ren, contorno sottile (`src/e_model.js`: la testa nuova legge la larghezza del contorno per
-  vertice, `line`; per Ren non cambia niente).
-- Nel look: `CFG.looks.kael.head:true`. Per tornare alla versione 6: togliere `head:true`.
-- Diverso dal foglio: la forma dei capelli è quella di Ren (più corti e a punte, il foglio ha una criniera larga), le
-  orecchie restano sotto i capelli.
+## Testa da Meshy (10/11, da approvare): `tools/kael_head.py`
+Denis: "se facessimo kael a pezzi su meshy? cioe prima testa e capelli e poi busto e braccia ed infine gambe e piedi?".
+Ha fatto le immagini della testa: fronte, due profili, dietro (`docs/ref/personaggi/kael_testa_fronte.png`,
+`_profilo_dx.png`, `_dietro.png`, `_profilo_sx.png`; più due di tre quarti, `_34_dx.png` e `_34_sx.png`, per i
+controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e si pubblica solo col suo ok.**
+- Task: multi-image-to-3d con le 4 immagini in quest'ordine (fronte, profilo dx, dietro, profilo sx), texture 4k
+  senza PBR, con un texture prompt della testa; 30 crediti, saldo da 1030 a 1000. Il GLB è in
+  `meshy/meshy_output/20261110_192241_voidrise-kael-testa_01a1c6e9/testa_k1.glb`.
+- Rifarla:
+  1. `python3 tools/mesh_prep/decimate_glb.py meshy/meshy_output/20261110_192241_voidrise-kael-testa_01a1c6e9/testa_k1.glb meshy/head/kael_k1_face.glb 23000 5000 -0.25 0.40 -0.62 0.15 0.2 4000 -0.50`
+     — 23.000 triangoli: 5.000 nel viso, 4.000 nel colletto (con meno triangoli il bordo viola veniva a denti), il
+     resto ai capelli.
+  2. `python3 tools/kael_head.py meshy/head/kael_k1_face.glb` (scrive `wip_assets/kael/kael_head.*` e toglie i
+     `kael_fringe.*` della proposta di prima), poi `bash mk.sh`.
+- Grandezza e posto: occhi e mento dove li ha il disegno intero (`kael_nero.png`); così anche la cima dei capelli e la
+  loro larghezza vengono come nel disegno. Il collo va sull'asse del colletto del corpo.
+- Colletto: è quello della testa, cioè quello delle immagini (alto, bordo viola, aperto davanti). È allargato alla
+  misura del colletto del corpo e prende il posto della sua parte alta. Quello del corpo arrivava 2-4 cm sopra la
+  mascella nuova, col bordo viola di traverso, e senza la testa vecchia era un guscio sottile e bucato.
+- Ossa:
+  - viso e capelli sulla testa;
+  - collo e nuca che passano dal collo alla testa salendo;
+  - colletto rigido: le spalle passano alla schiena e in cima è metà testa e metà collo. Prima il bordo si
+    sfrangiava nella presa e nel calcio alto, e la pelle del collo si stirava.
+- Colori dalle immagini:
+  - capelli nei loro due lavanda, con tanta ombra quanta se ne vede nelle immagini (36-41%);
+  - pelle e sua ombra;
+  - tolta la riga chiara sul naso;
+  - bordo del colletto viola, non scambiato per i capelli.
+- Contorno: sottile su capelli (0,55) e orecchini (0,3). Per le ciocche davanti al viso è spinto dietro il viso, come
+  per Ren: prima faceva fasce nere sul viso.
+- Controllato:
+  - da 6 lati contro le immagini, e il viso da vicino;
+  - Kael intero in tutte le mosse;
+  - collo e colletto da 8 lati, da vicino, anche solo la testa, solo il corpo e senza contorni, in guardia, presa,
+    calcio alto e montante.
+- Nel look: `CFG.looks.kael.head:true`. Per tornare alla versione 6, togliere `head:true`. La proposta con la testa di
+  Ren (`tools/kael_ren_head.py`) è superata.
+- Per dopo: il busto e le braccia, poi le gambe e i piedi da Meshy (il piano di Denis), sempre con saldo, costo e ok
+  prima. Col busto nuovo il colletto verrà dal busto.
 
 ## Versione 6 (10/11): capelli, mascella, tuta uguale davanti e dietro
 Denis: "continua a migliorare il viso ed tutto il resto fino a che non viene quasi identico alle foto di kael".

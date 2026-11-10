@@ -1,0 +1,325 @@
+#!/usr/bin/env python3
+"""Kael's new head (10/11/2026, Denis: "se facessimo kael a pezzi su meshy? cioe prima testa e capelli e poi busto e
+braccia ed infine gambe e piedi?"): Meshy's multi-image bust from his four head images (docs/ref/personaggi/
+kael_testa_fronte, _profilo_dx, _dietro, _profilo_sx.png; docs/meshy/KAEL.md, "Testa da Meshy"), decimated
+(tools/mesh_prep/decimate_glb.py: the face and the collar denser), placed on Kael's bind pose, skinned to his bones,
+his own head and his collar's top hidden, coloured as his head images.
+
+- Where (BUST: measured on the bust's front and side views, in its own units; DRAW: kael_nero.png, the full drawing the
+  body was made from, through its scan camera docs/meshy/kael_scan.json): its eyes' line and chin on the drawing's (the
+  head as big as drawn: its hair's top and width come out as drawn too), its neck's axis on the body's collar's (x, z).
+- What is taken: all of it above CUT_Y (its bottom's cap left out). Its collar (the images': high, its purple trim just
+  under the chin, open in front) widened to the size of Kael's at each height and side, his own above HIDE_COLLAR hidden
+  under it (it rose 2-4 cm over the new jaw, its purple rim across it, and with the old head hidden it was a thin
+  broken shell).
+- Skin: the Head bone for the face, the hair, the ears and the earrings; the neck and the nape from the collar's top
+  shares (COLLAR_TOP) to the Head up to the jaw in front and NAPE_Y behind; the collar as his collar's nearest point at
+  its bottom, stiff higher up (COLLAR_STIFF: the shoulders' share to the spine), at its top COLLAR_TOP's shares of the
+  Head and the neck, smoothed over its neighbours.
+- Kael's own head hidden: his triangles on the Head bone (their share over HIDE_W).
+- Colours (his head images'): the hair in their two lavenders (light and shadow, by the paint's lightness, the shadow
+  HAIR_SHADOW of it) with its black lines; the skin's main tone and its shadow moved to theirs (SKIN); the light marks
+  Meshy left on the face's skin (the nose's sheen) painted as skin. Light: flat (the texture's own colour), the
+  collar's as his collar's there; the hair's and the earrings' outline thinner, pushed back behind the face where the
+  locks hang over it.
+
+usage: python3 tools/kael_head.py BUST.glb   (writes wip_assets/kael/kael_head.json, .bin, .jpg and removes the
+kael_fringe.* of the earlier proposal, tools/kael_ren_head.py: this head draws its own locks; Kael's look needs head:true
+in CFG.looks.kael)"""
+import io, json, os, sys
+import numpy as np
+from PIL import Image
+from scipy import ndimage
+from scipy.spatial import cKDTree
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mesh_prep'))
+import glbio
+from paint_views import texel_table
+from kael_ren_head import lum_split
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+KAEL_PKG = os.path.join(ROOT, 'wip_assets/kael')
+# the bust (its own units): the eyes' line (y), the chin (y), the neck's axis (x, z: its skin's circle under the jaw),
+# the earrings' boxes (x, y, z ranges)
+BUST = {'eyes': -.09, 'chin': -.59, 'neck': (.078, -.010),
+        'ears': (((-.37, -.22), (-.58, -.21), (-.12, .22)), ((.36, .51), (-.58, -.21), (-.12, .22)))}
+DRAW = {'eyes': 152., 'chin': 220., 's': 831.682, 'by': 1478.11}   # kael_nero.png's rows; its scan camera (px per m, feet)
+BODY_NECK = (.0085, -.005)   # m: the body's collar's top ring's centre (x, z; fit over 1.50-1.52 m)
+CUT_Y, JAW_Y, NAPE_Y = 1.464, 1.512, 1.545   # m: under CUT_Y the bust is left out (its bottom's cap); above JAW_Y in
+                             # front, NAPE_Y behind, all on the Head
+HIDE_W = .9                  # Kael's triangles on his Head bone, their share over this: hidden
+# the collar (see main): the bust's (its cloth up to COLLAR_GAP m over its trim's top at each side) widened to his
+# (within COLLAR_R m of the neck's axis; per COLLAR_DY m and COLLAR_BIN degrees around it; fit up to COLLAR_FIT m),
+# COLLAR_OUT m outside it; his own above HIDE_COLLAR m hidden; NECK_Y: the neck's skin turns toward the Head from there
+COLLAR_R, COLLAR_BIN, COLLAR_DY, COLLAR_GAP, COLLAR_FIT, COLLAR_OUT, HIDE_COLLAR, NECK_Y = .1, 15, .004, .002, 1.50, .0015, 1.483, 1.50
+COLLAR_GROW, COLLAR_RINGS, COLLAR_F = .006, 3, (.8, 1.9)   # (see main: its cloth's neighbours; its widening's range)
+COLLAR_STIFF, COLLAR_TOP, COLLAR_SMOOTH = (1.465, 1.495, .9), (1.475, .5), 4   # (see main: its skin)
+COLLAR_Y = 1.545             # m: the bust's collar skinned as his collar's nearest point under this (his old rim's too)
+HAIR = ((227, 214, 229), (143, 125, 158))   # the images' hair: light, shadow (k-means of their hair's pixels)
+HAIR_SHADOW, HAIR_BLUR, HAIR_LINE = .52, 2., 70   # the shadow's share of the texels (.52: about .38 of what shows, as on the images); its smoothing (texels); its lines: darker (kept)
+SKIN = [((253, 192, 152), (248, 187, 143)), ((209, 158, 130), (178, 124, 96))]   # Meshy's skin, its shadow -> the images'
+SKIN_SPREAD = 30.
+SHEEN = 205                  # on the face's skin (its own triangles, under the eyes): texels lighter than this (the skin's 190): Meshy's sheen
+# the outline (per vertex: its width's share, aLine; its extra push back, m, aBack): the earrings' thin, the hair's
+# HAIR_LINE_W (its many thin locks drew black ribbons at the head's full width); the locks over the face (in front of its
+# skin seen from the front, within FRINGE[1] m of it, depth slack FRINGE[2]) pushed back FRINGE[0] m behind it, as Ren's
+# (tools/ren_head.py fringe_back): their outline showed as thick black bands over the face; smoothed over FRINGE[3] rounds
+EAR_LINE, HAIR_LINE_W = .3, .55
+FRINGE = (.02, .008, .004, 3, .002)
+HEAD_TEX = 2048
+
+
+def face_back(Q, I, skin, hair):
+    """Per vertex: the outline's extra push back (m) of the hair over the face (FRINGE), smoothed over its neighbours."""
+    t = I[skin[I].all(1)]; g = FRINGE[4]
+    lo = Q[skin][:, :2].min(0) - .02; hi = Q[skin][:, :2].max(0) + .02; n = np.ceil((hi - lo) / g).astype(int) + 1
+    Z = np.full(n, -np.inf)
+    ij = np.floor((Q[:, :2] - lo) / g).astype(int)
+    for k in range(3):   # (the skin's points and its triangles' middles: the face's front-most depth per cell)
+        pts = Q[t[:, k]] * .5 + Q[t].mean(1) * .5
+        c = np.clip(np.floor((pts[:, :2] - lo) / g).astype(int), 0, n - 1); np.maximum.at(Z, (c[:, 0], c[:, 1]), pts[:, 2])
+    c = np.clip(ij[skin], 0, n - 1); np.maximum.at(Z, (c[:, 0], c[:, 1]), Q[skin, 2])
+    have = np.isfinite(Z); have = ndimage.binary_closing(have, iterations=2) & ndimage.binary_fill_holes(have)
+    near = ndimage.binary_dilation(have, iterations=max(1, int(round(FRINGE[1] / g))))
+    _, (ix, iy) = ndimage.distance_transform_edt(~np.isfinite(Z), return_indices=True); Zf = ndimage.grey_dilation(Z[ix, iy], size=3)
+    inb = (ij >= 0).all(1) & (ij < n).all(1); c = np.clip(ij, 0, n - 1)
+    over = hair & inb & near[c[:, 0], c[:, 1]] & (Q[:, 2] > Zf[c[:, 0], c[:, 1]] - FRINGE[2])
+    lb = np.where(over, FRINGE[0], 0.)
+    _, weld = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_inverse=True); weld = weld.ravel()
+    T = weld[I]; E = np.unique(np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1), axis=0)
+    from scipy.sparse import csr_matrix
+    nw = weld.max() + 1; A = csr_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw))
+    deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1); lw = np.zeros(nw); np.maximum.at(lw, weld, lb)
+    for _ in range(FRINGE[3]): lw = np.maximum(lw, .5 * lw + .5 * (A @ lw) / deg)
+    return lw[weld], int(over.sum())
+
+
+def is_skin(c):
+    return (c[..., 0] - c[..., 2] > 50) & (c[..., 0] > 120)
+
+
+def is_hair(c):
+    L = c.mean(-1); sat = c.max(-1) - c.min(-1)
+    return (c[..., 2] >= c[..., 1]) & (c[..., 0] >= c[..., 1] - 5) & (L > 80) & (sat < 50)   # (greyish: the collar's trim is purple, sat 70-95)
+
+
+def is_purple(c):
+    return (c[..., 2] > c[..., 1] + 40) & (c[..., 0] > c[..., 1] + 20)
+
+
+def is_cloth(c):
+    return (c.max(-1) < 90) | is_purple(c)
+
+
+def collar_top(pts, agg, empty):
+    """Per COLLAR_BIN degrees around the neck's axis (BODY_NECK): agg of the points' heights there (empty bins from their
+    neighbours, then smoothed: [1, 2, 1])."""
+    nbin = 360 // COLLAR_BIN; ph = np.degrees(np.arctan2(pts[:, 0] - BODY_NECK[0], pts[:, 2] - BODY_NECK[1]))
+    b = ((ph + 180) // COLLAR_BIN).astype(int) % nbin; v = np.full(nbin, np.nan)
+    for k in range(nbin):
+        if (b == k).any(): v[k] = agg(pts[b == k, 1])
+    if np.isnan(v).all(): return np.full(nbin, empty)
+    ok = np.nonzero(~np.isnan(v))[0]; v = np.interp(np.arange(nbin), ok, v[ok], period=nbin)
+    return (np.roll(v, 1) + 2 * v + np.roll(v, -1)) / 4
+
+
+def radius_grid(pts, y0, y1):
+    """The points' outer radius around the neck's axis per COLLAR_DY m (from y0 to y1) and COLLAR_BIN degrees (empty
+    cells from their neighbours around, then up and down)."""
+    nbin = 360 // COLLAR_BIN; ny = int(np.ceil((y1 - y0) / COLLAR_DY))
+    r = np.hypot(pts[:, 0] - BODY_NECK[0], pts[:, 2] - BODY_NECK[1]); ph = np.degrees(np.arctan2(pts[:, 0] - BODY_NECK[0], pts[:, 2] - BODY_NECK[1]))
+    iy = np.clip(((pts[:, 1] - y0) / COLLAR_DY).astype(int), 0, ny - 1); ib = ((ph + 180) // COLLAR_BIN).astype(int) % nbin
+    G = np.full((ny, nbin), np.nan)
+    for a, b, v in zip(iy, ib, r):
+        if not v <= G[a, b]: G[a, b] = v
+    for a in range(ny):
+        ok = np.nonzero(~np.isnan(G[a]))[0]
+        if len(ok): G[a] = np.interp(np.arange(nbin), ok, G[a, ok], period=nbin)
+    for b in range(nbin):
+        ok = np.nonzero(~np.isnan(G[:, b]))[0]
+        if len(ok): G[:, b] = np.interp(np.arange(ny), ok, G[ok, b])
+    G = np.where(np.isnan(G), np.nanmean(G), G)
+    return (np.roll(G, 1, 1) + 2 * G + np.roll(G, -1, 1)) / 4
+
+
+def radius_at(G, y0, y, ph):
+    """G (radius_grid) at heights y and angles ph (degrees): bilinear, around the axis periodic."""
+    ny, nbin = G.shape; fy = np.clip((np.asarray(y) - y0) / COLLAR_DY - .5, 0, ny - 1); fb = (np.asarray(ph) + 180) / COLLAR_BIN - .5
+    a = np.floor(fy).astype(int); a1 = np.minimum(a + 1, ny - 1); ty = fy - a
+    b = np.floor(fb).astype(int); tb = fb - b; b0 = b % nbin; b1 = (b + 1) % nbin
+    return (G[a, b0] * (1 - tb) + G[a, b1] * tb) * (1 - ty) + (G[a1, b0] * (1 - tb) + G[a1, b1] * tb) * ty
+
+
+def at_angle(v, ph):
+    """v (per bin, collar_top) at the angles ph (degrees), linearly between the bins' middles."""
+    nbin = len(v); x = (np.asarray(ph) + 180) / COLLAR_BIN - .5
+    return np.interp(x, np.arange(nbin), v, period=nbin)
+
+
+def main(bust):
+    m = glbio.read(bust); Pb, Nb, UVb, Ib = m['pos'], m['nor'], m['uv'], m['idx']
+    tex = Image.open(io.BytesIO(m['img'])).convert('RGB')
+    if tex.size[0] > HEAD_TEX: tex = tex.resize((HEAD_TEX, HEAD_TEX), Image.LANCZOS)
+    T = np.asarray(tex).astype(np.float64); TS = T.shape[0]
+    # where: the eyes and the chin on the drawing's, the neck on the body's
+    eye_m, chin_m = (DRAW['by'] - DRAW['eyes']) / DRAW['s'], (DRAW['by'] - DRAW['chin']) / DRAW['s']
+    s = (eye_m - chin_m) / (BUST['eyes'] - BUST['chin'])
+    off = np.array([BODY_NECK[0] - s * BUST['neck'][0], eye_m - s * BUST['eyes'], BODY_NECK[1] - s * BUST['neck'][1]])
+    P = Pb * s + off
+    print('placed: %.4f m per unit; eyes at %.4f m, chin %.4f m; from y %.3f to %.3f m' % (s, eye_m, chin_m, P[:, 1].min(), P[:, 1].max()))
+    # each vertex's paint
+    vc = T[np.clip((UVb[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UVb[:, 0] * TS).astype(int), 0, TS - 1)]
+    tc = T[np.clip((UVb[Ib][:, :, 1].mean(1) * TS).astype(int), 0, TS - 1), np.clip((UVb[Ib][:, :, 0].mean(1) * TS).astype(int), 0, TS - 1)]
+    C = Pb[Ib].mean(1)
+    ear_t = np.zeros(len(Ib), bool)
+    for (x0, x1), (y0, y1), (z0, z1) in BUST['ears']:
+        ear_t |= (C[:, 0] > x0) & (C[:, 0] < x1) & (C[:, 1] > y0) & (C[:, 1] < y1) & (C[:, 2] > z0) & (C[:, 2] < z1)
+    Ct = P[Ib].mean(1)
+    # (the bust's collar's top at each side: its trim's highest point, body space; see collar_top)
+    ear_vb = np.zeros(len(P), bool); ear_vb[Ib[ear_t].ravel()] = True
+    trim = is_purple(vc) & (P[:, 1] < JAW_Y + .02) & ~ear_vb
+    top_b = collar_top(P[trim], np.max, P[:, 1].min())
+    ph_v = np.degrees(np.arctan2(P[:, 0] - BODY_NECK[0], P[:, 2] - BODY_NECK[1]))
+    collar_vb = is_cloth(vc) & ~ear_vb & ((P[:, 1] < JAW_Y) | (P[:, 1] < at_angle(top_b, ph_v) + COLLAR_GAP))
+    # (and the cloth next to it, COLLAR_RINGS rings of neighbours, up to COLLAR_GROW m over its top (not by the chin, in
+    # front, above the jaw): its trim's upper edge, left at the bust's width, cut dark teeth into the trim)
+    _, wb_ = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_inverse=True); wb_ = wb_.ravel(); TW_ = wb_[Ib]
+    grow_ok = is_cloth(vc) & ~ear_vb & (P[:, 1] < at_angle(top_b, ph_v) + COLLAR_GROW) & ((np.abs(ph_v) > 25) | (P[:, 1] < JAW_Y))
+    for _ in range(COLLAR_RINGS):
+        cw = np.zeros(wb_.max() + 1, bool); cw[wb_[collar_vb]] = True
+        nbr = np.zeros_like(cw); nbr[TW_[cw[TW_].any(1)].ravel()] = True
+        collar_vb |= grow_ok & nbr[wb_]
+    keep = (P[Ib, 1] > CUT_Y).all(1)
+    It = Ib[keep]; used = np.unique(It); remap = -np.ones(len(P), np.int64); remap[used] = np.arange(len(used))
+    It = remap[It]; Q, Nq, UV, vc, collar_v = P[used], Nb[used].copy(), UVb[used], vc[used], collar_vb[used]
+    ear_v = np.zeros(len(Q), bool); ear_v[It[ear_t[keep]].ravel()] = True
+    print('taken: %d of %d triangles (%d under the cut); its collar %d vertices' % (len(It), len(Ib), int((~keep).sum()), int(collar_v.sum())))
+    # skin
+    K = json.load(open(os.path.join(KAEL_PKG, 'kael.json'))); KB = open(os.path.join(KAEL_PKG, 'kael.bin'), 'rb').read(); me = K['mesh']
+    kf = lambda a, dt=np.float32: np.frombuffer(KB, dt, a[1], a[0])
+    names = [b['n'] for b in K['bones']]; nb = len(names); hb = names.index('Head')
+    KP = kf(me['pos']).reshape(-1, 3).astype(np.float64); KUV = kf(me['uv']).reshape(-1, 2)
+    KJ = kf(me['jnt'], np.uint8).reshape(-1, 4).astype(np.int64); KW = kf(me['wgt']).reshape(-1, 4).astype(np.float64)
+    KI = kf(me['idx'], np.uint16 if me['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
+    KT = np.asarray(Image.open(os.path.join(KAEL_PKG, 'kael_painted.jpg')).convert('RGB')).astype(np.float64); KTS = KT.shape[0]
+    kvc = KT[np.clip((KUV[:, 1] * KTS).astype(int), 0, KTS - 1), np.clip((KUV[:, 0] * KTS).astype(int), 0, KTS - 1)]
+    kr = np.hypot(KP[:, 0] - BODY_NECK[0], KP[:, 2] - BODY_NECK[1])
+    khw = (KW * (KJ == hb)).sum(1); hid = khw[KI].mean(1) > HIDE_W
+    # the bust's collar on Kael's (as wide as his at each height and side, COLLAR_OUT m outside it): its points pushed
+    # out from the neck's axis by his collar's outer radius over the bust's there (both per COLLAR_DY m and COLLAR_BIN
+    # degrees; above COLLAR_FIT his as at COLLAR_FIT: higher up his rim was the old head's); his collar above HIDE_COLLAR
+    # hidden under it (its top was 2-4 cm over the new jaw, its rim across it, and with the old head hidden a thin
+    # broken shell), the bust's own collar (as drawn: its top just under the chin, its purple trim) in its place
+    kvis = np.ones(len(KI), bool); kvis[hid] = False; kvv = np.zeros(len(KP), bool); kvv[KI[kvis].ravel()] = True
+    kcl = kvv & is_cloth(kvc) & (kr < COLLAR_R) & (KP[:, 1] > CUT_Y - .02) & (KP[:, 1] < COLLAR_FIT + COLLAR_DY)
+    R_k = radius_grid(KP[kcl], CUT_Y - .02, COLLAR_FIT + COLLAR_DY)
+    R_b = radius_grid(Q[collar_v], CUT_Y - .02, COLLAR_FIT + .03)
+    qy = Q[collar_v, 1]; qph = np.degrees(np.arctan2(Q[collar_v, 0] - BODY_NECK[0], Q[collar_v, 2] - BODY_NECK[1]))
+    fk = (radius_at(R_k, CUT_Y - .02, np.minimum(qy, COLLAR_FIT), qph) + COLLAR_OUT) / np.maximum(radius_at(R_b, CUT_Y - .02, np.minimum(qy, COLLAR_FIT + .03), qph), 1e-4)
+    fk = np.clip(fk, *COLLAR_F)   # (its points deep inside, in front's opening: no further out than the rest)
+    cv = np.nonzero(collar_v)[0]; ctr = np.array([BODY_NECK[0], BODY_NECK[1]])
+    Q[np.ix_(cv, [0, 2])] = ctr + (Q[np.ix_(cv, [0, 2])] - ctr) * fk[:, None]
+    hide_c = np.nonzero(kvis & (KP[KI].mean(1)[:, 1] > HIDE_COLLAR) & (np.hypot(KP[KI].mean(1)[:, 0] - BODY_NECK[0], KP[KI].mean(1)[:, 2] - BODY_NECK[1]) < COLLAR_R + .03))[0]
+    print('collar: the bust\'s %d points widened to his collar (x %.2f to %.2f), %d of his triangles above %.3f m hidden under it' % (
+        len(cv), fk.min(), fk.max(), len(hide_c), HIDE_COLLAR))
+    hair_v = is_hair(vc) & ~is_skin(vc)
+    # (the neck, up to the jaw in front and to NAPE_Y behind: there the nape's hair and skin joined the collar's top,
+    # and stretched over it when the head tipped back in the high kick)
+    sm3 = lambda x: (lambda u: u * u * (3 - 2 * u))(np.clip(x, 0, 1))
+    ph_q = np.abs(np.degrees(np.arctan2(Q[:, 0] - BODY_NECK[0], Q[:, 2] - BODY_NECK[1])))
+    y_hi = JAW_Y + (NAPE_Y - JAW_Y) * sm3((ph_q - 60) / 90)
+    low = (Q[:, 1] < y_hi) & ~collar_v & ~ear_v
+    head = ~low & ~collar_v
+    Wf = np.zeros((len(Q), nb)); Wf[head, hb] = 1
+    neck = np.nonzero(low)[0]
+    if len(neck):   # (the neck's skin: as the collar's top (COLLAR_TOP), toward the Head from NECK_Y up to the jaw; on his
+        # nearest points it took his old collar's shoulders and stretched over the collar in the high kick)
+        t = sm3((Q[neck, 1] - NECK_Y) / (y_hi[neck] - NECK_Y))
+        Wf[neck, hb] = COLLAR_TOP[1] + (1 - COLLAR_TOP[1]) * t; Wf[neck, names.index('neck')] = (1 - COLLAR_TOP[1]) * (1 - t)
+    if len(cv):   # (the collar: as his collar's nearest point, his old rim's too: it turned with the head as Meshy rigged it)
+        reg = np.nonzero(is_cloth(kvc) & (kr < COLLAR_R + .02) & (KP[:, 1] > CUT_Y - .03) & (KP[:, 1] < COLLAR_Y))[0]
+        _, near = cKDTree(KP[reg]).query(Q[cv]); near = reg[near]
+        Wc = np.zeros((len(cv), nb))
+        for k in range(4): np.add.at(Wc, (np.arange(len(cv)), KJ[near, k]), KW[near, k])
+        # (stiff: from COLLAR_STIFF[0] m up its shoulders' and arms' share to the spine, up to COLLAR_STIFF[2] at [1]; then
+        # toward COLLAR_TOP's shares of the Head and the neck at its top, from COLLAR_TOP[0] m: on his nearest points alone
+        # its top edge took the old rim's head share here and the shoulders' there, and tore into teeth in the throw and
+        # the high kick)
+        sh = [names.index(n) for n in ('LeftShoulder', 'RightShoulder', 'LeftArm', 'RightArm')]; sp, nk = names.index('Spine'), names.index('neck')
+        yq = Q[cv, 1]; u = sm3((yq - COLLAR_STIFF[0]) / (COLLAR_STIFF[1] - COLLAR_STIFF[0])) * COLLAR_STIFF[2]
+        take = Wc[:, sh] * u[:, None]; Wc[:, sh] -= take; Wc[:, sp] += take.sum(1)
+        ytop = at_angle(top_b, np.degrees(np.arctan2(Q[cv, 0] - BODY_NECK[0], Q[cv, 2] - BODY_NECK[1])))
+        tt = sm3((yq - COLLAR_TOP[0]) / np.maximum(ytop - COLLAR_TOP[0], 1e-3))
+        Wt = np.zeros_like(Wc); Wt[:, hb] = COLLAR_TOP[1]; Wt[:, nk] = 1 - COLLAR_TOP[1]
+        Wf[cv] = Wc * (1 - tt[:, None]) + Wt * tt[:, None]
+        LJ = json.load(open(os.path.join(KAEL_PKG, 'kael_look.json'))); LBb = open(os.path.join(KAEL_PKG, 'kael_look.bin'), 'rb').read()
+        flat_c = np.frombuffer(LBb, np.float32, LJ['flat'][1], LJ['flat'][0])[near] if 'flat' in LJ else np.zeros(len(cv))   # (lit as his collar there)
+    # (the copies of a vertex along the texture's seams: one weight)
+    _, weld = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_inverse=True); weld = weld.ravel()
+    Ww = np.zeros((weld.max() + 1, nb)); np.add.at(Ww, weld, Wf); Ww /= np.bincount(weld)[:, None]
+    if len(cv):   # (and the collar's smoothed over its neighbours, COLLAR_SMOOTH rounds: the rest kept)
+        from scipy.sparse import csr_matrix
+        TW = weld[It]; E = np.unique(np.sort(np.concatenate([TW[:, [0, 1]], TW[:, [1, 2]], TW[:, [2, 0]]]), 1), axis=0); nw = weld.max() + 1
+        A = csr_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)); deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1)
+        cw = np.zeros(nw, bool); cw[weld[cv]] = True
+        for _ in range(COLLAR_SMOOTH): Ww = np.where(cw[:, None], .5 * Ww + .5 * (A @ Ww) / deg[:, None], Ww)
+    Wf = Ww[weld]
+    top = np.argsort(-Wf, 1)[:, :4]; tw = np.take_along_axis(Wf, top, 1); tw /= np.maximum(tw.sum(1, keepdims=True), 1e-12)
+    print('skin: %d on the Head (%d earrings), %d of the neck and the nape toward it (%d of them hair), %d of the collar' % (int(head.sum()), int(ear_v.sum()), len(neck), int(hair_v[neck].sum()), len(cv)))
+    # Kael's own head hidden, and his collar's top (above)
+    hide = np.unique(np.r_[np.nonzero(hid)[0], hide_c]).astype(np.uint32)
+    print('Kael\'s head: %d triangles hidden (%d of his old head, %d of his collar\'s top)' % (len(hide), int(hid.sum()), len(hide_c)))
+    # colours
+    ys, xs, ks, bary, pos, nor = texel_table(Q, Nq, UV, It, TS)
+    tcx = T[ys, xs]; out = T.copy()
+    # (the skin: its main tone and its shadow to the images', each texel by the offsets of those near it)
+    src = np.array([a for a, _ in SKIN], float); dst = np.array([b for _, b in SKIN], float)
+    sk = is_skin(tcx); x = tcx[sk]; d2 = ((x[:, None, :] - src[None]) ** 2).sum(2); w = np.exp(-d2 / (2 * SKIN_SPREAD ** 2)); ws = w.sum(1, keepdims=True)
+    out[ys[sk], xs[sk]] = np.clip(x + (w @ (dst - src)) / np.maximum(ws, 1e-9) * np.clip(ws, 0, 1), 0, 255)
+    # (the face's light marks: as the skin around them)
+    face = (pos[:, 2] > BODY_NECK[1] + .06) & (np.abs(pos[:, 0] - BODY_NECK[0]) < .05) & (pos[:, 1] > JAW_Y) & (pos[:, 1] < eye_m - .012)
+    skin_tri = is_skin(vc)[It].all(1)   # (on the skin's own triangles: not the locks hanging over it, lavender as the sheen)
+    sheen = face & skin_tri[ks] & (tcx.mean(1) > SHEEN)
+    if sheen.any() and (face & sk).any():
+        fs = np.nonzero(face & sk)[0]; _, j = cKDTree(pos[fs]).query(pos[sheen]); out[ys[sheen], xs[sheen]] = out[ys[fs[j]], xs[fs[j]]]
+    # (the hair: two lavenders by its lightness, its thin dark lines black-ish, the eyes' whites not hair)
+    eyes_box = (np.abs(pos[:, 0] - BODY_NECK[0]) < .045) & (np.abs(pos[:, 1] - eye_m) < .012) & (pos[:, 2] > BODY_NECK[1] + .05)
+    HM = np.zeros((TS, TS), bool); HM[ys, xs] = is_hair(tcx) & ~sk & ~eyes_box & ~ear_v[It[ks]].any(1) & ~collar_v[It[ks]].any(1) & ~sheen
+    L = T.mean(2); darkl = np.zeros((TS, TS), bool); darkl[ys, xs] = (L[ys, xs] < HAIR_LINE)
+    body = HM & ~darkl
+    lit = lum_split(T, body, HAIR_SHADOW, HAIR_BLUR)
+    wl = ndimage.gaussian_filter(lit.astype(float), .7) / np.maximum(ndimage.gaussian_filter(body.astype(float), .7), 1e-6)
+    h0, h1 = (np.array(c, float) for c in (HAIR[1], HAIR[0]))
+    out[body] = h0 + (h1 - h0) * np.clip(wl[body], 0, 1)[:, None]
+    print('colours: %d skin texels to the images\' tones, %d of the face\'s sheen as skin, %d hair texels in two lavenders (%d lit)' % (
+        int(sk.sum()), int(sheen.sum()), int(body.sum()), int((lit & body).sum())))
+    cov = np.zeros((TS, TS), bool); cov[ys, xs] = True
+    _, (iy, ix) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], ix[~cov]]
+    Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(os.path.join(KAEL_PKG, 'kael_head.jpg'), quality=90, optimize=True)
+    # the package (as tools/ren_head.py's)
+    line_w = np.where(ear_v, EAR_LINE, np.where(hair_v, HAIR_LINE_W, 1.))
+    lb, n_over = face_back(Q, It, is_skin(vc) & ~hair_v & (Q[:, 1] > JAW_Y), hair_v)
+    print('outline: the hair\'s %.2f of the width, the earrings\' %.2f; %d hair vertices over the face pushed back %.0f mm (%d with the smoothing)' % (
+        HAIR_LINE_W, EAR_LINE, n_over, 1000 * FRINGE[0], int((lb > 0).sum())))
+    pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
+    blob = b''; jo = {'v': 1, 'verts': int(len(Q)), 'tris': int(len(It)), 'scale': round(float(s), 5)}
+    def put(key, arr):
+        nonlocal blob
+        blob = pad(blob); jo[key] = [len(blob), int(arr.size)]; blob += np.ascontiguousarray(arr).tobytes()
+    put('pos', Q.astype(np.float32)); put('nor', Nq.astype(np.float32)); put('uv', UV.astype(np.float32))
+    put('jnt', top.astype(np.uint8)); put('wgt', tw.astype(np.float32))
+    put('idx', It.astype(np.uint16 if len(Q) < 65536 else np.uint32)); put('hide', hide)
+    flat_v = np.ones(len(Q))
+    if len(cv): flat_v[cv] = flat_c
+    put('lb', lb.astype(np.float32)); put('flat', flat_v.astype(np.float32)); put('line', line_w.astype(np.float32))
+    open(os.path.join(KAEL_PKG, 'kael_head.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_head.json'), 'w'), separators=(',', ':'))
+    for ext in ('json', 'bin', 'png'):
+        fp = os.path.join(KAEL_PKG, 'kael_fringe.' + ext)
+        if os.path.exists(fp): os.remove(fp)
+    print('written: kael_head (%d vertices, %d triangles); bones %s' % (len(Q), len(It), {names[i]: int(c) for i, c in enumerate(np.bincount(top[:, 0], minlength=nb)) if c}))
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2: sys.exit(__doc__)
+    main(sys.argv[1])

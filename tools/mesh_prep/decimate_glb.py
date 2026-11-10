@@ -1,13 +1,16 @@
 """Texture-preserving decimation of a single-primitive Meshy GLB: python3 decimate_glb.py in.glb out.glb TARGET_TRIANGLES
-[FACE_TRIANGLES X0 X1 Y0 Y1 Z0]
+[FACE_TRIANGLES X0 X1 Y0 Y1 Z0 [LOW_TRIANGLES LOW_Y]]
 Keeps the original texture and UVs (quadric edge collapse with texture), rebuilds smooth normals per position.
 With FACE_*: the triangles in that box (their corners within x0..x1, y0..y1 and in front of z0, in the GLB's own units:
-a face) keep FACE_TRIANGLES of the target, the rest takes the others (two passes, each on its own selection)."""
+a face) keep FACE_TRIANGLES of the target, the rest takes the others (two passes, each on its own selection); with LOW_*,
+the triangles all under LOW_Y outside the face's box (a bust's collar: its trim's edge came out in teeth) keep
+LOW_TRIANGLES (a third pass)."""
 import json, struct, sys
 import numpy as np, pymeshlab
 
 src, dst, target = sys.argv[1], sys.argv[2], int(sys.argv[3])
 face = (int(sys.argv[4]), [float(v) for v in sys.argv[5:10]]) if len(sys.argv) >= 10 else None
+low = (int(sys.argv[10]), float(sys.argv[11])) if len(sys.argv) >= 12 else None
 b = open(src, 'rb').read(); n = struct.unpack('<I', b[12:16])[0]; j = json.loads(b[20:20 + n])
 o = 20 + n; bl = struct.unpack('<I', b[o:o + 4])[0]; BIN = b[o + 8:o + 8 + bl]
 CT = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8}
@@ -50,10 +53,20 @@ if face:
     nf, (fx0, fx1, fy0, fy1, fz0) = face
     inbox = ' && '.join('(x%d > %r && x%d < %r && y%d > %r && y%d < %r && z%d > %r)' % (k, fx0, k, fx1, k, fy0, k, fy1, k, fz0) for k in range(3))
     ms.apply_filter('compute_selection_by_condition_per_face', condselect=inbox); n_in = ms.current_mesh().selected_face_number()
-    ms.apply_filter('apply_selection_inverse', invfaces=True)
-    ms.apply_filter('meshing_decimation_quadric_edge_collapse_with_texture', targetfacenum=target - nf, selected=True, **dec)   # (selected: the target is theirs)
+    nl = 0
+    if low:
+        nl, ly = low; lowbox = '(%s) && ((%s) == 0)' % (' && '.join('y%d < %r' % (k, ly) for k in range(3)), inbox)   # (muParser: no '!')
+        ms.apply_filter('compute_selection_by_condition_per_face', condselect=lowbox); n_low = ms.current_mesh().selected_face_number()
+        ms.apply_filter('compute_selection_by_condition_per_face', condselect='((%s) == 0) && ((%s) == 0)' % (inbox, lowbox))
+        ms.apply_filter('meshing_decimation_quadric_edge_collapse_with_texture', targetfacenum=target - nf - nl, selected=True, **dec)   # (selected: the target is theirs)
+        ms.apply_filter('compute_selection_by_condition_per_face', condselect=lowbox)
+        print('low box: %d triangles -> %d' % (n_low, nl))
+        ms.apply_filter('meshing_decimation_quadric_edge_collapse_with_texture', targetfacenum=nl, selected=True, **dec)
+    else:
+        ms.apply_filter('apply_selection_inverse', invfaces=True)
+        ms.apply_filter('meshing_decimation_quadric_edge_collapse_with_texture', targetfacenum=target - nf, selected=True, **dec)   # (selected: the target is theirs)
     ms.apply_filter('compute_selection_by_condition_per_face', condselect=inbox)
-    print('face box: %d triangles -> %d; the rest -> %d' % (n_in, nf, target - nf))
+    print('face box: %d triangles -> %d; the rest -> %d' % (n_in, nf, target - nf - nl))
     ms.apply_filter('meshing_decimation_quadric_edge_collapse_with_texture', targetfacenum=nf, selected=True, **dec)
     ms.apply_filter('set_selection_none')
 elif target < len(F):

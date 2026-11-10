@@ -34,6 +34,9 @@ Denis: "devi guardarlo in 3d e vedere da solo cosa c'è di storto o di sfumato, 
 - **Mani**: pugni chiusi veri (dita allo stesso livello), niente spigolo sul lato del pollice, mani aperte nello
   speciale e nella presa.
 - **Colletto e collo**: forma, giunzione col busto davanti e dietro, niente buchi né gobbe.
+  Con una testa o un pezzo nuovo, la giunzione si guarda da 8 lati e da vicino (0,26 m), anche con solo il pezzo, solo
+  il corpo e senza contorni: così si vede di chi è un difetto. Poi nelle mosse dove la testa si piega e le braccia si
+  alzano (presa, calcio alto, montante): lì i bordi si sfrangiano e la pelle si stira (Kael, 10/11).
 - **Pezzi che pendono** (fascia, code, lembi): non entrano nel corpo in nessuna mossa, non si stirano da accovacciati,
   attaccati dove devono.
 - **Piedi e stivali**: appoggiati al pavimento, niente punte che lo attraversano.
