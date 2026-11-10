@@ -75,8 +75,8 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
   senza PBR, con un texture prompt della testa; 30 crediti, saldo da 1030 a 1000. Il GLB è in
   `meshy/meshy_output/20261110_192241_voidrise-kael-testa_01a1c6e9/testa_k1.glb`.
 - Rifarla:
-  1. `python3 tools/mesh_prep/decimate_glb.py meshy/meshy_output/20261110_192241_voidrise-kael-testa_01a1c6e9/testa_k1.glb meshy/head/kael_k1_face.glb 23000 5000 -0.25 0.40 -0.62 0.15 0.2 4000 -0.50`
-     — 23.000 triangoli: 5.000 nel viso, 4.000 nel colletto (con meno triangoli il bordo viola veniva a denti), il
+  1. `python3 tools/mesh_prep/decimate_glb.py meshy/meshy_output/20261110_192241_voidrise-kael-testa_01a1c6e9/testa_k1.glb meshy/head/kael_k1_face.glb 17000 4500 -0.25 0.40 -0.62 0.15 0.2 3000 -0.50`
+     — 17.000 triangoli: 4.500 nel viso, 3.000 nel colletto (con meno triangoli il bordo viola veniva a denti), il
      resto ai capelli.
   2. `python3 tools/kael_head.py meshy/head/kael_k1_face.glb` (scrive `wip_assets/kael/kael_head.*` e toglie i
      `kael_fringe.*` della proposta di prima), poi `bash mk.sh`.
