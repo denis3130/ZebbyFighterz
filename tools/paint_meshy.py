@@ -54,6 +54,8 @@ ARM_SPECK = 10   # its pieces in the texture of fewer texels: left out (9/11, De
 ARM_PALE = (12, .6)   # see main(): the pale specks by the armholes (texels, share of teal around them)
 TAIL_LOW, FILL_K = .12, 48   # the old tails' paint: from this height (m) up to the band; its fill: the median of that many texels
 UNDER_TAILS = (.02, .032, 8, .0025, .8)   # see under_tails()
+VEST_HEM = (.5, 5., .03, .03)   # see under_tails()
+OFF_TAILS = (.045, 40., 4.)   # see under_tails()
 HEM = (.82, .93, 140., 70., .015)   # see under_tails()
 MAROON = (.045, 18., 130., .012)   # see under_tails()
 TAIL_NEAR = .02   # the clothes under the old tails: this near (m) their hidden shapes, every colour but the vest's and the trousers'
@@ -231,7 +233,25 @@ def under_tails(img, ys, xs, pos, nor, tp, region):
     d = np.full(len(pos), np.inf); d[region] = cKDTree(tp).query(pos[region], distance_upper_bound=UNDER_TAILS[1])[0]
     c = img[ys, xs]
     U = np.nonzero(region & (d < UNDER_TAILS[0]))[0]; K = np.nonzero(region & (d >= UNDER_TAILS[0]) & (d < UNDER_TAILS[1]) & (c.mean(1) > 40))[0]
-    n = harmonic_fill(img, ys, xs, pos, nor, U, K)
+    K = K[~orangeish(c[K])]   # (not the band's orange: under the knot it made the fill a muddy yellow green streak, 9/11 Denis)
+    # (under the vest's hem, VEST_HEM, from the trousers' texels only: on the right thigh, 20 cm under the hem, the fill took
+    # the vest's teal from texels around, a teal patch seen from behind, 9/11 Denis. The hem: per VEST_HEM[1] degrees around
+    # the body, the vest's teal's lowest heights (its [3] quantile, above [0] m: not the boots); under it by [2] m: trousers)
+    vt = region & teal(c) & (pos[:, 1] > VEST_HEM[0]); vt[U] = False
+    ang = np.floor((np.degrees(np.arctan2(pos[:, 0], pos[:, 2])) + 180) / VEST_HEM[1]).astype(int); nbins = int(np.ceil(360 / VEST_HEM[1])) + 1
+    hem = np.full(nbins, np.inf)
+    for bi in np.unique(ang[vt]): hem[bi] = np.quantile(pos[vt & (ang == bi), 1], VEST_HEM[3])
+    hem = np.minimum(hem, np.minimum(np.roll(hem, 1), np.roll(hem, -1)))
+    low_ = pos[U, 1] < hem[ang[U]] - VEST_HEM[2]
+    n = harmonic_fill(img, ys, xs, pos, nor, U[~low_], K) + harmonic_fill(img, ys, xs, pos, nor, U[low_], K[~teal(c[K])])
+    print('under the old tails: %d texels under the vest\'s hem filled from the trousers alone' % int(low_.sum()))
+    # (and farther, to OFF_TAILS[0] m: Meshy's paint by the tails' path not the vest's teal nor the trousers' purple, brighter
+    # than [1] (not ink), or teal with green over blue by [2] (olive): a pale yellow green streak along the vest's slit by the
+    # knot, seen from behind, 9/11 Denis), filled from the teal and the purple around them
+    c = img[ys, xs]; d3 = np.full(len(pos), np.inf); d3[region] = cKDTree(tp).query(pos[region], distance_upper_bound=OFF_TAILS[0] + .015)[0]
+    off = region & (d3 < OFF_TAILS[0]) & ((~teal(c) & ~purple(c) & (c.mean(1) > OFF_TAILS[1])) | (teal(c) & (c[:, 1] - c[:, 2] > OFF_TAILS[2]))); off[U] = False   # (and the teal gone olive)
+    Ko = np.nonzero(region & (d3 < OFF_TAILS[0] + .015) & ~off & (teal(c) | purple(c)))[0]
+    print('near the old tails: %d texels neither the vest\'s nor the trousers\' colour filled from them' % harmonic_fill(img, ys, xs, pos, nor, np.nonzero(off)[0], Ko))
     print('under the old tails: %d texels filled smooth from the clothes around them (within %.0f mm of their shapes)' % (n, 1000 * UNDER_TAILS[0]))
     c = img[ys, xs]; inr = (pos[:, 1] > HEM[0]) & (pos[:, 1] < HEM[1]) & region
     lt = inr & (c.mean(1) > HEM[2]) & (c.max(1) - c.min(1) < HEM[3])

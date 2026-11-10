@@ -66,6 +66,7 @@ CHIN_LINE = (0, .045, 1.497, 1.527, .035, .095, .006, .004)   # see main(): the 
 LAPEL_TOPS = (38., 52., 1.432, .105, .15)   # see main()
 LAPEL_LINING = (20., 70., 1.33, .16)   # see main(): |angle from the front| between [0] and [1] degrees, above [2] m, within [3] m of the neck's axis
 LAPEL_NOLINE = (30., 60., 1.40, .09, .15)   # see main(): as LAPEL_TOPS
+BODY_HOLES = (40, 1.04, .03)   # see body_holes()
 CHEEKS = (.03, 1.525, 1.595, .015, 1.583, .07)   # see cheek_marks(): |x| over, y between, z over, the eyes' band (over y, within |x|)
 EARS = (.045, .1, 1.545, 1.615, -.035, .03)   # see cheek_marks(): |x|, y, z ranges (m)
 TEMPLE_SPOT = (-.078, -.052, 1.570, 1.592, -.012, .016)   # (x, y, z ranges, m) a brown spot on one temple: see temple_spot()
@@ -411,6 +412,72 @@ def place(Pb, colb, P, col, fit, HEAD_EYE, HEAD_CHIN, HEAD_NECK):
     return s, lambda q: q * s + T
 
 
+def body_holes(Q, N, UV, I, J, W, lb, TS, taken, PB, IB, UVB, JB, WB, NB, FB, keep, paint):
+    """The body's holes (its kept triangles' open loops, BODY_HOLES: of at most [0] points, all under [1] m: where the old
+    tails were hidden) closed by the head's triangles: the loop's points copied (skinned as the body's there, JB and WB,
+    with its light's normals NB and flat share FB) and ear-clipped across, in a flat block of the head's texture each, in
+    the body's paint around it (paint at the loop's uvs, the median); their outline pushed back BODY_HOLES[2] m. Returns
+    (Q, N, UV, I, J, W, lb with them, the blocks [(row, col, half, rgb)], (the first new vertex, their flat shares) or None)."""
+    from ren_collar import free_blocks
+    _, first, weld = np.unique(np.round(PB / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel()
+    kt = IB[keep]; T = weld[kt]
+    E = np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]); key = np.sort(E, 1)
+    _, inv, cnt = np.unique(key, axis=0, return_inverse=True, return_counts=True); bd = E[cnt[inv.ravel()] == 1]
+    out_ = {}
+    for a, b in bd: out_.setdefault(int(b), []).append(int(a))   # (each boundary edge a->b as its triangle has it; the fill runs b->a)
+    rep = np.full(len(first), -1); rep[T.ravel()] = kt.ravel(); Pw = PB[first]
+    # (the loops, walked edge by edge: where a loop touches itself at a point, cut there into simple ones)
+    found = []
+    for s0 in list(out_):
+        while out_.get(s0):
+            path, at = [s0], {s0: 0}; c = s0
+            while out_.get(c):
+                d = out_[c].pop()
+                if d in at:
+                    k = at[d]; found.append(path[k:])
+                    for v in path[k + 1:]: del at[v]
+                    path = path[:k + 1]
+                else: at[d] = len(path); path.append(d)
+                c = path[-1]
+    loops = [lp for lp in found if 3 <= len(lp) <= BODY_HOLES[0] and Pw[lp, 1].max() < BODY_HOLES[1]]
+    if not loops: return Q, N, UV, I, J, W, lb, [], None
+    if NB is None:
+        fn = np.cross(PB[IB[:, 1]] - PB[IB[:, 0]], PB[IB[:, 2]] - PB[IB[:, 0]]); NB = np.zeros_like(PB)
+        for k in range(3): np.add.at(NB, IB[:, k], fn)
+        NB = NB / np.maximum(np.linalg.norm(NB, axis=1, keepdims=True), 1e-12)
+    blocks = free_blocks(UV, I, TS, len(loops), half=8, taken=taken); PS = paint.shape[0]
+    n0 = len(Q); newP, newN, newUV, newJ, newW, newF, newT, out_blk = [], [], [], [], [], [], [], []
+    for lp, (r0, c0, b0) in zip(loops, blocks):
+        rv = rep[lp]; rgb = np.median(paint[np.clip((UVB[rv, 1] * PS).astype(int), 0, PS - 1), np.clip((UVB[rv, 0] * PS).astype(int), 0, PS - 1)], 0)
+        out_blk.append((r0, c0, b0, rgb)); uvf = np.array([(c0 + .5) / TS, (r0 + .5) / TS]); base = n0 + len(newP)
+        for v, r in zip(lp, rv):
+            newP.append(Pw[v]); newN.append(NB[r]); newUV.append(uvf); newJ.append(JB[r]); newW.append(WB[r]); newF.append(FB[r] if FB is not None else 0.)
+        # (ear clipping in the loop's best plane, its order the fill's winding; a fan from its first point if it fails)
+        P = Pw[lp]; ctr = P.mean(0); _, _, vt = np.linalg.svd(P - ctr); q = (P - ctr) @ vt[:2].T
+        cross = lambda a, b, c: (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        sg = np.sign(sum(cross(np.zeros(2), q[i], q[(i + 1) % len(q)]) for i in range(len(q)))) or 1.
+        idx, tris = list(range(len(lp))), []
+        while len(idx) > 3:
+            for k in range(len(idx)):
+                i0, i1, i2 = idx[k - 1], idx[k], idx[(k + 1) % len(idx)]
+                if cross(q[i0], q[i1], q[i2]) * sg <= 0: continue
+                if any(cross(q[i0], q[i1], q[j]) * sg > 0 and cross(q[i1], q[i2], q[j]) * sg > 0 and cross(q[i2], q[i0], q[j]) * sg > 0 for j in idx if j not in (i0, i1, i2)): continue
+                tris.append((i0, i1, i2)); idx.pop(k); break
+            else:   # (no ear: the rest as a fan)
+                tris += [(idx[0], idx[j], idx[j + 1]) for j in range(1, len(idx) - 2)]; idx = [idx[0], idx[-2], idx[-1]]
+        tris.append(tuple(idx))
+        # (each turned to face as the body's light normals there: the head draws both sides, its light by the side seen)
+        for a, b, c in tris:
+            fn_ = np.cross(P[b] - P[a], P[c] - P[a]); nn_ = NB[rv[a]] + NB[rv[b]] + NB[rv[c]]
+            newT.append((base + a, base + b, base + c) if fn_ @ nn_ >= 0 else (base + a, base + c, base + b))
+    na = len(newP)
+    Q2 = np.r_[Q, np.array(newP)]; N2 = np.r_[N, np.array(newN)]; UV2 = np.r_[UV, np.array(newUV)]
+    J2 = np.r_[J, np.array(newJ, J.dtype)]; W2 = np.r_[W, np.array(newW, W.dtype)]; lb2 = np.r_[lb, np.full(na, BODY_HOLES[2], lb.dtype)]
+    I2 = np.r_[I, np.array(newT, I.dtype)]
+    print('body: %d holes closed (%s points, %d triangles of the head\'s), in their paint %s' % (len(loops), [len(l) for l in loops], len(newT), [np.round(b_[3]).astype(int).tolist() for b_ in out_blk]))
+    return Q2, N2, UV2, I2, J2, W2, lb2, out_blk, (n0, np.array(newF))
+
+
 def main(bust, pkg, out, texture=None):
     Pb, Nb, UVb, Ib, texb = load_bust(bust)
     tb = np.asarray(texb).astype(int); th = tb.shape[0]
@@ -573,6 +640,11 @@ def main(bust, pkg, out, texture=None):
     # painted in skin in the hair's, the scalp between the locks in its dark, the skin flat with crisp marks; not the face
     from ren_hair import head_sides, fill_holes
     side_skin = head_sides(t, Q, Nq, UVq, Ik)
+    # (and as Denis's detail sheet has them, tools/ren_side.py: the ears seen, the hair over them pressed onto the head)
+    from ren_side import sides as sheet_sides
+    side_out, side_px, side_painted = sheet_sides(Q, Nq, UVq, Ik, lb_line, t, side_skin)
+    print('sides: around the ears, on the neck and the cheeks: the hair pressed onto the head (points per side; with skin under them, without), Meshy\'s locks cleaned %s; %d texels painted' % (
+        {k_: v_['pressed'] for k_, v_ in side_out.items()}, side_px))
     # the collar joined to the vest (tools/ren_collar.py): a skirt from the head's bottom edge to the vest, the collar's band
     # on the vest in the vest's paint
     from ren_collar import collar_join, load_body, collar_shell, NECK_AXIS
@@ -598,10 +670,14 @@ def main(bust, pkg, out, texture=None):
     # stair-stepped, with light patches and a grain over the skin. On the neck (the head's triangles within NECK_CLEAN[3] m
     # of its axis, between [4] and [0] m): the skin flat, the marks crisp: their darkness (from the skin's down to [1] of
     # its brightness) averaged on the model (a gaussian of [2] m) and cut at its half, in the sheets' shadow tone
-    # (NECK_SHADE of the skin), their darkest cores toward the ink
+    # (NECK_SHADE of the skin), their darkest cores toward the ink. Not the texels the sides drew nor their hair's (the
+    # hair's tips over the neck, tools/ren_side.py; 9/11/2026: taken for marks, they came out brown smudges)
     Cn_ = Q[Ik].mean(1); rn_ = np.hypot(Cn_[:, 0] - NECK_AXIS_X, Cn_[:, 2] - NECK_AXIS_Z)
     tri_c = np.nonzero((rn_ < NECK_CLEAN[3]) & (Cn_[:, 1] < NECK_CLEAN[0]) & (Cn_[:, 1] > NECK_CLEAN[4]))[0]
     ysc, xsc, _, _, posc, _ = texel_table(Q, Nq, UVq, Ik[tri_c], TSq)
+    if len(ysc):
+        own = side_painted[ysc, xsc]
+        ysc, xsc, posc = ysc[~own], xsc[~own], posc[~own]
     if len(ysc):
         c1 = t[ysc, xsc]; Ls = skin_rgb.mean(); dk = np.clip((Ls - c1.mean(1)) / (Ls * (1 - NECK_CLEAN[1])), 0, 1)
         dd, jj = cKDTree(posc).query(posc, k=48, distance_upper_bound=3 * NECK_CLEAN[2]); okk = np.isfinite(dd); jj = np.where(okk, jj, 0)
@@ -614,11 +690,14 @@ def main(bust, pkg, out, texture=None):
     # (and shifted to the body's lit chest's skin down to the floor: ren_collar.SKIN_TO_CHEST)
     from ren_collar import SHELL_FLOOR, SKIN_TO_CHEST
     PB_, IB_, UVB_, JB_, WB_ = load_body(pkg)
+    NB_ = FB_ = None
     lp_ = os.path.join(out, name + '_look.json')
-    if os.path.exists(lp_):   # (the look's skin of the body, as the viewer has it: tools/ren_look.py)
+    if os.path.exists(lp_):   # (the look's skin of the body, as the viewer has it: tools/ren_look.py; and its light's normals and flat share)
         lj_ = json.load(open(lp_)); lb_ = open(os.path.join(out, name + '_look.bin'), 'rb').read()
         (oj_, nj_), (ow_, nw_) = lj_['skin']
         JB_ = np.frombuffer(lb_, np.uint8, nj_, oj_).reshape(-1, 4).astype(JB_.dtype); WB_ = np.frombuffer(lb_, np.float32, nw_, ow_).reshape(-1, 4).astype(WB_.dtype)
+        if 'nor' in lj_: NB_ = np.frombuffer(lb_, np.float32, lj_['nor'][1], lj_['nor'][0]).reshape(-1, 3)
+        if 'flat' in lj_: FB_ = np.frombuffer(lb_, np.float32, lj_['flat'][1], lj_['flat'][0])
     pp = os.path.join(out, name + '_painted.jpg'); paint_b = np.asarray(Image.open(pp).convert('RGB')).astype(np.float64) if os.path.exists(pp) else None
     if paint_b is not None:
         PSb = paint_b.shape[0]; cb_ = paint_b[np.clip((UVB_[:, 1] * PSb).astype(int), 0, PSb - 1), np.clip((UVB_[:, 0] * PSb).astype(int), 0, PSb - 1)]
@@ -671,6 +750,13 @@ def main(bust, pkg, out, texture=None):
     # (and its small holes on the sides and the back closed, ren_hair.fill_holes: flat colours in their own blocks)
     Q, Nq, UVq, Ik, top, tw, lb_line, hole_blk = fill_holes(Q, Nq, UVq, Ik, top, tw, lb_line, t, [b_[:3] for b_ in flat_blk], side_skin)
     flat_blk = flat_blk + hole_blk
+    # (and the body's holes, BODY_HOLES, left by hiding the old tails: a slit on the vest's front right and one on its left,
+    # where the tails' roots were, and one on the right thigh; from behind in guard the vest's and the leg's insides showed
+    # through them, a dark streak and a black triangle, 9/11 Denis: closed by the head's triangles. Those under the band,
+    # under the ribbons' tops, left as they are)
+    Q, Nq, UVq, Ik, top, tw, lb_line, bh_blk, bh_flat = body_holes(Q, Nq, UVq, Ik, top, tw, lb_line, t.shape[0], [b_[:3] for b_ in flat_blk],
+                                                                    PB_, IB_, UVB_, JB_, WB_, NB_, FB_, keep_b, paint_b)
+    flat_blk = flat_blk + bh_blk
     # (the new collar after the skirt: its flat colours in blocks of the texture outside every piece and the skirt's)
     SP, SN, SUV, SJ, SW, STri, shell_blk, _, SLB, SK = collar_shell(Q, np.r_[rest_all, np.zeros(len(Q) - len(rest_all), bool)], top, tw, UVq, Ik, t.shape[0], [b_[:3] for b_ in flat_blk], np.r_[neck_all, np.zeros(len(Q) - len(neck_all), bool)], skin_rgb, teal_rgb,
                                                                      body=(PB_, IB_[keep_b], JB_, WB_))
@@ -683,6 +769,7 @@ def main(bust, pkg, out, texture=None):
     sm_ = lambda a, b, x: (lambda u: u * u * (3 - 2 * u))(np.clip((x - a) / (b - a), 0, 1))
     flat_v = np.ones(nv); lit = (SK == 0) | (SK == 2)
     flat_v[n0:][lit] = FLAT_BODY * sm_(.1, .45, SN[lit, 2])
+    if bh_flat is not None: flat_v[bh_flat[0]:bh_flat[0] + len(bh_flat[1])] = bh_flat[1]   # (the body's holes' fans: lit as the body there)
     print('collar: %d of its vertices lit as the body (%d toon on the sides and the back)' % (int(lit.sum()), int((flat_v[n0:][lit] < .5).sum())))
     head = {'v': 1, 'verts': nv, 'tris': len(Ik), 'scale': round(s, 5), 'pos': put(Q.astype(np.float32)), 'nor': put(Nq.astype(np.float32)), 'uv': put(UVq.astype(np.float32)),
             'jnt': put(top.astype(np.uint8)), 'wgt': put(tw.astype(np.float32)), 'idx': put(Ik.astype(np.uint32 if nv > 65535 else np.uint16)), 'hide': put(hide), 'lining': put(lining), 'noline': put(noline), 'lb': put(lb_line.astype(np.float32)), 'flat': put(flat_v.astype(np.float32))}
