@@ -33,7 +33,8 @@ appena lo trova in `assets/` o `viewer_assets/`: `src/d_render.js`, `modelBuild(
 5. `python3 tools/char_look.py wip_assets/kael wip_assets/kael` → `kael_look.json` + `.bin`: le ossa delle dita (3 per dito
    e pollice, dal mesh, come quelle di Ren: `ren_look.finger_rig`), la pelle sulle dita, il pugno; le larghezze del
    contorno (sottile sul viso e sulle dita, niente alla radice del pollice e sui palmi); le normali della luce lisciate.
-6. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
+6. `python3 tools/kael_outfit.py wip_assets/kael` (dopo `char_look.py`): i vestiti, vedi sotto.
+7. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Dita
 - Nel modello di Meshy le quattro dita di ogni mano sono **un pezzo solo** (attaccate fino alla punta, come una
@@ -46,4 +47,23 @@ appena lo trova in `assets/` o `viewer_assets/`: `src/d_render.js`, `modelBuild(
 ## Look nel gioco
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren
 (7 mm, solo sul bordo esterno, sottile sul viso e sulle dita), luce lisciata, testa alzata di 12° in guardia, la
-guardia `a191` che respira di Ren. Nessuna pittura dal disegno (la pittura è quella di Meshy).
+guardia `a191` che respira di Ren; dal 10/11 i vestiti: la forma (`faceShape`) e la pittura dai fogli (`paint`).
+
+## Vestiti (10/11/2026, dai fogli di Denis)
+Denis ha mandato i fogli del resto: `docs/ref/personaggi/kael_testa_3viste.png`, `kael_busto_3viste.png`,
+`kael_gambe_3viste.png`, `kael_retro.png`. Il disegno intero vestito `kael.png` combacia col disegno del corpo
+`kael_base.png` (stessa posa e misure), da cui Meshy ha fatto il corpo: lo si proietta sul modello senza aggiustamenti.
+
+Tappa 1, i vestiti che seguono il corpo (`tools/kael_outfit.py`): la pelle stessa del corpo spostata in fuori fino alla
+sagoma del disegno, e dipinta dai fogli; niente secondo strato che un calcio potrebbe far attraversare.
+- Capi: maglia senza maniche, colletto alto (cilindro attorno al collo, pesi solo di collo e schiena), fascia in vita,
+  pantaloni larghi (il profilo misurato su `kael.png`: di lato fino a 5,5 cm in più della gamba), stivali con la
+  cinghia e la suola viola, polsiere con i bordi rialzati, mezzi guanti. Ogni capo lisciato da solo, i bordi netti.
+- Dove finiscono pelle e stoffa (spalle, polsiere, guanti) lo decide il disegno: davanti `kael.png`, dietro
+  `kael_retro.png` (adattato alla sagoma, 86% dei vertici dentro).
+- Pittura: davanti e dietro proiettati; sui fianchi, che nessuna delle due viste vede bene, il colore del capo. Le viste
+  di tre quarti dei fogli non si usano: disegnate in modo diverso da una vera rotazione, non combaciano col modello
+  (provato con l'adattamento della sagoma).
+- Non dipinti sul corpo i pezzi che pendono (le code della fascia, la parte della maglia sotto la fascia, lo spallaccio):
+  diventano pezzi veri nella tappa 3. La testa resta quella di Meshy fino ai capelli (tappa 2).
+- Nel look: `faceShape` (la forma spostata) e `paint` (`kael_painted.jpg`).

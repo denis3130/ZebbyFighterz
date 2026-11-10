@@ -2,7 +2,7 @@
 """Check of a character viewer (viewer.html, viewer_kael.html, built by mk.sh): it boots with its character on the stage,
 every play button and option works, the picture is not empty and the console stays clean. Phone landscape and portrait
 sizes, touch. Ren's page: his whole look (new head, its locks, the sash out of the body, both paints); Kael's: his fists on
-his own finger bones and the outline's widths, Meshy's paint only (no paint buttons).
+his own finger bones, the outline's widths, his clothes (the body's shape moved, tools/kael_outfit.py), both paints.
 
 usage: python3 tests/viewer_check.py [OUT_DIR] [--page=viewer_kael.html]   (OUT_DIR: also save a screenshot per size)
 """
@@ -90,12 +90,13 @@ async def main(out_dir, page='viewer.html'):
             n = await pg.evaluate("document.querySelectorAll('#moves button').length")
             for i in range(n):
                 await pg.click('#play%d' % i); await pg.wait_for_timeout(250)
-            # its name; the paint buttons where the drawing is painted on it (Ren), each paint its own picture
+            # its name; the paint buttons (both have the drawing painted on them: Ren since 7/11, Kael's clothes since
+            # 10/11), each paint its own picture
             if not (await pg.inner_text('#name')).startswith(name) or not (await pg.title()).endswith(name.capitalize()): errs.append('not %s\'s page' % name)
-            if await pg.is_visible('#paint') != ren: errs.append('paint buttons ' + ('hidden' if ren else 'shown'))
-            if await pg.evaluate("VW.tex.meshy.image.src === VW.tex.draw.image.src") == ren: errs.append('paints ' + ('the same' if ren else 'not Meshy\'s alone'))
+            if not await pg.is_visible('#paint'): errs.append('paint buttons hidden')
+            if await pg.evaluate("VW.tex.meshy.image.src === VW.tex.draw.image.src"): errs.append('paints the same')
             for bid in ('pMeshy', 'lFlat', 's4', 'spin', 'pDraw', 'lToon', 's1', 'spin'):
-                if ren or bid not in ('pMeshy', 'pDraw'): await pg.click('#' + bid)
+                await pg.click('#' + bid)
             await pg.click('#play2'); await pg.wait_for_timeout(700)
             # the canvas shows the fighter: some pixels are not transparent in the middle of the picture
             drawn = await pg.evaluate("""() => { const c = document.getElementById('view'), g = document.createElement('canvas'); g.width = 64; g.height = 64;
@@ -117,7 +118,8 @@ async def main(out_dir, page='viewer.html'):
               r.spikes = it.joints.head.children.some(g => g.isGroup && g.children.length >= 8) || !!it.head;   // (the new head has its own hair)
               r.head = !!it.head && it.head.isSkinnedMesh && it.head.geometry.index.count > 30000;   // the new head (the viewer turns it on)
               r.fringe = !!it.fringe && it.fringe.isSkinnedMesh && it.fringe.geometry.index.count > 6000 && it.fringe.material.alphaTest > 0;   // its locks from the sheet (over 2000 triangles)
-              r.line = !!it.mesh.geometry.attributes.aLine; r.flat = !!it.mesh.geometry.attributes.aFlat; return r; }""")
+              r.line = !!it.mesh.geometry.attributes.aLine; r.flat = !!it.mesh.geometry.attributes.aFlat;
+              return r; }""")
             # the sash: two ribbons on chains of bones; calm in the guard, swinging after a jump, never NaN
             sash = await pg.evaluate("""async () => { const it = VW.it, sa = it.sash, r = {};
               if (!sa) return {ribbons: false};
