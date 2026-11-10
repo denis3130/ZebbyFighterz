@@ -70,6 +70,13 @@ SKIN_SPREAD = 30.
 # back of the head in shadow, the images draw it lit from every side) under hair[2], and where Meshy's own is darkest (the share hair[3]); their edges smoothed
 # over blur texels (skin, hair). None: the texture's own shading.
 SHADE = {'L': (0., .5, .87), 'Lh': (0., 1., .2), 'skin': (.006, .0015, -.15), 'neck': .004, 'hair': (.005, .004, -.2, .13), 'blur': (.8, 2.5)}
+# the head painted from Denis's six head images (10/11/2026, Denis: "l'hai migliorato ma troppo poco"): their cameras
+# (cams: tools/kael_hair_fit.py, fit on the face's skin), each of the hair's texels from the views that see it and draw
+# hair there (see paint(); ink: the images' lines, darker than this); not the face, the earrings and the collar (ours).
+# None: the colours above alone
+PAINT = {'cams': 'docs/meshy/kael_head_cams.json', 'seen': .002, 'min': .2, 'pow': 16., 'line': 3, 'ink': 90}
+HAIR_BACK = .012             # m: with PAINT, the hair's outline this far back (hidden behind the locks near it: Meshy's
+                             # tufts' black edges drew a tangle the images do not have; the mane's outer edge keeps it)
 SHEEN = 205                  # on the face's skin (its own triangles, under the eyes): texels lighter than this (the skin's 190): Meshy's sheen
 # the outline (per vertex: its width's share, aLine; its extra push back, m, aBack): the earrings' thin, the hair's
 # HAIR_LINE_W (its many thin locks drew black ribbons at the head's full width); the locks over the face (in front of its
@@ -109,6 +116,42 @@ def face_back(Q, I, skin, hair):
     deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1); lw = np.zeros(nw); np.maximum.at(lw, weld, lb)
     for _ in range(FRINGE[3]): lw = np.maximum(lw, .5 * lw + .5 * (A @ lw) / deg)
     return lw[weld], int(over.sum())
+
+
+def paint(out, Q, I, ys, xs, ks, pos, nor, sel):
+    """The texels sel (of the texel table ys, xs, ks, pos, nor) painted from the images (PAINT): each from the views that
+    see it (the head's front-most surface there, within PAINT['seen'] m; facing the camera over PAINT['min']; on the
+    image's figure, its outer line left out), weighted by how much it faces each (to the power PAINT['pow']: nearly the
+    best view alone, no doubled lines). Returns how many."""
+    from cel_light import view_depth
+    cams = json.load(open(os.path.join(ROOT, PAINT['cams'])))
+    idx = np.nonzero(sel)[0]; acc = np.zeros((len(idx), 3)); wsum = np.zeros(len(idx))
+    for view, cam in cams.items():
+        D = np.asarray(Image.open(os.path.join(ROOT, 'docs/ref/personaggi/kael_testa_%s.png' % view)).convert('RGB')).astype(np.float64); H, W = D.shape[:2]
+        bg = np.median(D[5:40, 5:40].reshape(-1, 3), 0)
+        F = ndimage.binary_fill_holes(ndimage.binary_opening(np.abs(D - bg).sum(2) > 30, iterations=1))
+        F = ndimage.binary_erosion(F, iterations=PAINT['line'])
+        Z, proj = view_depth(Q, I, cam, W, H); u, v, dep = proj(pos[idx])
+        ui, vi = np.clip(np.round(u).astype(int), 0, W - 1), np.clip(np.round(v).astype(int), 0, H - 1)
+        th = np.radians(cam['yaw']); facing = nor[idx] @ np.array([np.sin(th), 0, np.cos(th)])
+        px = D[vi, ui]; Lp = px.mean(1)
+        hair_px = (is_hair(px) | (Lp < PAINT['ink'])) & ~is_skin(px) & ~is_purple(px)   # (the image's hair there, or its lines: not its skin)
+        vis = (dep >= Z[vi, ui] - PAINT['seen']) & (facing > PAINT['min']) & (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1) & F[vi, ui] & hair_px
+        x0, y0 = np.clip(np.floor(u).astype(int), 0, W - 2), np.clip(np.floor(v).astype(int), 0, H - 2); fx, fy = (u - x0)[:, None], (v - y0)[:, None]
+        col = (D[y0, x0] * (1 - fx) + D[y0, x0 + 1] * fx) * (1 - fy) + (D[y0 + 1, x0] * (1 - fx) + D[y0 + 1, x0 + 1] * fx) * fy
+        w = np.where(vis, np.maximum(facing, 0) ** PAINT['pow'], 0.)
+        acc += w[:, None] * col; wsum += w
+    ok = wsum > 0
+    out[ys[idx[ok]], xs[idx[ok]]] = acc[ok] / wsum[ok, None]
+    return int(ok.sum())
+
+
+def placement():
+    """The bust's placement on the body (body = bust * s + off, m) and the eyes' and the chin's heights there."""
+    eye_m, chin_m = (DRAW['by'] - DRAW['eyes']) / DRAW['s'], (DRAW['by'] - DRAW['chin']) / DRAW['s']
+    s = (eye_m - chin_m) / (BUST['eyes'] - BUST['chin'])
+    off = np.array([BODY_NECK[0] - s * BUST['neck'][0], eye_m - s * BUST['eyes'], BODY_NECK[1] - s * BUST['neck'][1]])
+    return s, off, eye_m, chin_m
 
 
 def is_skin(c):
@@ -179,9 +222,7 @@ def main(bust):
     if tex.size[0] > HEAD_TEX: tex = tex.resize((HEAD_TEX, HEAD_TEX), Image.LANCZOS)
     T = np.asarray(tex).astype(np.float64); TS = T.shape[0]
     # where: the eyes and the chin on the drawing's, the neck on the body's
-    eye_m, chin_m = (DRAW['by'] - DRAW['eyes']) / DRAW['s'], (DRAW['by'] - DRAW['chin']) / DRAW['s']
-    s = (eye_m - chin_m) / (BUST['eyes'] - BUST['chin'])
-    off = np.array([BODY_NECK[0] - s * BUST['neck'][0], eye_m - s * BUST['eyes'], BODY_NECK[1] - s * BUST['neck'][1]])
+    s, off, eye_m, chin_m = placement()
     P = Pb * s + off
     print('placed: %.4f m per unit; eyes at %.4f m, chin %.4f m; from y %.3f to %.3f m' % (s, eye_m, chin_m, P[:, 1].min(), P[:, 1].max()))
     # each vertex's paint
@@ -341,6 +382,9 @@ def main(bust):
         out[ys[hair_t], xs[hair_t]] = np.array(HAIR[0], float); out[ys[hair_t[hs]], xs[hair_t[hs]]] = np.array(HAIR[1], float)
         print('shade: skin %d texels in shadow (%d under the locks, %d the face\'s own, %d turned away); hair %.0f%% in shadow' % (
             len(k), int(under.sum()), int(jaw.sum()), int(away.sum()), 100 * hs.mean()))
+    if PAINT:   # the head painted from Denis's six head images, see PAINT
+        n_p = paint(out, Q, It, ys, xs, ks, pos, nor, body[ys, xs] & ~ear_v[It[ks]].any(1) & ~collar_v[It[ks]].any(1))   # (the hair: on the face the image's bangs fell on the model's skin)
+        print('painted from the images: %d texels (%.0f%% of the head\'s)' % (n_p, 100 * n_p / len(ys)))
     # the earrings in the drawing's purples (EAR_TONES: by how much each facet faces EAR_LIGHT), the bead and the hook in
     # its silver (EAR_SILVER: lit, shaded); their lines black
     jt = np.nonzero(ear_v[It[ks]].all(1))[0]
@@ -359,6 +403,7 @@ def main(bust):
     # the package (as tools/ren_head.py's)
     line_w = np.where(ear_v, EAR_LINE, np.where(hair_v, HAIR_LINE_W, 1.))
     lb, n_over = face_back(Q, It, is_skin(vc) & ~hair_v & (Q[:, 1] > JAW_Y), hair_v)
+    if PAINT: lb = np.maximum(lb, np.where(hair_v, HAIR_BACK, 0.))   # (the hair's outline pushed back: only the mane's outer edge drawn, the lines inside it the images')
     print('outline: the hair\'s %.2f of the width, the earrings\' %.2f; %d hair vertices over the face pushed back %.0f mm (%d with the smoothing)' % (
         HAIR_LINE_W, EAR_LINE, n_over, 1000 * FRINGE[0], int((lb > 0).sum())))
     pad = lambda bts: bts + b'\0' * (-len(bts) % 4)

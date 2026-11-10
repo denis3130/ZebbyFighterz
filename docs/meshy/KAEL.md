@@ -114,6 +114,22 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     ombre (sono disegnate dove le ciocche toccano la pelle).
 - Orecchini: solo il cristallo, la perlina e il gancio (prima prendevano anche pelle e capelli vicini), il cristallo
   nei quattro viola del disegno secondo le sue facce, perlina e gancio d'argento.
+- **I capelli dipinti dalle immagini** (10/11 notte, Denis: "l'hai migliorato MA TROPPO POCO"):
+  - prima ho misurato le differenze: le sagome dei capelli e delle immagini si sovrappongono già all'84% da ogni lato;
+    la differenza è dentro i capelli (nelle immagini ciocche grandi con linee pulite, nel modello tanti ciuffetti, ognuno
+    col suo bordo nero);
+  - le 6 camere sono rifatte sulla sola pelle del viso (`tools/kael_hair_fit.py`, in `docs/meshy/kael_head_cams.json`:
+    il viso coincide al 71-77%, da dietro al 58%);
+  - ogni punto dei capelli prende il colore dalle immagini che lo vedono e lì disegnano capelli (`PAINT`, `paint()` in
+    `tools/kael_head.py`, quasi solo dalla vista migliore: niente linee doppie); il viso, gli orecchini e il colletto no
+    (sul viso cadevano le ciocche del disegno dove il modello ha pelle);
+  - il contorno dei capelli è spinto 12 mm indietro (`HAIR_BACK`): resta solo il bordo esterno della criniera, le linee
+    dentro sono quelle delle immagini;
+  - da 50°, 65° (la vista del gioco), 120° e 150° nessuna cucitura.
+- Provato e lasciato (`tools/kael_hair_fit.py`, `MODE`): rimodellare i capelli sulle sagome delle 6 immagini. Punto per
+  punto alza la sovrapposizione al 86-90% ma fa una zazzera senza punte; tutta la criniera insieme ('radial', 'sweep')
+  e le punte allungate ('spikes') guadagnano solo 1-3% e fanno punte sfrangiate. La forma resta quella di Meshy:
+  di lato la cresta in alto, dietro i capelli più corti delle immagini.
 - Scanner: `tools/sheet_scan.py` ora mette anche la testa nuova (`<nome>_head.*`) al posto di quella che nasconde.
   Scansioni delle immagini della testa: `--part=1.44:1.80` e la rotazione di ogni immagine (fronte -8:8, tre quarti
   -50:-20 e 20:50, profili -100:-78 e 78:100, dietro 168:192).
