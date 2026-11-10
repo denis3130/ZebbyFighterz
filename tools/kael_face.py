@@ -22,14 +22,18 @@ is (its shape untouched), in flat light (the sheet's own shading, as Ren's head)
   as Ren's face, clean skin with the drawing's features); his right half above the nose the mirror image of his left
   half (MIRROR: the front panel draws a lock over his right brow and eye); outside it the nearest of its face's colours
   from EDGE_IN inside it.
+- Sharp (CEL): the drawing's face in its own flat colours (CEL_PAL, its dark lines its black), each texel the colour of
+  its nearest pixel (the drawing resampled to the texture had soft, blurred eyes and brows).
 - The views on a texel: the one it faces most (SHARP; the front's lead FRONT_BIAS: the three quarters panels only on the
   face's sides), where it sees it; by how much it faces it (FACE) over the drawing's skin in light (BASE). Only the
   PANELS paint (now the front: the three quarters ones, fitted and mapped all the same, put their cheeks' shadows
   elsewhere than the front's, in stripes where they met; the face's sides are the skin in light, as Ren's).
-- The jaw's underside black (JAW_NY: where the surface turns under it), the sheet's shadow under the jaw: a V from the
-  front, the neck's shadow in three quarters; with kael_fix's bold outline on the jaw.
+- The jaw's black V line (JAW_V), as the drawings': along the jaw's lower edge seen from the front, on the face's front
+  surface (the 3D outline is pushed behind the body and draws no inner lines). (Painting the jaw's underside black
+  instead read as a goatee.)
 - The collar's specks (COLLAR_SPECK: Meshy's skin-coloured bits on its purple and black by the neck) in its colours.
-- The whole face flat lit (its shading is the sheet's).
+- The whole face flat lit (its shading is the sheet's), but the jaw's underside and the neck under it (UNDER): in the
+  toon light's shadow, as Ren's, the jaw's line over them reads as the jaw.
 
 usage: python3 tools/kael_face.py PACKAGE_DIR [DEBUG_DIR]   (after tools/kael_fix.py: paints PACKAGE_DIR/kael_painted.jpg
 over in place, the face's flat light into PACKAGE_DIR/kael_look.bin; DEBUG_DIR: each panel with the model's landmarks
@@ -58,11 +62,27 @@ FACE_BOX, FACE_Y, SURF, EYE_R = (-.09, .09, 1.47, 1.72), 1.508, .004, .013   # m
 HOLE, HOLE_CELL, HOLE_SKIN = .015, .003, .6   # m: a dark texel's neighbourhood, its cells; the share of skin in it
 HOLE_MAX = 1500                               # texels: a dark stroke's piece at most (the collar's black is bigger)
 COLLAR_Y = 1.53                               # m: under this, purple and big black pieces are the collar's, never the face's
+NECK = (1.545, .055, .015, 400)               # the neck's sides (y under, z under, |x| over, m): dark pieces touching its skin,
+                                              # under this many texels, are Meshy's strokes: skin
 COLLAR_SPECK = 400                            # texels: a speck of another colour on the collar at most (it takes the collar's)
 WARM = 25                                     # red over blue: a warm colour (skin's), not the hair's
 LIGHT_SKIN = .6                               # a light texel that much skin surrounds: Meshy's light strokes, not a lock
 CHIN_LIGHT = (1.54, .075)                      # m: under the mouth (y under, |x| under) no hair: its light texels are skin's
-JAW_NY, JAW_SHADE, JAW_BLACK = (.7, .74), (1.535, .08), (14., 13., 15.)   # the jaw's underside (-n.y from, to: a sharp edge, as the sheet's shadows), where (m), its black
+EYE_ZONE = (.022, .010, .024)                 # m: around an iris (|dx| under, dy from -, to +: the brow): the face's light texels
+CEL, CEL_LINE = True, 70                     # the drawing's face in its flat colours; its lines (lightness under) black
+CEL_PAL = ((14, 12, 12), (248, 186, 140), (248, 200, 154), (166, 112, 82), (240, 240, 242), (170, 100, 190),
+           (128, 72, 156), (60, 30, 80), (108, 84, 108), (226, 212, 226), (130, 112, 138))   # (the head sheet's)
+CEL_KEEP = 4                                  # (CEL_PAL's white: the irises' highlights, never a speck)
+CONTOUR = 7                                   # px: the drawn face's outline at its edge (left to the 3D outline)
+UNDER = (-.1, 1.56, .2, .002)                 # under the jaw's line seen from the front (to this over it, m; facing down: n.y under;
+                                              # y under): toon light, not flat (n.z: unused)
+NOSE_KEEP = (9, 30, 7)                        # px around the drawn nose's tip (|dx| under; up to, down to): its shadow kept, a band
+                                              # along it (Meshy's nose is flatter: the drawn shadow beside it fell on the cheek)
+NOSE_SIDE = (.35, .022, .035)                 # the nose's sides (|n.x| over; |dx| under, up to dy over the tip, m): no shadow
+JAW_PAINT = False                             # the jaw's line painted (off: the outline draws it, kael_fix HEAD_BACK; painted, a
+                                              # black stripe down the cheek seen from the side)
+JAW_V, JAW_BLACK = (.005, .002, .045, 1.56, .075), (14., 13., 15.)   # m: the jaw's line (its height, its columns' width, the
+                                              # face's front: z over, y under, |x| under); its black
                                               # (as kael_fix's HAIR_SKIN: the hair is the rest)
 FRONT_BIAS = .2                               # n . d: the front panel's lead (it paints the face until it turns ~35 deg)
 LOCK_EDGE, EYE_KEEP = 5, 22.                  # px: a lock over the drawn face left out with this much around it (its
@@ -83,16 +103,38 @@ def disk(r):
     a = np.arange(-r, r + 1); return np.add.outer(a * a, a * a) <= r * r
 
 
-def marks3d(P, I, hw):
+def marks3d(P, I, hw, skin_tri=None):
     """The model's landmarks in 3D: MODEL's x, y and the front-most face surface's z there."""
     import glbio
     zf = face_depth(P, I, hw, *FACE_BOX, 120)
     pts = [MODEL['eyes'][0], MODEL['eyes'][1], MODEL['nose'], MODEL['mouth'], MODEL['chin']]
     T = I[(hw[I] > .3).all(1)]; out = []
+    cx_, cy = pts[4]   # (the chin: the skin's lowest point in front there, wherever the shape put it; not the collar)
+    Ts = I[(hw[I] > .3).all(1) & (skin_tri if skin_tri is not None else True)]
+    for y in np.arange(cy + .01, cy - .03, -.0005):
+        if any(h[0] > JAW_V[2] for h in glbio.raycast_z(P, Ts, [cx_], [y])[0]): pts[4] = (cx_, y)
+        elif y < cy: break
     for k, (x, y) in enumerate(pts):   # (the nose's tip and the chin: the front-most hit; the eyes and the mouth: the face
         hits = [h[0] for h in glbio.raycast_z(P, T, [x], [y])[0] if h[0] > .02]   # behind the hair)
         out.append((x, y, max(hits) if k in (2, 4) and hits else float(zf(np.array([[x, y, 0.]]))[0])))
     return np.array(out)
+
+
+def cel(D, M):
+    """The drawing's face (D, inside the mask M) in its own flat colours (CEL_PAL: its skin in light and in shadow, its
+    black lines, the eyes' whites, the irises' purples and their dark ring, the brows', the hair's over the face): each
+    pixel the nearest of them, its dark ones (CEL_LINE) black; then each pixel unlike most of its 8 neighbours their
+    colour (specks). The edges sharp. D outside M as it is."""
+    pal = np.array(CEL_PAL, float); px = D[M]; L = px.mean(1)
+    lab = ((px[:, None, :] - pal[None]) ** 2).sum(2).argmin(1); lab[L < CEL_LINE] = 0   # (CEL_PAL[0]: the black)
+    key = np.full(D.shape[:2], -1); key[M] = lab
+    best = np.zeros(D.shape[:2]); arg = key.copy()
+    for k in range(len(pal)):
+        c = ndimage.uniform_filter((key == k).astype(float), 3)
+        up = c > best; best[up] = c[up]; arg[up] = k
+    lone = M & (best * 9 >= 5) & (arg != key) & (key != CEL_KEEP); key[lone] = arg[lone]   # (not the irises' highlights)
+    O = D.copy(); O[M] = pal[key[M]]
+    return O
 
 
 def mapping(src, dst):
@@ -137,8 +179,12 @@ def main(pkg, debug=None):
     th = (hw[I[ks]] * bary).sum(1)
     zf = face_depth(P, I, hw, *FACE_BOX, 120)(pos)
     onf = (th > .5) & ~np.isnan(zf) & (np.abs(pos[:, 2] - np.nan_to_num(zf, nan=-9)) < SURF) & (pos[:, 1] > FACE_Y)
-    cl = classes(T[ys, xs]); M3 = marks3d(P, I, hw)
-    near_eye = np.min([np.linalg.norm(pos[:, :2] - M3[k, :2], axis=1) for k in (0, 1)], 0) < EYE_R
+    uc = UV[I].mean(1); tcol = T[np.clip((uc[:, 1] * TS).astype(int), 0, TS - 1), np.clip((uc[:, 0] * TS).astype(int), 0, TS - 1)]
+    cl = classes(T[ys, xs]); M3 = marks3d(P, I, hw, classes(tcol) == 2)
+    near_eye = np.zeros(len(pos), bool)   # (the eyes and the brows above them: their light texels are the face's)
+    for k in (0, 1):
+        dx, dy = pos[:, 0] - M3[k, 0], pos[:, 1] - M3[k, 1]
+        near_eye |= (np.abs(dx) < EYE_ZONE[0]) & (dy > -EYE_ZONE[1]) & (dy < EYE_ZONE[2])
     # and off that surface (the jaw's underside, the neck under it, the face's sides by the ears, the forehead under the
     # locks): the head's skin, and the dark texels skin surrounds (Meshy's strokes: in a HOLE-wide neighbourhood, at
     # least HOLE_SKIN of it skin); not the hair (light, or its lavender shading: not skin), the earrings, the collar
@@ -151,7 +197,13 @@ def main(pkg, debug=None):
     DK = np.zeros((TS, TS), bool); DK[ys, xs] = head & (cl == 0); lab, n = ndimage.label(DK)   # (a dark stroke: a small piece;
     small = (np.bincount(lab.ravel()) < HOLE_MAX)[lab[ys, xs]]                                 # not the collar's black)
     reg = (onf & (np.isin(cl, (0, 2)) | ((cl == 4) & warm) | ((cl == 3) & near_eye))) | sk | (head & (cl == 0) & (share > HOLE_SKIN) & small) | (head & warm & ((cl == 4) | ((cl == 3) & (share > HOLE_SKIN)))) | (head & (cl == 3) & (share > LIGHT_SKIN)) | (head & (cl == 3) & (pos[:, 1] < CHIN_LIGHT[0]) & (np.abs(pos[:, 0]) < CHIN_LIGHT[1]))
-    collar = (pos[:, 1] < COLLAR_Y) & ((tc[:, 2] > tc[:, 1] + 30) | ((cl == 0) & ~small))   # (its purple and its black)
+    # (the neck's sides: Meshy's dark strokes on its skin, under the jaw; not the collar's black, a big piece)
+    NK = np.zeros((TS, TS), bool); NK[ys, xs] = head & (cl == 0) & (pos[:, 1] < NECK[0]) & (pos[:, 2] < NECK[1]) & (np.abs(pos[:, 0]) > NECK[2])
+    lab, n = ndimage.label(NK); szn = np.bincount(lab.ravel()); SKm = np.zeros((TS, TS), bool); SKm[ys, xs] = sk
+    tch = np.zeros(n + 1, bool); np.logical_or.at(tch, lab[ndimage.binary_dilation(SKm, iterations=3) & NK], True)
+    neck = ((szn < NECK[3]) & tch)[lab[ys, xs]] & (lab[ys, xs] > 0)
+    reg |= neck
+    collar = (pos[:, 1] < COLLAR_Y) & ((tc[:, 2] > tc[:, 1] + 30) | ((cl == 0) & ~small & ~neck))   # (its purple and its black)
     reg &= ~collar
     R = np.nonzero(reg)[0]
     print('the face: %d texels; the model\'s landmarks (m):' % len(R), np.round(M3, 4).tolist())
@@ -205,8 +257,12 @@ def main(pkg, debug=None):
         # and the locks are elsewhere on the model)
         Dk = Dv.copy(); light = np.median(Dv[(dcv == 1) & face & (Dv.mean(2) > 180)], 0)
         nz, mo, ch = dst[2], dst[3], dst[4]
-        keep = (np.hypot(xx - nz[0], yy - nz[1]) < KEEP_SHADE[0]) | (np.hypot(xx - mo[0], yy - mo[1]) < KEEP_SHADE[1]) | (yy > ch[1] - 4)
+        keep = ((np.abs(xx - nz[0]) < NOSE_KEEP[0]) & (yy > nz[1] - NOSE_KEEP[1]) & (yy < nz[1] + NOSE_KEEP[2])) | (np.hypot(xx - mo[0], yy - mo[1]) < KEEP_SHADE[1]) | (yy > ch[1] - 4)
         shade = face & (dcv == 1) & (Dv.mean(2) < SHADE_L) & ~keep; Dk[shade] = light
+        # (the drawn face's own outline, its black at its edge: skin; the 3D outline draws it, at the model's edge)
+        rim = Dm & (Dk.mean(2) < CEL_LINE + 30) & (ndimage.distance_transform_edt(Dm) < CONTOUR)
+        Dk[rim] = light
+        if CEL: Dk = cel(Dk, Dm)   # (the drawing's flat colours, its edges sharp: no blur from the resampling)
         Din = ndimage.binary_erosion(Dm, iterations=EDGE_IN)
         _, (iy, ix) = ndimage.distance_transform_edt(~Din, return_indices=True); Dc = np.where(Dm[..., None], Dk, Dk[iy, ix])
         # the face's texels this panel sees, facing it
@@ -219,9 +275,12 @@ def main(pkg, debug=None):
         vis[o] = np.asarray(adj[kr[o], fid[o]]).ravel() > 0
         face_n = nor[R] @ d; sel = vis & (face_n > FACE[0])
         qu, qv = f(pu[sel], pv[sel])
-        x0_ = np.clip(np.floor(qu).astype(int), 0, W - 2); y0_ = np.clip(np.floor(qv).astype(int), 0, H - 2)
-        fx = np.clip(qu - x0_, 0, 1)[:, None]; fy = np.clip(qv - y0_, 0, 1)[:, None]
-        Co[vi, sel] = Dc[y0_, x0_] * (1 - fx) * (1 - fy) + Dc[y0_, x0_ + 1] * fx * (1 - fy) + Dc[y0_ + 1, x0_] * (1 - fx) * fy + Dc[y0_ + 1, x0_ + 1] * fx * fy
+        if CEL:   # (the nearest pixel: its flat colour)
+            Co[vi, sel] = Dc[np.clip(np.round(qv).astype(int), 0, H - 1), np.clip(np.round(qu).astype(int), 0, W - 1)]
+        else:
+            x0_ = np.clip(np.floor(qu).astype(int), 0, W - 2); y0_ = np.clip(np.floor(qv).astype(int), 0, H - 2)
+            fx = np.clip(qu - x0_, 0, 1)[:, None]; fy = np.clip(qv - y0_, 0, 1)[:, None]
+            Co[vi, sel] = Dc[y0_, x0_] * (1 - fx) * (1 - fy) + Dc[y0_, x0_ + 1] * fx * (1 - fy) + Dc[y0_ + 1, x0_] * (1 - fx) * fy + Dc[y0_ + 1, x0_ + 1] * fx * fy
         Sc[vi, sel] = face_n[sel]
         print('  %d face texels it sees (%d facing it well); %d px of its face (%d of locks over it left out)' % (int(sel.sum()), int((face_n[sel] > FACE[1]).sum()), int(Dm.sum()), int(locks.sum())))
         if debug:
@@ -241,9 +300,21 @@ def main(pkg, debug=None):
     col = (w[..., None] * Co).sum(0) / np.maximum(w.sum(0), 1e-12)[:, None]
     wt = np.where(seen_any, smooth(*FACE, np.where(seen_any, smax, 0)), 0)[:, None]
     new_ = BASE * (1 - wt) + col * wt
-    # the jaw's underside black, as the sheet's shadow under the jaw (a V from the front, the neck's shadow in three quarters)
-    pr = pos[R]; under = smooth(JAW_NY[0], JAW_NY[1], -nor[R, 1]) * (pr[:, 1] < JAW_SHADE[0]) * (np.abs(pr[:, 0]) < JAW_SHADE[1])
-    new_ = new_ * (1 - under[:, None]) + np.array(JAW_BLACK) * under[:, None]
+    # the jaw's black V line, as the drawings' (kael_nero.png, the head sheet): along the jaw's lower edge seen from the front,
+    # JAW_V[0] high, on the face's front surface (the 3D outline is pushed behind the body: it draws no inner lines)
+    pr = pos[R]; fr = (pr[:, 2] > JAW_V[2]) & (nor[R, 2] > -.2) & (pr[:, 1] < JAW_V[3]) & (np.abs(pr[:, 0]) < JAW_V[4])
+    bins = np.floor((pr[:, 0] + .1) / JAW_V[1]).astype(int); edge = np.full(bins.max() + 2, np.inf)
+    np.minimum.at(edge, bins[fr], pr[fr, 1]); ok = np.isfinite(edge)   # (per column, the face's lowest point in front)
+    cx_ = (np.arange(len(edge)) + .5) * JAW_V[1] - .1
+    edge_s = ndimage.median_filter(np.where(ok, edge, np.nan), 3)[ok] if ok.sum() > 3 else edge[ok]
+    ej = np.interp(pr[:, 0], cx_[ok], edge_s)
+    vline = fr & (pr[:, 1] < ej + JAW_V[0]) & JAW_PAINT
+    new_[vline] = JAW_BLACK
+    print('the jaw\'s line: %d texels; its lowest point at y %.4f' % (int(vline.sum()), float(np.nanmin(np.where(ok, edge, np.nan)))))
+    # (the nose's sides in light: the drawing's shadow beside the nose, painted on its side, spread into a brown patch
+    # in three quarters; the shadow under it stays)
+    nz = (np.abs(pr[:, 0] - M3[2, 0]) < NOSE_SIDE[1]) & (pr[:, 1] > M3[2, 1] - .004) & (pr[:, 1] < M3[2, 1] + NOSE_SIDE[2]) & (np.abs(nor[R, 0]) > NOSE_SIDE[0])
+    nzs = nz & (np.abs(new_ - np.array(CEL_PAL[3], float)).sum(1) < 40); new_[nzs] = BASE
     out = T.copy(); out[ys[R], xs[R]] = new_
     # the collar's specks (Meshy's skin-coloured bits on its purple and black, by the neck): its nearest colour
     oc = out[ys, xs]; low = (pos[:, 1] < COLLAR_Y) & (th > .3)
@@ -270,7 +341,9 @@ def main(pkg, debug=None):
     vreg = np.zeros(len(P)); vc = np.zeros(len(P)); tri = np.bincount(ks[R], minlength=nt) > .5 * np.maximum(np.bincount(ks, minlength=nt), 1)
     np.add.at(vreg, I.ravel(), np.repeat(tri.astype(float), 3)); np.add.at(vc, I.ravel(), 1)
     vin = vreg / np.maximum(vc, 1) > .5
-    new = np.where(vin, 1., flat)
+    ejv = np.interp(P[:, 0], cx_[ok], edge_s)   # (the jaw's edge seen from the front, at each vertex's x)
+    under = (P[:, 1] < ejv + UNDER[3]) & (P[:, 1] < UNDER[1]) & (np.abs(P[:, 0]) < JAW_V[4]) & (hw > .3) & (NL[:, 1] < UNDER[0])   # (under the jaw's line: the jaw's underside and the neck under it, in the toon light: in
+    new = np.where(vin & ~under, 1., np.where(under, 0., flat))   # its shadow, as Ren's, the jaw's line reads as the jaw)
     blob = bytearray(LB); of = lj['flat'][0]; blob[of:of + 4 * len(P)] = new.astype(np.float32).tobytes()
     open(os.path.join(pkg, name + '_look.bin'), 'wb').write(bytes(blob))
     print('paint: %d face texels (%d from the sheet, %d facing it well); the skin in light %s; flat light on %d face vertices' % (

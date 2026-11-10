@@ -28,6 +28,11 @@ Denis: "devi guardarlo in 3d e vedere da solo cosa c'è di storto o di sfumato, 
 - **Resti**: niente pezzi dipinti di cose che non ci sono più o che sono diventate pezzi a parte (le vecchie code della
   fascia di Ren).
 - **Viso**: occhi puliti e simmetrici, naso, bocca, mascella e ombra sotto il mento come nel foglio, da ogni lato.
+  Tratti netti (righe nere, iridi, sopracciglia) e non sfocati: guardali da vicino accanto a Ren. Nessuna riga del
+  disegno dipinta su superfici che di lato diventano strisce (la mascella, il bordo del viso): quelle le disegna il
+  contorno 3D. Misura le proporzioni sovrapponendo il disegno (occhi, naso, bocca, mento).
+- **Telecamere giuste**: le prove finali con la telecamera in prospettiva dell'anteprima (il contorno spinto indietro
+  in una telecamera ortografica spostata dal centro si sposta di lato e disegna righe che nel gioco non ci sono).
 - **Capelli**: sagoma e punte come nel foglio, ciocche col contorno nero, tempie e zona attorno alle orecchie senza
   buchi, aghi o spigoli, niente cuoio capelluto scoperto, nuca coperta come nel foglio.
 - **Orecchie e orecchini** al loro posto, visibili come nel foglio.

@@ -1868,6 +1868,7 @@ function modelBuild(key) {
     if (fingers.length) { geo.setAttribute('skinIndex', look.skin[0]); geo.setAttribute('skinWeight', look.skin[1]); }
     if (smoothN) { geo.userData.bindNormal = md.geo.attributes.normal; geo.setAttribute('normal', look.nor); }
     if (per) geo.setAttribute('aLine', look.line);
+    if (per && look.lb) geo.setAttribute('aBack', look.lb);   // (the head's outline less pushed back: the jaw's line over the neck)
     if (flat) geo.setAttribute('aFlat', look.flat);
     if (shape) {   // the face's shape: copies of the positions and normals, the moved vertices changed
       const p = new Float32Array(md.geo.attributes.position.array), n = new Float32Array((smoothN || md.geo.attributes.normal).array), m = look.move;
@@ -1908,7 +1909,7 @@ function modelBuild(key) {
     face.tex.image.decode().then(() => { face.tex.needsUpdate = true; face.ready = true; mdFaceShow(face, face.want); }, () => {});
     mdFaceMat(main, face);
   }
-  const ol = lk.line || {w: MD_OUTLINE, back: 0}, line = mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per, back: ol.back});
+  const ol = lk.line || {w: MD_OUTLINE, back: 0}, line = mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per, back: ol.back, perBack: !!(per && look.lb)});
   // (with the new head's lining: the vest's lapels also drawn from behind in their paint, not their outline's black; and
   // their folded corners, noline, left out of the outline: pushed out past the lining it drew a black Z over the shirt,
   // and only pushed back, slid aside, as black dashes beside them)
@@ -2381,7 +2382,8 @@ function mdLookData(md, key) {
     face: j.face && Object.assign({}, j.face, {depth: Object.assign({}, j.face.depth, {map: new Uint8Array(u8.buffer, j.face.depth.map[0], j.face.depth.map[1])}),
       jaw: Object.assign({}, j.face.jaw, {map: new Uint8Array(u8.buffer, j.face.jaw.map[0], j.face.jaw.map[1])})}),
     skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
-    line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1), nor: j.nor && new THREE.BufferAttribute(f32(j.nor), 3)};
+    line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1), nor: j.nor && new THREE.BufferAttribute(f32(j.nor), 3),
+    lb: j.lb && new THREE.BufferAttribute(f32(j.lb), 1)};   // (the outline's per-vertex push back, m, over the look's line.back)
 }
 
 // --- Poses: {q: local rotations, nb x 4, h: the Hips' local position} ---

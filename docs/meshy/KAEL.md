@@ -65,6 +65,32 @@ disegno (antracite 46,45,48 e pieghe 14,13,15, seguendo le pieghe dipinte da Mes
 corpo è in luce piatta come quello di Ren (i colori del disegno, senza le bande scure della luce). In guardia la figura
 ha luminosità media 79 (prima 74, disegno 77), la tuta 38.
 
+## Versione 7 (10/11): il viso rifatto netto, la mascella come quella di Ren, il mento come nel disegno
+Denis: "il viso non è ancora fatto bene". Messo accanto a Ren in 3D (stesse inquadrature, telecamera in prospettiva
+come l'anteprima: `facepair.py` nello scratchpad) e al foglio della testa, con il disegno sovrapposto al modello:
+- **Occhi, sopracciglia, naso sfocati**: il disegno ricampionato sulla texture (circa 1,2 pixel per millimetro) veniva
+  morbido e grigio. Ora i colori del viso del disegno sono ridotti alla sua tavolozza (`kael_face.py` `CEL_PAL`: pelle
+  in luce e in ombra, nero delle righe, bianco degli occhi, tre viola dell'iride, sopracciglio, capelli) e ogni punto
+  prende il pixel più vicino: righe nere nette, iridi viola col riflesso, sopracciglia a due toni. Anche le sopracciglia
+  fanno parte del viso (`EYE_ZONE`: prima i loro puntini chiari restavano quelli di Meshy).
+- **Mento più corto del disegno**: sovrapponendo `kael_nero.png` e il foglio della testa, la V della mascella disegnata
+  era 1,3-1,5 cm più in basso di quella del modello (occhi e naso già al loro posto, entro 3 pixel). Il mento e la
+  mascella sono allungati di 1,3 cm (`kael_fix.py` `long_chin`, `LONG_CHIN`, togliere con `--nochin`): **unico
+  cambio di forma, da far vedere a Denis**.
+- **La V della mascella**: dipinta nella texture diventava una striscia nera giù per la guancia vista di lato. Ren non
+  la ha dipinta: la disegna il contorno 3D della sua testa, spinto indietro di soli 6 mm, dove la mascella sporge sul
+  collo. Kael (un solo pezzo col corpo) ha il contorno spinto indietro di 2 cm per non disegnare righe sulle pieghe
+  della tuta: ora sotto la mascella (solo dove guarda in basso) è spinto indietro di 6 mm come Ren (`kael_fix.py`
+  `HEAD_BACK`, nel look `lb`; `src/e_model.js` legge `lb` anche per il corpo). Sulle guance no: lì le pieghe di Meshy
+  facevano righe.
+- **Sotto la mascella** in luce 3D (ombra) come Ren, sopra in luce piatta (`kael_face.py` `UNDER`: sotto la linea della
+  mascella vista di fronte): la V si legge come mascella e non come una riga sulla guancia.
+- **Il contorno del viso disegnato** (la sua riga nera al bordo) non è più dipinto (`CONTOUR`): il viso di Meshy è
+  più largo e quella riga cadeva sulla guancia; il bordo lo disegna il contorno 3D.
+- **Naso**: l'ombra accanto al naso del disegno cadeva sulla guancia (il naso di Meshy è più piatto) e di tre quarti
+  era una macchia marrone: tenuta solo una fascia lungo il naso e l'ombra sotto (`NOSE_KEEP`, `NOSE_SIDE`).
+- Collo: via i tratti scuri di Meshy sotto la mascella (`NECK`).
+
 ## Versione 6 (10/11): capelli, mascella, tuta uguale davanti e dietro
 Denis: "continua a migliorare il viso ed tutto il resto fino a che non viene quasi identico alle foto di kael".
 Misurato in 3D contro i fogli dalla stessa inquadratura:
@@ -130,3 +156,5 @@ dell'anteprima mostra quella originale).
   foglio con gli orecchini a goccia non ci sono (le copre la forma dei capelli). Senza Meshy si possono solo ridipingere.
 - Gli orecchini: nel foglio sono cristalli a rombo con anellino, perlina e riflesso bianco; quelli di Meshy sono
   macchie viola attaccate alla mascella, mescolate al viola del colletto (non si separano bene per ridipingerli).
+- Forma (da chiedere a Denis, non fatta): la mascella di Meshy è più larga di quella del disegno (la V cade dentro il
+  viso visto di fronte) e il colletto sale fino al mento (nel foglio il collo si vede sopra il colletto).

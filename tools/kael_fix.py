@@ -18,12 +18,13 @@ docs/ref/personaggi/kael_nero.png), from looking at him in 3D from every side an
   darker behind), no patch of a tone under SUIT_MIN texels, its edges softened;
   the hair in the head sheet's two tones (HAIR: its light and its lavender shadow, as much of it as the sheet has, by
   the paint's lightness smoothed: Meshy's hair was nearly white) and its outline thinner (HAIR_LINE: the sheet's locks'
-  lines are thin), the jaw's outline bold as the head sheet's (JAW); the earrings in the drawing's purple (EARRING: their light and purple texels under the lobes); the face's right half
+  lines are thin), the jaw's outline bold as the head sheet's (JAW) and less pushed back (HEAD_BACK, the look's lb: the
+  jaw's line where it overhangs the neck, in every view, as Ren's head's); the earrings in the drawing's purple (EARRING: their light and purple texels under the lobes); the face's right half
   (his right, under the lifted lock: Meshy painted no eye there) the mirror image of its left half about the nose
   (FACE: on the face's surface, not the hair in front of it; faded in at the middle and where it turns away);
   between the UV pieces, the nearest piece's colour (no seams under filtering).
 
-usage: python3 tools/kael_fix.py PACKAGE_DIR   (writes PACKAGE_DIR/kael_painted.jpg and the shape and the flat light
+usage: python3 tools/kael_fix.py PACKAGE_DIR [--nochin]   (--nochin: Meshy's chin, not long_chin's; writes PACKAGE_DIR/kael_painted.jpg and the shape and the flat light
 into PACKAGE_DIR/kael_look.json + .bin)"""
 import json, os, sys
 import numpy as np
@@ -37,6 +38,9 @@ from paint_views import texel_table
 import glbio
 
 BANGS = {'x': (-.068, -.012), 'top': 1.70, 'tips': 1.575, 'to': 1.632, 'front': (.002, .008)}   # m (see above)
+CHIN = {'d': .013, 'y': (1.541, 1.526), 'x': (.025, .08), 'xc': .004, 'z': 0., 'back': -.01, 'front': .045,
+        'rim': (1.512, 1.522)}   # m: the chin's lengthening (see long_chin)
+LONG_CHIN = True   # the chin lengthened to the drawings' (10/11, version 7; --nochin: Meshy's)
 FLAT_HAIR, FLAT_FACE, FLAT_FACE_N = 1., .75, (.15, .45)   # the flat share: the hair; the face's skin, by its normal's z
 FLAT_BODY, FLAT_BODY_N = 1., (.1, .45)   # and on the body's front (as Ren's, tools/ren_look.py: the drawing's colours)
 SPECK, SKIN_KEEP, TINY = 60, 4, 20   # texels: a speck's size at most; how far from the skin a colour is the skin's own shading; a purple bit's
@@ -47,6 +51,8 @@ HAIR, HAIR_LIT, HAIR_BLUR, HAIR_MIN = ((129, 111, 138), (225, 214, 224)), .6, 5.
 HAIR_LINE = .5                             # the outline's width on the hair (its locks' lines thinner, as the sheet's)
 HAIR_SKIN = .6                             # but not a light texel that much skin surrounds (1.5 cm): a stroke on the skin
 JAW, JAW_LINE = (1.505, 1.535, .075), .7   # m: the jaw under the mouth (y from, to; |x| under); its outline's width
+HEAD_BACK = (-.014, 1.56, -.25)           # m: the head's skin's outline push back over the look's line.back (2 cm): 6 mm
+                                           # in all, as Ren's head's; under this height, where it faces down (n.y under)
 PURPLE, PURPLE_BLUR = ((96, 42, 136), (169, 84, 210)), 1.5   # the drawing's purple in shadow and in light
 FACE = {'box': (-.085, .085, 1.545, 1.665), 'surf': .004, 'mid': (.002, .008), 'turn': (.10, .30), 'px': .0004}
 EARRING = {'x': .052, 'y': (1.505, 1.585), 'z': -.012, 'ramp': ((70, 28, 104), (150, 70, 200), (214, 160, 240))}
@@ -103,6 +109,24 @@ def lift_bangs(P, I, hw, col):
     k = (top - to) / (top - tips); ynew = top - (top - np.maximum(P[:, 1], tips - .03)) * k
     Q = P.copy(); Q[:, 1] += w * (ynew - P[:, 1])
     print('bangs: %d vertices lifted, %.1f cm at most' % ((w > .01).sum(), 100 * (w * (ynew - P[:, 1])).max()))
+    return Q
+
+
+def long_chin(P, hw, col):
+    """The chin and the jaw lengthened down to the drawings' (CHIN: Meshy made the face 1.3-1.5 cm shorter under the mouth
+    than kael_nero.png and the head sheet draw it): the face's front under the mouth moved down by CHIN['d'] (faded in
+    from CHIN['y'][0] down to CHIN['y'][1], across the jaw to CHIN['x'], forward by CHIN['z'] at the bottom: in front of
+    the collar's rim); the jaw's underside and the neck behind it with it, less toward the collar's rim (CHIN['rim']);
+    not the collar, the hair, the earrings. The new positions."""
+    cv = classes(col); y0, y1 = CHIN['y']; sm = lambda e0, e1, v: (lambda t: t * t * (3 - 2 * t))(np.clip((v - e0) / (e1 - e0), 0, 1))
+    sel = (hw > .5) & (P[:, 2] > CHIN['back']) & (P[:, 1] < y0) & (P[:, 1] > CHIN['rim'][0]) & np.isin(cv, (0, 2, 4)) & (np.abs(P[:, 0] - CHIN['xc']) < CHIN['x'][1])
+    f = sm(y0, y1, P[:, 1]) * (1 - sm(*CHIN['x'], np.abs(P[:, 0] - CHIN['xc'])))
+    f *= np.where(P[:, 2] > CHIN['front'], 1., sm(*CHIN['rim'], P[:, 1]))   # (behind the chin: less toward the collar's rim)
+    f = np.where(sel, f, 0.)
+    _, inv = np.unique(np.round(P * 1e6).astype(np.int64), axis=0, return_inverse=True); inv = inv.ravel()
+    fm = np.zeros(inv.max() + 1); np.maximum.at(fm, inv, f); f = fm[inv]   # (copies of a position move together)
+    Q = P.copy(); Q[:, 1] -= CHIN['d'] * f; Q[:, 2] += CHIN['z'] * f * sm(y0, y1 - .01, P[:, 1])
+    print('chin: %d vertices moved, %.1f cm at most' % ((f > .01).sum(), 100 * CHIN['d'] * f.max()))
     return Q
 
 
@@ -203,7 +227,7 @@ def paint(pkg, name, Q, N, UV, I, hw, zfun):
     print('paint: %d texels of specks; %d purple texels in the drawing\'s tones, %d black ones; %d earring texels; the face\'s right half from its left (%d texels, the nose at x %.3f)' % (n_sp, int(q.sum()), int(bk.sum()), int(e.sum()), n_face, xc))
 
 
-def main(pkg):
+def main(pkg, chin=LONG_CHIN):
     name, m, P, N, UV, I, jn, wn, lj, LB = load(pkg)
     if 'move' in lj: sys.exit('the look already has a shape: run tools/char_look.py first')
     idx = {b['n']: i for i, b in enumerate(m['bones'])}; nb = len(m['bones'])
@@ -211,6 +235,7 @@ def main(pkg):
     tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(np.float64); ts = tex.shape[0]
     col = tex[np.clip((UV[:, 1] * ts).astype(int), 0, ts - 1), np.clip((UV[:, 0] * ts).astype(int), 0, ts - 1)]
     Q = lift_bangs(P, I, hw, col)
+    if chin: Q = long_chin(Q, hw, col)
     cv = classes(col)
     hand = sum(((jn == idx[s + 'Hand']) * wn).sum(1) for s in ('Left', 'Right')) + ((jn >= nb) * wn).sum(1)
     nsm = smooth_normals(Q, I, np.clip(hand / .5, 0, 1))
@@ -225,6 +250,10 @@ def main(pkg):
     f32 = lambda a: np.frombuffer(LB, np.float32, a[1], a[0])
     pad = lambda b: b + b'\0' * (-len(b) % 4)
     line = f32(lj['line']).copy(); line[(hw > .3) & (cv == 3)] *= HAIR_LINE   # (the hair's outline thinner)
+    # the head's skin's outline less pushed back (as Ren's new head's, e_model MD_HEAD_LINE: 6 mm): the jaw's line where
+    # it overhangs the neck and the collar, in every view (the body's 2 cm keeps the suit's folds free of lines)
+    lbk = np.zeros(len(P)); hs = (hw > .5) & np.isin(cv, (0, 2, 4)) & (Q[:, 1] < HEAD_BACK[1]) & (nsm[:, 1] < HEAD_BACK[2])
+    lbk[hs] = HEAD_BACK[0]   # (only the jaw's underside: on the cheeks and the neck Meshy's creases drew lines)
     jaw = (hw > .5) & (cv == 2) & (Q[:, 1] > JAW[0]) & (Q[:, 1] < JAW[1]) & (np.abs(Q[:, 0]) < JAW[2])   # (the jaw's line
     line[jaw] = np.maximum(line[jaw], JAW_LINE)                                                     # bold, as drawn)
     look = dict(lj); blob = line.astype(np.float32).tobytes(); look['line'] = [0, int(lj['line'][1])]
@@ -232,6 +261,7 @@ def main(pkg):
     look['skin'] = [[oj, int(jn.size)], [ow, int(wn.size)]]
     of = len(blob); blob += flat.astype(np.float32).tobytes(); look['flat'] = [of, int(flat.size)]
     on = len(blob); blob += nsm.astype(np.float32).tobytes(); look['nor'] = [on, int(nsm.size)]
+    ol_ = len(blob); blob += lbk.astype(np.float32).tobytes(); look['lb'] = [ol_, int(lbk.size)]
     moved = np.nonzero(np.linalg.norm(Q - P, axis=1) > 1e-6)[0].astype(np.uint16)
     mi = len(blob); blob += moved.tobytes(); blob = pad(blob)
     mp = len(blob); blob += Q[moved].astype(np.float32).tobytes(); mn = len(blob); blob += nsm[moved].astype(np.float32).tobytes()
@@ -242,5 +272,5 @@ def main(pkg):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2: sys.exit(__doc__)
-    main(sys.argv[1])
+    if len(sys.argv) not in (2, 3): sys.exit(__doc__)
+    main(sys.argv[1], LONG_CHIN and '--nochin' not in sys.argv[2:])
