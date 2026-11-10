@@ -62,7 +62,7 @@ COLLAR_SPECK = 400                            # texels: a speck of another colou
 WARM = 25                                     # red over blue: a warm colour (skin's), not the hair's
 LIGHT_SKIN = .6                               # a light texel that much skin surrounds: Meshy's light strokes, not a lock
 CHIN_LIGHT = (1.54, .075)                      # m: under the mouth (y under, |x| under) no hair: its light texels are skin's
-JAW_NY, JAW_SHADE, JAW_BLACK = (.6, .64), (1.535, .08), (14., 13., 15.)   # the jaw's underside (-n.y from, to: a sharp edge, as the sheet's shadows), where (m), its black
+JAW_NY, JAW_SHADE, JAW_BLACK = (.7, .74), (1.535, .08), (14., 13., 15.)   # the jaw's underside (-n.y from, to: a sharp edge, as the sheet's shadows), where (m), its black
                                               # (as kael_fix's HAIR_SKIN: the hair is the rest)
 FRONT_BIAS = .2                               # n . d: the front panel's lead (it paints the face until it turns ~35 deg)
 LOCK_EDGE, EYE_KEEP = 5, 22.                  # px: a lock over the drawn face left out with this much around it (its
