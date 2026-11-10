@@ -1,0 +1,210 @@
+{
+ "_": "Kael (wip_assets/kael, 10/11/2026) scanned against the sheets by tools/sheet_scan.py: per sheet, per panel from the left, the camera (yaw in degrees, + = his left side seen; s px/m; u = cx + s x', v = by - s y) and the overlaps",
+ "kael_testa_3viste.png": [
+  {
+   "box": [
+    17,
+    0,
+    741,
+    679
+   ],
+   "yaw": 31.0,
+   "s": 1394.227,
+   "cx": 416.684,
+   "by": 2474.65,
+   "iou": {
+    "silhouette": 0.674,
+    "skin": 0.667,
+    "hair": 0.337,
+    "dark": 0.017
+   }
+  },
+  {
+   "box": [
+    697,
+    0,
+    1471,
+    679
+   ],
+   "yaw": 1.0,
+   "s": 1277.458,
+   "cx": 1114.871,
+   "by": 2289.425,
+   "iou": {
+    "silhouette": 0.66,
+    "skin": 0.612,
+    "hair": 0.351,
+    "dark": 0.026
+   }
+  },
+  {
+   "box": [
+    1433,
+    0,
+    2166,
+    679
+   ],
+   "yaw": -19.0,
+   "s": 1329.592,
+   "cx": 1838.127,
+   "by": 2373.348,
+   "iou": {
+    "silhouette": 0.684,
+    "skin": 0.596,
+    "hair": 0.362,
+    "dark": 0.016
+   }
+  }
+ ],
+ "kael_busto_3viste.png": [
+  {
+   "box": [
+    0,
+    82,
+    570,
+    812
+   ],
+   "yaw": 7.0,
+   "s": 542.886,
+   "cx": 292.724,
+   "by": 1034.216,
+   "iou": {
+    "silhouette": 0.531,
+    "skin": 0.225,
+    "dark": 0.288,
+    "purple": 0.231
+   }
+  },
+  {
+   "box": [
+    521,
+    87,
+    1246,
+    818
+   ],
+   "yaw": -4.0,
+   "s": 728.325,
+   "cx": 886.568,
+   "by": 1253.025,
+   "iou": {
+    "silhouette": 0.651,
+    "skin": 0.509,
+    "dark": 0.426,
+    "purple": 0.4
+   }
+  },
+  {
+   "box": [
+    1200,
+    81,
+    1774,
+    819
+   ],
+   "yaw": -7.0,
+   "s": 789.76,
+   "cx": 1417.221,
+   "by": 1321.608,
+   "iou": {
+    "silhouette": 0.467,
+    "skin": 0.223,
+    "dark": 0.305,
+    "purple": 0.355
+   }
+  }
+ ],
+ "kael_gambe_3viste.png": [
+  {
+   "box": [
+    104,
+    0,
+    580,
+    860
+   ],
+   "yaw": 7.0,
+   "s": 712.245,
+   "cx": 333.288,
+   "by": 817.001,
+   "iou": {
+    "silhouette": 0.629,
+    "dark": 0.47,
+    "purple": 0.261
+   }
+  },
+  {
+   "box": [
+    643,
+    0,
+    1147,
+    854
+   ],
+   "yaw": -1.0,
+   "s": 714.12,
+   "cx": 886.892,
+   "by": 819.396,
+   "iou": {
+    "silhouette": 0.781,
+    "dark": 0.711,
+    "purple": 0.604
+   }
+  },
+  {
+   "box": [
+    1186,
+    0,
+    1686,
+    858
+   ],
+   "yaw": -7.0,
+   "s": 701.293,
+   "cx": 1425.763,
+   "by": 814.409,
+   "iou": {
+    "silhouette": 0.641,
+    "dark": 0.495,
+    "purple": 0.379
+   }
+  }
+ ],
+ "kael_nero.png": [
+  {
+   "box": [
+    25,
+    0,
+    988,
+    1529
+   ],
+   "yaw": -4.0,
+   "s": 831.682,
+   "cx": 505.611,
+   "by": 1478.11,
+   "iou": {
+    "silhouette": 0.876,
+    "skin": 0.588,
+    "hair": 0.162,
+    "dark": 0.767,
+    "purple": 0.585
+   }
+  }
+ ],
+ "kael_retro.png": [
+  {
+   "box": [
+    28,
+    0,
+    990,
+    1528
+   ],
+   "yaw": 177.0,
+   "s": 814.667,
+   "cx": 503.572,
+   "by": 1463.441,
+   "iou": {
+    "silhouette": 0.855,
+    "skin": 0.608,
+    "hair": 0.343,
+    "dark": 0.719,
+    "purple": 0.296
+   }
+  }
+ ]
+}
