@@ -6,7 +6,9 @@ is (its shape untouched), in flat light (the sheet's own shading, as Ren's head)
 - The face: the head's texels on its surface seen from the front (kael_fix.face_depth: the face behind the hair), from
   the collar up (FACE_Y), its skin, its lines, the whites of its eyes (light texels near the eyes only: elsewhere a
   light texel on the face is a lock of hair lying on it); and the rest of the head's skin (the jaw's underside, the
-  neck, the face's sides, under the locks) with the dark strokes it surrounds (HOLE) and Meshy's warm brown strokes
+  neck, the face's sides, under the locks) with the dark strokes it surrounds (HOLE; small pieces, HOLE_MAX: not the
+  collar's black by the neck) and Meshy's warm brown strokes; never the collar (COLLAR_Y: its purple, its lavender
+  highlights, its black), whatever its texels' bones
   and highlights on it (WARM: the hair's lavender and white are cool); not the hair, the earrings, the collar.
 - Each panel's camera: orthographic, turned by a yaw (the one whose view of the face's landmarks, its eyes, nose tip,
   mouth and chin, MODEL, best matches the panel's, MARKS: a scale and a shift across, YAW_RANGE), and from the model's
@@ -26,6 +28,7 @@ is (its shape untouched), in flat light (the sheet's own shading, as Ren's head)
   elsewhere than the front's, in stripes where they met; the face's sides are the skin in light, as Ren's).
 - The jaw's underside black (JAW_NY: where the surface turns under it), the sheet's shadow under the jaw: a V from the
   front, the neck's shadow in three quarters; with kael_fix's bold outline on the jaw.
+- The collar's specks (COLLAR_SPECK: Meshy's skin-coloured bits on its purple and black by the neck) in its colours.
 - The whole face flat lit (its shading is the sheet's).
 
 usage: python3 tools/kael_face.py PACKAGE_DIR [DEBUG_DIR]   (after tools/kael_fix.py: paints PACKAGE_DIR/kael_painted.jpg
@@ -53,6 +56,9 @@ YAW_RANGE = {'his left side': (15., 50.), 'front': (-6., 6.), 'his right side': 
 MODEL = {'eyes': ((-.0294, 1.5946), (.0385, 1.5947)), 'nose': (.004, 1.560), 'mouth': (.004, 1.543), 'chin': (.006, 1.5225)}
 FACE_BOX, FACE_Y, SURF, EYE_R = (-.09, .09, 1.47, 1.72), 1.508, .004, .013   # m: the raycast's box; the collar's top; on the surface; an eye's white
 HOLE, HOLE_CELL, HOLE_SKIN = .015, .003, .6   # m: a dark texel's neighbourhood, its cells; the share of skin in it
+HOLE_MAX = 1500                               # texels: a dark stroke's piece at most (the collar's black is bigger)
+COLLAR_Y = 1.53                               # m: under this, purple and big black pieces are the collar's, never the face's
+COLLAR_SPECK = 400                            # texels: a speck of another colour on the collar at most (it takes the collar's)
 WARM = 25                                     # red over blue: a warm colour (skin's), not the hair's
 LIGHT_SKIN = .6                               # a light texel that much skin surrounds: Meshy's light strokes, not a lock
 CHIN_LIGHT = (1.54, .075)                      # m: under the mouth (y under, |x| under) no hair: its light texels are skin's
@@ -142,7 +148,11 @@ def main(pkg, debug=None):
     kk = int(round(HOLE / HOLE_CELL)) | 1; Sk = ndimage.uniform_filter(Sk, kk); Al = ndimage.uniform_filter(Al, kk)
     gi = tuple(np.clip(g, 0, np.array(shp) - 1).T); share = np.where(head, Sk[gi] / np.maximum(Al[gi], 1e-6), 0)
     tc = T[ys, xs]; warm = tc[:, 0] - tc[:, 2] > WARM   # (Meshy's brown strokes and the skin's light: warm; the hair's lavender and white: not)
-    reg = (onf & (np.isin(cl, (0, 2)) | ((cl == 4) & warm) | ((cl == 3) & near_eye))) | sk | (head & (cl == 0) & (share > HOLE_SKIN)) | (head & warm & ((cl == 4) | ((cl == 3) & (share > HOLE_SKIN)))) | (head & (cl == 3) & (share > LIGHT_SKIN)) | (head & (cl == 3) & (pos[:, 1] < CHIN_LIGHT[0]) & (np.abs(pos[:, 0]) < CHIN_LIGHT[1]))
+    DK = np.zeros((TS, TS), bool); DK[ys, xs] = head & (cl == 0); lab, n = ndimage.label(DK)   # (a dark stroke: a small piece;
+    small = (np.bincount(lab.ravel()) < HOLE_MAX)[lab[ys, xs]]                                 # not the collar's black)
+    reg = (onf & (np.isin(cl, (0, 2)) | ((cl == 4) & warm) | ((cl == 3) & near_eye))) | sk | (head & (cl == 0) & (share > HOLE_SKIN) & small) | (head & warm & ((cl == 4) | ((cl == 3) & (share > HOLE_SKIN)))) | (head & (cl == 3) & (share > LIGHT_SKIN)) | (head & (cl == 3) & (pos[:, 1] < CHIN_LIGHT[0]) & (np.abs(pos[:, 0]) < CHIN_LIGHT[1]))
+    collar = (pos[:, 1] < COLLAR_Y) & ((tc[:, 2] > tc[:, 1] + 30) | ((cl == 0) & ~small))   # (its purple and its black)
+    reg &= ~collar
     R = np.nonzero(reg)[0]
     print('the face: %d texels; the model\'s landmarks (m):' % len(R), np.round(M3, 4).tolist())
     nt = len(I)
@@ -235,6 +245,20 @@ def main(pkg, debug=None):
     pr = pos[R]; under = smooth(JAW_NY[0], JAW_NY[1], -nor[R, 1]) * (pr[:, 1] < JAW_SHADE[0]) * (np.abs(pr[:, 0]) < JAW_SHADE[1])
     new_ = new_ * (1 - under[:, None]) + np.array(JAW_BLACK) * under[:, None]
     out = T.copy(); out[ys[R], xs[R]] = new_
+    # the collar's specks (Meshy's skin-coloured bits on its purple and black, by the neck): its nearest colour
+    oc = out[ys, xs]; low = (pos[:, 1] < COLLAR_Y) & (th > .3)
+    colc = low & ((oc[:, 2] > oc[:, 1] + 30) | (oc.mean(1) < 60)); CC = np.zeros((TS, TS), bool); CC[ys, xs] = colc
+    OT = np.zeros((TS, TS), bool); OT[ys, xs] = low & ~colc; lab, n = ndimage.label(OT); sz = np.bincount(lab.ravel())
+    spk = np.zeros(n + 1, bool); CV = np.zeros((TS, TS), bool); CV[ys, xs] = True
+    for i, sl in enumerate(ndimage.find_objects(lab), 1):
+        if sl is None or sz[i] > COLLAR_SPECK: continue
+        y0, y1 = max(sl[0].start - 3, 0), sl[0].stop + 3; x0, x1 = max(sl[1].start - 3, 0), sl[1].stop + 3
+        me = lab[y0:y1, x0:x1] == i; ring = ndimage.binary_dilation(me, iterations=2) & ~me & CV[y0:y1, x0:x1]
+        spk[i] = ring.any() and CC[y0:y1, x0:x1][ring].mean() > .7
+    SP = spk[lab] & OT
+    if SP.any():
+        _, (iy, ix) = ndimage.distance_transform_edt(~CC, return_indices=True); out[SP] = out[iy[SP], ix[SP]]
+    print('the collar: %d texels of specks in its colours' % int(SP.sum()))
     if debug:   # (the texture with the face's texels in the colour of the panel painting them: red, green, blue; white: none)
         vt = T.copy(); tint = np.array([[255, 0, 0], [0, 200, 0], [0, 80, 255]], float)
         vt[ys[R], xs[R]] = (w[..., None] * tint[:, None]).sum(0) / np.maximum(w.sum(0), 1e-12)[:, None] * wt + 255 * (1 - wt)

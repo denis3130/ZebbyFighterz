@@ -76,6 +76,9 @@ Misurato in 3D contro i fogli dalla stessa inquadratura:
   netto (`kael_face.py` `JAW_NY`): la V nera del foglio vista di fronte, l'ombra sul collo di tre quarti.
 - **Tuta**: Meshy l'aveva dipinta più scura dietro che davanti; ora antracite e pieghe nella stessa proporzione del
   disegno davanti, dietro e di lato (`SUIT_BINS`).
+- **Colletto**: via i quadratini color pelle sul bordo viola e nero del colletto (alcuni li aveva dipinti Meshy,
+  altri li aggiungeva il passo del viso: la regola del mento prendeva i riflessi lavanda del colletto). Il colletto
+  non fa mai parte del viso (`COLLAR_Y`) e i pezzetti di altri colori sopra di esso prendono il suo (`COLLAR_SPECK`).
 - Provato e tolto: luce piatta anche sulla schiena (nell'anteprima non cambiava niente: le luci girano col modello).
 
 ## Viso dal foglio della testa (`tools/kael_face.py`, 10/11)
