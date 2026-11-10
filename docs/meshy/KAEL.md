@@ -168,7 +168,16 @@ dell'anteprima mostra quella originale).
 - Il nero della tuta resta quello di Meshy (in due toni diventava granuloso).
 - I tatuaggi del disegno di fronte (fiamme) e quelli dei fogli (fulmini) non sono uguali: davanti fiamme, di lato e
   dietro fulmini. Se Denis vuole un solo disegno, si dipinge quello su tutta la spalla.
-- I capelli hanno la forma di Meshy (ciocche a punte), non quella del foglio (massa morbida e larga); le orecchie del
-  foglio con gli orecchini a goccia non ci sono (le copre la forma dei capelli). Senza Meshy si possono solo ridipingere.
-- Gli orecchini: nel foglio sono cristalli a rombo con anellino, perlina e riflesso bianco; quelli di Meshy sono
-  macchie viola attaccate alla mascella, mescolate al viola del colletto (non si separano bene per ridipingerli).
+- (Versione 6, superate dalla testa da Meshy: forma dei capelli, orecchie e orecchini a cristallo ora sono quelli
+  delle immagini di Denis.)
+- Capelli che si muovono un po' nelle mosse (Denis, 10/11: "saresti in grado di farlo muovere leggermente i capelli
+  quando fa movimenti?"): ossa a molla sulle ciocche grandi (la cresta, le punte ai lati e dietro), figlie della testa,
+  che restano un po' indietro e oscillano come i nastri della fascia di Ren; solo grafica, la logica del combattimento
+  non cambia. I pesi delle ciocche crescono verso le punte.
+- Stile più anime (Denis, 10/11: "così sembra troppo realistico"). In Meshy non c'è un'opzione "anime" per
+  image-to-3d: lo stile viene dall'immagine, ma il modello standard aggiunge dettagli realistici (muscoli, pieghe,
+  ombre nella pittura). Tre strade:
+  - in Meshy, il modello "smart topology": più semplice e pulito, a pezzi separati;
+  - in Meshy, "retexture" con un disegno di Denis come riferimento di stile, per colori piatti;
+  - da noi, gratis: luce toon a due toni netti, pittura ripulita a colori piatti, contorni.
+  Prima di provarle in Meshy: prezzo dal listino (docs.meshy.ai/en/api/pricing), saldo e ok di Denis.
