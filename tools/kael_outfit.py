@@ -18,6 +18,9 @@ kick could push the body through. Each garment, in the bind pose (metres; the ch
 - the gloves: the hand (its own bone's weight over GLOVE_W, not the fingers'), GLOVE_OFF out along the normal.
 Between garments the surface steps (the cuffs, the collar's top, the band's edges, the guards' rims): each is smoothed
 alone, its edge kept. The collar's skin: the neck's and the spine's only (not the head's: it does not turn with him).
+MOVE = False since Denis saw it (10/11/2026: "perché l'hai ingrossato così tanto? il modello iniziale la forma andava
+benissimo"): the body keeps Meshy's shape and the clothes are its paint only; the garments' shapes above still decide
+where each garment is (the paint's materials) and fit the back sheet (its baggy outline).
 
 usage: python3 tools/kael_outfit.py PACKAGE_DIR   (after tools/char_look.py: writes the look's shape into
 PACKAGE_DIR/kael_look.json + .bin, and PACKAGE_DIR/kael_painted.jpg)"""
@@ -46,6 +49,7 @@ BOOT_SHAFT, BOOT_STRAP, BOOT_FOOT, BOOT_SMOOTH = .012, .020, .010, 12
 GUARD_T, GUARD_RIM, GUARD_OFF, GUARD_RIM_OFF = (.32, 1.), ((.32, .40), (.86, .97)), .008, .013
 GLOVE_W, GLOVE_OFF = .5, .002
 RELABEL_ROUNDS = 3
+MOVE = False   # (see above: the body's own shape, the clothes painted on it)
 # garment labels (also the paint's materials)
 SKIN, TOP, COLLAR, BAND, PANTS_, BOOT, GUARD, GLOVE = range(8)
 NAMES = ['skin', 'top', 'collar', 'band', 'trousers', 'boots', 'guards', 'gloves']
@@ -242,7 +246,7 @@ def save_look(pkg, name, lj, LB, Q, I, P, jn, wn, keep_w):
     on = len(blob); blob += nsm.astype(np.float32).tobytes(); look['nor'] = [on, int(nsm.size)]
     mi = len(blob); blob += moved.tobytes(); blob = pad(blob)
     mp = len(blob); blob += Q[moved].astype(np.float32).tobytes(); mn = len(blob); blob += nsm[moved].astype(np.float32).tobytes()
-    look['move'] = {'idx': [mi, int(moved.size)], 'pos': [mp, int(moved.size * 3)], 'nor': [mn, int(moved.size * 3)]}
+    if moved.size: look['move'] = {'idx': [mi, int(moved.size)], 'pos': [mp, int(moved.size * 3)], 'nor': [mn, int(moved.size * 3)]}
     open(os.path.join(pkg, name + '_look.bin'), 'wb').write(blob)
     json.dump(look, open(os.path.join(pkg, name + '_look.json'), 'w'), separators=(',', ':'))
     print('look %d B: %d vertices moved' % (len(blob), moved.size))
@@ -350,7 +354,8 @@ def main(pkg):
              (Db, lambda X: cx2 - s2 * X[:, 0], lambda X: by2 - s2 * X[:, 1], lambda X: -X[:, 2], lambda Nn: -Nn[:, 2])]
     flap = lambda v: [poly for poly, gs in HIDDEN[v] if TOP in gs]
     Q, lab, collar = shape(P, N, I, bones, J, jn, wn, drawn_split(P, views, (flap('front'), flap('back'))))
-    jn2, wn2 = collar_skin(jn, wn, collar, bones)
+    if MOVE: jn2, wn2 = collar_skin(jn, wn, collar, bones)
+    else: Q, jn2, wn2 = P.copy(), jn, wn   # (the garments' labels only: the body's own shape and skin)
     nb = len(bones); idx = {b['n']: i for i, b in enumerate(bones)}
     hw = sum(((jn == idx[s_ + 'Hand']) * wn).sum(1) for s_ in ('Left', 'Right')) + ((jn >= nb) * wn).sum(1)
     nsm = save_look(pkg, name, lj, LB, Q, I, P, jn2, wn2, np.clip(hw / .5, 0, 1))

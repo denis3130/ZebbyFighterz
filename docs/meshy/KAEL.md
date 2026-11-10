@@ -47,15 +47,18 @@ appena lo trova in `assets/` o `viewer_assets/`: `src/d_render.js`, `modelBuild(
 ## Look nel gioco
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren
 (7 mm, solo sul bordo esterno, sottile sul viso e sulle dita), luce lisciata, testa alzata di 12° in guardia, la
-guardia `a191` che respira di Ren; dal 10/11 i vestiti: la forma (`faceShape`) e la pittura dai fogli (`paint`).
+guardia `a191` che respira di Ren; dal 10/11 i vestiti dipinti dai fogli (`paint`).
 
 ## Vestiti (10/11/2026, dai fogli di Denis)
 Denis ha mandato i fogli del resto: `docs/ref/personaggi/kael_testa_3viste.png`, `kael_busto_3viste.png`,
 `kael_gambe_3viste.png`, `kael_retro.png`. Il disegno intero vestito `kael.png` combacia col disegno del corpo
 `kael_base.png` (stessa posa e misure), da cui Meshy ha fatto il corpo: lo si proietta sul modello senza aggiustamenti.
 
-Tappa 1, i vestiti che seguono il corpo (`tools/kael_outfit.py`): la pelle stessa del corpo spostata in fuori fino alla
-sagoma del disegno, e dipinta dai fogli; niente secondo strato che un calcio potrebbe far attraversare.
+Tappa 1, i vestiti che seguono il corpo (`tools/kael_outfit.py`): dipinti dai fogli sulla pelle del corpo. Nella prima
+versione (anteprima v2) la pelle era anche spostata in fuori fino alla sagoma del disegno (pantaloni larghi ecc.); Denis
+l'ha vista (10/11: "perché l'hai ingrossato così tanto? il modello iniziale la forma andava benissimo") e ora il corpo
+tiene la forma di Meshy (`MOVE = False`): le forme dei capi servono solo a sapere dove è ogni capo (i materiali della
+pittura) e ad adattare il foglio da dietro.
 - Capi: maglia senza maniche, colletto alto (cilindro attorno al collo, pesi solo di collo e schiena), fascia in vita,
   pantaloni larghi (il profilo misurato su `kael.png`: di lato fino a 5,5 cm in più della gamba), stivali con la
   cinghia e la suola viola, polsiere con i bordi rialzati, mezzi guanti. Ogni capo lisciato da solo, i bordi netti.
@@ -66,4 +69,9 @@ sagoma del disegno, e dipinta dai fogli; niente secondo strato che un calcio pot
   (provato con l'adattamento della sagoma).
 - Non dipinti sul corpo i pezzi che pendono (le code della fascia, la parte della maglia sotto la fascia, lo spallaccio):
   diventano pezzi veri nella tappa 3. La testa resta quella di Meshy fino ai capelli (tappa 2).
-- Nel look: `faceShape` (la forma spostata) e `paint` (`kael_painted.jpg`).
+- Nel look: `paint` (`kael_painted.jpg`).
+
+Tappa 2, i capelli (in corso, non accesi): `tools/kael_hair.py` costruisce in codice la massa e le ciocche (con i bordi
+neri disegnati sulle ciocche e le punte prese dalla sagoma del disegno) e gli orecchini, come pezzo del look
+(`kael_hair.json|bin|png`, `CFG.looks.kael.parts: ['hair']`, `e_model` `mdPartData`). La prima prova davanti sembra un
+casco con bastoncini ai lati: da rifare prima di accenderla.
