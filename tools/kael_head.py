@@ -75,6 +75,11 @@ SHADE = {'L': (0., .5, .87), 'Lh': (0., 1., .2), 'skin': (.006, .0015, -.15), 'n
 # hair there (see paint(); ink: the images' lines, darker than this); not the face, the earrings and the collar (ours).
 # None: the colours above alone
 PAINT = {'cams': 'docs/meshy/kael_head_cams.json', 'seen': .002, 'min': .2, 'pow': 16., 'line': 3, 'ink': 90}
+# the face (tools/kael_fringe.py): painted from the images, Meshy's locks over it out, the front image's bangs a sheet in
+# front of it; FACE_MID: the face's middle (x, m)
+FACE, FACE_MID = 'paint', .0076   # ('sheet': Meshy's locks over the face out, the front image's bangs a sheet; 'paint': Meshy's locks
+                                  # over the eyes and the forehead out, the front image's bangs painted on the forehead; 'all': and all of the
+                                  # circled area, hair or skin, from the images that see it; 'skin': only the face painted)
 HAIR_BACK = .012             # m: with PAINT, the hair's outline this far back (hidden behind the locks near it: Meshy's
                              # tufts' black edges drew a tangle the images do not have; the mane's outer edge keeps it)
 SHEEN = 205                  # on the face's skin (its own triangles, under the eyes): texels lighter than this (the skin's 190): Meshy's sheen
@@ -385,6 +390,11 @@ def main(bust):
     if PAINT:   # the head painted from Denis's six head images, see PAINT
         n_p = paint(out, Q, It, ys, xs, ks, pos, nor, body[ys, xs] & ~ear_v[It[ks]].any(1) & ~collar_v[It[ks]].any(1))   # (the hair: on the face the image's bangs fell on the model's skin)
         print('painted from the images: %d texels (%.0f%% of the head\'s)' % (n_p, 100 * n_p / len(ys)))
+    keep_t, card = np.ones(len(It), bool), None
+    if FACE:   # the face from the images, Meshy's locks over it out, the front image's bangs a sheet (tools/kael_fringe.py)
+        from kael_fringe import face as face_paint
+        cams_ = json.load(open(os.path.join(ROOT, PAINT['cams'])))
+        keep_t, card = face_paint(out, Q, Nq, UV, It, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, FACE_MID, eye_m, chin_m, cams_, is_skin, is_hair, sheet=FACE == 'sheet', paint_bangs=FACE in ('paint', 'all'), paint_all=FACE == 'all')
     # the earrings in the drawing's purples (EAR_TONES: by how much each facet faces EAR_LIGHT), the bead and the hook in
     # its silver (EAR_SILVER: lit, shaded); their lines black
     jt = np.nonzero(ear_v[It[ks]].all(1))[0]
@@ -401,6 +411,7 @@ def main(bust):
     _, (iy, ix) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], ix[~cov]]
     Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(os.path.join(KAEL_PKG, 'kael_head.jpg'), quality=90, optimize=True)
     # the package (as tools/ren_head.py's)
+    It = It[keep_t]   # (without Meshy's locks over the face, FACE)
     line_w = np.where(ear_v, EAR_LINE, np.where(hair_v, HAIR_LINE_W, 1.))
     lb, n_over = face_back(Q, It, is_skin(vc) & ~hair_v & (Q[:, 1] > JAW_Y), hair_v)
     if PAINT: lb = np.maximum(lb, np.where(hair_v, HAIR_BACK, 0.))   # (the hair's outline pushed back: only the mane's outer edge drawn, the lines inside it the images')
@@ -421,6 +432,11 @@ def main(bust):
     for ext in ('json', 'bin', 'png'):
         fp = os.path.join(KAEL_PKG, 'kael_fringe.' + ext)
         if os.path.exists(fp): os.remove(fp)
+    if card is not None:   # the bangs' sheet (src/e_model.js mdFringeData: on the Head bone)
+        sp, suv, stri, rgba = card; blob = b''; jo = {'v': 1, 'verts': int(len(sp)), 'tris': int(len(stri))}
+        put('pos', sp.astype(np.float32)); put('uv', suv.astype(np.float32)); put('idx', stri.astype(np.uint16 if len(sp) < 65536 else np.uint32))
+        open(os.path.join(KAEL_PKG, 'kael_fringe.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_fringe.json'), 'w'), separators=(',', ':'))
+        Image.fromarray(rgba, 'RGBA').save(os.path.join(KAEL_PKG, 'kael_fringe.png'), optimize=True)
     print('written: kael_head (%d vertices, %d triangles); bones %s' % (len(Q), len(It), {names[i]: int(c) for i, c in enumerate(np.bincount(top[:, 0], minlength=nb)) if c}))
 
 

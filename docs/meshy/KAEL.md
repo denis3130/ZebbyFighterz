@@ -126,6 +126,20 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
   - il contorno dei capelli è spinto 12 mm indietro (`HAIR_BACK`): resta solo il bordo esterno della criniera, le linee
     dentro sono quelle delle immagini;
   - da 50°, 65° (la vista del gioco), 120° e 150° nessuna cucitura.
+- **Il viso dalle immagini** (11/11 notte, Denis cerchiando il viso in ogni vista: "voglio che le parti che ho cerchiato
+  siano perfettamente identiche alle immagini sue. faccia occhi e naso sopratutto, le orecchie vanno bene";
+  `tools/kael_fringe.py`, `FACE = 'paint'` in `tools/kael_head.py`):
+  - la pelle del viso dipinta dalle immagini che la vedono e lì disegnano il viso; occhi, sopracciglia, naso, bocca e
+    mento solo dall'immagine di fronte (da più immagini gli occhi si sdoppiavano);
+  - le ciocche di Meshy davanti agli occhi e alla fronte tolte (entro 4,6 cm dal centro del viso, con i pezzi rimasti
+    staccati), la frangia dell'immagine di fronte dipinta sulla fronte;
+  - il controllo con le camere delle immagini (`docs/meshy/kael_head_cams.json`): da davanti modello e immagine hanno
+    pelle e capelli negli stessi punti quasi ovunque (restano qualche ciocca davanti alle orecchie e una riga lungo la
+    mascella); di tre quarti e di lato le differenze sono alle tempie (Meshy ha più capelli lì) e qualche ciocca;
+  - provato e lasciato: la frangia come un foglio davanti al viso (di lato strisce e pezzi), le ciocche alzate sopra le
+    sopracciglia (sono attaccate alla fronte: la stiravano in strisce), le ciocche tolte dove i profili mostrano il viso
+    (dietro ce ne sono altre: buchi e pezzi), tutta l'area cerchiata dipinta dall'immagine migliore per ogni punto
+    (capelli a macchie).
 - Provato e lasciato (`tools/kael_hair_fit.py`, `MODE`): rimodellare i capelli sulle sagome delle 6 immagini. Punto per
   punto alza la sovrapposizione al 86-90% ma fa una zazzera senza punte; tutta la criniera insieme ('radial', 'sweep')
   e le punte allungate ('spikes') guadagnano solo 1-3% e fanno punte sfrangiate. La forma resta quella di Meshy:
