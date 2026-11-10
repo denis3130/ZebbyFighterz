@@ -294,7 +294,7 @@ const CFG={
     // his package in wip_assets/kael, only in his viewer until his hair and clothes are made): his own finger bones and
     // the outline's widths (tools/char_look.py), the light's normals smoothed, Ren's clips on his skeleton and Ren's guard
     // (his head held as high).
-    kael:{fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, paint:true,
+    kael:{fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
       clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
@@ -1947,25 +1947,12 @@ function modelBuild(key) {
       head.fringeMesh = fmesh; head.fringeMat = fm;
     }
   }
-  const parts = {};   // the look's parts made in code (lk.parts: their names; Kael's hair): toon lit in their own colours, outlined
-  for (const name of lk.parts || []) {
-    const pd = mdPartData(md, key, name);
-    if (!pd) continue;
-    const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false;
-    tex.image.src = pd.png; tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
-    const pm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
-    const pmesh = new THREE.SkinnedMesh(pd.geo, pm), pline = new THREE.SkinnedMesh(pd.geo, mdLineMat({skinning: true, w: (pd.line[0] / s).toFixed(5), back: pd.line[1], perBack: !!pd.geo.attributes.aBack}));
-    pmesh.frustumCulled = pline.frustumCulled = false; body.add(pmesh, pline);
-    pmesh.bind(skel, mesh.matrixWorld); pline.bind(skel, mesh.matrixWorld);
-    parts[name] = {mesh: pmesh, line: pline, mat: pm};
-  }
   const limbs = {};
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = look.fingers.map(f => new THREE.Quaternion().fromArray(f.fist)); }
   if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
-  for (const name in parts) { it.parts = it.parts || {}; it.parts[name] = parts[name].mesh; it.mats['part_' + name] = parts[name].mat; }
   if (face) it.face = face;
   if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash
     let at = bones.length + fingers.length;
@@ -2348,27 +2335,6 @@ function mdHeadData(md, key) {
   md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
     noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null, fringe: mdFringeData(md, key)};
   return {j, geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
-}
-
-// A part of the look made in code (ASSETS '<key>/<key>_<part>.json|bin|png'; 10/11/2026, Kael's hair, tools/kael_hair.py):
-// its geometry skinned to the package's bones in the package's bind space (lb: per vertex its outline's push back, m)
-// and its colours (png: the palette its uvs pick from); null without it.
-function mdPartData(md, key, part) {
-  const j = ASSETS[key + '/' + key + '_' + part + '.json'], b64 = ASSETS[key + '/' + key + '_' + part + '.bin'], png = ASSETS[key + '/' + key + '_' + part + '.png'];
-  if (!j || !b64 || !png) return null;
-  md.parts = md.parts || {};
-  if (md.parts[part] && md.parts[part].j === j) return md.parts[part];
-  const s = atob(b64), u8 = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
-  const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(f32(j.pos), 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(f32(j.nor), 3));
-  geo.setAttribute('uv', new THREE.BufferAttribute(f32(j.uv), 2));
-  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint8Array(buf, j.jnt[0], j.jnt[1]), 4));
-  geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(j.wgt), 4));
-  geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
-  if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));
-  return md.parts[part] = {j, geo, png, line: j.line || [MD_OUTLINE, 0]};
 }
 
 // A geometry with the body's attributes (g's, shared) and the package's triangles (of its index src) but those of hide and
