@@ -640,11 +640,11 @@ def main(bust, pkg, out, texture=None):
     # painted in skin in the hair's, the scalp between the locks in its dark, the skin flat with crisp marks; not the face
     from ren_hair import head_sides, fill_holes
     side_skin = head_sides(t, Q, Nq, UVq, Ik)
-    # (and as Denis's detail sheet has them, tools/ren_side.py: the ears seen, the hair over them pressed onto the head)
+    # (and as Denis's detail sheet has them, tools/ren_side.py: the ears seen, the hair around them, the temples, the neck
+    # and the cheeks clean)
     from ren_side import sides as sheet_sides
     side_out, side_px, side_painted = sheet_sides(Q, Nq, UVq, Ik, lb_line, t, side_skin)
-    print('sides: around the ears, on the neck and the cheeks: the hair pressed onto the head (points per side; with skin under them, without), Meshy\'s locks cleaned %s; %d texels painted' % (
-        {k_: v_['pressed'] for k_, v_ in side_out.items()}, side_px))
+    print('sides: around the ears, the temples, the neck and the cheeks: Meshy\'s locks cleaned, the flaps pressed onto the head (points moved per side %s); %d texels painted' % (side_out, side_px))
     # the collar joined to the vest (tools/ren_collar.py): a skirt from the head's bottom edge to the vest, the collar's band
     # on the vest in the vest's paint
     from ren_collar import collar_join, load_body, collar_shell, NECK_AXIS

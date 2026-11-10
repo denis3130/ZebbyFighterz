@@ -1,59 +1,67 @@
-"""The sides of the new head clean around the ears, on the neck and on the cheeks (9-10/11/2026). Denis's detail sheet
-(docs/ref/personaggi/ren_testa_dettagli.png, "togli tutto il necessario affinché sembri real come l'immagine") gave the
-ear: seen, small as Meshy's ("ok l'orecchio ci sta", prova 1). Then: "fai meglio i capelli attorno alle orecchie e sul
-collo, e quelli sulle guance; gli altri capelli non toccarli".
+"""The sides of the new head clean around the ears, on the temples, on the neck and on the cheeks (9-10/11/2026).
+Denis's detail sheet (docs/ref/personaggi/ren_testa_dettagli.png, "togli tutto il necessario affinché sembri real come
+l'immagine") gave the ear: seen, small as Meshy's ("ok l'orecchio ci sta", prova 1). Then: "fai meglio i capelli attorno
+alle orecchie e sul collo, e quelli sulle guance; gli altri capelli non toccarli"; and on 10/11 two photos with the
+circled parts left: the ear, around it, the temple to the eye's corner, the neck behind the ear.
 
 Meshy's head is one shell: on the sides its outer surface is the hair, with no scalp under it, and loose flaps of hair
-hang over the face's and the neck's skin (the ragged strands). Cut, they opened holes. So:
-- the hair is pressed onto the head as prova 1 did (press(): the sheet's profile, PRESS_WIN of its panel, its ear on
-  Meshy's ear, tells where the side is skin; there the hair's points go to PRESS_SKIN_UP m over the skin under them (a ray
-  along x; without skin under them, as their neighbours that have), and around it their height over it is no more than
-  PRESS_CONE[0] m per m of distance from that skin (a slope), fading in front (PRESS_CONE[1..3]); none under
-  PRESS_FLOOR m nor within PRESS_EDGE steps of the head's open edges; the outline of the moved points pushed back
-  SIDE_LINE m);
-- and painted along x with Meshy's own locks cleaned as a drawing is, in a window around the ear (SIDE_BOX, its edges
-  fading over SIDE_EDGE m), seen from the side before the pressing (a picture SIDE_PX m per px, the outermost surface;
-  the hair there is the dark joined to the hair above it, SIDE_TOP_PX: Meshy's dark marks on the neck are not hair):
-  the hair's outline cleaned (strands thinner than 2 * SIDE_OPEN px off, their tips put back as clean points, SIDE_TIP;
-  gaps narrower than 2 * SIDE_CLOSE px shut, specks and holes under SIDE_SPECK px gone, the edge smoothed); the ear the
-  sheet's drawing and SIDE_EAR_PAD m of skin around it (and the sheet's skin within SIDE_NEAR_EAR of it); the skin plain
-  (the skin's own tone around, its marks left out) where the hair went and SIDE_SKIN m around it, and from the hair's
-  edge (the hair's shadows and specks there); the gaps between the locks in the hair's tone and an ink line SIDE_INK[0]
-  m wide along the hair's edge, on the outermost surface only (the skin under a lock stays); the ear's drawing on the
-  outermost surface facing the side (SIDE_EAR_FACE: its rim and what is behind it plain skin), no ink line along it (its
-  drawing has its own); all of it only on the triangles facing the side (their normal's share along x over SIDE_FACE):
-  the walls of the head's bumps keep their paint, not the side's stretched along them; but on the ear and the skin kept
-  around it all of them (no hair's piece left on the ear).
-sides() also returns the texels it painted and the hair's there: the neck's marks (ren_head.py, NECK_CLEAN) leave them
-as they are.
+hang over the face's and the neck's skin (the ragged strands, the "spikes"); cut, they opened holes. Here, per side, in
+a window (SIDE_WIN: z from, to; y from, to) seen along x (a picture SIDE_PX m per px: the outermost surface's colour and
+depth, the innermost's depth), its parts SIDE_CORE changed fully, fading over SIDE_BAND m:
+- a clean design: Meshy's hair outline cleaned as a drawing is (the dark joined to the hair above, SIDE_TOP_PX; strands
+  thinner than 2 * SIDE_OPEN px off, SIDE_OPEN[1] in front of SIDE_TEMPLE_Z, the temple's, their tips put back as clean
+  points, SIDE_TIP; gaps narrower than 2 * SIDE_CLOSE px shut, specks under SIDE_SPECK px gone, holes in the hair up to
+  SIDE_HOLE px filled, pieces cut off from it under SIDE_BIG px out, the edge smoothed); the ear the sheet's drawing and
+  SIDE_EAR_PAD m of skin around it (and the sheet's skin within SIDE_NEAR_EAR of it); in it the hair in its own colours
+  (the nearest hair's where it was not), the skin in its own tone around (its marks left out), an ink line SIDE_INK[0]
+  m wide along the hair's edge (not along the ear: its drawing has its own);
+- the surface: the skin's (the skin seen where the shell has one layer, carried harmonic under the rest) SIDE_SKIN_UP
+  m over it where the design has skin, the ear's bump too (prova 1's ear: the drawing on the side of the head); the
+  hair under a cone from its edge (no higher over the skin than SIDE_CONE[0] m plus SIDE_CONE[1] m per m, a soft
+  minimum of SIDE_CONE[2] m; never raised: its relief kept under it), within SIDE_DEEP m of its edge brought onto the
+  smoothed surface; a point raised no more than SIDE_RAISE m (deeper: left, hidden); a flap's underside SIDE_INSINK m
+  under its top (no flicker between them); flaps of hair over the skin (SIDE_FLAP[1] m over it where the design has
+  skin) moved down within SIDE_FLAP[0] too, wherever the window ends; never the head's bottom edge (SIDE_EDGE_STEPS
+  steps around it: the collar's skirt hangs from it), the collar, nor anything under SIDE_FLOOR m; the outline of all
+  that pushed back SIDE_LINE m;
+- the paint: every triangle there, its texels from the design along x (the same on every layer: the gaps between the
+  locks and the skin under them alike), the triangles moved over SIDE_MOVED m painted fully, the walls (their normal's
+  share along x under SIDE_WALL) without lines; the texels standing SIDE_LIFT m over the skin after the moves (a lock
+  not pressed down: seen from the front) in the hair's colours, not the design's skin; not the face's front (normal's
+  share along z over SIDE_FRONT, unless moved).
+- the eyes kept: their triangles (whites or iris in their texels, SIDE_EYE_RINGS rings around), a box (SIDE_EYE_BOX)
+  and SIDE_EYE_GUARD m around their whites neither moved nor painted.
+sides() also returns the texels it painted: the neck's marks (ren_head.py, NECK_CLEAN) leave them as they are.
 
 usage (prototyping on a head already made): python3 tools/ren_side.py HEAD_DIR [DEBUG.npz]"""
 import json, os, sys
 import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
+from scipy.spatial import cKDTree
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SIDE_SHEET = ('docs/ref/personaggi/ren_testa_dettagli.png', (1028, 0, 1536, 490))   # (the sheet, its profile panel: x0, y0, x1, y1 px)
 SIDE_EAR = (273, 263, 317, 347)          # the ear in the panel (x0, y0, x1, y1 px)
 SIDE_EAR_M = (-.008, 1.590, .042)        # where the drawn ear goes on the model: its centre (z, y m) and height (m): Meshy's
-SIDE_BOX = (-.080, .042, 1.505, 1.640)   # the window: z from, to; y from, to (m: the collar under it)
-SIDE_EDGE = .010                         # its edges (but the bottom: the collar) fade over this (m)
+SIDE_WIN = (-.090, .080, 1.490, 1.675)   # the window: z from, to; y from, to (m)
+SIDE_CORE = [(-.078, .014, 1.528, 1.660), (.014, .072, 1.572, 1.650)]   # its parts changed fully (z0, z1, y0, y1)
+SIDE_BAND = .004                         # m: their edges' fade (a gaussian)
 SIDE_PX = .00025                         # the side picture's m per px
-SIDE_OPEN, SIDE_CLOSE = 7, 4             # px (see above)
+SIDE_OPEN, SIDE_CLOSE, SIDE_TEMPLE_Z = (7, 12), 4, .012   # px; px; m (see above)
 SIDE_TIP = (10, .35, 8)                  # tips put back: at least [0] px long, their base's half width up to [1] of their length, [2] px apart
-SIDE_SPECK = 160                         # px
+SIDE_SPECK, SIDE_HOLE, SIDE_BIG = 160, 2500, 4000   # px (see above)
 SIDE_SOFT_EDGE = 1.5                     # px: the cleaned outline smoothed (a gaussian, cut at its half)
-SIDE_EAR_PAD, SIDE_NEAR_EAR = .0005, .006   # m (see above)
-PRESS_WIN, PRESS_DOWN = (190, 235, 345, 352), 1.46   # the panel's window (px); its skin row at the bottom carried down to this height (m)
-PRESS_FLOOR, PRESS_EDGE = 1.52, 3        # m: no point under it moves (the neck in the collar: moved, its dark inside became the neck's marks);
-                                         # nor any within this many steps of the head's open edges (its bottom: the collar's skirt hangs from it)
-PRESS_SKIN_UP = .0015                    # m over the skin
-PRESS_CONE = (1.2, .03, .05, .2, .002)   # the slope (m per m); its fade in front (z from, to: m) and the fade's rise; the soft minimum's width (m)
-SIDE_EAR_FACE, SIDE_FACE = .3, (.15, .35)   # (see above: the normal's share along x)
-SIDE_SKIN, SIDE_SPECKS = .003, .002       # m (see above); hair's colours left in the skin this near the hair painted skin
 SIDE_TOP_PX = 12                         # px: the hair is the dark joined to the window's top rows
+SIDE_EAR_PAD, SIDE_NEAR_EAR = .0005, .006   # m (see above)
 SIDE_INK = (.0007, .00015)               # m: the ink line's width, its edges' softness
+SIDE_SKIN_UP, SIDE_RAISE, SIDE_INSINK = .0006, .001, .0012   # m (see above)
+SIDE_CONE, SIDE_DEEP = (.001, 1.2, .002), .004   # see above
+SIDE_FLAP = ((-.090, .076, 1.520, 1.675), .003)   # see above
+SIDE_FLOOR, SIDE_EDGE_STEPS = 1.515, 3   # see above
+SIDE_MOVED, SIDE_WALL, SIDE_LIFT, SIDE_FRONT = .001, (.2, .45), .002, .6   # see above
+SIDE_EYE_BOX = (.055, 1.570, 1.615, .058, .003)   # the eyes: z over [0], y between [1] and [2], under [3] m from the middle; its margin [4]
+SIDE_EYE_RINGS, SIDE_EYE_GUARD = 2, (.004, .008, .006, .012)   # m from the whites: no paint within [0], fully from [1]; no move: [2], [3]
 SIDE_LINE, SIDE_GROW = .03, 2.5          # m; px of the painted triangles' texels around them, in the texture's gaps
 X0 = .006                                # the head's middle (x, m)
 INK = np.array([22., 20, 26]); HAIR = np.array([[22., 20, 26], [58, 48, 58], [75, 64, 73], [113, 94, 102]])   # (ren_hair.HAIR_TONES)
@@ -105,15 +113,9 @@ def to_panel(z, y):
 
 def grid():
     """The window's picture: its size and model (z, y) -> px (u, v) and back."""
-    z0, z1, y0, y1 = SIDE_BOX; m = .006
-    W, H = int((z1 - z0 + 2 * m) / SIDE_PX), int((y1 - y0 + 2 * m) / SIDE_PX)
-    return W, H, (lambda z, y: ((z - z0 + m) / SIDE_PX, (y1 + m - y) / SIDE_PX)), (lambda u, v: (u * SIDE_PX + z0 - m, y1 + m - v * SIDE_PX))
-
-
-def weight(z, y):
-    """1 in the window, fading to 0 over SIDE_EDGE at its front, back and top."""
-    z0, z1, y0, y1 = SIDE_BOX
-    return ss(z0, z0 + SIDE_EDGE, z) * (1 - ss(z1 - SIDE_EDGE, z1, z)) * (1 - ss(y1 - SIDE_EDGE, y1, y)) * (y > y0 - .004)
+    z0, z1, y0, y1 = SIDE_WIN
+    W, H = int((z1 - z0) / SIDE_PX), int((y1 - y0) / SIDE_PX)
+    return W, H, (lambda z, y: ((z - z0) / SIDE_PX, (y1 - y) / SIDE_PX)), (lambda u, v: (u * SIDE_PX + z0, y1 - v * SIDE_PX))
 
 
 def raster(Q, UV, I, tex, sg, tris):
@@ -176,15 +178,36 @@ def tips(H, O):
     return np.asarray(out) > 0, nt
 
 
-def clean(H):
-    """H (the hair seen) cleaned (see above)."""
-    O = ndimage.binary_opening(H, structure=disk(SIDE_OPEN))
+def clean(H, r_open):
+    """H (the hair seen) cleaned (see above): strands thinner than 2 * r_open px off."""
+    O = ndimage.binary_opening(H, structure=disk(r_open))
     T, nt = tips(H, O)
     C = O | (T & ndimage.binary_dilation(H, structure=disk(2)))
     C = ndimage.binary_closing(C, structure=disk(SIDE_CLOSE))
     lab, n = ndimage.label(C); sz = np.bincount(lab.ravel()); sz[0] = 0; C = (sz >= SIDE_SPECK)[lab] & (lab > 0)
     lab, n = ndimage.label(~C); sz = np.bincount(lab.ravel()); C |= (sz < SIDE_SPECK)[lab] & (lab > 0)
     return ndimage.gaussian_filter(C.astype(float), SIDE_SOFT_EDGE) > .5, nt
+
+
+def harmonic(val, known, step=4):
+    """val where known, harmonic elsewhere (solved on a grid step times coarser, back up bilinear)."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.linalg import spsolve
+    H, W = val.shape; h, w = H // step, W // step
+    vk = val[:h * step, :w * step].reshape(h, step, w, step); kk = known[:h * step, :w * step].reshape(h, step, w, step)
+    cnt = kk.sum((1, 3)); K = cnt > 0; V = np.where(K, (vk * kk).sum((1, 3)) / np.maximum(cnt, 1), 0)
+    n = h * w; idx = np.arange(n).reshape(h, w); rows, cols, data = [], [], []
+    ys, xs = np.mgrid[:h, :w]
+    for (dy, dx) in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+        y2, x2 = ys + dy, xs + dx; ok = (y2 >= 0) & (y2 < h) & (x2 >= 0) & (x2 < w)
+        a, c = idx[ys[ok], xs[ok]], idx[y2[ok], x2[ok]]
+        rows += [a, a]; cols += [a, c]; data += [np.ones(len(a)), -np.ones(len(a))]
+    A = coo_matrix((np.concatenate(data), (np.concatenate(rows), np.concatenate(cols))), shape=(n, n)).tocsr()
+    kf = K.ravel(); D = coo_matrix((np.ones(kf.sum()), (np.nonzero(kf)[0], np.nonzero(kf)[0])), shape=(n, n)).tocsr()
+    b = np.zeros(n); b[kf] = V.ravel()[kf]
+    sol = spsolve((A.multiply((~kf)[:, None]).tocsr() + D).tocsc(), b).reshape(h, w)
+    yy, xx = np.mgrid[:H, :W]
+    return bilinear(sol[..., None], np.clip((xx.ravel() + .5) / step - .5, 0, w - 1), np.clip((yy.ravel() + .5) / step - .5, 0, h - 1))[:, 0].reshape(H, W)
 
 
 def laplace_fill(val, known, iters=400):
@@ -224,80 +247,42 @@ def bilinear(img, x, y):
     return (img[y0, x0] * (1 - fx) * (1 - fy) + img[y0, x0 + 1] * fx * (1 - fy) + img[y0 + 1, x0] * (1 - fx) * fy + img[y0 + 1, x0 + 1] * fx * fy)
 
 
-def press(Q, N, UV, I, lb, tex):
-    """The hair pressed onto the head as prova 1 did (see above). Moves Q, N, lb in place; returns per side the points
-    moved, how many found skin under them, how many not."""
-    from scipy.spatial import cKDTree
-    k = sheet_classes(); H, Wd = k.shape; x0, y0, x1, y1 = PRESS_WIN
-    sk = (k == 1) | (k == 2); sk = ndimage.binary_closing(sk, iterations=2) | sk
-    skin = np.zeros_like(sk); skin[y0:y1, x0:x1] = (sk | ((k == 3) & ndimage.binary_dilation(sk, iterations=2)))[y0:y1, x0:x1]
-    yd = int(np.ceil(to_panel(SIDE_EAR_M[0], PRESS_DOWN)[1])); ext = np.zeros((max(yd + 2, H), Wd), bool)
-    ext[:H] = skin
-    for yy in range(y1 - 1, yd + 1): ext[yy] = skin[y1 - 2]
-    Hx = ext.shape[0]; d_out = ndimage.distance_transform_edt(~ext)
-    TS = tex.shape[0]
-    vc = tex[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)]
-    skin_v = (vc[:, 0] > 150) & (vc[:, 0] - vc[:, 2] > 40)
-    hair_v = ~skin_v & (vc.mean(1) < 130) & (vc[:, 0] >= vc[:, 1] - 4)   # (not the collar's teal nor its cream)
+def welded(Q, I):
+    """The welded points (copies at one place, as one): (first copy, each point's weld) and the welded edges."""
     _, first, weld = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True); weld = weld.ravel()
-    s = SIDE_EAR_M[2] / (SIDE_EAR[3] - SIDE_EAR[1]); cx, cy = (SIDE_EAR[0] + SIDE_EAR[2]) / 2, (SIDE_EAR[1] + SIDE_EAR[3]) / 2
-    zb = SIDE_EAR_M[0] - (cx - x1) * s; yt = SIDE_EAR_M[1] + (cy - y0) * s
-    moved = np.zeros(len(Q), bool); out = {}
-    tri_skin = skin_v[I].sum(1) >= 2; Cq = Q[I].mean(1)
-    # (the head's open edges, welded, and PRESS_EDGE steps around them)
-    Tw = weld[I]; Ew = np.sort(np.concatenate([Tw[:, [0, 1]], Tw[:, [1, 2]], Tw[:, [2, 0]]]), 1)
-    ue, cnt = np.unique(Ew, axis=0, return_counts=True); ne = np.zeros(len(first), bool); ne[ue[cnt == 1].ravel()] = True
-    for _ in range(PRESS_EDGE):
-        grow = ne.copy(); grow[Ew[:, 0][ne[Ew[:, 1]]]] = True; grow[Ew[:, 1][ne[Ew[:, 0]]]] = True; ne = grow
-    near_edge = ne[weld]
-    for sg in (1, -1):
-        a = sg * (Q[:, 0] - X0)
-        px, py = to_panel(Q[:, 2], Q[:, 1]); ix, iy = np.round(px).astype(int), np.round(py).astype(int)
-        inw = (a > .025) & (ix >= 0) & (ix < Wd) & (iy >= 0) & (iy < Hx) & (Q[:, 2] < PRESS_CONE[2])
-        dd = np.full(len(Q), np.inf); dd[inw] = d_out[iy[inw], ix[inw]]
-        cap_all = PRESS_SKIN_UP + PRESS_CONE[0] * dd * s + PRESS_CONE[3] * ((Q[:, 2] - PRESS_CONE[1]) / (PRESS_CONE[2] - PRESS_CONE[1])).clip(0, None) ** 2
-        cand = np.nonzero(inw & (cap_all < .05) & hair_v & (Q[:, 1] > PRESS_FLOOR) & ~near_edge)[0]
-        # the skin under each: the nearest skin triangle on this side hit by a ray toward the middle (along x)
-        st = np.nonzero(tri_skin & (sg * (Cq[:, 0] - X0) > .02) & (Cq[:, 2] < PRESS_CONE[2] + .03) & (Cq[:, 2] > zb - .08) & (Cq[:, 1] > PRESS_DOWN - .03) & (Cq[:, 1] < yt + .08))[0]
-        A0 = Q[I[st, 0]]; E1 = Q[I[st, 1]] - A0; E2 = Q[I[st, 2]] - A0; dvec = np.array([-sg, 0., 0.])
-        pv = np.cross(dvec, E2); det = (E1 * pv).sum(1); okd = np.abs(det) > 1e-14; inv = np.where(okd, 1 / np.where(okd, det, 1), 0)
-        hit = np.full(len(Q), np.nan)
-        for v in cand:
-            tv = Q[v] - A0; u = (tv * pv).sum(1) * inv; qv = np.cross(tv, E1); w_ = (qv @ dvec) * inv; tt = (qv * E2).sum(1) * inv
-            ok = okd & (u >= 0) & (w_ >= 0) & (u + w_ <= 1) & (tt > 1e-4) & (tt < .07)
-            if ok.any(): hit[v] = a[v] - tt[ok].min()
-        # (no skin under it: as the nearest that found some, in (z, y))
-        good = cand[np.isfinite(hit[cand])]; bad = cand[~np.isfinite(hit[cand])]
-        if len(good) and len(bad):
-            dk, jk = cKDTree(Q[good][:, 1:]).query(Q[bad][:, 1:], k=min(6, len(good)))
-            hit[bad] = np.median(hit[good][np.atleast_2d(jk)], 1)
-        if not len(cand): out[sg] = (0, 0, 0); continue
-        tgt = np.maximum(hit[cand], .03) + PRESS_SKIN_UP
-        # (smoothed among themselves: the skin under the hair is ragged in places)
-        nb = cKDTree(Q[cand][:, 1:]).query_ball_point(Q[cand][:, 1:], .006)
-        for _ in range(3): tgt = np.array([np.median(tgt[j]) for j in nb])
-        # (a soft minimum of where it is and the cap over the skin: no kink where the cap starts)
-        th = a[cand] - (tgt - PRESS_SKIN_UP); cap = cap_all[cand]; kk_ = PRESS_CONE[4]
-        newa = (tgt - PRESS_SKIN_UP) + np.minimum(-kk_ * np.logaddexp(-th / kk_, -cap / kk_), th)
-        mv = a[cand] > newa + 2e-4
-        Q[cand[mv], 0] = X0 + sg * newa[mv]; moved[cand[mv]] = True
-        out[sg] = (int(mv.sum()), int(len(good)), int(len(bad)))
-    # the welded copies of a moved point move with it
-    Wq = np.zeros((len(first), 3)); Wn = np.zeros(len(first)); np.add.at(Wq, weld[moved], Q[moved]); np.add.at(Wn, weld[moved], 1)
-    wm = Wn > 0; Wq[wm] /= Wn[wm, None]; sel = wm[weld]; Q[sel] = Wq[weld[sel]]; moved |= sel
-    fn = np.cross(Q[I[:, 1]] - Q[I[:, 0]], Q[I[:, 2]] - Q[I[:, 0]]); Nw = np.zeros((len(first), 3))
-    for c in range(3): np.add.at(Nw, weld[I[:, c]], fn)
-    Nw /= np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12); N[moved] = Nw[weld[moved]]
-    lb[moved] = np.maximum(lb[moved], SIDE_LINE)
-    return out
+    T = weld[I]; return first, weld, np.sort(np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]), 1)
+
+
+def eyes(Q, UV, I, tex):
+    """The eyes kept (see above): per point the share it may be moved and painted (0 to 1), the eyes' triangles."""
+    TS = tex.shape[0]; first, weld, E = welded(Q, I)
+    vc = tex[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)]
+    C = Q[I].mean(1); bw = np.array([[1 / 3, 1 / 3, 1 / 3], [.6, .2, .2], [.2, .6, .2], [.2, .2, .6]])
+    U = np.einsum('kb,tbc->tkc', bw, UV[I]) * TS; ct = tex[np.clip(U[..., 1].astype(int), 0, TS - 1), np.clip(U[..., 0].astype(int), 0, TS - 1)]
+    m, st = ct.mean(-1), ct.max(-1) - ct.min(-1)
+    white, iris = (m > 200) & (st < 45), (ct[..., 0] > 110) & (ct[..., 0] < 215) & (ct[..., 2] < 95) & (m < 150) & (st > 70)
+    eye_t = (C[:, 2] > .045) & (C[:, 1] > 1.565) & (C[:, 1] < 1.625) & (white | iris).any(1)
+    for _ in range(SIDE_EYE_RINGS):
+        vw = np.zeros(len(first), bool); vw[weld[I[eye_t]].ravel()] = True; eye_t = vw[weld[I]].any(1)
+    eye_v = np.zeros(len(Q), bool); eye_v[I[eye_t].ravel()] = True
+    wh = (vc.mean(1) > 215) & (vc.max(1) - vc.min(1) < 45) & (Q[:, 1] > 1.57) & (Q[:, 1] < 1.62) & (Q[:, 2] > .05)
+    d = cKDTree(Q[wh]).query(Q)[0] if wh.any() else np.full(len(Q), 9.)
+    ez, ey0, ey1, ea, em = SIDE_EYE_BOX
+    box = ss(ez - em, ez, Q[:, 2]) * ss(ey0 - em, ey0, Q[:, 1]) * (1 - ss(ey1, ey1 + em, Q[:, 1])) * (1 - ss(ea, ea + em, np.abs(Q[:, 0] - X0)))
+    keep = (1 - box) * ~eye_v
+    g = SIDE_EYE_GUARD
+    return ss(g[0], g[1], d) * keep, ss(g[2], g[3], d) * keep, eye_t
 
 
 def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
     """Q, N, UV, I, lb: the head (positions, normals, uvs, triangles, outline push); tex: its texture (painted in place).
-    Moves Q, N, lb in place; returns a summary per side, the texels painted (count) and their mask (TS, TS)."""
+    Moves Q, N, lb in place; returns per side the points moved, the texels painted (count) and their mask (TS, TS)."""
     skin_rgb = np.asarray(skin_rgb, float); TS = tex.shape[0]
     W, H, to_g, from_g = grid()
-    gu, gv = np.meshgrid(np.arange(W) + .5, np.arange(H) + .5); gz, gy = from_g(gu, gv); wg = weight(gz, gy)
+    gu, gv = np.meshgrid(np.arange(W) + .5, np.arange(H) + .5); gz, gy = from_g(gu, gv)
+    core = np.zeros((H, W))
+    for z0, z1, y0, y1 in SIDE_CORE: core[(gz >= z0) & (gz <= z1) & (gy >= y0) & (gy <= y1)] = 1
+    wg = ss(.02, .98, ndimage.gaussian_filter(core, SIDE_BAND / SIDE_PX))
     ear_p, sheet_skin, ear_img = sheet_ear(skin_rgb)
     pu, pv = to_panel(gz, gy); iu, iv = np.round(pu).astype(int), np.round(pv).astype(int)
     inp = (iu >= 0) & (iu < ear_p.shape[1]) & (iv >= 0) & (iv < ear_p.shape[0])
@@ -305,88 +290,109 @@ def sides(Q, N, UV, I, lb, tex, skin_rgb, debug=None):
     near_g = np.zeros((H, W), bool); near_g[inp] = sheet_skin[iv[inp], iu[inp]]
     d_ear = ndimage.distance_transform_edt(~ear_g) * SIDE_PX
     keep_skin = (d_ear < SIDE_EAR_PAD) | (near_g & (d_ear < SIDE_NEAR_EAR))
-    keep_f = ndimage.gaussian_filter(keep_skin.astype(float), 1.)
+    ear_c = bilinear(ear_img, pu.ravel(), pv.ravel()).reshape(H, W, 3); ear_f = ndimage.gaussian_filter(keep_skin.astype(float), 2)
     vc = tex[np.clip((UV[:, 1] * TS).astype(int), 0, TS - 1), np.clip((UV[:, 0] * TS).astype(int), 0, TS - 1)]
     r_, g_, b_ = vc[:, 0], vc[:, 1], vc[:, 2]
-    collar = (g_ > r_ + 5) | ((vc.mean(1) > 165) & (r_ - b_ < 60) & (np.abs(r_ - g_) < 30))   # (the collar's teal and cream, the shirt)
+    collar = ((g_ > r_ + 5) | ((vc.mean(1) > 165) & (r_ - b_ < 60) & (np.abs(r_ - g_) < 30))) & (Q[:, 1] < 1.555)   # (its teal and cream; higher up, the eyes' light greys)
     tri_ok = ~collar[I].all(1)
-    z0, z1, y0, y1 = SIDE_BOX
-    def window_tris(sg):
+    near_collar = np.zeros(len(Q), bool); near_collar[I[collar[I].sum(1) >= 2].ravel()] = True
+    first, weld, E = welded(Q, I)
+    ue, cnt = np.unique(E, axis=0, return_counts=True); ne = np.zeros(len(first), bool); ne[ue[cnt == 1].ravel()] = True
+    ne &= Q[first, 1] < 1.53   # (the head's bottom edge only: the hair's flaps' edges move)
+    for _ in range(SIDE_EDGE_STEPS):
+        gr = ne.copy(); gr[E[:, 0][ne[E[:, 1]]]] = True; gr[E[:, 1][ne[E[:, 0]]]] = True; ne = gr
+    near_edge = ne[weld]
+    eg, egm, eye_t = eyes(Q, UV, I, tex)
+    z0, z1, y0, y1 = SIDE_WIN
+    def side_tris(sg):
         C3 = Q[I].mean(1)
-        return np.nonzero(tri_ok & (C3[:, 2] > z0 - .008) & (C3[:, 2] < z1 + .008) & (C3[:, 1] > y0 - .008) & (C3[:, 1] < y1 + .008) & (sg * (C3[:, 0] - X0) > .012))[0]
-    masks, out = {}, {}
+        return np.nonzero(tri_ok & (C3[:, 2] > z0) & (C3[:, 2] < z1) & (C3[:, 1] > y0) & (C3[:, 1] < y1) & (sg * (C3[:, 0] - X0) > .012))[0]
+    Q0 = Q.copy(); design = {}; out = {}
+    newa = np.zeros(len(Q)); moved = np.zeros(len(Q), bool); win_w = np.zeros(len(Q))
     for sg in (1, -1):
-        amax, amin, tid, col = raster(Q, UV, I, tex, sg, window_tris(sg))
+        amax, amin, tid, col = raster(Q, UV, I, tex, sg, side_tris(sg))
         on = amax > -9; H0 = on & is_hair(col)
-        # (the hair: the dark that hangs from the head's hair above the window, not Meshy's dark marks on the neck)
-        lab_, n_ = ndimage.label(H0); top_ = np.unique(lab_[:SIDE_TOP_PX]); top_ = top_[top_ > 0]; H0 = np.isin(lab_, top_)
-        C, nt = clean(H0)
-        M = np.where(wg > .5, C, H0) & on & ~keep_skin
-        # (the cleaned hair's signed distance from its edge, m: + in the hair)
-        sd = (ndimage.distance_transform_edt(M) - ndimage.distance_transform_edt(~M)) * SIDE_PX
-        # (the skin painted plain: where the hair went and around it, near the hair's edge)
-        gone = H0 & ~M; d_gone = ndimage.distance_transform_edt(~gone) * SIDE_PX
-        skz = ~M & ((sd > -SIDE_SKIN) | (d_gone < SIDE_SKIN))
-        # (the skin's own tone around: its light, unmarked texels seen, carried over the rest)
+        # the design (see above)
+        lab, n = ndimage.label(H0); top = np.unique(lab[:SIDE_TOP_PX]); H0 = np.isin(lab, top[top > 0])
+        C = np.where(gz < SIDE_TEMPLE_Z, clean(H0, SIDE_OPEN[0])[0], clean(H0, SIDE_OPEN[1])[0])
+        M = np.where(wg > .02, C, H0) & on
+        lab, n = ndimage.label(~M); sz = np.bincount(lab.ravel()); touch = np.zeros(n + 1, bool); touch[np.unique(lab[keep_skin])] = True
+        M |= (sz < SIDE_HOLE)[lab] & ~touch[lab] & (lab > 0)
+        M &= ~keep_skin
+        lab, n = ndimage.label(M); sz = np.bincount(lab.ravel()); top = np.zeros(n + 1, bool); top[np.unique(lab[:SIDE_TOP_PX])] = True
+        M &= (top | (sz >= SIDE_BIG))[lab] & (lab > 0)
+        sd = (ndimage.distance_transform_edt(M) - ndimage.distance_transform_edt(~M)) * SIDE_PX   # (+ in the hair, m)
+        _, ind = ndimage.distance_transform_edt(~H0, return_indices=True); hair_c = col[ind[0], ind[1]]
         clean_sk = on & ~is_hair(col) & (col[..., 0] > 200) & (col[..., 0] - col[..., 2] > 80) & (col.mean(-1) > 160)
         sk_map = np.stack([ndimage.gaussian_filter(laplace_fill(col[..., c], clean_sk, 150), 6) for c in range(3)], -1) if clean_sk.any() else np.broadcast_to(skin_rgb, col.shape).copy()
-        masks[sg] = (M, sd, skz, sk_map)
-        out[sg] = dict(tips=nt, hair_px=int(H0.sum()), hair_after=int(M.sum()), skin_from_hair=int((H0 & ~M & (wg > .5)).sum()), hair_from_skin=int((M & ~H0).sum()))
-        if debug is not None: debug[sg] = dict(H0=H0, C=C, M=M, sd=sd, amax=amax, col=col, on=on, wg=wg)
-    pr = press(Q, N, UV, I, lb, tex)
-    for sg in (1, -1): out[sg]['pressed'] = pr[sg]
-    fn = np.cross(Q[I[:, 1]] - Q[I[:, 0]], Q[I[:, 2]] - Q[I[:, 0]])
-    # the paint (the outermost surface seen again, after the moves)
+        img = np.where(M[..., None], hair_c, sk_map)
+        flat = np.stack([ndimage.gaussian_filter(img[..., c], 1.5) for c in range(3)], -1)   # (for the walls: no lines)
+        ink = ss(-SIDE_INK[1], SIDE_INK[1], sd) * (1 - ss(SIDE_INK[0] - SIDE_INK[1], SIDE_INK[0] + SIDE_INK[1], sd)) * ss(.0008, .0016, d_ear)
+        img = img * (1 - ink[..., None]) + INK * ink[..., None]
+        img = np.where(ear_g[..., None], ear_c, img)
+        img = np.stack([ndimage.gaussian_filter(img[..., c], .6) for c in range(3)], -1)
+        # the surface (see above)
+        known = on & ~is_hair(col) & (col[..., 0] > 150) & (col[..., 0] - col[..., 2] > 55) & (amax - amin < .003) & (d_ear > .003)
+        h_skin = ndimage.gaussian_filter(harmonic(np.where(known, amax, 0), known), 8)
+        _, ind2 = ndimage.distance_transform_edt(~on, return_indices=True)
+        h_out = ndimage.gaussian_filter(ndimage.median_filter(amax[ind2[0], ind2[1]], 7), 8)
+        cap = SIDE_CONE[0] + SIDE_CONE[1] * np.maximum(sd, 0)
+        h = ndimage.gaussian_filter(h_skin + SIDE_SKIN_UP + np.where(M, np.clip(h_out - h_skin - SIDE_SKIN_UP, 0, cap), 0), 4)
+        design[sg] = (img, flat, h_skin, hair_c)
+        a = sg * (Q[:, 0] - X0); u, v = to_g(Q[:, 2], Q[:, 1])
+        ing = (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1) & (a > .012) & ~near_collar & ~near_edge & (Q[:, 1] > SIDE_FLOOR)
+        k = np.nonzero(ing)[0]; uk, vk = u[k], v[k]; ak = a[k]
+        wv = bilinear(wg, uk, vk) * egm[k]; hv = bilinear(h, uk, vk); sdk = bilinear(sd, uk, vk); sk_k = bilinear(h_skin, uk, vk) + SIDE_SKIN_UP
+        (fz0, fz1, fy0, fy1), fh = SIDE_FLAP
+        flap = (Q[k, 2] > fz0) & (Q[k, 2] < fz1) & (Q[k, 1] > fy0) & (Q[k, 1] < fy1) & (sdk < 0) & (ak - sk_k + SIDE_SKIN_UP > fh)
+        wv = np.where(flap, np.maximum(wv, egm[k]), wv)
+        hgt = ak - sk_k; capk = SIDE_CONE[0] + SIDE_CONE[1] * np.maximum(sdk, 0)
+        soft = -SIDE_CONE[2] * np.logaddexp(-hgt / SIDE_CONE[2], -capk / SIDE_CONE[2])
+        hv = np.where(sdk > SIDE_DEEP, sk_k + np.minimum(soft, hgt), hv)
+        win_w[k] = np.maximum(win_w[k], wv)
+        hv = hv - SIDE_INSINK * (sg * N[k, 0] < -.2)
+        sel = (wv > 1e-3) & (hv - ak < np.where(sdk > 0, 0, SIDE_RAISE)); k, wv, hv, ak = k[sel], wv[sel], hv[sel], ak[sel]
+        newa[k] = ak + wv * (hv - ak); moved[k] = True
+        out[sg] = int((np.abs(wv * (hv - ak)) > 2e-4).sum())
+        if debug is not None: debug[sg] = dict(H0=H0, M=M, sd=sd, amax=amax, amin=amin, col=col, h=h, h_skin=h_skin, img=img, wg=wg)
+    for sg in (1, -1):
+        m = moved & (sg * (Q[:, 0] - X0) > .012); Q[m, 0] = X0 + sg * newa[m]
+    # (the welded copies of a moved point with it; the normals from the triangles)
+    Wq = np.zeros((len(first), 3)); Wn = np.zeros(len(first)); np.add.at(Wq, weld[moved], Q[moved]); np.add.at(Wn, weld[moved], 1)
+    wm = Wn > 0; Wq[wm] /= Wn[wm, None]; sel = wm[weld]; Q[sel] = Wq[weld[sel]]
+    fn = np.cross(Q[I[:, 1]] - Q[I[:, 0]], Q[I[:, 2]] - Q[I[:, 0]]); Nw = np.zeros((len(first), 3))
+    for c in range(3): np.add.at(Nw, weld[I[:, c]], fn)
+    Nw /= np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12); N[sel] = Nw[weld[sel]]
+    lb[:] = np.maximum(lb, SIDE_LINE * ss(.3, .7, win_w))
+    # the paint (see above)
     cov = Image.new('L', (TS, TS), 0); dr = ImageDraw.Draw(cov)
     for tr_ in UV[I] * TS: dr.polygon([tuple(v) for v in tr_], fill=255)
-    covered = np.asarray(cov) > 0
-    painted = np.zeros((TS, TS), bool); n_px = 0
+    covered = np.asarray(cov) > 0; painted = np.zeros((TS, TS), bool); n_px = 0
     fnu = fn / np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12)
+    tmoved = np.abs(Q[:, 0] - Q0[:, 0])[I].max(1) > SIDE_MOVED
     for sg in (1, -1):
-        M, sd, skz, sk_map = masks[sg]; tris = window_tris(sg)
-        amax = raster(Q, UV, I, tex, sg, tris)[0]
-        sdl = ndimage.gaussian_filter(sd, .7); skf = ndimage.gaussian_filter(skz.astype(float), .7)
-        for t in tris:
-            face = fnu[t, 0] * sg; fw_t = ss(SIDE_FACE[0], SIDE_FACE[1], face)
+        img, flat, hsk, hcol = design[sg]
+        for t in side_tris(sg):
+            if (fnu[t, 2] > SIDE_FRONT and not tmoved[t]) or eye_t[t]: continue
+            fw = ss(SIDE_WALL[0], SIDE_WALL[1], abs(fnu[t, 0]))
             q, P3 = texels_wide(UV[I[t]] * TS, Q[I[t]], TS, covered)
             if not len(q): continue
-            u, v = to_g(P3[:, 2], P3[:, 1]); w = weight(P3[:, 2], P3[:, 1])
-            # (on the ear and the skin kept around it every triangle, the walls too: no hair's piece left on the ear)
-            kz = bilinear(keep_f, u, v) > .5
-            sel = (w > .5) & ((fw_t > 0) | kz)
+            u, v = to_g(P3[:, 2], P3[:, 1]); ok = (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1)
+            q, u, v, P3 = q[ok], u[ok], v[ok], P3[ok]
+            if not len(q): continue
+            w = np.maximum(bilinear(wg, u, v), 1. if tmoved[t] else 0.) * eg[I[t]].min(); sel = w > 1e-3
             if not sel.any(): continue
-            q, P3, u, v, w, kz = q[sel], P3[sel], u[sel], v[sel], w[sel], kz[sel]
-            a = sg * (P3[:, 0] - X0); top = a > bilinear(amax, u, v) - .002   # (on the outermost surface)
-            s_ = bilinear(sdl, u, v); c0 = tex[q[:, 1], q[:, 0]]; hc = is_hair(c0)
-            pu_, pv_ = to_panel(P3[:, 2], P3[:, 1])
-            ine = np.zeros(len(q), bool); ok_ = (pu_ >= 0) & (pu_ < ear_p.shape[1] - 1) & (pv_ >= 0) & (pv_ < ear_p.shape[0] - 1)
-            ine[ok_] = ear_p[np.round(pv_[ok_]).astype(int), np.round(pu_[ok_]).astype(int)]
-            new = c0.copy(); ch = np.zeros(len(q), bool)
-            # the skin plain (and the hair's colours left in it near the hair)
-            sk = (s_ < 0) & ((bilinear(skf, u, v) > .5) | (hc & (s_ > -SIDE_SPECKS)))
-            skc = bilinear(sk_map, u, v); new[sk] = skc[sk]; ch |= sk
-            # the gaps between the locks in the hair's tone (outermost only)
-            gp = (s_ >= 0) & ~hc & top
-            new[gp] = HAIR[1]; ch |= gp
-            # the ink along the edge (outermost only)
-            ink = ss(-SIDE_INK[1], SIDE_INK[1], s_) * (1 - ss(SIDE_INK[0] - SIDE_INK[1], SIDE_INK[0] + SIDE_INK[1], s_)) * top
-            ink *= ss(.0008, .0016, bilinear(d_ear, u, v))   # (not along the ear: its drawing has its own line)
-            li = ink > .01
-            new[li] = new[li] * (1 - ink[li, None]) + INK * ink[li, None]; ch |= li
-            # the ear: the sheet's drawing on the outermost surface facing the side, plain skin elsewhere
-            if ine.any():
-                fw = ss(SIDE_EAR_FACE - .1, SIDE_EAR_FACE + .1, face) * top[ine]
-                new[ine] = bilinear(ear_img, pu_[ine], pv_[ine]) * fw[:, None] + skc[ine] * (1 - fw[:, None]); ch |= ine
-            hz = (s_ >= 0) & (np.where(kz, 1., fw_t) > .5); painted[q[hz, 1], q[hz, 0]] = True   # (the hair's texels: the neck's marks leave them too)
-            if not ch.any(): continue
-            ww = (ss(.5, .8, w[ch]) * np.where(kz[ch], 1., fw_t))[:, None]
-            tex[q[ch, 1], q[ch, 0]] = c0[ch] * (1 - ww) + new[ch] * ww
-            painted[q[ch, 1], q[ch, 0]] |= ww[:, 0] > .5; n_px += int((ww > .5).sum())
+            q, u, v, w, P3 = q[sel], u[sel], v[sel], w[sel], P3[sel]
+            c0 = tex[q[:, 1], q[:, 0]]; d = bilinear(img, u, v) * fw + bilinear(flat, u, v) * (1 - fw)
+            up = (sg * (P3[:, 0] - X0) - bilinear(hsk, u, v) > SIDE_LIFT) & (bilinear(ear_f, u, v) < .5)
+            if up.any(): d[up] = bilinear(hcol, u[up], v[up])
+            tex[q[:, 1], q[:, 0]] = c0 * (1 - w[:, None]) + d * w[:, None]
+            painted[q[w > .5, 1], q[w > .5, 0]] = True; n_px += int((w > .5).sum())
     return out, n_px, painted
 
 
 if __name__ == '__main__':
-    d = sys.argv[1]; sys.path.insert(0, HERE)
+    d = sys.argv[1]
     h = json.load(open(os.path.join(d, 'ren_head.json'))); B = bytearray(open(os.path.join(d, 'ren_head.bin'), 'rb').read())
     f = lambda a, dt=np.float32: np.frombuffer(B, dt, a[1], a[0])
     Q = f(h['pos']).reshape(-1, 3).astype(float); N = f(h['nor']).reshape(-1, 3).astype(float); UV = f(h['uv']).reshape(-1, 2).astype(float)
@@ -397,7 +403,7 @@ if __name__ == '__main__':
     skin_rgb = np.median(vc[sk], 0); print('side skin', skin_rgb)
     dbg = {} if len(sys.argv) > 2 else None
     out, n, painted = sides(Q, N, UV, I, lb, tex, skin_rgb, debug=dbg)
-    print('sides:', out, '; texels painted', n)
+    print('sides: points moved per side', out, '; texels painted', n)
     if dbg is not None: np.savez_compressed(sys.argv[2], **{'%s_%d' % (k, s): v for s in dbg for k, v in dbg[s].items()})
     def put(key, arr):
         o, cnt = h[key]; B[o:o + 4 * cnt] = np.ascontiguousarray(arr, np.float32).tobytes()
