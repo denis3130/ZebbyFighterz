@@ -6,8 +6,9 @@ e cosa ti dimentichi". Prima di pubblicare una versione nell'anteprima, controll
 cosa ho controllato.
 
 ## Come guardare
-- Il modello accanto ai fogli di Denis, alla stessa scala: davanti, dietro, di lato, di tre quarti, dall'alto e da
-  sotto, più i primi piani (viso, mani, piedi, spalle, colletto, vita).
+Denis: "devi guardarlo in 3d e vedere da solo cosa c'è di storto o di sfumato, cose così".
+- In 3D, il modello accanto ai fogli di Denis, alla stessa scala: davanti, dietro, di lato, di tre quarti, dall'alto e
+  da sotto, più i primi piani ad alta risoluzione (viso, mani, piedi, spalle, colletto, vita), girandoci attorno.
 - Tutte le mosse dei pulsanti dell'anteprima (guardia, camminata, pugni, calci, in basso, salto, speciale, presa,
   colpito, a terra), più la vista del gioco (65° di lato) e da vicino come col dito sul telefono.
 - Le due pitture (Disegno e Meshy) e le due luci (3D e Piatta).
@@ -15,6 +16,10 @@ cosa ho controllato.
 
 ## Cosa cercare
 - **Sagoma e proporzioni** uguali al foglio: niente parti gonfiate, assottigliate o spostate.
+- **Cose storte**: parti asimmetriche o fuori posto (occhi, orecchie, orecchini, spalle, colletto, fascia), pezzi
+  inclinati o che non combaciano dove si uniscono.
+- **Cose sfumate**: pittura sfocata, stirata o impastata dove il foglio ha linee nette; bordi tra i colori morbidi
+  invece che netti; righe del disegno che diventano macchie.
 - **Contorno nero**: niente macchie, triangoli, bandierine o righe nere dove non c'è un bordo; contorno sottile sul
   viso e sulle dita.
 - **Cuciture della pittura**: niente strisce chiare o scure lungo i bordi dei pezzi, niente aloni grigi del foglio.

@@ -34,4 +34,5 @@ Rispondi sempre a Denis **in italiano**, con messaggi brevi e chiari (spesso usa
 - Gli effetti non allungano le lotte: misura prima e dopo. Misura gli FPS prima e dopo (obiettivo 60 su telefono medio).
 - Contenuti originali: ispirati al genere, senza copiare nomi, personaggi o grafica di altri giochi.
 - Meshy: prima di spendere crediti mostra a Denis saldo e costo stimato, e procedi solo con il suo ok.
+- Prima di mostrare a Denis una versione di un personaggio, guardala tu in 3D da ogni lato, da vicino e in tutte le mosse con `docs/meshy/CONTROLLI.md` (cose storte, sfumate, colori che sbordano, contorni sbagliati) e correggi tutto quello che trovi: non contare su di lui per trovare gli errori. Non cambiare la forma del corpo senza chiederglielo.
 - Consegna: 2-3 righe su cosa è cambiato, FPS e come provarlo; idee "per dopo" annotate senza costruirle; chiudi con un solo passo successivo concreto.
