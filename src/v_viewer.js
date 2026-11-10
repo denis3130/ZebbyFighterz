@@ -1,6 +1,7 @@
 // Character viewer ("Anteprima 3D", 7/11/2026): one Meshy fighter alone on a stage, turned by drag, pinch and wheel,
 // playing the game's own animation: a stand-alone fighter state stepped 60 times a second and drawn by mdSync, so what
-// shows here is exactly what the game draws for that act and frame. A separate page (viewer.html, built by mk.sh).
+// shows here is exactly what the game draws for that act and frame. A separate page per character (built by mk.sh:
+// viewer.html for Ren, viewer_kael.html for Kael since 10/11/2026).
 
 const VW = {it: null, F: null, S: null, renderer: null, scene: null, camera: null, shadow: null, plan: [], step: 0, left: 0,
   name: '', speed: 1, acc: 0, last: null, yaw: .55, zoom: 1, fit: 5.4, spin: true, idleMs: 0, pointers: new Map(), pinch: 0, tex: {}, mats: {}};
@@ -29,30 +30,34 @@ const VW_NAMES = {idle: 'Guardia', guard: 'Parata', crouch: 'Accovacciato', guar
   getup: 'Si rialza'};
 
 function vwBoot() {
-  // The proposal Denis is judging (7/11/2026): guard A (the boxing guard the punches start from, breathing), fists
-  // (open only in the special and the throw) and the head held a little higher.
-  const guard = {c: 'a191', at: 0, breathe: 1};
-  Object.assign(CFG.looks.ren, {fists: true, headUp: 12, spikes: true, faceLine: true, line: {w: .007, back: .02}, flatFace: true, sash: true, faceShape: true, head: true, smoothNormals: true,
-    clips: {idle: guard, intro: guard, crouch: {low: {c: 'a54', at: .67}, up: guard}}});   // (the paint: the viewer's own buttons, vwPaint)
-  const it = modelBuild('ren');
-  if (!it) { document.getElementById('now').textContent = 'Il modello di Ren non è nel pacchetto.'; return; }
+  // The page's character (viewer_head.html's name, data-char: mk.sh builds a page per character), drawn with its look in
+  // the game (CFG.looks: for Ren, guard A breathing, fists open only in the special and the throw, the head a little higher).
+  const key = document.getElementById('name').dataset.char || 'ren', name = key[0].toUpperCase() + key.slice(1);
+  const it = modelBuild(key);
+  if (!it) { document.getElementById('now').textContent = 'Il modello di ' + name + ' non è nel pacchetto.'; return; }
   const cv = document.getElementById('view');
   VW.renderer = new THREE.WebGLRenderer({canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true});
   VW.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   VW.scene = new THREE.Scene(); VW.camera = new THREE.PerspectiveCamera(30, 1, .1, 50);
   VW.scene.add(...f3Lights(), it.root, vwShadow());
-  VW.it = it; VW.F = {side: 0, char: 'ren', x: 0, y: 0, vx: 0, vy: 0, face: 1, act: 'idle', af: 0, air: false, hit: 0, stun: 0, prev: 0, land: CFG.jump.land, hold: [0, 0]};
+  VW.it = it; VW.F = {side: 0, char: key, x: 0, y: 0, vx: 0, vy: 0, face: 1, act: 'idle', af: 0, air: false, hit: 0, stun: 0, prev: 0, land: CFG.jump.land, hold: [0, 0]};
   VW.S = {frame: 0, sides: [{team: [VW.F], cur: 0}]};
-  // the two paints: the drawing projected on the model (tools/paint_from_drawing.py) and Meshy's own
-  VW.tex.meshy = it.mats.main.map;
-  const img = new Image(), t = new THREE.Texture(img); t.flipY = false;
-  img.src = ASSETS['ren/ren_painted.jpg'] || ASSETS['ren/ren.jpg']; img.decode().then(() => { t.needsUpdate = true; }, () => {});
-  VW.tex.draw = t;
-  VW.mats.toon = it.mats.main; VW.mats.flat = new THREE.MeshBasicMaterial({map: t, skinning: true});
+  // the two paints where the drawing is painted on the model (tools/paint_from_drawing.py): the drawing's and Meshy's own
+  // (the one its look takes is the model's texture already); without it Meshy's alone, and no paint buttons
+  const lk = CFG.looks[key] || {}, drawn = !!ASSETS[key + '/' + key + '_painted.jpg'], own = lk.paint && drawn ? 'draw' : 'meshy';
+  VW.tex[own] = it.mats.main.map;
+  if (!drawn) VW.tex.draw = VW.tex.meshy;
+  else {
+    const other = own === 'draw' ? 'meshy' : 'draw', img = new Image(), t = new THREE.Texture(img); t.flipY = false;
+    img.src = ASSETS[key + '/' + key + (other === 'draw' ? '_painted.jpg' : '.jpg')]; img.decode().then(() => { t.needsUpdate = true; }, () => {});
+    VW.tex[other] = t;
+  }
+  document.getElementById('paint').hidden = !drawn;
+  VW.mats.toon = it.mats.main; VW.mats.flat = new THREE.MeshBasicMaterial({map: VW.tex.draw, skinning: true});
   if (it.face) mdFaceMat(VW.mats.flat, it.face);   // the face decal on both lights
   document.getElementById('stage').style.backgroundImage = 'url(' + ASSETS['arena/cascata.jpg'] + ')';
   vwUi(); vwInput(); vwResize(); addEventListener('resize', vwResize);
-  vwPlay(0); vwPaint('draw'); vwLight('toon'); vwSpeed(1);
+  vwPlay(0); vwPaint(drawn ? 'draw' : 'meshy'); vwLight('toon'); vwSpeed(1);
   requestAnimationFrame(vwLoop);
 }
 

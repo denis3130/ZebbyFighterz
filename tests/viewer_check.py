@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Check of the character viewer (viewer.html, built by mk.sh): it boots with Ren on the stage, every play button and
-option works, the picture is not empty and the console stays clean. Phone landscape and portrait sizes, touch.
+"""Check of a character viewer (viewer.html, viewer_kael.html, built by mk.sh): it boots with its character on the stage,
+every play button and option works, the picture is not empty and the console stays clean. Phone landscape and portrait
+sizes, touch. Ren's page: his whole look (new head, its locks, the sash out of the body, both paints); Kael's: his fists on
+his own finger bones and the outline's widths, Meshy's paint only (no paint buttons).
 
-usage: python3 tests/viewer_check.py [OUT_DIR]   (OUT_DIR: also save a screenshot per size)
+usage: python3 tests/viewer_check.py [OUT_DIR] [--page=viewer_kael.html]   (OUT_DIR: also save a screenshot per size)
 """
 import asyncio, os, sys, tempfile
 from playwright.async_api import async_playwright
@@ -68,9 +70,13 @@ async def route(r):
     else: await r.abort()
 
 
-async def main(out_dir):
-    page_file = os.path.join(tempfile.mkdtemp(), 'viewer.html')
-    open(page_file, 'w', encoding='utf-8').write(WRAP % open(os.path.join(ROOT, 'viewer.html'), encoding='utf-8').read())
+REN_ONLY = ('spikes', 'head', 'fringe', 'flat', 'ribbons', 'calm', 'swings', 'finite')   # (the look's parts only Ren has)
+
+
+async def main(out_dir, page='viewer.html'):
+    ren = page == 'viewer.html'; name = 'REN' if ren else os.path.splitext(page)[0].split('_')[-1].upper()
+    page_file = os.path.join(tempfile.mkdtemp(), page)
+    open(page_file, 'w', encoding='utf-8').write(WRAP % open(os.path.join(ROOT, page), encoding='utf-8').read())
     failed = 0
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME, args=ARGS)
@@ -84,8 +90,12 @@ async def main(out_dir):
             n = await pg.evaluate("document.querySelectorAll('#moves button').length")
             for i in range(n):
                 await pg.click('#play%d' % i); await pg.wait_for_timeout(250)
+            # its name; the paint buttons where the drawing is painted on it (Ren), each paint its own picture
+            if not (await pg.inner_text('#name')).startswith(name) or not (await pg.title()).endswith(name.capitalize()): errs.append('not %s\'s page' % name)
+            if await pg.is_visible('#paint') != ren: errs.append('paint buttons ' + ('hidden' if ren else 'shown'))
+            if await pg.evaluate("VW.tex.meshy.image.src === VW.tex.draw.image.src") == ren: errs.append('paints ' + ('the same' if ren else 'not Meshy\'s alone'))
             for bid in ('pMeshy', 'lFlat', 's4', 'spin', 'pDraw', 'lToon', 's1', 'spin'):
-                await pg.click('#' + bid)
+                if ren or bid not in ('pMeshy', 'pDraw'): await pg.click('#' + bid)
             await pg.click('#play2'); await pg.wait_for_timeout(700)
             # the canvas shows the fighter: some pixels are not transparent in the middle of the picture
             drawn = await pg.evaluate("""() => { const c = document.getElementById('view'), g = document.createElement('canvas'); g.width = 64; g.height = 64;
@@ -94,7 +104,7 @@ async def main(out_dir):
             # the proposal's look: fists in the guard (the fingers curled on their own bones, in the skeleton), open hands
             # in the special, spikes on the head, thin face outline
             look = await pg.evaluate("""async () => { const it = VW.it, r = {};
-              document.getElementById('play0').click(); await new Promise(f => setTimeout(f, 300));
+              document.getElementById('play0').click(); VW.tick(12);   /* (game frames, not the clock: the same on a slow machine) */
               const sashBones = it.sash ? it.sash.ribbons.reduce((n, q) => n + q.bones.length, 0) : 0;
               r.fists = !!it.fingers && it.fingers.length === 30 && it.mesh.skeleton.bones.length === it.bones.length + 30 + sashBones && it.curl === 1
                 && it.fingers.every((o, i) => Math.abs(o.quaternion.dot(it.fist[i])) > .9999);
@@ -102,12 +112,12 @@ async def main(out_dir):
               r.level = ['Left', 'Right'].every(h => { const H = it.bones.find(b => b.name === h + 'Hand');
                 const y = ['Index', 'Middle', 'Ring', 'Pinky'].map(f => Math.min(...[2, 3].map(k => H.worldToLocal(it.fingers.find(o => o.name === h + 'Hand' + f + k).getWorldPosition(new THREE.Vector3())).y)));
                 return Math.max(...y) - Math.min(...y) < .002; });
-              document.getElementById('play6').click(); await new Promise(f => setTimeout(f, 300));
+              document.getElementById('play6').click(); VW.tick(12);
               r.open = it.curl === 0 && it.fingers.every(o => Math.abs(o.quaternion.w) > .9999);
               r.spikes = it.joints.head.children.some(g => g.isGroup && g.children.length >= 8) || !!it.head;   // (the new head has its own hair)
               r.head = !!it.head && it.head.isSkinnedMesh && it.head.geometry.index.count > 30000;   // the new head (the viewer turns it on)
               r.fringe = !!it.fringe && it.fringe.isSkinnedMesh && it.fringe.geometry.index.count > 6000 && it.fringe.material.alphaTest > 0;   // its locks from the sheet (over 2000 triangles)
-              r.line = !!it.mesh.geometry.attributes.aLine && !!it.mesh.geometry.attributes.aFlat; return r; }""")
+              r.line = !!it.mesh.geometry.attributes.aLine; r.flat = !!it.mesh.geometry.attributes.aFlat; return r; }""")
             # the sash: two ribbons on chains of bones; calm in the guard, swinging after a jump, never NaN
             sash = await pg.evaluate("""async () => { const it = VW.it, sa = it.sash, r = {};
               if (!sa) return {ribbons: false};
@@ -122,16 +132,17 @@ async def main(out_dir):
               r.finite = sa.ribbons.every(q => q.P.every(p => Number.isFinite(p.x + p.y + p.z)));
               return r; }""")
             look.update(sash)
+            if not ren: look = {k: v for k, v in look.items() if k not in REN_ONLY}
             if not all(look.values()): errs.append('look ' + str(look))
-            if w > h:   # once: the sash out of the body in every play button's moves
+            if w > h and ren:   # once: the sash out of the body in every play button's moves
                 ins = await pg.evaluate(INSIDE, [list(SASH_OUT), 180, 3]); slf = ins.pop('self')
                 over = {k: v for k, v in ins.items() if v[0] > SASH_OUT[int(k)]}
                 if slf != [4, 0] or over: errs.append('sash inside the body %s (self-test %s)' % ({k: [round(v[0], 3), round(v[1], 3)] for k, v in over.items()}, slf))
                 print('  sash inside the body, per button (share, deepest m):', {k: [round(v[0], 3), round(v[1], 3)] for k, v in ins.items()})
             ok = n == 10 and drawn > 200 and not errs
             failed += not ok
-            print(('PASS' if ok else 'FAIL') + ' viewer %dx%d: %d play buttons, %d drawn pixels of 4096 in the middle%s' % (w, h, n, drawn, (', ' + ' | '.join(errs[:3])) if errs else ''))
-            if out_dir: await pg.screenshot(path=os.path.join(out_dir, 'viewer_%dx%d.png' % (w, h)))
+            print(('PASS' if ok else 'FAIL') + ' %s %dx%d: %d play buttons, %d drawn pixels of 4096 in the middle%s' % (page, w, h, n, drawn, (', ' + ' | '.join(errs[:3])) if errs else ''))
+            if out_dir: await pg.screenshot(path=os.path.join(out_dir, '%s_%dx%d.png' % (os.path.splitext(page)[0], w, h)))
             await ctx.close()
         await b.close()
     print('%d failed (viewer_check)' % failed)
@@ -139,4 +150,5 @@ async def main(out_dir):
 
 
 if __name__ == '__main__':
-    sys.exit(1 if asyncio.run(main(sys.argv[1] if len(sys.argv) > 1 else None)) else 0)
+    pages = [a[len('--page='):] for a in sys.argv[1:] if a.startswith('--page=')]; rest = [a for a in sys.argv[1:] if not a.startswith('--page=')]
+    sys.exit(1 if asyncio.run(main(rest[0] if rest else None, *pages[:1])) else 0)

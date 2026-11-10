@@ -799,21 +799,38 @@ def skin_near(p, P, ok, J, W):
     return [[b, round(w / tot, 4)] for b, w in top]
 
 
-def main(pkg, out, drawing):
-    name = os.path.basename(os.path.normpath(pkg))
-    m = json.load(open(os.path.join(pkg, name + '.json'))); B = open(os.path.join(pkg, name + '.bin'), 'rb').read(); me = m['mesh']
-    f = lambda a, dt=np.float32: np.frombuffer(B, dt, a[1], a[0])
-    P = f(me['pos']).reshape(-1, 3).astype(np.float64); J = f(me['jnt'], np.uint8).reshape(-1, 4); W = f(me['wgt']).reshape(-1, 4)
-    I = f(me['idx'], np.uint16 if me['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
-    bones = m['bones']; idx = {b['n']: i for i, b in enumerate(bones)}
-    G = [None] * len(bones)
-    for i, b in enumerate(bones):
-        M = np.eye(4); M[:3, :3] = qm(b['q']); M[:3, 3] = b['t']; G[i] = M if b['p'] < 0 else G[b['p']] @ M
-    # --- the shape as drawn (drawn_shape): all below is measured on it ---
-    N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2)
-    tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int); ts = tex.shape[0]
-    col = tex[np.clip((UV[:, 1] * ts).astype(int), 0, ts - 1), np.clip((UV[:, 0] * ts).astype(int), 0, ts - 1)]
-    P, N, moved, face_mask = drawn_shape(P, N, I, ((J == idx['Head']) * W).sum(1), col)
+FUSED_W = (.26, .27, .25, .22)   # four fingers fused in one piece (split_fused): their widths' shares, index to little finger
+
+
+def split_fused(Lw, lab, l, n, thumb):
+    """When the mesh's four fingers are one piece (10/11/2026, Kael from Meshy: joined to their tips, a mitten; branches()
+    finds the thumb and that piece only), that piece split across the hand into four fingers, FUSED_W of its width each
+    (from the thumb's side): the labels with 5 fingers. With 5 already (Ren), lab as it is."""
+    ks = [k for k in range(lab.max() + 1) if (lab == k).sum() >= 8]
+    if len(ks) >= 5 or len(ks) < 2: return lab
+    st = {k: Lw[lab == k].mean(0) for k in ks}
+    th = max(ks, key=lambda k: float(st[k] @ l) * thumb - 2 * float(st[k][1]))   # (the thumb: as fingers_of finds it)
+    blk = max((k for k in ks if k != th), key=lambda k: (lab == k).sum())
+    vs = np.nonzero(lab == blk)[0]; Q = Lw[vs]; c = Q.mean(0)
+    d = np.linalg.svd(Q - c)[2][0]; a = np.cross(n, d); a /= np.linalg.norm(a)
+    if (st[th] - c) @ a < 0: a = -a   # (toward the thumb)
+    u = (Q - c) @ a; lo, hi = np.percentile(u, 1), np.percentile(u, 99)
+    edges = hi - np.cumsum((0,) + FUSED_W) * (hi - lo)   # (from the thumb's side down)
+    out = lab.copy(); nxt = lab.max() + 1
+    for f in range(4):
+        sel = (u <= edges[f] + (1e9 if f == 0 else 0)) & (u > edges[f + 1] - (1e9 if f == 3 else 0))
+        out[vs[sel]] = nxt + f
+    print('  the four fingers fused in one piece (%d points): split across the hand, %s of its %.0f mm' % (len(vs), FUSED_W, 1000 * (hi - lo)))
+    return out
+
+
+def finger_rig(P, J, W, I, bones, idx, G):
+    """The fingers' bones of both hands (see fingers_of, fist_of) and the skin on them: (fingers, jn, wn, palms,
+    thumb_root, on_finger, first, weld, E): the fingers' bones as the look stores them, the new skin joints and weights
+    (n x 4), per hand (its weight on the hand's bone, the palm's side in the model), the thumbs' and the fingers' share of
+    each vertex before the thumb's root is spread (the outline's rules), the welded vertices and edges. P: the positions,
+    J, W: the package's skin, I: the triangles, bones: the package's bones, idx: name -> index, G: the bones' bind
+    matrices."""
     # --- the fingers: the mesh welded across its texture seams, then each hand's fingers on it ---
     _, first, weld = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True)
     weld = weld.ravel(); T = weld[I]
@@ -829,6 +846,7 @@ def main(pkg, out, drawing):
         for u, v in E[ins[E[:, 0]] & ins[E[:, 1]]]:
             dl = float(np.linalg.norm(Lw[u] - Lw[v])); nb[u].append((int(v), dl)); nb[v].append((int(u), dl))
         lab = branches(Lw, nb, ws)
+        lab = split_fused(Lw, lab, l, n, thumb)
         fg = fingers_of(Lw, lab, l, n, thumb)
         base = len(bones) + len(fingers)
         fists = fist_of(fg, l, n, thumb)
@@ -871,6 +889,26 @@ def main(pkg, out, drawing):
             jn[v] = [a for a, _ in top] + [0] * (4 - len(top)); wn[v] = [b / tot for _, b in top] + [0] * (4 - len(top)); nch += 1
         print(side, 'hand: the thumb\'s root spread over', nch, 'palm vertices')
         print(side, 'hand: thumb side', thumb, 'fingers', [int((lab == F['k']).sum()) for F in fg], 'vertices on them')
+    return fingers, jn, wn, palms, thumb_root, on_finger, first, weld, E
+
+
+def main(pkg, out, drawing):
+    name = os.path.basename(os.path.normpath(pkg))
+    m = json.load(open(os.path.join(pkg, name + '.json'))); B = open(os.path.join(pkg, name + '.bin'), 'rb').read(); me = m['mesh']
+    f = lambda a, dt=np.float32: np.frombuffer(B, dt, a[1], a[0])
+    P = f(me['pos']).reshape(-1, 3).astype(np.float64); J = f(me['jnt'], np.uint8).reshape(-1, 4); W = f(me['wgt']).reshape(-1, 4)
+    I = f(me['idx'], np.uint16 if me['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
+    bones = m['bones']; idx = {b['n']: i for i, b in enumerate(bones)}
+    G = [None] * len(bones)
+    for i, b in enumerate(bones):
+        M = np.eye(4); M[:3, :3] = qm(b['q']); M[:3, 3] = b['t']; G[i] = M if b['p'] < 0 else G[b['p']] @ M
+    # --- the shape as drawn (drawn_shape): all below is measured on it ---
+    N = f(me['nor']).reshape(-1, 3).astype(np.float64); UV = f(me['uv']).reshape(-1, 2)
+    tex = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(int); ts = tex.shape[0]
+    col = tex[np.clip((UV[:, 1] * ts).astype(int), 0, ts - 1), np.clip((UV[:, 0] * ts).astype(int), 0, ts - 1)]
+    P, N, moved, face_mask = drawn_shape(P, N, I, ((J == idx['Head']) * W).sum(1), col)
+    # --- the fingers: the mesh welded across its texture seams, then each hand's fingers on it (finger_rig) ---
+    fingers, jn, wn, palms, thumb_root, on_finger, first, weld, E = finger_rig(P, J, W, I, bones, idx, G)
     if len(bones) + len(fingers) > 255: sys.exit('too many bones for uint8 skin indices')
     # --- the band's back on the hips (band_on_hips): it no longer stretches when the thighs and the spine bend ---
     band = sash_band(P, col); jn, wn = band_on_hips(P, jn, wn, idx, band)

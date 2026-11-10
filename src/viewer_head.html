@@ -1,4 +1,4 @@
-<title>Anteprima 3D di Ren</title>
+<title>Anteprima 3D di {{Char}}</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,20 +29,21 @@ button:active{transform:skewX(-10deg) scale(.93)}
 button[aria-pressed="true"]{background:var(--orange);border-color:var(--orange);color:#1a0f05}
 button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .opt{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:15px}
+.opt[hidden]{display:none}
 .opt button{font-size:15px;padding:5px 10px 4px}
 #hint{color:var(--dim);font-size:14px;text-shadow:0 1px 3px #000}
 @media (max-height:430px){#name{font-size:40px}button{font-size:15px;padding:5px 11px 4px}.opt button{font-size:13px}}
 @media (prefers-reduced-motion:reduce){button{transition:none}}
 </style>
 <div id="stage"><canvas id="view"></canvas></div>
-<div class="ui" id="top"><div id="name">REN<small>Anteprima 3D, senza giocare</small></div><div id="now"></div></div>
+<div class="ui" id="top"><div id="name" data-char="{{char}}">{{CHAR}}<small>Anteprima 3D, senza giocare</small></div><div id="now"></div></div>
 <div class="ui" id="bottom">
   <div class="row" id="moves"></div>
   <div class="row">
-    <div class="opt">Pittura <button id="pDraw"><span>Disegno</span></button><button id="pMeshy"><span>Meshy</span></button></div>
+    <div class="opt" id="paint">Pittura <button id="pDraw"><span>Disegno</span></button><button id="pMeshy"><span>Meshy</span></button></div>
     <div class="opt">Luce <button id="lToon"><span>3D</span></button><button id="lFlat"><span>Piatta</span></button></div>
     <div class="opt">Velocità <button id="s1"><span>1×</span></button><button id="s2"><span>½×</span></button><button id="s4"><span>¼×</span></button></div>
     <div class="opt"><button id="spin"><span>Gira</span></button></div>
   </div>
-  <div id="hint">Trascina per girare Ren, pizzica o usa la rotella per avvicinarti, doppio tocco per tornare al centro.</div>
+  <div id="hint">Trascina per girare {{Char}}, pizzica o usa la rotella per avvicinarti, doppio tocco per tornare al centro.</div>
 </div>

@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Packs a Meshy rigged character and its Meshy animation clips for the game (Tappa 2a).
 
-usage: python3 tools/meshy_pack.py RIG_GLB ANIM_DIR OUT_DIR
+usage: python3 tools/meshy_pack.py RIG_GLB ANIM_DIR OUT_DIR [ANIM_RIG_GLB]
   RIG_GLB  the rigging task's rigged_character_glb (one skinned mesh, one texture)
   ANIM_DIR a<ID>.glb files, one Meshy animation task each (the same rig); the clip id is the file name ('a89')
   OUT_DIR  gets <name>.json (layout), <name>.bin (data) and <name>.jpg (texture), name = the folder's name
+  ANIM_RIG_GLB  (optional) the rig the clips in ANIM_DIR were made on, when it is another character's with the same
+           bones (Meshy's 24): the clips are retargeted onto RIG_GLB (10/11/2026: Kael with Ren's 25 clips, no new
+           animation credits): each bone's world rotation from its rest in the clips' rig applied to its rest here,
+           the Hips' motion scaled by the two Hips' heights
 
 Space of the output: metres, y up, the feet at y=0, forward +z, the Hips centred in x and z; Meshy's Armature scale
 (0.01) is baked in. ren.json: {v, height, bones:[{n, p, t, q}], mesh:{verts, tris, pos, nor, uv, jnt, wgt, idx},
@@ -124,7 +128,72 @@ def despike(q, b):
     return fixed
 
 
-def main(rig_path, anim_dir, out_dir):
+def rig(rig_path):
+    """A rigged character's skeleton in the package's space (see main): its glTF, its joints' names and parents, their
+    world rotations bR and positions bt (metres, feet at 0, Hips centred), the local rest rotations rest_q, the Armature
+    above the Hips Ga, the space's offset off."""
+    j, BIN = read_glb(rig_path)
+    G, parent = world_mats(j)
+    skin = j['skins'][0]; joints = skin['joints']; nb = len(joints)
+    names = [j['nodes'][k]['name'] for k in joints]; index = {k: i for i, k in enumerate(joints)}
+    IBM = acc(j, BIN, skin['inverseBindMatrices']).reshape(nb, 4, 4).transpose(0, 2, 1).astype(np.float64)
+    mesh_node = next(i for i, nd in enumerate(j['nodes']) if 'skin' in nd and 'mesh' in nd)
+    pr = j['meshes'][j['nodes'][mesh_node]['mesh']]['primitives'][0]; at = pr['attributes']
+    P = acc(j, BIN, at['POSITION']).astype(np.float64)
+    J = np.array([G[k] @ IBM[i] for i, k in enumerate(joints)]); M = J[0]
+    Pw = P @ M[:3, :3].T + M[:3, 3]
+    bt = np.array([G[k][:3, 3] for k in joints]); bR = [rot_part(G[k])[0] for k in joints]
+    hips = names.index('Hips'); off = np.array([-bt[hips][0], -Pw[:, 1].min(), -bt[hips][2]]); bt = bt + off
+    bpar = [index.get(parent.get(k), -1) for k in joints]
+    rest_q = []
+    for i in range(nb):
+        p = bpar[i]; rest_q.append([round(float(v), 7) for v in mat_q(bR[i] if p < 0 else bR[p].T @ bR[i])])   # (as the bones' list)
+    Ga = G[parent[joints[hips]]] if joints[hips] in parent else np.eye(4)
+    return {'names': names, 'bpar': bpar, 'bR': bR, 'bt': bt, 'rest_q': np.array(rest_q), 'Ga': Ga, 'off': off, 'hips': hips}
+
+
+def read_clip(path, R):
+    """One Meshy animation GLB of rig R (rig()): (name, frames, local rotations n x bones x 4, the Hips' positions n x 3)."""
+    cid = os.path.basename(path)[:-4]; aj, AB = read_glb(path); an = aj['animations'][0]
+    anames = [nd.get('name') for nd in aj['nodes']]
+    tracks = {}; n = None
+    for ch in an['channels']:
+        s = an['samplers'][ch['sampler']]; t = acc(aj, AB, s['input']).reshape(-1); v = acc(aj, AB, s['output']).astype(np.float64)
+        assert s.get('interpolation', 'LINEAR') == 'LINEAR' and np.allclose(np.diff(t), 1 / 30, atol=2e-3), cid + ' is not 30 fps linear'
+        n = len(t) if n is None else n; assert len(t) == n, cid + ' tracks of different lengths'
+        tracks[(anames[ch['target']['node']], ch['target']['path'])] = v
+    hips, Ga = R['hips'], R['Ga']
+    q = np.repeat(R['rest_q'][None], n, 0)
+    for i, bn in enumerate(R['names']):
+        if (bn, 'rotation') in tracks: q[:, i] = tracks[(bn, 'rotation')]
+    q[:, hips] = np.array([mat_q(rot_part(Ga)[0] @ qmat(r)) for r in q[:, hips]])
+    rep = despike(q, hips)
+    if rep: print('  %s: Hips glitch frames repaired: %s' % (cid, ', '.join('%d-%d' % r for r in rep)))
+    hraw = tracks.get(('Hips', 'translation'))
+    h = (hraw @ Ga[:3, :3].T + Ga[:3, 3] + R['off']) if hraw is not None else np.repeat(R['bt'][hips][None], n, 0)
+    nm = an.get('name', cid).split('|')[1] if '|' in an.get('name', '') else an.get('name', cid)
+    return nm, n, q, h
+
+
+def retarget(q, h, S, T):
+    """Clip rotations q (n x bones x 4) and Hips positions h of rig S onto rig T (rig()), the same bones by name: each
+    bone's world rotation from its rest in S (D = W_S W_S,rest^-1) applied to its rest in T, back to T's local
+    rotations; the Hips' motion around their rest scaled by T's Hips height over S's."""
+    si = [S['names'].index(nm) for nm in T['names']]; n = len(q); nb = len(T['names'])
+    out = np.zeros((n, nb, 4))
+    for f in range(n):
+        Ws = [None] * len(S['names']); Wt = [None] * nb
+        for i in range(len(S['names'])):
+            p = S['bpar'][i]; L = qmat(q[f, i]); Ws[i] = L if p < 0 else Ws[p] @ L
+        for i in range(nb):
+            k = si[i]; Wt[i] = (Ws[k] @ S['bR'][k].T) @ T['bR'][i]
+            p = T['bpar'][i]; out[f, i] = mat_q(Wt[i] if p < 0 else Wt[p].T @ Wt[i])
+    sc = T['bt'][T['hips']][1] / S['bt'][S['hips']][1]
+    ht = T['bt'][T['hips']] + (h - S['bt'][S['hips']]) * sc
+    return out, ht
+
+
+def main(rig_path, anim_dir, out_dir, anim_rig=None):
     name = os.path.basename(os.path.normpath(out_dir)); os.makedirs(out_dir, exist_ok=True)
     j, BIN = read_glb(rig_path)
     G, parent = world_mats(j)
@@ -165,30 +234,15 @@ def main(rig_path, anim_dir, out_dir):
         w = sum(((JN == names.index(g)) * WT).sum(1) for g in group); sel = w >= LIMB_W
         c = Pw[sel].mean(0); i = names.index(b)
         limbs[l] = {'b': b, 'p': [round(float(v), 5) for v in bR[i].T @ (c - bt[i])]}
-    # Clips: local rotations of every bone (rest where a bone is not animated) and the Hips' local position.
-    rest_q = np.array([b['q'] for b in bones], dtype=np.float64)
-    Ga = G[parent[joints[hips]]] if joints[hips] in parent else np.eye(4)   # the Armature above the Hips
+    # Clips: local rotations of every bone (rest where a bone is not animated) and the Hips' local position; made on
+    # another rig (anim_rig): retargeted (retarget())
+    T = rig(rig_path); S = rig(anim_rig) if anim_rig else T
     clips = {}
     for fn in sorted(os.listdir(anim_dir), key=lambda s: int(s[1:-4]) if s[1:-4].isdigit() else 0):
         if not (fn.startswith('a') and fn.endswith('.glb')): continue
-        cid = fn[:-4]; aj, AB = read_glb(os.path.join(anim_dir, fn)); an = aj['animations'][0]
-        anames = [nd.get('name') for nd in aj['nodes']]
-        tracks = {}; n = None
-        for ch in an['channels']:
-            s = an['samplers'][ch['sampler']]; t = acc(aj, AB, s['input']).reshape(-1); v = acc(aj, AB, s['output']).astype(np.float64)
-            assert s.get('interpolation', 'LINEAR') == 'LINEAR' and np.allclose(np.diff(t), 1 / 30, atol=2e-3), cid + ' is not 30 fps linear'
-            n = len(t) if n is None else n; assert len(t) == n, cid + ' tracks of different lengths'
-            tracks[(anames[ch['target']['node']], ch['target']['path'])] = v
-        q = np.repeat(rest_q[None], n, 0)
-        for i, bn in enumerate(names):
-            if (bn, 'rotation') in tracks: q[:, i] = tracks[(bn, 'rotation')]
-        q[:, hips] = np.array([mat_q(rot_part(Ga)[0] @ qmat(r)) for r in q[:, hips]])
-        rep = despike(q, hips)
-        if rep: print('  %s: Hips glitch frames repaired: %s' % (cid, ', '.join('%d-%d' % r for r in rep)))
-        hraw = tracks.get(('Hips', 'translation'))
-        h = (hraw @ Ga[:3, :3].T + Ga[:3, 3] + off) if hraw is not None else np.repeat(bt[hips][None], n, 0)
-        clips[cid] = {'name': an.get('name', cid).split('|')[1] if '|' in an.get('name', '') else an.get('name', cid), 'n': n, 'fps': 30,
-                      'q': q.astype(np.float32), 'h': h.astype(np.float32)}
+        cid = fn[:-4]; nm, n, q, h = read_clip(os.path.join(anim_dir, fn), S)
+        if anim_rig: q, h = retarget(q, h, S, T)
+        clips[cid] = {'name': nm, 'n': n, 'fps': 30, 'q': q.astype(np.float32), 'h': h.astype(np.float32)}
     # The binary: mesh blocks, then the clips; every block on a 4-byte boundary.
     blob = bytearray(); lay = {}
     def put(arr):
@@ -213,5 +267,5 @@ def main(rig_path, anim_dir, out_dir):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4: sys.exit(__doc__)
+    if len(sys.argv) not in (4, 5): sys.exit(__doc__)
     main(*sys.argv[1:])

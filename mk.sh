@@ -8,8 +8,10 @@ p="index.html";s=open(p).read();i=s.find("window.__VF={");j=s.find("\nboot();",i
 assert i>0 and j>i
 s=s[:i]+s[j+1:];open(p,"w").write(s);print("stripped",len(s))
 PY
-# viewer.html = the character viewer ("Anteprima 3D di Ren"), its own page (not committed: rebuilt here)
-python3 build.py viewer.html 0 --head=viewer_head.html --assets=viewer_assets a0_cfg.js c1_sim.js e_poses.js e_fighter3d.js e_model.js v_viewer.js >/dev/null
+# viewer.html, viewer_kael.html = the character viewers ("Anteprima 3D di Ren", "di Kael"), their own pages (not committed: rebuilt here)
+V="a0_cfg.js c1_sim.js e_poses.js e_fighter3d.js e_model.js v_viewer.js"
+python3 build.py viewer.html 0 --head=viewer_head.html --char=ren --assets=viewer_assets $V >/dev/null
+python3 build.py viewer_kael.html 0 --head=viewer_head.html --char=kael --assets=wip_assets --drop=ren/,ui/ $V >/dev/null
 python3 -c "
 import re;s=open('game_w.html').read();open('g.js','w').write(re.findall(r'<script>\n(.*?)\n</script>',s,re.S)[0])
 s=open('viewer.html').read();open('gv.js','w').write(re.findall(r'<script>\n(.*?)\n</script>',s,re.S)[0])" && node --check g.js && node --check gv.js && echo SYNTAX_OK
