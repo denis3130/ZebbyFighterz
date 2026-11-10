@@ -37,12 +37,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mes
 import glbio
 from paint_views import texel_table
 from kael_ren_head import lum_split
+from cel_light import contact, occlusion
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 KAEL_PKG = os.path.join(ROOT, 'wip_assets/kael')
 # the bust (its own units): the eyes' line (y), the chin (y), the neck's axis (x, z: its skin's circle under the jaw),
-# the earrings' boxes (x, y, z ranges)
-BUST = {'eyes': -.09, 'chin': -.59, 'neck': (.078, -.010),
+# the ear lobes (y: the earrings hang under it), the earrings' boxes (x, y, z ranges)
+BUST = {'eyes': -.09, 'chin': -.59, 'neck': (.078, -.010), 'lobe': -.25,
         'ears': (((-.37, -.22), (-.58, -.21), (-.12, .22)), ((.36, .51), (-.58, -.21), (-.12, .22)))}
 DRAW = {'eyes': 152., 'chin': 220., 's': 831.682, 'by': 1478.11}   # kael_nero.png's rows; its scan camera (px per m, feet)
 BODY_NECK = (.0085, -.005)   # m: the body's collar's top ring's centre (x, z; fit over 1.50-1.52 m)
@@ -60,12 +61,27 @@ HAIR = ((227, 214, 229), (143, 125, 158))   # the images' hair: light, shadow (k
 HAIR_SHADOW, HAIR_BLUR, HAIR_LINE = .52, 2., 70   # the shadow's share of the texels (.52: about .38 of what shows, as on the images); its smoothing (texels); its lines: darker (kept)
 SKIN = [((253, 192, 152), (248, 187, 143)), ((209, 158, 130), (178, 124, 96))]   # Meshy's skin, its shadow -> the images'
 SKIN_SPREAD = 30.
+# the images' drawn shading (tools/cel_light.py; Denis, 10/11: "rendi il modello 3d identico"; tools/kael_light.py
+# measured that no one light gives it: they shade the skin in a thin band under the locks over it, on the nose's side, in
+# the ears and under the jaw, the hair under the locks over it and on their undersides): L toward the light (x his
+# left, y up, z his front); the skin in shadow under a lock within skin[0] m, more than skin[1] m out of it, in the face's
+# own shadow from L under the chin (up to neck m above it: the jaw's on the neck) and turned from L under skin[2]; the
+# hair under other locks (hair[0], [1] as the skin's), turned from Lh (a light from above: a front light put the whole
+# back of the head in shadow, the images draw it lit from every side) under hair[2], and where Meshy's own is darkest (the share hair[3]); their edges smoothed
+# over blur texels (skin, hair). None: the texture's own shading.
+SHADE = {'L': (0., .5, .87), 'Lh': (0., 1., .2), 'skin': (.006, .0015, -.15), 'neck': .004, 'hair': (.005, .004, -.2, .13), 'blur': (.8, 2.5)}
 SHEEN = 205                  # on the face's skin (its own triangles, under the eyes): texels lighter than this (the skin's 190): Meshy's sheen
 # the outline (per vertex: its width's share, aLine; its extra push back, m, aBack): the earrings' thin, the hair's
 # HAIR_LINE_W (its many thin locks drew black ribbons at the head's full width); the locks over the face (in front of its
 # skin seen from the front, within FRINGE[1] m of it, depth slack FRINGE[2]) pushed back FRINGE[0] m behind it, as Ren's
 # (tools/ren_head.py fringe_back): their outline showed as thick black bands over the face; smoothed over FRINGE[3] rounds
-EAR_LINE, HAIR_LINE_W = .3, .55
+EAR_LINE, HAIR_LINE_W = .3, .4
+# the earrings (the drawing's, kael_testa_fronte.png): EAR_RINGS rings of the bead and hook around the crystal; its purples
+# from the highlight to the darkest (EAR_TONES) by its facets' light from EAR_LIGHT (over EAR_STEPS, dark to light); the
+# bead's and the hook's silver, lit and shaded
+EAR_RINGS, EAR_LIGHT, EAR_STEPS = 4, (-.35, .6, .7), (-.1, .35, .8)
+EAR_TONES = ((232, 164, 245), (156, 75, 198), (107, 50, 143), (76, 36, 109))
+EAR_SILVER = ((205, 200, 222), (140, 134, 160))
 FRINGE = (.02, .008, .004, 3, .002)
 HEAD_TEX = 2048
 
@@ -190,6 +206,14 @@ def main(bust):
         cw = np.zeros(wb_.max() + 1, bool); cw[wb_[collar_vb]] = True
         nbr = np.zeros_like(cw); nbr[TW_[cw[TW_].any(1)].ravel()] = True
         collar_vb |= grow_ok & nbr[wb_]
+    # (the earrings themselves: in their boxes the crystal, purple, and its dark lines, then the bead and the hook under
+    # the lobe, EAR_RINGS rings of the non-skin next to them; the boxes' skin and hair stay skin and hair: as earrings
+    # they kept Meshy's colours, the hair by the ears whitish)
+    jewel = ear_t & (is_purple(tc) | (tc.max(1) < 70)); grow_e = ear_t & ~is_skin(tc) & (C[:, 1] < BUST['lobe'])
+    for _ in range(EAR_RINGS):
+        cw = np.zeros(wb_.max() + 1, bool); cw[TW_[jewel].ravel()] = True
+        jewel |= grow_e & cw[TW_].any(1)
+    ear_t = jewel
     keep = (P[Ib, 1] > CUT_Y).all(1)
     It = Ib[keep]; used = np.unique(It); remap = -np.ones(len(P), np.int64); remap[used] = np.arange(len(used))
     It = remap[It]; Q, Nq, UV, vc, collar_v = P[used], Nb[used].copy(), UVb[used], vc[used], collar_vb[used]
@@ -294,6 +318,41 @@ def main(bust):
     out[body] = h0 + (h1 - h0) * np.clip(wl[body], 0, 1)[:, None]
     print('colours: %d skin texels to the images\' tones, %d of the face\'s sheen as skin, %d hair texels in two lavenders (%d lit)' % (
         int(sk.sum()), int(sheen.sum()), int(body.sum()), int((lit & body).sum())))
+    if SHADE:   # the images' drawn shading (tools/cel_light.py), see SHADE
+        def smooth(sel, idx, sigma):   # (a mask over the texels idx, smoothed in the texture: no stairs at its edges)
+            Sm = np.zeros((TS, TS)); Mm = np.zeros((TS, TS)); Sm[ys[idx], xs[idx]] = sel; Mm[ys[idx], xs[idx]] = 1
+            return (ndimage.gaussian_filter(Sm, sigma) / np.maximum(ndimage.gaussian_filter(Mm, sigma), 1e-6))[ys[idx], xs[idx]] > .5
+        Lv = np.array(SHADE['L'], float); Lv /= np.linalg.norm(Lv)
+        hair_t = np.nonzero(body[ys, xs])[0]; casters = pos[hair_t][::4]; tree = cKDTree(casters)
+        skin_t = np.nonzero(sk & ~eyes_box & ~ear_v[It[ks]].any(1) & ~collar_v[It[ks]].any(1))[0]
+        R, FR, TERM = SHADE['skin']
+        under = contact(pos[skin_t], nor[skin_t], casters, R, FR, up=(0., 1., 0.), tree=tree)   # (under the locks)
+        jaw = occlusion(Q, It[is_skin(vc)[It].all(1)], pos[skin_t], Lv) & (pos[skin_t, 1] < chin_m + SHADE['neck'])   # (the jaw's shadow on the neck: only there, the nose's on the cheek was a long dark wedge)
+        away = nor[skin_t] @ Lv < TERM
+        ss = smooth(under | jaw | away, skin_t, SHADE['blur'][0])
+        lit_tone = out[ys[skin_t], xs[skin_t]].mean(1) > np.mean(SKIN[1][1]) + 8   # (Meshy's own skin shadows stay as they are: not twice)
+        k = skin_t[ss & lit_tone]; out[ys[k], xs[k]] = out[ys[k], xs[k]] * (np.array(SKIN[1][1], float) / np.array(SKIN[0][1], float))
+        R, FR, TERM, DR = SHADE['hair']
+        hc = contact(pos[hair_t], nor[hair_t], casters, R, FR, tree=tree)   # (under other locks)
+        Lh = np.array(SHADE['Lh'], float); Lh /= np.linalg.norm(Lh)
+        ha = nor[hair_t] @ Lh < TERM   # (their undersides: by a light from above, the same from every side, as the images)
+        Dk = np.zeros((TS, TS), bool); Dk[body] = ~lum_split(T, body, DR, HAIR_BLUR)[body]   # (Meshy's darkest: the images' deep shadows)
+        hs = smooth(hc | ha | Dk[ys[hair_t], xs[hair_t]], hair_t, SHADE['blur'][1])
+        out[ys[hair_t], xs[hair_t]] = np.array(HAIR[0], float); out[ys[hair_t[hs]], xs[hair_t[hs]]] = np.array(HAIR[1], float)
+        print('shade: skin %d texels in shadow (%d under the locks, %d the face\'s own, %d turned away); hair %.0f%% in shadow' % (
+            len(k), int(under.sum()), int(jaw.sum()), int(away.sum()), 100 * hs.mean()))
+    # the earrings in the drawing's purples (EAR_TONES: by how much each facet faces EAR_LIGHT), the bead and the hook in
+    # its silver (EAR_SILVER: lit, shaded); their lines black
+    jt = np.nonzero(ear_v[It[ks]].all(1))[0]
+    if len(jt):
+        fn = np.cross(Q[It[:, 1]] - Q[It[:, 0]], Q[It[:, 2]] - Q[It[:, 0]]); fn /= np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12)
+        el = np.array(EAR_LIGHT, float); el /= np.linalg.norm(el); lt = fn[ks[jt]] @ el; cj = T[ys[jt], xs[jt]]
+        pur = is_purple(cj) & (cj.max(1) >= 70); sil = ~is_purple(cj) & (cj.max(1) >= 70)
+        tone = np.digitize(lt, EAR_STEPS)   # (0 darkest .. 3 highlight)
+        tones = np.array(EAR_TONES, float)[::-1]
+        out[ys[jt[pur]], xs[jt[pur]]] = tones[tone[pur]]
+        out[ys[jt[sil]], xs[jt[sil]]] = np.where((lt[sil] > 0)[:, None], np.array(EAR_SILVER[0], float), np.array(EAR_SILVER[1], float))
+        print('earrings: %d crystal texels in the drawing\'s four purples, %d of the bead and the hook silver' % (int(pur.sum()), int(sil.sum())))
     cov = np.zeros((TS, TS), bool); cov[ys, xs] = True
     _, (iy, ix) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], ix[~cov]]
     Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(os.path.join(KAEL_PKG, 'kael_head.jpg'), quality=90, optimize=True)

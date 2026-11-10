@@ -5,7 +5,8 @@ left, or a single view), the camera that shows the model as the panel shows it, 
 viewer page (its look: paint, toon light, outline) and the two side by side and over each other, so that every
 difference in shape, lines and colours is in sight.
 
-- The model: its bind pose (the drawings' A-pose), with the look's shape (look.move).
+- The model: its bind pose (the drawings' A-pose), with the look's shape (look.move) and its new head if the package's
+  folder has one (<name>_head.*, tools/kael_head.py: in place of the triangles it hides).
 - The camera: orthographic, the model turned by a yaw about the vertical (+: its face toward the viewer's left, its left
   side seen), its x' = p . (cos t, 0, -sin t) at u = cx + s x', its y at v = by - s y. Yaw, scale and offset: the ones
   where the model seen so overlaps the panel's figure most, the sum of the overlaps (intersection over union) of the
@@ -63,6 +64,16 @@ def model(pkg):
     tp = os.path.join(pkg, name + '_painted.jpg'); tp = tp if os.path.exists(tp) else os.path.join(pkg, name + '.jpg')
     T = np.asarray(Image.open(tp).convert('RGB')).astype(np.float64); ts = T.shape[0]
     uv = UV[I].mean(1); mat = classes(T[np.clip((uv[:, 1] * ts).astype(int), 0, ts - 1), np.clip((uv[:, 0] * ts).astype(int), 0, ts - 1)])
+    hp = os.path.join(pkg, name + '_head.json')
+    if os.path.exists(hp):   # (the new head in the package's folder, tools/kael_head.py: in place of the triangles it hides, as the viewer draws it)
+        hj = json.load(open(hp)); HB = open(os.path.join(pkg, name + '_head.bin'), 'rb').read()
+        hf = lambda a, dt=np.float32: np.frombuffer(HB, dt, a[1], a[0])
+        HP = hf(hj['pos']).reshape(-1, 3).astype(np.float64); HUV = hf(hj['uv']).reshape(-1, 2).astype(np.float64)
+        HI = hf(hj['idx'], np.uint16 if hj['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
+        keep = np.ones(len(I), bool); keep[hf(hj['hide'], np.uint32).astype(np.int64)] = False
+        HT = np.asarray(Image.open(os.path.join(pkg, name + '_head.jpg')).convert('RGB')).astype(np.float64); hs = HT.shape[0]
+        huv = HUV[HI].mean(1); hmat = classes(HT[np.clip((huv[:, 1] * hs).astype(int), 0, hs - 1), np.clip((huv[:, 0] * hs).astype(int), 0, hs - 1)])
+        I, mat = np.vstack([I[keep], HI + len(P)]), np.r_[mat[keep], hmat]; P = np.vstack([P, HP])
     return P, I, mat
 
 

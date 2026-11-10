@@ -95,13 +95,28 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
   - pelle e sua ombra;
   - tolta la riga chiara sul naso;
   - bordo del colletto viola, non scambiato per i capelli.
-- Contorno: sottile su capelli (0,55) e orecchini (0,3). Per le ciocche davanti al viso è spinto dietro il viso, come
+- Contorno: sottile su capelli (0,4) e orecchini (0,3). Per le ciocche davanti al viso è spinto dietro il viso, come
   per Ren: prima faceva fasce nere sul viso.
 - Controllato:
   - da 6 lati contro le immagini, e il viso da vicino;
   - Kael intero in tutte le mosse;
   - collo e colletto da 8 lati, da vicino, anche solo la testa, solo il corpo e senza contorni, in guardia, presa,
     calcio alto e montante.
+- **Le ombre disegnate delle immagini** (10/11 sera, Denis: "è fatto bene ma so che puoi fare di meglio, guarda bene
+  queste immagini e rendi il modello 3d identico"). Meshy toglie le luci dalla pittura: il viso era tutto chiaro dove
+  le immagini lo ombreggiano. Ora le ombre sono cotte nella pittura (`tools/cel_light.py`, `SHADE` in
+  `tools/kael_head.py`), quindi seguono la testa in ogni mossa:
+  - pelle: una striscia d'ombra sotto le ciocche che stanno sopra la pelle (frangia, tempie), il lato del naso e delle
+    guance lontano dalla luce, l'ombra della mascella sul collo;
+  - capelli: in ombra sotto le altre ciocche e sotto le punte (luce dall'alto, uguale da ogni lato), più i punti più
+    scuri di Meshy; ombra 36-42% di fronte, di tre quarti e di lato come nelle immagini (36-41%), dietro 47% (38%);
+  - una luce sola non basta: `tools/kael_light.py` l'ha misurata sulle immagini allineate e nessuna direzione dà le loro
+    ombre (sono disegnate dove le ciocche toccano la pelle).
+- Orecchini: solo il cristallo, la perlina e il gancio (prima prendevano anche pelle e capelli vicini), il cristallo
+  nei quattro viola del disegno secondo le sue facce, perlina e gancio d'argento.
+- Scanner: `tools/sheet_scan.py` ora mette anche la testa nuova (`<nome>_head.*`) al posto di quella che nasconde.
+  Scansioni delle immagini della testa: `--part=1.44:1.80` e la rotazione di ogni immagine (fronte -8:8, tre quarti
+  -50:-20 e 20:50, profili -100:-78 e 78:100, dietro 168:192).
 - Nel look: `CFG.looks.kael.head:true`. Per tornare alla versione 6, togliere `head:true`. La proposta con la testa di
   Ren (`tools/kael_ren_head.py`) è superata.
 - Per dopo: il busto e le braccia, poi le gambe e i piedi da Meshy (il piano di Denis), sempre con saldo, costo e ok

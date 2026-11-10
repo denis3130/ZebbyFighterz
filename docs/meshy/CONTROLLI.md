@@ -28,6 +28,9 @@ Denis: "devi guardarlo in 3d e vedere da solo cosa c'è di storto o di sfumato, 
 - **Resti**: niente pezzi dipinti di cose che non ci sono più o che sono diventate pezzi a parte (le vecchie code della
   fascia di Ren).
 - **Viso**: occhi puliti e simmetrici, naso, bocca, mascella e ombra sotto il mento come nel foglio, da ogni lato.
+  Anche le ombre del disegno: Meshy toglie le luci, quindi un viso tutto chiaro dove il foglio lo ombreggia (sotto la
+  frangia, di lato al naso, sotto la mascella) è un errore. Si misura: la quota d'ombra dei capelli e della pelle dalla
+  stessa inquadratura del foglio (Kael, 10/11).
 - **Capelli**: sagoma e punte come nel foglio, ciocche col contorno nero, tempie e zona attorno alle orecchie senza
   buchi, aghi o spigoli, niente cuoio capelluto scoperto, nuca coperta come nel foglio.
 - **Orecchie e orecchini** al loro posto, visibili come nel foglio.
