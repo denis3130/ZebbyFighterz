@@ -470,34 +470,38 @@ rkAddMove('dev', {
 // --- Calcio a frusta: the lead leg, the standing foot turning on its tip ---
 // Load: the rear foot steps in under the body (30 cm), the weight goes onto it and he rises on it, the lead knee comes
 // up high (the foot folded under it, toes pointed). Pivot and whip: the standing foot turns on its tip as the hips turn
-// a little (never a body turning on a planted foot), the body leans away and the shin snaps out at chest height, the
-// standing leg nearly straight. The body stays three-quarters, as the sheet has it. Back: the knee folds back in, then
-// he steps down forward out of the kick (no step back: the fighter ends 30 cm on, in the same guard). The kicking leg
-// itself is set after the pose (rkKickLeg): its knee forward and up, its foot pointed against the shin.
+// a little (never a body turning on a planted foot), the body leans away and the leg snaps out rising to chest
+// height, the foot snapping flexed: as the sheet's "Impatto" draws it, he strikes with the sole, toes up, the standing
+// leg nearly straight and its foot flat. The body stays three-quarters. Back: the knee folds back in, then he steps
+// down forward out of the kick (no step back: the fighter ends 30 cm on, in the same guard). The kicking leg itself
+// is set after the pose (rkKickLeg): its knee forward and up, its foot set against the shin.
 rkAddMove('kick', {
   len: 34, name: 'Calcio a frusta',
   phase: [[0, 'Caricamento'], [9, 'Pivot'], [14, 'Impatto'], [17, 'Rientro'], [22, 'Atterraggio'], [28, 'Guardia']],
-  cfg: {s: 13, a: 3, r: 18, h: 'mid', box: [300, 1000, 750, 1250], limb: 'footL'},   // PROPOSAL
+  cfg: {s: 13, a: 3, r: 18, h: 'mid', box: [300, 1000, 950, 1400], limb: 'footL'},   // PROPOSAL (the sole lands at chest height)
   root: rkMono([[0, 0], [19, 0], [27, .3], [34, .3]]),
   body: {
-    yaw: rkMono([[0, 0], [6, -3], [10, -6], [14, -12], [17, -12], [22, -5], [28, 0]]),
-    chest: rkMono([[0, 0], [6, -2], [14, -5], [17, -5], [24, -1], [30, 0]]),
-    leanL: rkMono([[0, 0], [6, -3], [10, -7], [14, -22], [17, -22], [22, -8], [27, 4], [34, 0]]),
+    yaw: rkMono([[0, 0], [6, -2], [10, -3], [14, -5], [17, -5], [22, -2], [28, 0]]),
+    chest: rkMono([[0, 0], [6, -1], [14, -3], [17, -3], [24, -1], [30, 0]]),
+    leanL: rkMono([[0, 0], [6, -3], [10, -10], [14, -34], [17, -34], [22, -12], [27, 4], [34, 0]]),   // (the sheet's lean away: ~22 degrees back)
     lx: rkMono([[0, 0], [5, -.12], [14, -.1], [17, -.1], [20, -.12], [27, 0], [34, 0]]),
     dip: rkMono([[0, .004], [5, -.03], [9.5, -.15], [14, -.17], [17, -.17], [22, -.1], [27, .03], [31, .01], [34, .004]]),   // (up on the standing leg, nearly straight)
     head: rkMono([[0, 0], [14, -4], [17, -4], [28, 0]]),
   },
   feet: {
+    // the standing foot: up on its ball to turn (7-12), flat again for the impact (14: the sheet's), up to turn back (19-23)
     R: {x: [[0, 0], [.6, 0], [4, .3]], bumps: [[0, 5, .025]],
-      heel: [[0, 0], [6, 0], [9, 10], [17, 10], [21, 5], [24, 0]], yaw: [[0, 0], [7, 0], [12, -30], [18, -30], [21.5, -4], [22.5, 0]]},
+      heel: [[0, 0], [6, 0], [8.5, 10], [12, 10], [14, 0], [18, 0], [19.5, 8], [22.5, 8], [24, 0]], yaw: [[0, 0], [7, 0], [12, -30], [19.5, -30], [22.5, 0]]},
     // the kicking foot's ankle: off the floor on frame 5, folded high under the knee (9.5), out at chest height (14),
     // back under the knee (21), down forward on its toes (26), the heel down (28)
     L: {free: true, heel: [[0, 0], [3.5, 0], [5, 16], [26, 16], [28, 0]],
-      x: [[0, 0], [5, 0], [9.5, -.15], [14, .35, 'whip'], [16, .35], [21, -.1], [25.8, .3]],
-      up: [[0, 0], [5, 0], [9.5, .55], [14, .97, 'whip'], [16, .97], [21, .5], [26, 0]],
+      x: [[0, 0], [5, 0], [9.5, -.15], [14, .33, 'whip'], [16, .33], [21, -.1], [25.8, .3]],
+      up: [[0, 0], [5, 0], [9.5, .55], [14, 1.04, 'whip'], [16, 1.04], [21, .5], [26, 0]],
       toe: [[0, 0]]},
   },
-  kickLeg: {s: 'L', pole: [1, 1, 0], point: [[0, 30], [9.5, 45], [14, 62, 'whip'], [16, 62], [21, 45], [25, 30]],
+  // the foot: pointed (toes down) while folded under the knee, then it snaps flexed as the leg goes out: on the impact
+  // the ankle is square, toes up, the sole toward the opponent (the sheet's "Impatto": he strikes with the sole)
+  kickLeg: {s: 'L', pole: [1, 1, 0], point: [[0, 30], [9.5, 45], [12, 30], [14, -5, 'whip'], [16, -5], [18.5, 25], [21, 45], [25, 30]],
     air: [[0, 0], [5, 0], [7, 1], [23.5, 1], [25.6, 0]]},
   arms: {L: [[0, 'guard'], [7, 'kGuardL'], [22, 'kGuardL'], [30, 'guard']], R: [[0, 'guard'], [6, 'rChin'], [24, 'rChin'], [31, 'guard']]},
   poses: {
