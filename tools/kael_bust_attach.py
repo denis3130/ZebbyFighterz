@@ -15,8 +15,9 @@ his legs below.
   shorter than his (the sheet's): his arm bones are shortened to them (src/e_model.js: the part's bones), the arms keep
   their shape.
 - Posed as his bind pose (the animations are made for it): each upper arm turned about its shoulder onto his upper arm's
-  direction, each forearm about its elbow onto his, each hand about its wrist so that it lies in his hand bone as Ren's
-  lay in Ren's (the animations' hands are Ren's; his fists' turns are Ren's as they are). Skinned for that (provisional): the share of torso, upper arm, forearm and hand of his nearest
+  direction, each forearm about its elbow onto his, each hand about its wrist as Ren's lies in the world in his (his hand
+  bones and Kael's differ by 25 degrees on the left, 4 on the right, and the animations keep it: so in every pose the
+  fists face as Ren's do; the fists' turns Ren's, turned into Kael's hand bones' frames). Skinned for that (provisional): the share of torso, upper arm, forearm and hand of his nearest
   point facing the same way (Ren's for his hands), smoothed.
 - Skinned: his nearest point's weights facing the same way, its arms first stretched to his arms' lengths (so the elbow's
   and the wrist's bends fall where his do); Ren's own weights on Ren's hands, finger bones included; smoothed across the
@@ -57,6 +58,8 @@ SMOOTH, SEAM, SEAM_SMOOTH = 4, .03, 6
 HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
+HAND_SCALE = 1.                          # the hands' size (about the wrists)
+HAND_NSMOOTH = 6                         # rounds of smoothing of the hands' normals (the light's bands clean)
 HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
 HAND_FLAT = 0.                           # the hands' share of flat light (the game's toon light: the fists' volume reads, as Ren's)
 COLLAR_CUT = (1.472, (.0085, -.005), .11)   # m: its collar over this height within [2] of the neck's axis [1] (the head's collar from 1.464 m)
@@ -220,8 +223,9 @@ def main(bust):
     for side, sd in SIDES:
         j = J[sd]; Ru = turn(j['Eb'] - j['Ab'], j['Ek'] - j['Ak']); Eb2 = j['Ab'] + Ru @ (j['Eb'] - j['Ab'])
         Rf = turn(Ru @ (j['Hb'] - j['Eb']), j['Hk'] - j['Ek']) @ Ru; Hb2 = Eb2 + Rf @ (j['Hb'] - j['Eb'])
-        Rk = Wm[names.index(side + 'Hand')][:3, :3]; Rr = R['Wm'][names.index(side + 'Hand')][:3, :3]
-        Rh = Rk @ Rr.T @ sim[sd]['R'].T   # (the hand as Ren's lies in his hand bone: the animations' and the fists' own)
+        Rh = sim[sd]['R'].T   # (the hand turned as Ren's lies in the world in his rest pose: his hand bone and Kael's differ there by
+        # 25 degrees on the left, 4 on the right, and the animations keep that difference; laid as Ren's lies in his hand bone,
+        # Kael's left fist showed the camera its back where Ren's shows its knuckles)
         ang = lambda M: np.degrees(np.arccos(np.clip((np.trace(M) - 1) / 2, -1, 1)))
         print('%s: upper arm turned %.1f deg, forearm %.1f more, hand %.1f more' % (side, ang(Ru), ang(Rf @ Ru.T), ang(Rh @ Rf.T)))
         j.update(Ru=Ru, Rf=Rf, Rh=Rh, Eb2=Eb2, Hb2=Hb2)
@@ -234,6 +238,12 @@ def main(bust):
     G = np.zeros((len(X), 4)); np.add.at(G, (np.repeat(np.arange(len(X)), 4), gid[K['JN'][near]].ravel()), K['WG'][near].ravel())
     rr = rid[isR]; Gr = np.zeros((len(rr), 4)); np.add.at(Gr, (np.repeat(np.arange(len(rr)), 4), gid[rsi[rr]].ravel()), rsw[rr].ravel()); G[isR] = Gr
     G = smooth(G, wv, A, deg, SMOOTH); G /= G.sum(1, keepdims=True)
+    # (the hands HAND_SCALE times as large about the wrists, by their share of the hand: KAEL_HAND_SCALE to try)
+    hs = float(os.environ.get('KAEL_HAND_SCALE', HAND_SCALE))
+    if hs != 1:
+        for side, sd in SIDES:
+            s_ = (X[:, 0] >= 0) == (sd > 0); k_ = 1 + (hs - 1) * np.where(s_, G[:, 3], 0.)
+            X = np.where(s_[:, None], J[sd]['Hb'] + (X - J[sd]['Hb']) * k_[:, None], X)
     # the pose
     X2 = X * G[:, :1]; N2 = NX * G[:, :1]
     for side, sd in SIDES:
@@ -241,6 +251,9 @@ def main(bust):
         for g, (Rm, piv, piv2) in enumerate(((j['Ru'], j['Ab'], j['Ab']), (j['Rf'], j['Eb'], j['Eb2']), (j['Rh'], j['Hb'], j['Hb2'])), 1):
             w = np.where(s_, G[:, g], 0.)[:, None]; X2 += w * ((X - piv) @ Rm.T + piv2); N2 += w * (NX @ Rm.T)
     N2 /= np.maximum(np.linalg.norm(N2, axis=1, keepdims=True), 1e-9)
+    if HAND_NSMOOTH:   # (the hands' light's normals smoothed: the game's light on Ren's low hands, scaled up, fell in blotches on the glove)
+        hn = isR.copy(); hn[Ib[isR[Ib].any(1)].ravel()] = True
+        N2 = smooth(N2, wv, A, deg, HAND_NSMOOTH, hn); N2 /= np.maximum(np.linalg.norm(N2, axis=1, keepdims=True), 1e-9)
     # the skin: his nearest point facing the same way, the arms stretched to his lengths first; Ren's on Ren's hands
     V = X2 * G[:, :1]
     for side, sd in SIDES:
@@ -268,13 +281,14 @@ def main(bust):
         for n, a, b_, a2, b2 in (('ForeArm', 'Ak', 'Ek', 'Ab', 'Eb2'), ('Hand', 'Ek', 'Hk', 'Eb2', 'Hb2')):
             t0 = np.array(K['J']['bones'][names.index(side + n)]['t'])
             bones[side + n] = (t0 * np.linalg.norm(j[b2] - j[a2]) / np.linalg.norm(j[b_] - j[a])).tolist()
-    fingers = []
+    fingers = []; frames = {}   # (frames: per hand the turn from Ren's hand frame into Kael's: the fists' own frame, tests/viewer_check.py)
     for f in RL['fingers']:
         side = 'Left' if f['n'].startswith('Left') else 'Right'; sd = dict(SIDES)[side]; j = J[sd]
         Rk = Wm[names.index(side + 'Hand')][:3, :3]; Rr = R['Wm'][names.index(side + 'Hand')][:3, :3]
-        place = lambda Y: (to_bust(Y[None], sd)[0] - j['Hb']) @ j['Rh'].T + j['Hb2']
+        place = lambda Y: (to_bust(Y[None], sd)[0] - j['Hb']) * hs @ j['Rh'].T + j['Hb2']
         p_w = place(rf[f['n']]); par = j['Hb2'] if f['p'] == side + 'Hand' else place(rf[f['p']])
         M = j['Rh'] @ sim[sd]['R']; C = Rk.T @ M @ Rr; qc = mq(C); qr = np.array(f['fist'])
+        frames[side] = [round(float(v), 5) for v in qc]
         def qmul(a, b):
             x1, y1, z1, w1 = a; x2, y2, z2, w2 = b
             return np.array([w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2, w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2, w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2, w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2])
@@ -342,7 +356,7 @@ def main(bust):
     put('idx', It.astype(np.uint16 if len(used) < 65536 else np.uint32)); put('hide', hide)
     put('flat', np.where(isR, HAND_FLAT, 1.)[used].astype(np.float32))   # (its light: flat, the hands the game's)
     put('glove', gfield[used])   # (the hands' glove: the signed distance to its edge, m; 1 a hand's vertex)
-    jo['bones'] = {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}; jo['fingers'] = fingers
+    jo['bones'] = {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}; jo['fingers'] = fingers; jo['fistFrame'] = frames
     open(os.path.join(KAEL_PKG, 'kael_bust.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_bust.json'), 'w'), separators=(',', ':'))
     BT.save(os.path.join(KAEL_PKG, 'kael_bust.png'), optimize=True)
     print('written: kael_bust (%d vertices, %d triangles)' % (len(used), len(It)))

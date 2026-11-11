@@ -602,6 +602,16 @@ Denis ("manda anteprima").
   - il polso di Ren era il 70-75% della banda viola, una strozzatura col polso piegato: allargato del 32% dalla
     cucitura, sfumando sul palmo (`WRIST` in `tools/kael_bust.py`), come nel disegno dove il guanto esce largo dalla polsiera.
   Provato e lasciato: ammorbidire i pesi della pelle sulle mani (il pugno si apriva, un buco vicino al pollice).
+- **Pugni, "ancora un po"** (Denis, dopo le immagini dei pugni):
+  - la mano sinistra era girata di 25 gradi rispetto a quella di Ren in ogni posa (le ossa delle mani di Kael e di Ren
+    differiscono di tanto nella posa di riposo e le animazioni lo conservano; a destra 4 gradi): ora le mani stanno nel
+    mondo come quelle di Ren nella sua posa di riposo, così in ogni posa i pugni sono girati come i suoi;
+  - luce a due toni come il foglio: dove la luce del gioco mette la mano in ombra, il guanto è il nero del foglio e la
+    pelle il colore della sua ombra; altrove i colori pieni (prima tre bande grigie, un pugno fangoso);
+  - normali delle mani lisciate (`HAND_NSMOOTH`): niente macchie sul guanto;
+  - grandezza: le proporzioni della mano sono quelle del foglio, ma accanto alle polsiere grosse il pugno sembra piccolo
+    (quello di Ren è più grande del suo polso). Pronta la prova a +15% (`KAEL_HAND_SCALE=1.15`, `HAND_SCALE`): è un
+    cambio di forma, aspetta l'ok di Denis.
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

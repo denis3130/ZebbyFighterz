@@ -109,9 +109,9 @@ async def main(out_dir, page='viewer.html'):
               const sashBones = it.sash ? it.sash.ribbons.reduce((n, q) => n + q.bones.length, 0) : 0;
               r.fists = !!it.fingers && it.fingers.length === 30 && it.mesh.skeleton.bones.length === it.bones.length + 30 + sashBones && it.curl === 1
                 && it.fingers.every((o, i) => Math.abs(o.quaternion.dot(it.fist[i])) > .9999);
-              it.root.updateMatrixWorld(true);   // a real fist: the four curled fingers end level (hand frame, within 2 mm)
-              r.level = ['Left', 'Right'].every(h => { const H = it.bones.find(b => b.name === h + 'Hand');
-                const y = ['Index', 'Middle', 'Ring', 'Pinky'].map(f => Math.min(...[2, 3].map(k => H.worldToLocal(it.fingers.find(o => o.name === h + 'Hand' + f + k).getWorldPosition(new THREE.Vector3())).y)));
+              it.root.updateMatrixWorld(true);   // a real fist: the four curled fingers end level (hand frame, within 2 mm; the fist's own frame where the model gives one, it.fistFrame: Kael's bust's hands)
+              r.level = ['Left', 'Right'].every(h => { const H = it.bones.find(b => b.name === h + 'Hand'), fq = it.fistFrame ? it.fistFrame[h].clone().invert() : new THREE.Quaternion();
+                const y = ['Index', 'Middle', 'Ring', 'Pinky'].map(f => Math.min(...[2, 3].map(k => H.worldToLocal(it.fingers.find(o => o.name === h + 'Hand' + f + k).getWorldPosition(new THREE.Vector3())).applyQuaternion(fq).y)));
                 return Math.max(...y) - Math.min(...y) < .002; });
               document.getElementById('play6').click(); VW.tick(12);
               r.open = it.curl === 0 && it.fingers.every(o => Math.abs(o.quaternion.w) > .9999);

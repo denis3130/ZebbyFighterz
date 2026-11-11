@@ -1973,8 +1973,14 @@ function modelBuild(key) {
     bm.onBeforeCompile = sh => {
       if (bf) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
       if (bg) sh.vertexShader = 'attribute vec2 aGlove;\nvarying vec2 vGlove;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGlove = aGlove;');
+      // (the hands in the sheet's two tones: where the game's light puts them in shadow, the glove its black and the skin its
+      // shadow's colour, elsewhere their own, flat; the rest of the bust flat. In the game's 3 bands the fist was a muddy block)
+      const fl = (bf ? 'vFlat * ' : '') + MD_BUST_FLAT.toFixed(2);
+      const two = bg ? '\n\tif (vGlove.y > .99) { float lt = dot(outgoingLight, vec3(1.)) / max(dot(diffuseColor.rgb, vec3(1.)), .001);'
+        + ' vec3 sc = vGlove.x < 0. ? ' + c3(MD_GLOVE.shade) + ' : diffuseColor.rgb * ' + c3(MD_GLOVE.skinShade.map(v => v * 255)) + ';'
+        + ' outgoingLight = (lt < ' + MD_GLOVE.cut.toFixed(2) + ' ? sc : diffuseColor.rgb) + totalEmissiveRadiance; }' : '';
       sh.fragmentShader = (bf ? 'varying float vFlat;\n' : '') + (bg ? 'varying vec2 vGlove;\n' : '') + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + (bf ? 'vFlat * ' : '') + MD_BUST_FLAT.toFixed(2) + ');');
+        '$&' + two + '\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + fl + ');');
       // (the glove on the hands: where the distance to its edge is under 0 its plum, along the edge its ink: a clean line in every triangle)
       if (bg) sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n\tif (vGlove.y > .99) { if (vGlove.x < 0.) diffuseColor.rgb = ' + c3(MD_GLOVE.c) + '; if (abs(vGlove.x) < ' + MD_GLOVE.w.toFixed(4) + ') diffuseColor.rgb = ' + c3(MD_GLOVE.ink) + '; }');
     };
@@ -1989,7 +1995,7 @@ function modelBuild(key) {
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = fdef.map(f => new THREE.Quaternion().fromArray(f.fist)); }
-  if (bust) { it.bust = bust.mesh; it.mats.bust = bust.mat; }
+  if (bust) { it.bust = bust.mesh; it.mats.bust = bust.mat; if (bust.j.fistFrame) it.fistFrame = {Left: new THREE.Quaternion().fromArray(bust.j.fistFrame.Left), Right: new THREE.Quaternion().fromArray(bust.j.fistFrame.Right)}; }   // (fistFrame: each fist's own frame in its hand bone's: Ren's hands, laid as his)
   if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
   if (face) it.face = face;
   if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash
@@ -2405,8 +2411,8 @@ function mdSpikes(list, back) {
 const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
 // Kael's bust's light: flat (its texture, the sheet's colours, has the skin's shadows)
 const MD_BUST_FLAT = 1;
-// Kael's gloves (on his bust's hands, aGlove): their plum, the ink along their edge, its half width (m) (the bust's palette)
-const MD_GLOVE = {c: [65, 49, 74], ink: [9, 6, 9], w: .0012};
+// Kael's gloves (on his bust's hands, aGlove): their plum, the ink along their edge, its half width (m) (the bust's palette); the hands' two tones
+const MD_GLOVE = {c: [65, 49, 74], ink: [9, 6, 9], w: .0012, shade: [26, 21, 27], skinShade: [.656, .586, .563], cut: .6};   // (in shadow (the game's light under cut of the colour's own): the glove the sheet's black, the skin times skinShade: its shadow, 164 112 85)
 
 // The triangles of the parts' hide lists together (each a Uint32Array or null)
 function mdJoin(a, b) {
