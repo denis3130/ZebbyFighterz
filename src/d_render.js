@@ -244,9 +244,19 @@ function rdShadowsStep(S) {
 }
 
 // --- Fighters ---
-// The two fighters (side 0 Ren, side 1 Kael; F3D): a Meshy model when its package is in ASSETS (e_model.js), else
-// the placeholder; and the light they are shaded by.
+// One fighter per character (F3D_BY): a Meshy model when its package is in ASSETS (e_model.js), else the placeholder;
+// and the light they are shaded by. F3D = the two on the sides of the match (renderCast), side 0 Ren and side 1 Kael
+// until a match says otherwise.
+const F3D_BY = {};
 function rdFightersBuild() {
   scene.add(...f3Lights());
-  for (const c of ['ren', 'kael']) { const it = modelBuild(c) || fighterBuild(c); F3D.push(it); scene.add(it.root); }
+  for (const c of ['ren', 'kael']) { const it = modelBuild(c) || fighterBuild(c); F3D_BY[c] = it; F3D.push(it); scene.add(it.root); }
+}
+// The fighters of a match on their sides (chars = [side 0, side 1]). The effects keep each fighter its own colours.
+// The same character on both sides needs a second copy of the model: not there yet (the menus do not offer it).
+function renderCast(chars) {
+  const a = F3D_BY[chars[0]], b = F3D_BY[chars[1]];
+  if (!a || !b || a === b || (F3D[0] === a && F3D[1] === b)) return;
+  F3D[0] = a; F3D[1] = b;
+  if (typeof fxRecast === 'function') fxRecast();
 }

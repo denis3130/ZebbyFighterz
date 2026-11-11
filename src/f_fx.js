@@ -14,7 +14,8 @@ const FX_PROJ = {ren: {core: 0xffffff, halo: 0xbff3ff, rim: 0x0a8fe0}, kael: {co
 for (const k in FX_PROJ) FX_PROJ[k].coreC = new THREE.Color(FX_PROJ[k].core);
 
 // sparks = the active hit sparks, pool = the free ones; side[i] = flash/squash state of the fighter on side i
-// (f/s = [start, end] ms, fon/son = applied now, em0 = its materials' own emissive colours); flash, squash = the last
+// (f/s = [start, end] ms, fon/son = applied now; each fighter keeps its materials' own emissive colours as it.em0, so they
+// follow it when it changes side); flash, squash = the last
 // ones started; shake = {amp m (0 = none), t0, until, dur}; screenFlash = [start, end] of the KO flash.
 const FX = {built: false, now: 0, seed: 11, sparks: [], pool: [], glow: [], pc: [], side: [], shake: {amp: 0, t0: 0, until: 0, dur: 1},
   flash: [0, 0], squash: [0, 0], screenFlash: [0, 0], el: null, elOp: 0, v: new THREE.Vector3(),
@@ -59,7 +60,9 @@ function fxBuild() {
   const star = fxTex(1), soft = fxTex(0), ring = fxTex(2);
   for (let i = 0; i < FX_K.pool; i++) FX.pool.push({sp: fxSprite(star, 0xffffff, false), t0: 0, life: 1, size: 1});
   for (let i = 0; i < 2; i++) {
-    FX.side.push({f: [0, 0], s: [0, 0], fon: false, son: false, em0: Object.values(F3D[i].mats).map(m => m.emissive.clone())});
+    const it = F3D[i];
+    if (!it.em0) it.em0 = Object.values(it.mats).map(m => m.emissive.clone());   // each fighter's own colours (they follow it if it changes side)
+    FX.side.push({f: [0, 0], s: [0, 0], fon: false, son: false});
     FX.glow.push([fxSprite(soft, FX_COL.glow), fxSprite(soft, FX_COL.glow)]);
     const p = {core: fxSprite(soft, 0xffffff), halo: fxSprite(soft, 0xffffff), rim: fxSprite(ring, 0xffffff, false), trail: [], char: ''};
     for (let k = 0; k < FX_K.trail; k++) p.trail.push(fxSprite(soft, 0xffffff, false));
@@ -143,7 +146,7 @@ function fxUpdate(nowMs, S) {
 function fxHurtStep(i, now) {
   const d = FX.side[i], root = F3D[i].root, mats = Object.values(F3D[i].mats);
   const fon = now >= d.f[0] && now < d.f[1];
-  if (fon !== d.fon) { d.fon = fon; mats.forEach((m, k) => fon ? m.emissive.setRGB(1, 1, 1) : m.emissive.copy(d.em0[k])); }
+  if (fon !== d.fon) { d.fon = fon; mats.forEach((m, k) => fon ? m.emissive.setRGB(1, 1, 1) : m.emissive.copy(F3D[i].em0[k])); }
   const son = now >= d.s[0] && now < d.s[1];
   if (son) {
     const u = 1 - (now - d.s[0]) / (d.s[1] - d.s[0]), e = u * u, q = CFG.fx.squash;
@@ -202,4 +205,15 @@ function fxShakeApply() {
   camera.position.x += (fxRand() * 2 - 1) * a; camera.position.y += (fxRand() * 2 - 1) * a;
   camera.updateMatrixWorld();
   return true;
+}
+
+// The fighters changed sides (renderCast): every fighter back to its own colours and size, no flash or squash carried over.
+function fxRecast() {
+  if (!FX.built) return;
+  for (const it of Object.values(F3D_BY)) {
+    if (!it.em0) it.em0 = Object.values(it.mats).map(m => m.emissive.clone());
+    Object.values(it.mats).forEach((m, k) => m.emissive.copy(it.em0[k]));
+    it.root.scale.set(1, 1, 1);
+  }
+  for (const d of FX.side) { d.fon = d.son = false; d.f = [0, 0]; d.s = [0, 0]; }
 }

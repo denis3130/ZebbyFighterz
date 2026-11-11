@@ -197,7 +197,7 @@ function later(ms, fn) {
 // screen (inside an open dialog in #uiOver only, as the navigation does); byText(t) = the first of them whose text
 // contains t; focused() = the text of the element with the focus; uiClick(t) = a click on byText(t) (mouse or
 // programmatic, as a page click); hover(t) = the mouse moving over it.
-if (__VF.CFG.ui) __VF.CFG.ui.t.tapGuard = 0;
+if (__VF.CFG.ui) { __VF.CFG.ui.t.tapGuard = 0; __VF.CFG.ui.vs.minMs = 0; }   // (and the VS does not wait: tests of the VS timing set their own)
 function keyTap(code) { key(code); keyUp(code); }
 function navEls() {
   const o = document.getElementById('uiOver'), box = o && o.firstElementChild ? o : document;
@@ -229,3 +229,6 @@ function toArena(mode) {
   else { uiClick('Versus locale'); uiClick('Combatti'); keyTap('Enter'); keyTap('Enter'); }
   if (__VF.UI.NAV.cur !== 'arena') throw new Error('arena not reached: ' + __VF.UI.NAV.cur);
 }
+// vsThrough(fn) = let the VS screen finish its loading (a microtask), run one frame (it starts the match: minMs 0 in the
+// tests), then fn. Returns the Promise for the test to return.
+function vsThrough(fn) { return Promise.resolve().then(() => { __VF.uiFrame(performance.now()); if (fn) fn(); }); }

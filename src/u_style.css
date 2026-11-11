@@ -316,3 +316,43 @@
 #sc-arena .uhead{margin-top:calc(var(--u)*6)}
 .arCards{display:flex;gap:calc(var(--u)*2);align-self:center}
 #sc-arena .umw{width:min(calc(var(--u)*110),92vw);align-self:center}
+/* --- arena (u5_play.js), as the reference: the arena with the focus fills the background, the cards in a row --- */
+#sc-arena{justify-content:space-between;background:linear-gradient(180deg,rgba(14,12,22,.55),rgba(14,12,22,0) 30%,rgba(14,12,22,0) 55%,rgba(14,12,22,.75))}
+.arCards{display:flex;gap:calc(var(--u)*1.8);align-self:center;margin-top:auto;margin-bottom:calc(var(--u)*2)}
+.arCards .ucard{width:max(92px,calc(var(--u)*24));height:max(58px,calc(var(--u)*15))}
+#uiLayers[data-scene="select"] #lyArena{filter:brightness(.78) saturate(.95)}
+/* --- VS (u5_play.js), as the reference: the two faces, the golden VS between them, a line each, the loading bar --- */
+#sc-vs{padding:0;display:none;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,rgba(14,12,22,0),rgba(14,12,22,.55))}
+#sc-vs.on{display:block}
+.vsF{position:absolute;top:0;height:86%;width:52%;background:center top/cover no-repeat;pointer-events:none}
+.vsF.l{left:-2%;background-position:right top;-webkit-mask-image:linear-gradient(90deg,#000 65%,transparent),linear-gradient(180deg,#000 70%,transparent);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,#000 65%,transparent),linear-gradient(180deg,#000 70%,transparent);mask-composite:intersect}
+.vsF.r{right:-2%;background-position:left top;-webkit-mask-image:linear-gradient(270deg,#000 65%,transparent),linear-gradient(180deg,#000 70%,transparent);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(270deg,#000 65%,transparent),linear-gradient(180deg,#000 70%,transparent);mask-composite:intersect}
+#sc-vs.in .vsF.l{animation:vsInL .55s var(--u-ease) both}
+#sc-vs.in .vsF.r{animation:vsInR .55s var(--u-ease) .08s both}
+@keyframes vsInL{from{opacity:0;translate:-18vw 0}}
+@keyframes vsInR{from{opacity:0;translate:18vw 0}}
+.vsMark{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);pointer-events:none}
+.vsMark b{display:block;font-family:var(--u-display);font-weight:600;font-size:calc(var(--u)*26);line-height:1;letter-spacing:-.04em;
+  background:linear-gradient(180deg,#fff3d8,#e7c27e 45%,#a87632);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 14px rgba(0,0,0,.6))}
+.vsMark i{position:absolute;left:-10%;right:-10%;top:48%;height:5px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange) 45%,#ffd9a0 55%,rgba(240,138,50,0));transform:rotate(-58deg);clip-path:var(--u-brush)}
+#sc-vs.in .vsMark{animation:vsMark .6s var(--u-ease) .2s both}
+@keyframes vsMark{from{opacity:0;scale:1.6}}
+.vsSide{position:absolute;bottom:calc(env(safe-area-inset-bottom) + var(--u)*17);width:34%;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1);text-align:center}
+.vsSide.l{left:6%}.vsSide.r{right:6%}
+.vsName{font-family:var(--u-display);font-weight:500;font-size:max(20px,calc(var(--u)*6.4));letter-spacing:.14em;text-transform:uppercase;color:#f6efe3;text-shadow:0 2px 10px #000}
+.vsName::after{content:'';display:block;height:1px;margin-top:calc(var(--u)*1.2);background:linear-gradient(90deg,rgba(216,166,87,0),rgba(216,166,87,.8),rgba(216,166,87,0))}
+.vsLine{font-style:italic;font-weight:500;font-size:max(14px,calc(var(--u)*3.8));color:var(--u-ink);text-shadow:0 2px 8px #000}
+.vsLoad{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--u)*6);transform:translateX(-50%);width:min(calc(var(--u)*80),70vw);display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.4);
+  font-style:italic;font-size:max(14px,calc(var(--u)*3.6));color:var(--u-ink)}
+.vsLoad .uprog{width:100%}
+.vsErr{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:none;flex-direction:column;align-items:center;gap:calc(var(--u)*3);padding:calc(var(--u)*4) calc(var(--u)*6);
+  background:linear-gradient(180deg,rgba(36,30,46,.97),rgba(18,15,24,.97));border:1px solid rgba(212,81,63,.7);text-align:center}
+.vsErr b{font-weight:600;font-size:max(18px,calc(var(--u)*5));color:#ffd2c4}
+.vsErrB{display:flex;gap:calc(var(--u)*3)}
+#sc-vs.err .vsErr{display:flex}
+#sc-vs.err .vsLoad{display:none}
+#uiLayers[data-scene="vs"] .ly{opacity:.55}
+#sc-arena .uhead{margin-top:calc(var(--u)*9)}
+.arCards .ucardTx{font-size:max(12px,calc(var(--u)*3.1));overflow-wrap:anywhere}

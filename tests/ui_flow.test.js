@@ -1,0 +1,33 @@
+// Interface U1, Task 10: arena, VS (with real loading: one hidden frame of the arena and the chosen fighters), the bridge to
+// the real fight (the chosen fighters drawn on their sides, the HUD faces), the match statistics counted from the events.
+T.test('versus from the menu to the real fight', () => { __VF.CFG.ui.vs.minMs = 0; __VF.UI.SV.name = 'Lama'; __VF.navReset('menu'); uiClick('Versus locale'); uiClick('Combatti');
+  navFocusSlot(1); keyTap('Enter'); navFocusSlot(0); keyTap('Enter'); T.eq(__VF.UI.NAV.cur, 'arena'); uiClick('Conferma'); T.eq(__VF.UI.NAV.cur, 'vs');
+  T.ok(txt('sc-vs').includes('Kael') && txt('sc-vs').includes('Ren')); T.ok(txt('sc-vs').includes('Sei ancora in piedi?'));
+  return Promise.resolve().then(() => { later(700, () => __VF.uiFrame(performance.now())); T.eq(__VF.G.state, 'fight');
+    T.eq(__VF.fighterOf(__VF.G.S, 0).char, 'kael'); T.eq(__VF.F3D[0], __VF.F3D_BY.kael); T.eq(__VF.F3D[1], __VF.F3D_BY.ren); __VF.frame(1); T.eq(txt('name0'), 'KAEL');
+    T.ok($('face0').style.backgroundImage.includes('data:image/webp'), 'HUD face from the interface pictures'); T.eq(__VF.UI.SV.lastChar, 'kael'); }); });
+T.test('the arena screen: the playable one and the coming ones', () => { __VF.menu.toTitle(); __VF.navGo('arena', {mode: 'versus', chars: ['ren', 'kael']});
+  T.eq(document.querySelectorAll('#sc-arena .ucard').length, 6); T.eq(document.querySelectorAll('#sc-arena .ucard.lock').length, 5); T.ok(txt('sc-arena').includes('La Grande Cascata')); });
+T.test('the playable arena shows a picture taken from the real arena', () => { const c = byText('La Grande Cascata'); T.ok(/data:image\/(jpeg|png|webp)/.test(c.querySelector('.ucardImg').style.backgroundImage)); });
+T.test('the focused arena fills the background', () => { navFocusText('Foresta'); T.ok($('lyArena').classList.contains('on')); T.ok($('lyArena').style.backgroundImage.includes('data:image')); });
+T.test('locked arena does not start', () => { uiClick('Foresta'); T.ok(txt('uiToast').includes('in arrivo')); T.eq(__VF.UI.NAV.cur, 'arena'); });
+T.test('preload error: message, retry and back', () => { const UIB = __VF.UI.UIB, real = UIB.preload; UIB.preload = () => Promise.reject(new Error('test'));
+  __VF.navGo('vs', {mode: 'versus', chars: ['ren', 'kael'], arena: 'cascata', dev: 'kb'});
+  return Promise.resolve().then(() => Promise.resolve()).then(() => { T.ok($('sc-vs').classList.contains('err'), 'error shown'); T.ok(vis('sc-vs') && txt('sc-vs').includes("Impossibile caricare l'arena"));
+    T.ok(byText('Riprova') && byText('Indietro')); UIB.preload = real; uiClick('Riprova');
+    return Promise.resolve().then(() => { T.ok(!$('sc-vs').classList.contains('err'), 'retried'); keyTap('Escape'); T.eq(__VF.UI.NAV.cur, 'arena'); }); }); });
+T.test('hidden during VS: the fight waits', () => { __VF.CFG.ui.vs.minMs = 2500; __VF.menu.toTitle(); __VF.navGo('vs', {mode: 'versus', chars: ['ren', 'kael'], arena: 'cascata', dev: 'kb'});
+  return Promise.resolve().then(() => { Object.defineProperty(document, 'hidden', {value: true, configurable: true}); document.dispatchEvent(new Event('visibilitychange'));
+    __VF.uiFrame(performance.now()); later(5000, () => __VF.uiFrame(performance.now())); T.eq(__VF.G.state, 'title');
+    Object.defineProperty(document, 'hidden', {value: false, configurable: true}); document.dispatchEvent(new Event('visibilitychange')); __VF.uiFrame(performance.now() + 5016); T.eq(__VF.G.state, 'title', 'the VS time goes on from where it was');
+    __VF.CFG.ui.vs.minMs = 0; }); });
+T.test('a tap skips the VS once loaded', () => { __VF.CFG.ui.vs.minMs = 2500; __VF.menu.toTitle(); __VF.navGo('vs', {mode: 'versus', chars: ['ren', 'kael'], arena: 'cascata', dev: 'kb'});
+  return Promise.resolve().then(() => { const t = performance.now(); __VF.uiFrame(t); __VF.uiFrame(t + 80); __VF.uiFrame(t + 160); __VF.uiFrame(t + 240); __VF.uiFrame(t + 320); __VF.uiFrame(t + 400); __VF.uiFrame(t + 480); __VF.uiFrame(t + 560); __VF.uiFrame(t + 640);
+    tapEl($('sc-vs'), 41); T.eq(__VF.G.state, 'fight'); __VF.CFG.ui.vs.minMs = 0; __VF.menu.toTitle(); }); });
+T.test('training goes straight to the fight with the chosen fighter', () => { __VF.navReset('menu'); uiClick('Allenamento'); navFocusSlot(1); keyTap('Enter'); uiClick('Conferma');
+  return Promise.resolve().then(() => { later(1000, () => __VF.uiFrame(performance.now())); T.eq(__VF.G.mode, 'training'); T.eq(__VF.fighterOf(__VF.G.S, 0).char, 'kael'); T.eq(__VF.F3D[0], __VF.F3D_BY.kael); }); });
+T.test('rendering the swapped cast does not change the sim', () => { __VF.startMatch('versus', {seed: 3, chars: ['kael', 'ren']}); const h = __VF.simHash(__VF.G.S); __VF.renderFrame(__VF.G.S, performance.now()); T.eq(__VF.simHash(__VF.G.S), h); });
+T.test('a hit flash keeps each fighter its own colours after a side swap', () => { const V = __VF; V.startMatch('versus', {seed: 1}); hitOnce('p1'); V.startMatch('versus', {seed: 1, chars: ['kael', 'ren']}); V.fxUpdate(V.FX.now + 2000);
+  const it = V.F3D_BY.ren, m = Object.values(it.mats)[0]; T.ok(it.em0, 'colours kept on the fighter'); T.ok(m.emissive.equals(it.em0[0]), 'ren back to its own colour'); });
+T.test('uiEvents counts hits and the best combo', () => { comboG(3); const r = __VF.bridgeResult(__VF.G.S); T.ok(r.hits[0] >= 3, 'hits ' + r.hits[0]); T.ok(r.maxCombo[0] >= 3, 'combo ' + r.maxCombo[0]); T.eq(r.chars.join(), 'ren,kael'); });
+T.test('a new match starts the counters from zero', () => { __VF.startMatch('versus', {seed: 2}); __VF.frame(1); const r = __VF.bridgeResult(__VF.G.S); T.eq(r.hits[0] + r.hits[1], 0); T.eq(r.maxCombo[0], 0); });

@@ -8,8 +8,8 @@ T.test('Esc pauses, Esc resumes', () => { key('Escape'); keyUp('Escape'); T.eq(_
 T.test('pause stops the sim', () => { __VF.menu.pause(); const f=__VF.G.S.frame; __VF.tick(performance.now()+500); T.eq(__VF.G.S.frame,f); __VF.menu.resume(); });
 T.test('opponent toggle in training', () => { __VF.menu.pause(); uiClick('Avversario'); T.eq(__VF.G.S.dummy,'casuale'); T.ok(txt('oppTx').includes('Casuale')); __VF.menu.resume(); });
 T.test('gamepad navigates the menu and becomes G1', () => { __VF.menu.toTitle(); const A=()=>{ fakePads([{buttons:{0:1}}]); padTick(); fakePads([{}]); padTick(); };
-  A(); T.eq(focused(),'Versus locale'); A(); T.eq(__VF.UI.NAV.cur,'vsopts'); A(); T.eq(__VF.UI.NAV.cur,'select'); A(); A(); T.eq(__VF.UI.NAV.cur,'arena'); A(); fakePads([]); padTick();
-  T.eq(__VF.G.mode,'versus'); T.eq(__VF.IN.assign[0].pad,0); });
+  A(); T.eq(focused(),'Versus locale'); A(); T.eq(__VF.UI.NAV.cur,'vsopts'); A(); T.eq(__VF.UI.NAV.cur,'select'); A(); A(); T.eq(__VF.UI.NAV.cur,'arena'); A(); T.eq(__VF.UI.NAV.cur,'vs'); fakePads([]); padTick();
+  return vsThrough(() => { T.eq(__VF.G.state,'fight'); T.eq(__VF.G.mode,'versus'); T.eq(__VF.IN.assign[0].pad,0); }); });
 T.test('match end screen and rematch', () => { endMatch(0); T.eq(__VF.G.state,'end'); T.eq(txt('endTitle'),'VINCE REN!'); later(__VF.CFG.menu.endGuardMs+50,()=>uiClick('Rivincita')); T.eq(__VF.G.state,'fight'); });
 T.test('mouse click on pause button', () => { $('tPause').click(); T.eq(__VF.G.state,'pause'); __VF.menu.resume(); });
 T.test('hidden tab pauses and does not catch up', () => { __VF.tick(performance.now()); T.ok(__VF.G.last!==null);
@@ -39,8 +39,8 @@ T.test('loop: fixed steps from real time, at most loop.maxSteps per tick', () =>
 T.test('menu keys move the focus and wrap', () => {
   __VF.menu.toTitle(); T.eq(focused(),'Gioca'); key('ArrowDown'); keyUp('ArrowDown'); T.eq(focused(),'Allenamento');
   key('KeyW'); keyUp('KeyW'); key('KeyW'); keyUp('KeyW'); T.eq(focused(),'Impostazioni','wraps to the last entry');
-  __VF.menu.toTitle(); keyTap('Space'); keyTap('Space'); T.eq(__VF.UI.NAV.cur,'vsopts'); keyTap('Space'); keyTap('Space'); keyTap('Space'); T.eq(__VF.UI.NAV.cur,'arena'); keyTap('Space');
-  T.eq(__VF.G.mode,'versus'); T.eq(__VF.IN.assign[0].pad,null);
+  __VF.menu.toTitle(); keyTap('Space'); keyTap('Space'); T.eq(__VF.UI.NAV.cur,'vsopts'); keyTap('Space'); keyTap('Space'); keyTap('Space'); T.eq(__VF.UI.NAV.cur,'arena'); keyTap('Space'); T.eq(__VF.UI.NAV.cur,'vs');
+  return vsThrough(() => { T.eq(__VF.G.mode,'versus'); T.eq(__VF.IN.assign[0].pad,null); });
 });
 T.test('screens: one at a time, hud hidden on the menu', () => {
   __VF.menu.toTitle(); T.ok(vis('sc-menu')); T.ok(!vis('sc-pause')&&!vis('sc-results')&&!vis('tPause')); T.ok(!vis('hud'));

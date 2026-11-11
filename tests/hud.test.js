@@ -6,7 +6,7 @@ T.test('combo counter shows from 2 hits and bumps once per hit', () => { comboG(
 T.test('combo counter hides 60 frames after the combo', () => { comboG(2); __VF.frame(30); T.ok(vis('combo0')); __VF.frame(70); T.ok(!vis('combo0')); });
 T.test('timer shows seconds, ∞ in training', () => { startFight(); T.eq(txt('timer'),'99'); __VF.startMatch('training',{seed:1,dummy:'fermo'}); __VF.frame(110); T.eq(txt('timer'),'∞'); });
 T.test('round banners', () => { __VF.startMatch('versus',{seed:1}); __VF.frame(2); T.eq(txt('banner'),'ROUND 1'); __VF.frame(99); T.eq(txt('banner'),'COMBATTI!'); });
-T.test('portraits and names', () => { T.eq(txt('name0'),'REN'); T.eq(txt('name1'),'KAEL'); T.ok($('face0').style.backgroundImage.includes('data:image/jpeg')); });
+T.test('portraits and names', () => { T.eq(txt('name0'),'REN'); T.eq(txt('name1'),'KAEL'); T.ok($('face0').style.backgroundImage.includes('data:image/webp'),'the faces of the interface pictures (Interface U1)'); });
 T.test('HUD fits a 360 px tall screen and does not cover the fighters', () => { const t=$('timer').getBoundingClientRect(); T.ok(t.bottom < innerHeight*.25); for(const id of ['meter0','meter1']) T.ok($(id).getBoundingClientRect().bottom<=innerHeight);
   const hp=$('hpFill0').getBoundingClientRect(); for(const id of ['meter0','meter1','lvl0','lvl1']){ const r=$(id).getBoundingClientRect(); T.ok(r.top>=hp.bottom||r.bottom<=hp.top,id+' overlaps the health bar'); }
   if(innerHeight>480&&!matchMedia('(pointer:coarse)').matches) for(const id of ['meter0','meter1']) T.ok($(id).getBoundingClientRect().top>innerHeight*.7,id+' not at the bottom'); });

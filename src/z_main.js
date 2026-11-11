@@ -34,6 +34,7 @@ function stepGame(now){
   simStep(S,in0,in1);
   if(typeof fxEvents==='function') fxEvents(S,now);
   if(typeof hudEvents==='function') hudEvents(S);
+  if(typeof uiEvents==='function') uiEvents(S);   // the match statistics for the results (reads the events only)
 }
 // n game steps, then one render if there is a renderer.
 function frame(n){
@@ -47,7 +48,9 @@ function startMatch(mode,o){
   o=o||{};
   G.opts={chars:o.chars||['ren','kael'],rounds:o.rounds,timeS:o.timeS};
   G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:G.opts.chars,dummy:o.dummy,rounds:o.rounds,timeS:o.timeS});
+  if(typeof renderCast==='function')renderCast(G.opts.chars);   // the chosen fighters on their sides
+  if(typeof hudReset==='function')hudReset(G.S);                 // their names and faces in the HUD at once
   G.mode=mode; G.state='fight'; G.acc=0; G.last=null; menuSync();
 }
-window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,navRegister,navGo,navBack,navReset,navReplace,navClear,navMove,navPress,navTab,navFocus,navPadPoll,uiTap,cLogo,cHead,cBtn,cItem,cCard,cTabs,cStepper,cStatBar,cProgress,cChip,cBack,uiToast,uiConfirm,layersSet,layersShift,layersDepth,layersQuality,layersFrame,uiFrame,introAt,introSkip,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,modelBuild,mdData,mdPoseOf,mdMix,mdSample,mdApply,headTop,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD,UI:{get SV(){return SV;},NAV,LY,INTRO},saveDefaults,saveLoad,saveWrite,progLevel,progMatchXp,progAddXp,progRecord};
+window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,navRegister,navGo,navBack,navReset,navReplace,navClear,navMove,navPress,navTab,navFocus,navPadPoll,uiTap,cLogo,cHead,cBtn,cItem,cCard,cTabs,cStepper,cStatBar,cProgress,cChip,cBack,uiToast,uiConfirm,layersSet,layersShift,layersDepth,layersQuality,layersFrame,uiFrame,introAt,introSkip,F3D_BY,renderCast,fxRecast,bridgePreload,bridgeWarm,bridgeStart,bridgeResult,bridgeArenaShot,uiEvents,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,modelBuild,mdData,mdPoseOf,mdMix,mdSample,mdApply,headTop,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD,UI:{get SV(){return SV;},NAV,LY,INTRO,UIB},saveDefaults,saveLoad,saveWrite,progLevel,progMatchXp,progAddXp,progRecord};
 boot();

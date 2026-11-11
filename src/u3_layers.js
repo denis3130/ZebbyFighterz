@@ -30,14 +30,14 @@ function lyChar(id, c, pose) {
   el.style.backgroundImage = key && ASSETS[key] ? 'url(' + ASSETS[key] + ')' : 'none';
 }
 // scene: 'menu' | 'title' | 'intro' | 'select' | 'vs' | 'results' | 'off' (CSS places the layers per scene); o = {hero, rival,
-// pose, arena}. The characters' pictures come only from Denis's interface references (docs/ref/ui/), never the A-pose sheets.
+// pose, arena (an id: its card picture), arenaImg (a picture: the real arena's snapshot)}. The characters' pictures come only from Denis's interface references (docs/ref/ui/), never the A-pose sheets.
 function layersSet(scene, o) {
   o = o || {};
   LY.scene = scene;
   LY.el.dataset.scene = scene;
   const hero = o.hero || null, rival = o.rival !== undefined ? o.rival : hero ? (hero === 'ren' ? 'kael' : 'ren') : null;
   lyChar('lyHero', hero, o.pose); lyChar('lyRival', rival, o.pose);
-  const a = document.getElementById('lyArena'), src = o.arena ? ASSETS['ui/arena_' + o.arena + '.webp'] : null;
+  const a = document.getElementById('lyArena'), src = o.arenaImg || (o.arena ? ASSETS['ui/arena_' + o.arena + '.webp'] : null);
   if (src) a.style.backgroundImage = 'url(' + src + ')';
   a.classList.toggle('on', !!src);
   lyPlace();

@@ -19,3 +19,9 @@
 - Costo di un `tick` nei menu (headless, 844x390): **0,07 ms** in qualità alta, 0,00 in bassa (prima, col titolo vecchio, 0,20 ms: i menu non disegnano più l'arena 3D).
 - **Lezione importante**: le animazioni CSS infinite (nuvole, nebbia, respiro) rallentavano i fotogrammi della lotta anche quando gli strati erano nascosti (prova a raffica: da 1,4 a 22-25 ms per fotogramma). Ora tutto il movimento della scena è guidato da JavaScript solo mentre un menu è aperto (`layersFrame`); un test vieta le animazioni CSS infinite nei menu.
 - FPS della lotta nel ciclo reale (headless, 844x390, dal secondo 2 al 7): **24,5** contro 25,3 prima (dentro il rumore). Nei primi 2 secondi la lotta paga la preparazione grafica (compilare gli shader, caricare le texture), che prima avveniva dietro il titolo: il caricamento del VS (Task 10) disegnerà un fotogramma nascosto dell'arena per pagarla lì.
+
+## Ponte verso la lotta (Task 10, 11/11/2026)
+- Il VS fa un caricamento vero: `bridgeWarm` disegna di nascosto un fotogramma dell'arena con i due lottatori scelti. FPS dei primi 5 secondi di lotta (headless, 844x390): **20,4** con la preparazione contro 19,2 senza (20,6 prima dell'interfaccia).
+- I lottatori seguono i personaggi scelti (`renderCast`): un lottatore per personaggio (`F3D_BY`), i colori originali per gli effetti stanno sul lottatore (`it.em0`, `fxRecast`). Lo scontro speculare (stesso personaggio da tutti e due i lati) non è ancora possibile: serve una seconda copia del modello.
+- La carta della «Grande Cascata» mostra una foto della vera arena presa dal gioco (`bridgeArenaShot`): nessuna immagine dei riferimenti la ritrae.
+- I ritratti dell'HUD ora sono i volti della schermata VS (`face_*.webp`), non più quelli ricavati dalle schede in A-pose.

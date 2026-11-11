@@ -6,15 +6,17 @@ function hudInit() {
   const e = HUD.el;
   for (const id of ['face0', 'face1', 'name0', 'name1', 'hpFill0', 'hpFill1', 'hpChip0', 'hpChip1', 'timer', 'wins0', 'wins1',
     'combo0', 'combo1', 'meter0', 'meter1', 'lvl0', 'lvl1', 'banner', 'hud']) e[id] = document.getElementById(id);
-  e.face0.style.backgroundImage = 'url(' + ASSETS['ui/ren_face.jpg'] + ')';
-  e.face1.style.backgroundImage = 'url(' + ASSETS['ui/kael_face.jpg'] + ')';
+
   HUD.seg = [0, 1].map(i => [...e['meter' + i].querySelectorAll('b')]);
   HUD.pip = [0, 1].map(i => [...e['wins' + i].children]);
   hudReset(null);
 }
 // A new match (a new S) starts from full bars and no counters.
 function hudReset(S) {
-  HUD.S = S; HUD.round = S ? S.round : 0; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
+  HUD.S = S;
+  HUD.round = S ? S.round : 0; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
+  // the faces of the match's fighters, from the interface pictures (the VS reference)
+  if (S) for (let i = 0; i < 2; i++) HUD.el['face' + i].style.backgroundImage = 'url(' + uiFace(fighterOf(S, i).char) + ')';
   HUD.combo = [{n: 0, last: 0, left: 0, seq: 0}, {n: 0, last: 0, left: 0, seq: 0}];
 }
 // One sim step. combo[a] = the combo side a is landing on side 1-a: shown from the 2nd hit, hidden hud.comboHide frames after it

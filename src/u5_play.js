@@ -1,5 +1,5 @@
-// The way into a match (spec §3): main menu, the «Gioca» block, the local versus options, the fighter select, the arena.
-// Later tasks add the VS screen and the results to this file. Locked entries say what is still to come.
+// The way into a match (spec §3): main menu, the «Gioca» block, the local versus options, the fighter select, the arena,
+// the VS screen (the bridge to the fight is u9_bridge.js). The results come in Task 11. Locked entries say what is still to come.
 const VSOPT = {r: null, tm: null};   // the versus options chosen in this session (indexes into CFG.ui.vsOpts)
 
 function playScreens() {
@@ -136,18 +136,89 @@ function selScreen() {
     }});
 }
 
-// --- Arena (params {mode, chars, rounds, timeS}). Until the full screen of Task 10: the one arena to play and «Conferma».
+// --- Arena (params {mode, chars, rounds, timeS}): the arena with the focus fills the background; the cards of the coming
+// arenas say so. «Conferma»: the VS in a versus, straight into the fight (after the loading) in training.
+const AR_SEL = {cur: 'cascata'};   // the arena chosen on the arena screen (ARENA is the 3D arena of d_render.js)
+function arenaGo(dev) {
+  const p = NAV.stack[NAV.stack.length - 1].params, next = {mode: p.mode, chars: p.chars, rounds: p.rounds, timeS: p.timeS, arena: AR_SEL.cur, dev};
+  if (p.mode === 'versus') { navGo('vs', next); return; }
+  try { bridgeWarm(next.arena, next.chars); } catch (_) { uiToast("Impossibile caricare l'arena", 'err'); return; }   // training: no VS, straight in
+  bridgeStart(next);
+}
 function arenaScreen() {
   navRegister({id: 'arena', scene: 'select', layers: () => ({}),
     build(r) {
       r.appendChild(cBack());
       r.appendChild(cHead("Scegli l'arena", 'Seleziona il luogo dello scontro.'));
       const cards = uiEl('div', 'arCards');
-      cards.appendChild(cCard({label: 'La Grande Cascata', act: () => navFocus(r.querySelector('.arOk .ub'))}));
+      for (const A of CFG.ui.arenas) {
+        const img = A.ok ? '' : ASSETS['ui/arena_' + A.id + '.webp'];
+        const c = cCard({label: A.name, img, locked: !A.ok, note: 'Arena in arrivo', act: dev => { AR_SEL.cur = A.id; arenaGo(dev); }});
+        c.dataset.arena = A.id;
+        if (A.ok) c.setAttribute('data-first', '');
+        cards.appendChild(c);
+      }
       r.appendChild(cards);
-      const ok = cBtn({label: 'Conferma', kind: 'main', act0: 'go', act: dev => { const p = NAV.stack[NAV.stack.length - 1].params; mnStart(p.mode, dev, {chars: p.chars, rounds: p.rounds, timeS: p.timeS}); }});
+      const ok = cBtn({label: 'Conferma', kind: 'main', act0: 'go', act: dev => arenaGo(dev)});
       ok.classList.add('arOk');
-      ok.querySelector('.ub').setAttribute('data-first', '');
       r.appendChild(ok);
+    },
+    enter() {
+      const shot = bridgeArenaShot(), img = this.root.querySelector('.ucard[data-arena="cascata"] .ucardImg');   // the real arena, drawn by the game
+      if (shot && img) img.style.backgroundImage = 'url(' + shot + ')';
+    },
+    onFocus(el) {
+      const id = el.dataset.arena;
+      if (!id) return;
+      const A = CFG.ui.arenas.find(a => a.id === id);
+      if (A.ok) AR_SEL.cur = id;
+      const bg = el.querySelector('.ucardImg').style.backgroundImage.replace(/^url\(["']?|["']?\)$/g, '');
+      layersSet('select', {arenaImg: bg});
     }});
+  vsScreen();
+}
+
+// --- VS (params {mode, chars, arena, rounds, timeS, dev}): the two faces come in from the sides, the golden VS, a line each;
+// «Caricamento…» follows the real loading. It stays CFG.ui.vs.minMs (its clock runs on shown frames only, so a hidden
+// page does not start the fight); once loaded, a tap or a key after CFG.ui.vs.tapAfterMs starts at once. Loading
+// failed: the reason, «Riprova» and «Indietro».
+const VS = {t: 0, last: 0, ready: false, err: false, started: false, tok: 0, p: null};
+function vsLoad() {
+  const tok = ++VS.tok, r = NAV.screens.vs.root;
+  VS.ready = VS.err = false;
+  r.classList.remove('err');
+  UIB.preload(VS.p.arena, VS.p.chars).then(() => { if (tok === VS.tok) VS.ready = true; },
+    () => { if (tok !== VS.tok) return; VS.err = true; r.classList.add('err'); navFocus(r.querySelector('.vsErr .ub')); });
+}
+function vsStart() { if (VS.started) return; VS.started = true; bridgeStart(VS.p); }
+function vsScreen() {
+  navRegister({id: 'vs', scene: 'vs', layers: () => ({}),
+    build(r) {
+      r.innerHTML = '<i class="vsF l"></i><i class="vsF r"></i><div class="vsMark"><b>VS</b><i></i></div>' +
+        '<div class="vsSide l"><b class="vsName"></b><i class="vsLine"></i></div><div class="vsSide r"><b class="vsName"></b><i class="vsLine"></i></div>' +
+        '<div class="vsLoad"><span>Caricamento…</span></div><div class="vsErr"><b>Impossibile caricare l\'arena</b><div class="vsErrB"></div></div>';
+      const bar = cProgress(0); bar.classList.add('vsBar'); r.querySelector('.vsLoad').appendChild(bar);
+      r.querySelector('.vsErrB').append(cBtn({label: 'Riprova', act: () => vsLoad()}), cBtn({label: 'Indietro', act: () => navBack()}));
+    },
+    enter(p) {
+      VS.p = p; VS.t = 0; VS.last = 0; VS.started = false;
+      const r = this.root, lines = CFG.ui.lines[p.chars[0] + '>' + p.chars[1]] || ['', ''];
+      ['l', 'r'].forEach((s, i) => {
+        const c = p.chars[i];
+        r.querySelector('.vsF.' + s).style.backgroundImage = 'url(' + (ASSETS['ui/' + c + '_vs.webp'] || '') + ')';
+        r.querySelector('.vsSide.' + s + ' .vsName').textContent = CFG.ui.chars[c].name;
+        r.querySelector('.vsSide.' + s + ' .vsLine').textContent = lines[i];
+      });
+      r.querySelector('.vsBar').uiSet(0);
+      vsLoad();
+    },
+    leave() { VS.tok++; },
+    frame(now) {
+      const dt = VS.last ? Math.min(100, now - VS.last) : 0, M = CFG.ui.vs.minMs;
+      VS.last = now; VS.t += dt;
+      if (VS.err) return;
+      NAV.screens.vs.root.querySelector('.vsBar').uiSet(VS.ready ? Math.min(1, M ? VS.t / M : 1) : Math.min(.85, VS.t / Math.max(M, 1)));
+      if (VS.ready && VS.t >= M) vsStart();
+    },
+    any() { if (!VS.ready || VS.err || VS.t < CFG.ui.vs.tapAfterMs) return false; vsStart(); return true; }});
 }
