@@ -34,7 +34,7 @@ Ogni schermata è una scena a strati, non un'immagine ferma:
 - Game feel nei menu: pulsanti che si schiacciano, fuoco che "scatta" con un piccolo rimbalzo, contatori XP che salgono e rimbalzano.
 
 ### Immagini
-Generate **a pezzi separati in alta risoluzione** (Blueprint Studio, dalla prossima sessione: rete già aperta; prima di generare: saldo e costo stimato a Denis). Fino ad allora: **ritagli dei collage come segnaposto** dichiarati, stessi nomi di file, così le immagini nuove entrano senza cambiare codice.
+Generate **a pezzi separati in alta risoluzione** (Blueprint Studio, dalla prossima sessione: rete già aperta; prima di generare: saldo e costo stimato a Denis). Fino ad allora: **segnaposto a strati veri** fatti da `tools/make_ui_assets.py`: Ren e Kael scontornati dalle loro schede (`docs/ref/personaggi/*.png`, sfondo grigio uniforme), rovine separate dal cielo e portate al tramonto da `docs/ref/sfondo-rovine.png`, cielo al tramonto disegnato, ritratti e anteprime ritagliati. Stessi nomi di file delle immagini definitive, così entrano senza cambiare codice.
 
 Elenco (in `assets/ui/`): `sky.jpg`, `ruins.png`, `fog1.png`, `fog2.png`, `ren_full.png`, `kael_full.png`, `ren_win.png`, `kael_win.png`, `ren_vs.png`, `kael_vs.png`, `intro_ren.png`, `intro_kael.png`, `intro_clash.png`, ritratti `face_ren/kael/astra/raigon.jpg`, `silhouette.png`, `astra_full.png`, `raigon_full.png`, anteprime arene `arena_cascata/rovine/montagne/tetti/foresta/deserto.jpg`, icone profilo e stendardi (6+6).
 
@@ -111,27 +111,30 @@ src/u5_play.js     scelta modalità, personaggi, arena, VS, risultati, arcade, o
 src/u6_meta.js     profilo, statistiche, impostazioni, editor comandi
 src/u7_prog.js     XP, livelli, pass, missioni, archivio (logica pura, testabile senza DOM)
 src/u8_hud.js      HUD della lotta e tasti touch (U2)
-src/u9_bridge.js   ponte verso la lotta: oggi «lotta di prova», poi la vera
+src/u9_bridge.js   ponte verso la lotta vera (startMatch, risultato, eventi in sola lettura)
 src/u_head.html    CSS (variabili di colore e caratteri) e radice #ui
 tools/make_ui_assets.py   ritagli segnaposto e compressione delle immagini
 ```
 - Ogni schermata è un oggetto `{id, enter(params), leave(), items, back}` registrato in `u1_nav`. `nav.go(id, params)`, `nav.back()`, `nav.replace(id)`.
 - Il fuoco si muove in 2D (vicino più prossimo nella direzione) tra gli elementi con `data-focus`; il tocco e il mouse spostano il fuoco e confermano.
 - **Ponte verso la lotta** (`u9_bridge.js`), unico punto di contatto:
-  - `bridge.preload(arena) → Promise` (per la barra del VS);
-  - `bridge.start({mode, chars, arena, rounds, time, dummy}, onEnd)`;
-  - `onEnd(result)` con `{winner, wins:[a,b], chars, mode, hits, maxCombo, combos, timeS}`, che aggiorna statistiche, missioni e pass;
-  - `bridge.events` (sola lettura degli eventi della lotta, per il tutorial).
-  - Oggi è una **lotta di prova** dichiarata: schermata con l'HUD vero e i tasti «Vince G1», «Vince G2», «Pareggio», «Combo ×5», per provare tutto il percorso. Con la Tappa 1 pronta, il ponte chiama `startMatch` e legge `S` e `S.ev`; la simulazione non viene toccata.
+  - `bridgePreload(arena) → Promise` (per la barra del VS);
+  - `bridgeStart({mode, chars, arena})` chiama `startMatch` della lotta vera (la Tappa 1 è finita, la Tappa 2 è in corso sul ramo `tappa2-ren-meshy`);
+  - a fine partita `bridgeResult(S)` dà `{winner, wins:[a,b], chars, mode, hits:[a,b], maxCombo:[a,b], timeS}`, che aggiorna statistiche e XP (e dalla U4 missioni e pass);
+  - gli eventi della lotta arrivano in sola lettura da `uiEvents(S)`, chiamata da `stepGame` come `fxEvents` e `hudEvents`.
+  - Aggiornamento dell'11/11: la Tappa 1 è già pronta, quindi **niente lotta di prova**: il percorso arriva subito alla lotta vera.
+- Lato del giocatore e personaggi: il lato 0 (sinistra) è G1 con il personaggio che ha scelto. Il disegno dei lottatori segue i personaggi scelti (oggi era fisso: lato 0 Ren, lato 1 Kael). Lo **scontro speculare** (stesso personaggio da tutti e due i lati) è «In arrivo»: servono una seconda copia del modello e il colore alternativo.
+- Profilo, XP e statistiche sono del **G1** (chi ha confermato); il G2 in Versus locale gioca da ospite.
 - La pausa della lotta usa `menu.pause/resume` della Tappa 1; la schermata di pausa è disegnata da questa parte.
 - Nota: i numeri dell'interfaccia stanno nell'oggetto `CFG` ma in un file a parte (`a1_ui_cfg.js`) per non scontrarsi con la Tappa 1 su `a0_cfg.js`; si possono unire quando i rami si uniscono.
-- Build: `tools/build_ui.py` crea `ui.html` (giocabile, con la lotta di prova) e `ui_w.html` (test, espone `window.__UI`). Quando i rami si uniscono, i file `u*` entrano nel `mk.sh` principale.
+- Build: i file `u*` entrano nel `mk.sh` del gioco (ramo di partenza: `tappa2-ren-meshy`, la linea principale). I test usano `game_w.html` e `window.__VF` come il resto del gioco. Le immagini dell'interfaccia hanno un tetto di **3 MB** dentro la pagina (la pagina intera resta sotto i 16 MB); `build.py` accetta anche `.webp`.
+- Pubblicazione: una pagina Claude a parte, «Voidrise · Interfaccia», finché Denis non decide di unirla al gioco. L'app del telefono (`gh-pages`) non si tocca senza il suo ok.
 
 ## 7. Tappe
 
 Ognuna giocabile, provata e pubblicata come pagina:
-1. **U1**: sistema (componenti, navigazione, strati, transizioni, salvataggio) + Intro + Titolo + Nome + Menu principale + Gioca + Selezione personaggi + Arena + VS + lotta di prova + Risultati (XP base).
-2. **U2**: HUD della lotta, tasti touch, Pausa, «Gira il telefono».
+1. **U1**: sistema (componenti, navigazione, strati, transizioni, salvataggio) + Intro + Titolo + Nome + Menu principale + Gioca + Selezione personaggi + Arena + VS + lotta vera + Risultati (XP base) + la Pausa attuale portata nel nuovo sistema (Riprendi, Ricomincia, Avversario, FPS, Abbandona).
+2. **U2**: HUD della lotta, tasti touch, Pausa completa (Lista mosse, Impostazioni), «Gira il telefono» nel nuovo stile.
 3. **U3**: Profilo, Statistiche, Classifica, Impostazioni con editor dei comandi.
 4. **U4**: Pass stagionale, Missioni, Archivio, Sblocco.
 5. **U5**: Arcade, Allenamento e Tutorial, schermate Online.
@@ -139,7 +142,7 @@ Ognuna giocabile, provata e pubblicata come pagina:
 ## 8. Prove e misure
 
 Test automatici (Playwright, come la Tappa 1):
-- Percorso completo con tastiera, con controller finto, con tocco su 844×390 e con mouse a 1280×720: Titolo → Menu → Versus → G1 → G2 → Arena → VS → Lotta di prova → Risultati → Rivincita / Menu.
+- Percorso completo con tastiera, con controller finto, con tocco su 844×390 e con mouse a 1280×720: Titolo → Menu → Versus → G1 → G2 → Arena → VS → Lotta → Risultati → Rivincita / Menu.
 - Indietro da ogni schermata torna alla precedente con il fuoco dove era.
 - Gli elementi bloccati non avviano nulla e mostrano l'avviso giusto.
 - Salvataggio: nome, XP, impostazioni sopravvivono al ricaricamento; `localStorage` che lancia errori → avviso e gioco che continua.
