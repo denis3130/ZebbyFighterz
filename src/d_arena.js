@@ -84,7 +84,8 @@ function arenaBuild(def) {
     f3Shared();
     arLayers(def, sky, cliffs, aw, mist);
     const M = arMesh();   // terrace, column and props: one mesh and one outline (each draw costs, on phones too)
-    arTerrace(def, M); arProps(def, M);
+    arTerrace(def, M);
+    AR.props = [M.p.length / 3]; arProps(def, M); AR.props.push(M.p.length / 3);   // the props' vertices (for the tests)
     const G = arMesh(); arGrass(def, G);
     const stone = arStoneTex(); stone.minFilter = THREE.LinearFilter; stone.generateMipmaps = false;   // seen magnified
     arToon(M, stone, def.terrace.line, 'stone', G);

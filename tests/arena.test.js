@@ -90,8 +90,8 @@ T.test('banner step under 0.2 ms', () => {
 
 T.test("props stay out of the fighters' lane", () => {
   const V = __VF, p = V.ARENA.group.getObjectByName('stone').geometry.attributes.position;
-  let zMax = -99;   // the props are everything standing above the lip (y > 0.12); the slabs are flat at y <= 0
-  for (let i = 0; i < p.count; i++) if (p.getY(i) > .12) zMax = Math.max(zMax, p.getZ(i));
+  let zMax = -99;   // column, pole, lantern, rocks: the vertex range V.AR.props of the stone mesh
+  for (let i = V.AR.props[0]; i < V.AR.props[1]; i++) zMax = Math.max(zMax, p.getZ(i));
   T.ok(zMax < -1.5, 'props reach z ' + zMax.toFixed(2));
   const b = new THREE.Box3().setFromObject(V.ARENA.group.getObjectByName('banner'));
   T.ok(b.max.z < -1.5, 'banner reaches z ' + b.max.z.toFixed(2));
