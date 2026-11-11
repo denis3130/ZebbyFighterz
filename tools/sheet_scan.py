@@ -61,7 +61,8 @@ def model(pkg):
         if 'move' in lj:
             mv = lj['move']; idx = np.frombuffer(LB, np.uint16, mv['idx'][1], mv['idx'][0]).astype(int)
             P[idx] = np.frombuffer(LB, np.float32, mv['pos'][1], mv['pos'][0]).reshape(-1, 3)
-    tp = os.path.join(pkg, name + '_painted.jpg'); tp = tp if os.path.exists(tp) else os.path.join(pkg, name + '.jpg')
+    tp = os.path.join(pkg, name + '_painted.png')   # (tools/kael_body.py's, else the look's JPEG, else Meshy's)
+    tp = tp if os.path.exists(tp) else os.path.join(pkg, name + '_painted.jpg'); tp = tp if os.path.exists(tp) else os.path.join(pkg, name + '.jpg')
     T = np.asarray(Image.open(tp).convert('RGB')).astype(np.float64); ts = T.shape[0]
     uv = UV[I].mean(1); mat = classes(T[np.clip((uv[:, 1] * ts).astype(int), 0, ts - 1), np.clip((uv[:, 0] * ts).astype(int), 0, ts - 1)])
     hp = os.path.join(pkg, name + '_head.json')

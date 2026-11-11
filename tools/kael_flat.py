@@ -37,6 +37,10 @@ PAL = {'hairL': (226, 214, 227), 'hairS': (140, 121, 154), 'skin': (247, 188, 14
 INKC = (22, 18, 22)
 HEAD = ('hairL', 'hairS', 'skin', 'skinS')        # the hair, the skin, the ears, the neck
 COLLAR = ('coat', 'coatL', 'coatD', 'trim')
+# (the collar painted as the body sheets paint the vest, tools/kael_body.py: its cloth the vest's plum, its shadow the vest's black, its trim the
+# vest's purple. Chosen by the colours above (the head images', darker), painted in these: in the head images' darker colours it was a black
+# ring on the plum vest; 11/11)
+COLLAR_OUT = {'coat': (76, 58, 84), 'coatL': (76, 58, 84), 'coatD': (28, 24, 30), 'trim': (166, 90, 202)}
 TOL, FLAT, EDGE = 16, 22, 60       # a core: within TOL of its colour (the largest channel difference), its neighbours within FLAT of it (or none of them darker by EDGE: no line beside it)
 LAM = .8                           # the cost of ink: levels per share of ink a colour needs to explain a texel (times 255)
 INK = (.38, .68)                   # the ink's share sharpened: none under [0], all over [1]
@@ -294,7 +298,16 @@ def flatten(out, It, ys, xs, ks, pos, nor, hair_v, skin_v, ear_v, collar_v, keep
     log('flat: %d texels of islands of one thing in another (under %.0f mm2) took its colour' % (ni, ISLE[0]))
     log('flat: %d texels of specks took the colour around them (areas under %.0f mm2 on the hair, %.0f elsewhere); ink: %d texels of lines, %d of dashes (under %.1f mm2 on the hair, %.1f elsewhere) and %d of haze left out' % (
         ns, SMALL[0], SMALL[1], int(ink.sum()), nd, DASH[0], DASH[1], int(haze.sum())))
-    w = ~fixed; before = c[w].copy(); newc = cols[lab[w]] * (1 - a_[w, None]) + np.array(INKC, np.float32)[None] * a_[w, None]
+    if COLLAR_OUT and col.any():   # (the collar as the body sheets paint it: its cloth the vest's plum outside, its black inside (turned to the
+        # neck), its purple trim as it is, no ink (the head images draw it nearly all black: as ink it was a black ring on the plum vest; its rim's
+        # line is the outline's))
+        cw = col & ~fixed & (lab != names.index('trim')); cp = p[col]; c_xz = np.array([cp[:, 0].mean(), cp[:, 2].mean()])
+        inside = (n[:, 0] * (p[:, 0] - c_xz[0]) + n[:, 2] * (p[:, 2] - c_xz[1])) < 0
+        lab[cw & ~inside] = names.index('coat'); lab[cw & inside] = names.index('coatD'); a_ = np.where(cw, 0., a_)
+        log('flat: the collar (%d texels) as the vest: %d its cloth, %d its inside, %d its trim' % (int(col.sum()), int((cw & ~inside).sum()), int((cw & inside).sum()), int((col & (lab == names.index('trim'))).sum())))
+    oc = cols.copy()
+    for k_, v_ in COLLAR_OUT.items(): oc[names.index(k_)] = v_
+    w = ~fixed; before = c[w].copy(); newc = oc[lab[w]] * (1 - a_[w, None]) + np.array(INKC, np.float32)[None] * a_[w, None]
     out[ys[use[w]], xs[use[w]]] = newc
     ch = np.abs(newc - before).max(1)
     log('flat: %d texels flat (%d of the eyes, the brows and the earrings left as they are); %.1f%% changed by over 20 levels, %.1f%% by over 60' % (int(w.sum()), int(fixed.sum()), 100 * (ch > 20).mean(), 100 * (ch > 60).mean()))

@@ -73,7 +73,7 @@ function modelBuild(key) {
   // The texture appears once decoded; until then the mesh draws with an empty map (no error, no warning).
   const img = new Image(), tex = new THREE.Texture(img);
   tex.flipY = false;   // glTF UVs
-  img.src = (lk.paint && ASSETS[key + '/' + key + '_painted.jpg']) || ASSETS[key + '/' + key + '.jpg'];   // (the look's: the drawing painted on it)
+  img.src = (lk.paint && (ASSETS[key + '/' + key + '_painted.png'] || ASSETS[key + '/' + key + '_painted.jpg'])) || ASSETS[key + '/' + key + '.jpg'];   // (the look's: the drawing painted on it; a PNG for flat colours, tools/kael_body.py)
   img.decode().then(() => { tex.needsUpdate = true; }, () => {});
   const main = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true});
   if (flat) {   // the look's flat light: per vertex, the share of the texture's own colour (the face's drawn shading)

@@ -43,7 +43,9 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
    vedi sotto (circa 1 minuto).
 8. `python3 tools/kael_face.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_fix.py`): il viso dipinto dal foglio della
    testa, vedi sotto (circa 30 secondi). I passi 5-8 si possono rifare sempre da capo: danno sempre lo stesso risultato.
-9. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
+9. `python3 tools/kael_body.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_arms.py`): il corpo nei colori dei fogli del
+   corpo (vedi "Corpo dai fogli del corpo"); scrive `kael_painted.png`, che le pagine prendono al posto del JPEG.
+10. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
 - **Ciocca sull'occhio destro**: Meshy l'aveva fatta scendere sull'occhio, il disegno li mostra tutti e due con una
@@ -454,6 +456,32 @@ braccia di Meshy pallide e a schizzi, con scarabocchi neri sulle spalle, e un po
   cuciture facevano fallire il controllo di visibilità), una macchia marrone al gomito (il colore del bordo del
   disegno), trattini neri di Meshy vicino ai bracciali, una macchia color pelle sulla punta del colletto (pesata sulle
   ossa del braccio: ora esclusa).
+
+## Corpo dai fogli del corpo (`tools/kael_body.py`, 11/11)
+Denis, rimandando i fogli del busto, delle gambe e della schiena (`kael_busto_3viste.png`, `kael_gambe_3viste.png`,
+`kael_retro.png`): "ora migliorami il corpo come hai fatto per il viso deve essere identico senza usare agenti". Messo
+il corpo accanto ai fogli dalle stesse inquadrature (`tools/sheet_scan.py`; camere in `docs/meshy/kael_body_cams.json`):
+la stoffa era quasi nera (nei fogli viola scuro con ombre nere a punte), i tatuaggi neri (nei fogli fulmini viola), la
+fascia una banda liscia (nei fogli annodata) e dietro due code e un pezzo viola in più. Per le forme serviva Meshy (60
+crediti, saldo 1000): Denis ha scelto di tenere le forme e ridipingere ("Solo ridipingere, gratis").
+- **I colori dei fogli** (misurati sui tre fogli): stoffa viola scuro (76,58,84) e le sue ombre nere (28,24,30), il
+  viola in luce e in ombra, la pelle e la sua ombra, le righe nere. La pittura di `kael_fix.py` ci passa tono per tono
+  (antracite -> viola scuro, pieghe -> nero, i viola ai due del foglio), poi ogni texel è uno dei colori piatti.
+- **Proiettare i fogli è stato provato e lasciato davanti e di lato**: le forme di Meshy non sono le loro (nodo della
+  fascia, orlo, pieghe; i profili coincidono al 62-78%), proiettati i disegni erano strisce viola sbavate e ombre
+  doppie. La ricolorazione delle forme del modello, che vengono dallo stesso personaggio, è pulita e vicina ai fogli.
+- **La schiena dal foglio della schiena** (coincide all'85%): dove la si vede bene (oltre 0,5), non le spalle e le
+  braccia (lì il foglio cadeva di traverso, macchie viola sul deltoide). Le gambe di tre quarti e di fronte dipingono
+  solo i gambali degli stivali (Meshy li aveva tutti neri), e solo coi colori scuri.
+- **Tatuaggi**: i pezzi scuri delle spalle e delle braccia con almeno metà pelle attorno entro 6 mm (in 3D: nella
+  texture i vicini possono essere un altro pezzo dell'atlante, e le ombre della schiena diventavano viola), non le
+  righe sottili dei muscoli, in viola col bordo viola scuro: ora sono fulmini viola come nei fogli.
+- **Colletto della testa**: era nei colori scuri delle immagini della testa, un anello nero sul gilet viola scuro; ora
+  nei colori del gilet (`COLLAR_OUT` in `tools/kael_flat.py`), scelti con quelli di prima.
+- La pittura è un PNG (`kael_painted.png`, colori piatti senza le sbavature del JPEG); `mk.sh` toglie il JPEG dalla
+  pagina dell'anteprima.
+- Resta (forme di Meshy, non toccate per scelta di Denis): la fascia è una banda e non un nodo, dietro sui fianchi due
+  code e il bordo viola dell'orlo, le strisce viola del davanti sono quelle di Meshy (simili, non le stesse del foglio).
 
 ## Look nel gioco
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

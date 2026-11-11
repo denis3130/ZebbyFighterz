@@ -44,12 +44,12 @@ function vwBoot() {
   VW.S = {frame: 0, sides: [{team: [VW.F], cur: 0}]};
   // the two paints where the drawing is painted on the model (tools/paint_from_drawing.py): the drawing's and Meshy's own
   // (the one its look takes is the model's texture already); without it Meshy's alone, and no paint buttons
-  const lk = CFG.looks[key] || {}, drawn = !!ASSETS[key + '/' + key + '_painted.jpg'], own = lk.paint && drawn ? 'draw' : 'meshy';
+  const lk = CFG.looks[key] || {}, painted = ASSETS[key + '/' + key + '_painted.png'] || ASSETS[key + '/' + key + '_painted.jpg'], drawn = !!painted, own = lk.paint && drawn ? 'draw' : 'meshy';   // (the PNG first: tools/kael_body.py)
   VW.tex[own] = it.mats.main.map;
   if (!drawn) VW.tex.draw = VW.tex.meshy;
   else {
     const other = own === 'draw' ? 'meshy' : 'draw', img = new Image(), t = new THREE.Texture(img); t.flipY = false;
-    img.src = ASSETS[key + '/' + key + (other === 'draw' ? '_painted.jpg' : '.jpg')]; img.decode().then(() => { t.needsUpdate = true; }, () => {});
+    img.src = other === 'draw' ? painted : ASSETS[key + '/' + key + '.jpg']; img.decode().then(() => { t.needsUpdate = true; }, () => {});
     VW.tex[other] = t;
   }
   document.getElementById('paint').hidden = !drawn;
