@@ -26,6 +26,7 @@ const RB = {
   bal1: .08,          // metres the body's mass may be from the middle of the standing foot in a kick (the actor's: 6-14 cm)
   blend: 6, hitBlend: 3,   // frames: easing into a new free act / into a hit reaction
   md: null, W: null, sty: null, con: null, pol: 'none', rawOk: {},
+  post: [],           // functions (md, p, F, S, y) applied to the finished pose (other modules: arms, hands, head)
   // Per move, what the style adds to the clip. hip/chest = twist at the impact (degrees; the sign follows the hitting
   // side), coil = share wound the other way first, lean = pitch at the impact (degrees, < 0 back) and leanCoil in the
   // coil, dip = pelvis drop in the coil and rise at the impact (shares of the height), back/fwd = metres the pelvis
@@ -223,6 +224,7 @@ RN.pure = function (md, F, S) {
     else { p.h[0] += fix.x * y.box; p.h[1] += fix.y * y.box; p.h[2] += fix.z * y.box; }   // else the body
   }
   if (pol !== 'none') rbLegs(md, p);
+  for (const f of RB.post) f(md, p, F, S, y);
   return p;
 };
 // The arms of a kick toward the guard pose g (their local rotations: the guard's fists in front of the face, carried by

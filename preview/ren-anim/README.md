@@ -6,6 +6,8 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
 - `scaffold.js`: i punti di aggancio (nuove/vecchie, opzioni, tastiera e controller, disegno tra due fotogrammi).
 - `mods/body.js`: lo stile di ogni mossa e la fisica del corpo (piedi fissati sulla punta, tallone che si alza e
   ruota, gambe mai stirate, ginocchia sopra i piedi, peso ed equilibrio, colpo sempre dentro la sua zona, allungo).
+- `mods/style.js`: lo stile di Ren fatto a mano: guardia "acqua che scorre" a mani aperte con piccoli cerchi,
+  guardia tenuta in camminata, gesti da fermo (si stringe le bende, scioglie il collo). Braccia con cinematica inversa.
 - `mods/trail.js`: la scia, solo sui colpi forti, curva e sempre dietro al corpo.
 - `mods/fx.js`: il manichino, il fermo-immagine, lampo, scintilla, tremolio, il colpo energetico.
 - `mods/hair.js`: i capelli che seguono la testa con un piccolo ritardo.
@@ -15,7 +17,7 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
 
 ## Costruire
 
-    python3 build.py --assets ASSETS.js --out pagina.html --mods body.js,trail.js,fx.js,hair.js,extra.js
+    python3 build.py --assets ASSETS.js --out pagina.html --mods body.js,style.js,trail.js,fx.js,hair.js,extra.js
 
 `ASSETS.js` è la riga `const ASSETS={...};` della pagina pubblicata (circa 9,7 MB, non sta nel repository).
 
