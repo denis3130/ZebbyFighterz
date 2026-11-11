@@ -620,6 +620,7 @@ Denis ("manda anteprima").
   sono pelle, il bordo è dritto sul dorso; sul palmo resta all'attaccatura delle dita come nel foglio. Sulle dita via le
   macchie marroni della pittura di Ren, restano solo le pieghe più scure (tra le dita); l'ombra del guanto prugna scuro, non
   nera (i blocchi neri sembravano buchi).
+  Pubblicato nell'anteprima di Kael (versione 19, "anteprima?").
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,
