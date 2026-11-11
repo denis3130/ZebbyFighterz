@@ -78,13 +78,13 @@ T.test('the floor goes on past the free camera views (sides and front)', () => {
 
 T.test('depth: near moves more than far', () => {
   const V = __VF, d = AD(), pl = V.ARENA.layers.planes;
-  T.eq(pl.map(p => p.name).join(), 'base,L,R,falls,sky', 'planes nearest first');
+  T.eq(pl.map(p => p.name).join(), 'base,hillsL,hillsR,falls,farL,far,farR,sky', 'planes nearest first');
   for (const p of pl) T.eq(p.z, d.layers[p.name], p.name + ' depth');
   view(-1200, 1200, 0);
-  const pts = [[d.props.column.x, 2, d.props.column.z], [0, 5, d.layers.base], [0, 5, d.layers.L], [0, 5, d.layers.falls], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
+  const pts = [[d.props.column.x, 2, d.props.column.z], [0, 5, d.layers.base], [0, 5, d.layers.hillsL], [0, 5, d.layers.falls], [0, 5, d.layers.far], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
   const a = at(); V.camera.position.x += 1; V.camera.updateMatrixWorld(); const b = at(); view(-1200, 1200, 0);
   const m = a.map((x, i) => Math.abs(b[i] - x));
-  T.ok(m.every((x, i) => i === 0 || (x < m[i - 1] && x > 0)), 'screen shift column > base mist > mountains > falls > sky: ' + m.map(x => x.toFixed(1)));
+  T.ok(m.every((x, i) => i === 0 || (x < m[i - 1] && x > 0)), 'screen shift column > base mist > hills > falls > far mountains > sky: ' + m.map(x => x.toFixed(1)));
 });
 
 T.test('water flows, stone does not', () => {

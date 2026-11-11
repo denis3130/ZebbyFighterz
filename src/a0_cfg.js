@@ -56,12 +56,15 @@ const CFG={
   //  ref = the flat backdrop it replaces, placed as before (footRow = painting row share under the feet, cover) on a
   //   ref screen at the start camera: each far layer shows the painting there, projected to its own depth;
   //  view = the widest view to cover (aspect, camera x reach and shake, metres);
-  //  layers: z of each far painted plane (tools/make_layers.py cuts them): base = the painted mist at the mountains'
-  //   feet, one band in front of all of them; L and R = the two mountains, each one whole piece as painted (left and
-  //   right of the waterfall), each going on outwards as more of itself (quilted from its own painting) down into the
-  //   mist; falls; sky; around them a sky dome (the painting's colours by elevation, its distant mist below the
-  //   horizon: never an edge, wherever the camera looks). At the
-  //   start camera they add up to the painting whatever their depths (each is scaled for its own); the depths only
+  //  layers: z of each far painted plane (tools/make_layers.py builds them from Denis's layers, docs/ref/
+  //   cascata_livelli, 11/11: "dal più lontano al più vicino", parallax "delicata", least on the far one): far (with
+  //   farL and farR past the painting's sides) = his layer 3, the sky, the two big mountains and the misty valley;
+  //   falls = layer 2, the waterfall with its rock sides; hillsL and hillsR = layer 1, the two low hills in front of
+  //   it; layer 0, the floor with the column and the lantern, is the 3D floor and props (fixed with the fighters);
+  //   base = the painting's mist band at the hills' feet (for the free camera, its top at the floor's edge); sky = the
+  //   painting's sky past layer 3's sides and top; around them a sky dome (the sky's colours by elevation, the
+  //   valley's mist below the horizon: never an edge, wherever the camera looks). At the
+  //   start camera they add up to Denis's composition whatever their depths (each is scaled for its own); the depths only
   //   set how much they slide apart when the camera moves; mists = drifting mist banks (none since 11/11, Denis:
   //   "c'è troppa nebbia"); sway = the far planes' slow breathing (metres, seconds), so their depth shows with the
   //   camera still too;
@@ -86,12 +89,12 @@ const CFG={
   arenas:{cascata:{
     ref:{w:844, h:390, footRow:.83, cover:1.1, img:[1672, 941]},
     view:{aspect:2.45, xPad:.4},
-    layers:{base:-7, L:-15, R:-15, falls:-36, sky:-300},
+    layers:{base:-8, hillsL:-17, hillsR:-17, falls:-34, far:-90, farL:-90, farR:-90, sky:-300},
     mists:[],
     sway:{amp:.25, period:24},
     mistLift:.12,
     contrast:.92, lift:.03, skyDrift:.012, skyPeriod:140,
-    water:{v:[45, 230], rows:[262, 640], beat:.6, mix:.85, crest:[256, 320], foam:[680, 1200, 495, 700], spray:.9, sprayRate:1.3},
+    water:{v:[45, 230], rows:[265, 650], beat:.6, mix:.85, crest:[258, 322], foam:[420, 1320, 540, 735], spray:.9, sprayRate:1.3},
     terrace:{half:60, front:30, ledge:[-3.1, 3.25, -3.2], moss:[.42, .5, .3]},
     props:{column:{x:-5.29, z:-2.6, shaft:[.62, .62, 3.95], cap:[1.12, .82, 3.62, 4.85, .16]}, pole:[-2.45, -2.3],
       lantern:{x:5.31, z:-2.75}, rock:[-4.48, .25, -2.25, .56, .33, .4], tufts:{step:[.32, .3], scale:[.75, .55]}},
