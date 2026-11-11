@@ -5,8 +5,8 @@ docs/ref/personaggi/kael_nero.png), from looking at him in 3D from every side an
 - the lock over his right eye lifted above the brow (as tools/mesh_prep/lift_bangs.py did for Ren's bangs): the drawing
   shows both eyes and one lock between them (BANGS: the hair in front of the face within x0..x1, from its root's
   height down to its tips, pressed up so the tips end at the brow; the lock between the eyes is outside x0..x1);
-- the hair, the face's front and all the body in flat light (the look's per-vertex flat share): the toon light's bands
-  on the many locks, over the face and on the vest were grey patches and soft smears; the paint has the drawings' shading;
+- the hair and the face's front in flat light (the look's per-vertex flat share): the toon light's bands on the many
+  locks and over the face were grey patches; Meshy's paint has the drawing's own shading;
 - the paint cleaned (kael_painted.jpg, the look's paint): on the clothes (not the head), specks (small spots of
   another colour inside a patch of black or purple, not at its UV piece's edge, under SPECK texels) take their
   surroundings' colour; the purple in the drawing's two tones by its lightness smoothed over PURPLE_BLUR texels (the
@@ -18,8 +18,7 @@ docs/ref/personaggi/kael_nero.png), from looking at him in 3D from every side an
   darker behind), no patch of a tone under SUIT_MIN texels, its edges softened;
   the hair in the head sheet's two tones (HAIR: its light and its lavender shadow, as much of it as the sheet has, by
   the paint's lightness smoothed: Meshy's hair was nearly white) and its outline thinner (HAIR_LINE: the sheet's locks'
-  lines are thin), the jaw's outline bold as the head sheet's (JAW); no outline on the upper arms' small sharp ridges (FIN: Meshy's
-  skin fins by the armholes; seen along the shoulder in the guard, their outline lay on the skin as black dashes); the earrings in the drawing's purple (EARRING: their light and purple texels under the lobes); the face's right half
+  lines are thin), the jaw's outline bold as the head sheet's (JAW); the earrings in the drawing's purple (EARRING: their light and purple texels under the lobes); the face's right half
   (his right, under the lifted lock: Meshy painted no eye there) the mirror image of its left half about the nose
   (FACE: on the face's surface, not the hair in front of it; faded in at the middle and where it turns away);
   between the UV pieces, the nearest piece's colour (no seams under filtering).
@@ -39,8 +38,7 @@ import glbio
 
 BANGS = {'x': (-.068, -.012), 'top': 1.70, 'tips': 1.575, 'to': 1.632, 'front': (.002, .008)}   # m (see above)
 FLAT_HAIR, FLAT_FACE, FLAT_FACE_N = 1., .75, (.15, .45)   # the flat share: the hair; the face's skin, by its normal's z
-FLAT_BODY = 1.                             # and on all the body (11/11: on its front alone, as Ren's, the toon light's soft bands on the
-                                           # vest's sides and back and on the shoulders were no sheet's flat colours; the paint has their shading)
+FLAT_BODY, FLAT_BODY_N = 1., (.1, .45)   # and on the body's front (as Ren's, tools/ren_look.py: the drawing's colours)
 SPECK, SKIN_KEEP, TINY = 60, 4, 20   # texels: a speck's size at most; how far from the skin a colour is the skin's own shading; a purple bit's
 BLACK, BLACK_MED = (14, 13, 15), 5         # the drawing's black; the black's median (texels)
 SUIT, SUIT_LIT, SUIT_BLUR, SUIT_MIN = ((14, 13, 15), (46, 45, 48)), .54, 3., 150   # kael_nero.png's black: folds, lit
@@ -49,8 +47,6 @@ HAIR, HAIR_LIT, HAIR_BLUR, HAIR_MIN = ((129, 111, 138), (225, 214, 224)), .6, 5.
 HAIR_LINE = .5                             # the outline's width on the hair (its locks' lines thinner, as the sheet's)
 HAIR_SKIN = .6                             # but not a light texel that much skin surrounds (1.5 cm): a stroke on the skin
 JAW, JAW_LINE = (1.505, 1.535, .075), .7   # m: the jaw under the mouth (y from, to; |x| under); its outline's width
-FIN = (.3, .3, -.2)                        # the upper arms' ridges: the shoulders' and arms' share over [0], the forearms' under [1],
-                                           # convexity (the neighbours' mean under the tangent plane, per mean edge) under [2]
 PURPLE, PURPLE_BLUR = ((96, 42, 136), (169, 84, 210)), 1.5   # the drawing's purple in shadow and in light
 FACE = {'box': (-.085, .085, 1.545, 1.665), 'surf': .004, 'mid': (.002, .008), 'turn': (.10, .30), 'px': .0004}
 EARRING = {'x': .052, 'y': (1.505, 1.585), 'z': -.012, 'ramp': ((70, 28, 104), (150, 70, 200), (214, 160, 240))}
@@ -207,20 +203,6 @@ def paint(pkg, name, Q, N, UV, I, hw, zfun):
     print('paint: %d texels of specks; %d purple texels in the drawing\'s tones, %d black ones; %d earring texels; the face\'s right half from its left (%d texels, the nose at x %.3f)' % (n_sp, int(q.sum()), int(bk.sum()), int(e.sum()), n_face, xc))
 
 
-def convexity(P, I):
-    """Per vertex (welded): its neighbours' mean over the tangent plane, per its mean edge (negative: a ridge, positive: a pit)."""
-    from scipy.sparse import coo_matrix
-    _, wv = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_inverse=True); wv = wv.ravel(); nw = wv.max() + 1
-    W = wv[I]; E = np.unique(np.sort(np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]]), 1), axis=0)
-    A = coo_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr()
-    Pw = np.zeros((nw, 3)); Pw[wv] = P
-    fn = np.cross(P[I[:, 1]] - P[I[:, 0]], P[I[:, 2]] - P[I[:, 0]]); Nw = np.zeros((nw, 3)); np.add.at(Nw, W.ravel(), np.repeat(fn, 3, 0))
-    Nw /= np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12)
-    deg = np.maximum(np.asarray(A.sum(1)).ravel(), 1); el = np.linalg.norm(Pw[E[:, 0]] - Pw[E[:, 1]], axis=1)
-    se = np.zeros(nw); np.add.at(se, E[:, 0], el); np.add.at(se, E[:, 1], el)
-    return ((((A @ Pw) / deg[:, None] - Pw) * Nw).sum(1) / np.maximum(se / deg, 1e-9))[wv]
-
-
 def main(pkg):
     name, m, P, N, UV, I, jn, wn, lj, LB = load(pkg)
     if 'move' in lj: sys.exit('the look already has a shape: run tools/char_look.py first')
@@ -236,8 +218,8 @@ def main(pkg):
     flat = np.zeros(len(P)); flat[(hw > .3) & (cv == 3)] = FLAT_HAIR
     face = (hw > .5) & (cv == 2) & (P[:, 1] > 1.52)
     flat[face] = np.maximum(flat[face], FLAT_FACE * sm(*FLAT_FACE_N, nsm[face, 2]))
-    body = hw < .3; flat[body] = FLAT_BODY
-    print('flat light: %d hair vertices, %d of the face, %d of the body' % ((flat[(cv == 3)] > 0).sum(), (flat[face] > 0).sum(), (flat[body] > .5).sum()))
+    body = hw < .3; flat[body] = np.maximum(flat[body], FLAT_BODY * sm(*FLAT_BODY_N, nsm[body, 2]))
+    print('flat light: %d hair vertices, %d of the face, %d of the body\'s front' % ((flat[(cv == 3)] > 0).sum(), (flat[face] > 0).sum(), (flat[body] > .5).sum()))
     paint(pkg, name, Q, nsm.astype(np.float64), UV, I, hw, face_depth(Q, I, hw, *FACE['box']))
     # the look: its line and skin as they are; the light's normals on the new shape, the flat share, the moved vertices
     f32 = lambda a: np.frombuffer(LB, np.float32, a[1], a[0])
@@ -245,10 +227,6 @@ def main(pkg):
     line = f32(lj['line']).copy(); line[(hw > .3) & (cv == 3)] *= HAIR_LINE   # (the hair's outline thinner)
     jaw = (hw > .5) & (cv == 2) & (Q[:, 1] > JAW[0]) & (Q[:, 1] < JAW[1]) & (np.abs(Q[:, 0]) < JAW[2])   # (the jaw's line
     line[jaw] = np.maximum(line[jaw], JAW_LINE)                                                     # bold, as drawn)
-    up_arm = sum(((jn == idx[s + b]) * wn).sum(1) for s in ('Left', 'Right') for b in ('Shoulder', 'Arm'))
-    fore = sum(((jn == idx[s + 'ForeArm']) * wn).sum(1) for s in ('Left', 'Right'))
-    fin = (up_arm > FIN[0]) & (fore < FIN[1]) & (convexity(P, I) < FIN[2]); line[fin] = 0
-    print('outline: none on %d vertices of the upper arms\' ridges' % int(fin.sum()))
     look = dict(lj); blob = line.astype(np.float32).tobytes(); look['line'] = [0, int(lj['line'][1])]
     oj = len(blob); blob += jn.astype(np.uint8).tobytes(); blob = pad(blob); ow = len(blob); blob += wn.astype(np.float32).tobytes()
     look['skin'] = [[oj, int(jn.size)], [ow, int(wn.size)]]

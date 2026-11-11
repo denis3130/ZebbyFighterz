@@ -501,32 +501,13 @@ crediti, saldo 1000): Denis ha scelto di tenere le forme e ridipingere ("Solo ri
     viola fino a 30 mm² sulla pelle delle braccia diventano pelle (`TAT[5:]`). Resta qualche scheggia viola sotto la
     punta del colletto sulla spalla destra (è il bordo della punta visto da sotto o il tatuaggio a pezzi: da guardare);
   - niente inchiostro proprio sul corpo: le righe sono quelle del contorno.
-- **Zone cerchiate sulla versione 15** (versione 16; Denis: "fai come con la faccia di kael che l'hai resa perfetta"):
-  - **triangolo sulla punta del colletto** (bianco/nero): non era un triangolo rovesciato ma un buco. `tools/kael_head.py`
-    nasconde i triangoli del corpo sopra `HIDE_COLLAR` vicino al collo (li sostituisce il colletto della testa); 22 di
-    loro erano la cima delle spalle, fuori dal colletto: nascosti, dal davanti si vedeva l'interno della schiena. Ora
-    restano quelli oltre `HIDE_OUT` (5 mm) fuori dal colletto di Kael a quell'altezza e angolo;
-  - **lineette nere sulle spalle** (sul tatuaggio sinistro e sotto la punta del colletto): erano il contorno di piccole
-    creste della pelle di Meshy vicino agli scalfi, viste di taglio in guardia. Niente contorno sulle creste (vertici
-    di spalle e braccia con convessità sotto -0,2, `FIN` in `tools/kael_fix.py`: 792 vertici); il contorno vero delle
-    braccia resta;
-  - **sfumature sul gilet**: luce piatta su tutto il corpo (`FLAT_BODY`), come sulla testa: prima solo davanti, e sui
-    fianchi, sulla schiena e sulle spalle la luce del toon faceva bande morbide che i fogli non hanno;
-  - **fronte**: l'ombra della pelle sulla fronte (sopra gli occhi di 2 cm, entro 4 cm dal centro) solo entro 4 mm dai
-    capelli, come la striscia sottile del disegno sotto la frangia; più in là pelle chiara (`FOREHEAD` in
-    `tools/kael_flat.py`; 344 texel, nessuno negli occhi e nelle sopracciglia);
-  - **ascella**: i pezzi scuri trasformati in tatuaggio fuori dai deltoidi (ascelle, gomiti, bicipiti) o piccoli (sotto
-    60 texel) erano isole viola nell'ombra; ora prendono il colore della pelle più vicina (`TAT_ZONE` in
-    `tools/kael_body.py`), i tatuaggi restano sui deltoidi;
-  - resta piccolo: nell'incavo davanti alla spalla sinistra, dove il tatuaggio incontra lo scalfo, qualche pezzetto
-    viola e scuro del disegno.
 - Resta (forme di Meshy, non toccate per scelta di Denis): la fascia è una banda e non un nodo, dietro sui fianchi due
   code e il bordo viola dell'orlo, le strisce viola del davanti sono quelle di Meshy (simili, non le stesse del foglio).
 
 ## Look nel gioco
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,
 luce lisciata, testa alzata di 12° in guardia, la guardia `a191` che respira di Ren, `faceShape` (la ciocca alzata),
-`flatFace` (luce piatta: capelli, viso e dall'11/11 tutto il corpo), `paint` (`kael_painted.jpg`, la pittura pulita; il pulsante "Meshy"
+`flatFace` (capelli e viso in luce piatta), `paint` (`kael_painted.jpg`, la pittura pulita; il pulsante "Meshy"
 dell'anteprima mostra quella originale).
 
 ## Per dopo

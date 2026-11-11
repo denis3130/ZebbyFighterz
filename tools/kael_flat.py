@@ -63,8 +63,6 @@ JAW = (.028, 60., .5, 2, 100.)           # under the chin plus [0] m, off the ha
 COARSE = .0006                     # m: the skin's texels coarser than this get their ink all or none (see flatten)
 HALO = (.0025, 22., .35)           # the eyes and the brows: what is not skin (further than [1] from the skin's tones with under [2] of ink) and [0] m around it
 EYE_PIECE = (.0012, .042, .006)    # see eyes_mask(): its pieces (texels within [0] m) wholly beyond [1] m from the middle and [2] m or more from the rest
-FOREHEAD = (.02, .04, .5, .004, .004)   # see flatten(): over the eyes' line by [0] m, within [1] m of the middle, facing the front over [2]: the skin's shadow
-                                   # only within [3] m of the hair; not within [4] m of the eyes' and the brows' texels
 EYE = (.064, .030, .008, .045, .05, .004, 9, .0012)   # the eyes and the brows, never touched (Denis, 11/11: "occhi e sopracciglia non si toccano"): see eyes_zone():
 # |x - middle| under [0], |y - eyes - [2]| under [1], z over [3] (m), facing the front over [4], within [5] m of the skin's surface there ([6]: mm);
 # and whatever lies within [7] m of those
@@ -269,15 +267,6 @@ def flatten(out, It, ys, xs, ks, pos, nor, hair_v, skin_v, ear_v, collar_v, keep
         if sel is isle:   # (the other kind's colours alone)
             tab[:, [names.index('skin'), names.index('skinS')]] *= (ck == 1)[:, None]; tab[:, [names.index('hairL'), names.index('hairS')]] *= (ck == 0)[:, None]
         has = tab.sum(1) > 0; ch = has[comp[t]]; lab[t[ch]] = tab.argmax(1)[comp[t[ch]]]; ni += int(ch.sum())
-    # (the forehead: the front drawing's shadow there is a thin band under the bangs (FOREHEAD); where the model's lock lies elsewhere than the
-    # drawing's it took that lock's shadow as a broad ragged brown patch on the forehead, between the bangs, over his right brow; Denis, 11/11)
-    fh = (~hair & ~col & ~fixed & (lab == names.index('skinS')) & (p[:, 1] > eye_m + FOREHEAD[0]) & (np.abs(p[:, 0] - mid) < FOREHEAD[1])
-          & (n[:, 2] > FOREHEAD[2]))
-    hl = np.nonzero(np.isin(lab, [names.index('hairL'), names.index('hairS')]))[0]
-    if fh.any() and len(hl):
-        fi = np.nonzero(fh)[0]; dh, _ = cKDTree(p[hl]).query(p[fi]); far = fi[dh > FOREHEAD[3]]
-        if fixed.any() and len(far): de, _ = cKDTree(p[fixed]).query(p[far]); far = far[de > FOREHEAD[4]]
-        lab[far] = names.index('skin'); log('flat: the forehead\'s shadow over %.0f mm from the hair (%d texels) as the skin\'s light' % (1e3 * FOREHEAD[3], len(far)))
     # 2. the ink over it
     a_ = al[np.arange(len(use)), lab]; q = np.clip((a_ - INK[0]) / (INK[1] - INK[0]), 0, 1); a_ = q * q * (3 - 2 * q)
     a_[inner] = 0.

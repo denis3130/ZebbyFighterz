@@ -54,7 +54,6 @@ HIDE_W = .9                  # Kael's triangles on his Head bone, their share ov
 # (within COLLAR_R m of the neck's axis; per COLLAR_DY m and COLLAR_BIN degrees around it; fit up to COLLAR_FIT m),
 # COLLAR_OUT m outside it; his own above HIDE_COLLAR m hidden; NECK_Y: the neck's skin turns toward the Head from there
 COLLAR_R, COLLAR_BIN, COLLAR_DY, COLLAR_GAP, COLLAR_FIT, COLLAR_OUT, HIDE_COLLAR, NECK_Y = .1, 15, .004, .002, 1.50, .0015, 1.483, 1.50
-HIDE_OUT = .005               # m: his triangles over HIDE_COLLAR but this far outside his collar (the shoulders' tops) not hidden
 COLLAR_GROW, COLLAR_RINGS, COLLAR_F = .006, 3, (.8, 1.9)   # (see main: its cloth's neighbours; its widening's range)
 COLLAR_STIFF, COLLAR_TOP, COLLAR_SMOOTH = (1.465, 1.495, .9), (1.475, .5), 4   # (see main: its skin)
 COLLAR_Y = 1.545             # m: the bust's collar skinned as his collar's nearest point under this (his old rim's too)
@@ -385,13 +384,9 @@ def main(bust):
     fk = np.clip(fk, *COLLAR_F)   # (its points deep inside, in front's opening: no further out than the rest)
     cv = np.nonzero(collar_v)[0]; ctr = np.array([BODY_NECK[0], BODY_NECK[1]])
     Q[np.ix_(cv, [0, 2])] = ctr + (Q[np.ix_(cv, [0, 2])] - ctr) * fk[:, None]
-    kc_ = KP[KI].mean(1); kcr = np.hypot(kc_[:, 0] - BODY_NECK[0], kc_[:, 2] - BODY_NECK[1]); kcph = np.degrees(np.arctan2(kc_[:, 0] - BODY_NECK[0], kc_[:, 2] - BODY_NECK[1]))
-    # (not the shoulders' tops beside it: under the fit's top, the triangles more than HIDE_OUT m outside his collar there stay,
-    # the bust's collar does not reach them; hidden, they were holes in the vest's shoulder points, the back seen through them)
-    k_out = (kc_[:, 1] < COLLAR_FIT + COLLAR_DY) & (kcr > radius_at(R_k, CUT_Y - .02, np.minimum(kc_[:, 1], COLLAR_FIT + COLLAR_DY), kcph) + COLLAR_OUT + HIDE_OUT)
-    hide_c = np.nonzero(kvis & (kc_[:, 1] > HIDE_COLLAR) & (kcr < COLLAR_R + .03) & ~k_out)[0]
-    print('collar: the bust\'s %d points widened to his collar (x %.2f to %.2f), %d of his triangles above %.3f m hidden under it (%d outside it kept)' % (
-        len(cv), fk.min(), fk.max(), len(hide_c), HIDE_COLLAR, int((kvis & (kc_[:, 1] > HIDE_COLLAR) & (kcr < COLLAR_R + .03) & k_out).sum())))
+    hide_c = np.nonzero(kvis & (KP[KI].mean(1)[:, 1] > HIDE_COLLAR) & (np.hypot(KP[KI].mean(1)[:, 0] - BODY_NECK[0], KP[KI].mean(1)[:, 2] - BODY_NECK[1]) < COLLAR_R + .03))[0]
+    print('collar: the bust\'s %d points widened to his collar (x %.2f to %.2f), %d of his triangles above %.3f m hidden under it' % (
+        len(cv), fk.min(), fk.max(), len(hide_c), HIDE_COLLAR))
     hair_v = is_hair(vc) & ~is_skin(vc)
     # (the neck, up to the jaw in front and to NAPE_Y behind: there the nape's hair and skin joined the collar's top,
     # and stretched over it when the head tipped back in the high kick)
