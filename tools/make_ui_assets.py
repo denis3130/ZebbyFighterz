@@ -97,9 +97,9 @@ def silhouette(size=256):
     m = m.resize((size, size), Image.LANCZOS)
     rim = Image.new('RGBA', (size, size), (70, 58, 92, 255)); rim.putalpha(m.filter(ImageFilter.MaxFilter(5)))
     body = Image.new('RGBA', (size, size), (26, 22, 36, 255)); body.putalpha(m)
-    bg = Image.new('RGBA', (size, size), (20, 17, 28, 255))
-    bg.alpha_composite(rim); bg.alpha_composite(body)
-    return bg.convert('RGB')
+    out = Image.new('RGBA', (size, size), (0, 0, 0, 0))   # transparent around the shape (slots and empty sides draw their own ground)
+    out.alpha_composite(rim); out.alpha_composite(body)
+    return out
 
 
 def main():

@@ -30,7 +30,7 @@ T.test('captions are Italian', () => { T.ok(/PUGNO/.test(txt('tP'))); T.ok(/CALC
 T.test('menus and the pause button take taps while another finger is held', () => {
   const V=__VF, btn=(scr,act)=>document.querySelector('#sc-'+scr+' [data-act="'+act+'"]');
   V.menu.toTitle(); ptr($('sc-menu'),'pointerdown',80,-200,100);   // a finger resting on the menu
-  tapEl(btn('menu','train'),81); T.eq(V.G.state,'fight','menu tap'); T.eq(V.G.mode,'training');
+  tapEl(btn('menu','train'),81); T.eq(V.UI.NAV.cur,'select','menu tap'); tapEl(document.querySelector('#sc-select .uSlot'),811); tapEl(btn('arena','go'),812); T.eq(V.G.state,'fight','arena tap'); T.eq(V.G.mode,'training');
   skipIntro(); pd('stickZone',100,300,82); pm('stickZone',170,300,82); T.eq(V.inputRead(0)&B.R,B.R,'thumb on the stick');
   tapEl($('tPause'),83); T.eq(V.G.state,'pause','pause tap with the thumb on the stick');
   const opp=btn('pause','opp'); tapEl(opp,84); T.eq(V.G.S.dummy,'casuale','opponent tap');

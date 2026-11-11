@@ -10,9 +10,9 @@ T.test('keyboard: Gioca → Versus locale → the cards above it', () => { __VF.
 T.test('Versus locale opens the options', () => { __VF.navReset('menu'); uiClick('Versus locale'); T.eq(__VF.UI.NAV.cur, 'vsopts'); });
 T.test('versus options: rounds and time, sent into the match', () => { __VF.navReset('menu'); uiClick('Versus locale'); T.ok(txt('sc-vsopts').includes('Round: 3')); T.ok(txt('sc-vsopts').includes('Tempo: 99'));
   navFocusText('Round'); keyTap('ArrowRight'); navFocusText('Tempo'); keyTap('ArrowRight'); T.ok(txt('sc-vsopts').includes('∞')); T.ok(txt('sc-vsopts').includes('Round: 5'));
-  uiClick('Combatti'); T.eq(__VF.G.state, 'fight'); T.eq(__VF.G.mode, 'versus'); T.eq(__VF.G.S.need, 3); T.eq(__VF.G.S.timer, -1); __VF.menu.toTitle(); });
+  uiClick('Combatti'); T.eq(__VF.UI.NAV.cur, 'select'); keyTap('Enter'); keyTap('Enter'); keyTap('Enter'); T.eq(__VF.G.state, 'fight'); T.eq(__VF.G.mode, 'versus'); T.eq(__VF.G.S.need, 3); T.eq(__VF.G.S.timer, -1); __VF.menu.toTitle(); });
 T.test('the options stay for the session', () => { __VF.navReset('menu'); uiClick('Versus locale'); T.ok(txt('sc-vsopts').includes('Round: 5')); T.ok(txt('sc-vsopts').includes('∞')); });
 T.test('back from the options returns to the menu, focus on Versus locale', () => { __VF.navReset('menu'); navFocusText('Versus locale'); keyTap('Enter'); T.eq(__VF.UI.NAV.cur, 'vsopts'); keyTap('Escape'); T.eq(__VF.UI.NAV.cur, 'menu'); T.eq(focused(), 'Versus locale'); });
 T.test('the options screen has a touch back button', () => { __VF.navReset('menu'); uiClick('Versus locale'); uiClick('Indietro'); T.eq(__VF.UI.NAV.cur, 'menu'); });
-T.test('Allenamento starts a training fight', () => { __VF.navReset('menu'); uiClick('Allenamento'); T.eq(__VF.G.state, 'fight'); T.eq(__VF.G.mode, 'training'); __VF.menu.toTitle(); });
+T.test('Allenamento opens the fighter select', () => { __VF.navReset('menu'); uiClick('Allenamento'); T.eq(__VF.UI.NAV.cur, 'select'); T.ok(txt('sc-select').includes('Allenamento')); __VF.menu.toTitle(); });
 T.test('rematch keeps the versus options', () => { __VF.startMatch('versus', {seed: 1, rounds: 1, timeS: 60}); __VF.menu.restart(); T.eq(__VF.G.S.need, 1); T.eq(__VF.G.S.timer, 3600); __VF.menu.toTitle(); });

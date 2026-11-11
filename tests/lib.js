@@ -217,3 +217,15 @@ function mount(list) {
 function type(el, text) { el.value = text; el.dispatchEvent(new Event('input', {bubbles: true})); }
 // navFocusText(t) = give the focus to the focusable element whose text contains t.
 function navFocusText(t) { __VF.navFocus(byText(t)); }
+// slot(i) = the i-th slot of the fighter select; navFocusSlot(i) = give it the focus; focusedSlot() = the index of the focused slot (-1 if none).
+function slot(i) { return document.querySelectorAll('#sc-select .uSlot')[i]; }
+function navFocusSlot(i) { __VF.navFocus(slot(i)); }
+function focusedSlot() { return [...document.querySelectorAll('#sc-select .uSlot')].indexOf(__VF.UI.NAV.focus); }
+// toArena(mode) = from the menu to the arena screen with the keyboard: training (Ren against Kael) or versus (G1 Ren,
+// G2 Kael), so a test can do the last confirm (the one that starts the match) with the device it checks.
+function toArena(mode) {
+  __VF.menu.toTitle();
+  if (mode === 'training') { uiClick('Allenamento'); keyTap('Enter'); }
+  else { uiClick('Versus locale'); uiClick('Combatti'); keyTap('Enter'); keyTap('Enter'); }
+  if (__VF.UI.NAV.cur !== 'arena') throw new Error('arena not reached: ' + __VF.UI.NAV.cur);
+}

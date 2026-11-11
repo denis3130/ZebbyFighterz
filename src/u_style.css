@@ -270,3 +270,49 @@
 #uiLayers[data-scene="versus"] #lyHero{left:-6%;right:auto;width:50%;background-position:left bottom;background-size:auto 100%;
   -webkit-mask-image:linear-gradient(90deg,#000 58%,transparent 96%);mask-image:linear-gradient(90deg,#000 58%,transparent 96%)}
 #uiLayers[data-scene="versus"] #lyRival{left:auto;right:-4%;top:auto;bottom:0;width:42%;height:100%;opacity:1;filter:none;background-position:right bottom;-webkit-mask-image:none;mask-image:none}
+/* --- fighter select (u5_play.js), as the reference: title on top, the two sides large, the grid of slanted portraits --- */
+#sc-select{padding:0;display:none}
+#sc-select.on{display:block}
+#sc-select .uback{position:absolute;z-index:3;left:calc(env(safe-area-inset-left) + var(--u)*5);top:calc(env(safe-area-inset-top) + var(--u)*2.5)}
+.selTitle{position:absolute;z-index:2;left:50%;top:calc(env(safe-area-inset-top) + var(--u)*3);transform:translateX(-50%);display:flex;align-items:center;gap:calc(var(--u)*3);white-space:nowrap}
+.selTitle b{font-weight:600;font-size:max(18px,calc(var(--u)*5.4));color:#f6efe3;text-shadow:0 2px 8px #000}
+.selTitle i{width:calc(var(--u)*20);height:1px;background:linear-gradient(90deg,rgba(216,166,87,0),rgba(216,166,87,.7))}
+.selTitle i:last-child{background:linear-gradient(90deg,rgba(216,166,87,.7),rgba(216,166,87,0))}
+.selWho{position:absolute;z-index:2;left:50%;top:calc(env(safe-area-inset-top) + var(--u)*11);transform:translateX(-50%);font-family:var(--u-display);font-size:max(11px,calc(var(--u)*2.6));letter-spacing:.16em;color:var(--u-gold2)}
+.selFig{position:absolute;bottom:calc(var(--u)*28);height:calc(100% - var(--u)*30);width:40%;background:center bottom/contain no-repeat;pointer-events:none;
+  -webkit-mask-image:linear-gradient(180deg,#000 72%,transparent),linear-gradient(90deg,transparent,#000 22%,#000 80%,transparent);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(180deg,#000 72%,transparent),linear-gradient(90deg,transparent,#000 22%,#000 80%,transparent);mask-composite:intersect}
+#sc-select::before{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(12,10,18,.78),rgba(12,10,18,0) 30%,rgba(12,10,18,0) 70%,rgba(12,10,18,.78)),linear-gradient(180deg,rgba(12,10,18,.4),rgba(12,10,18,0) 25%,rgba(12,10,18,0) 55%,rgba(12,10,18,.7))}
+.selFig.l{left:12%;background-position:right bottom}
+.selFig.r{right:12%;background-position:left bottom}
+.selFig.r:not(.none){transform:scaleX(-1)}
+.selFig.ghost{opacity:.5;filter:saturate(.75) brightness(.8)}
+.selFig.none{opacity:.3;background-size:auto 72%}
+.selFig.locked{filter:grayscale(.4) brightness(.75)}
+.selFig.in{animation:uIn .35s var(--u-ease) both}
+.selInfo{position:absolute;z-index:2;top:calc(env(safe-area-inset-top) + var(--u)*17);width:26%;display:flex;flex-direction:column;gap:calc(var(--u)*1)}
+.selInfo.l{left:calc(env(safe-area-inset-left) + var(--u)*6)}
+.selInfo.r{right:calc(env(safe-area-inset-right) + var(--u)*6);align-items:flex-end;text-align:right}
+.selTag{font-family:var(--u-display);font-size:max(10px,calc(var(--u)*2.3));letter-spacing:.14em;color:var(--u-dim)}
+.selName{position:relative;font-style:italic;font-weight:600;font-size:max(24px,calc(var(--u)*8));line-height:1;color:#fff7ea;text-shadow:0 2px 10px #000;min-height:1em}
+.selName::after{content:'';display:block;height:6px;margin-top:4px;width:calc(var(--u)*24);background:linear-gradient(90deg,var(--u-orange),rgba(240,138,50,0));clip-path:var(--u-brush)}
+.selInfo.r .selName::after{margin-left:auto;background:linear-gradient(270deg,var(--u-orange),rgba(240,138,50,0))}
+.selStats{display:flex;flex-direction:column;gap:calc(var(--u)*.8)}
+.selLock{display:flex;align-items:center;gap:.4em;font-style:italic;font-size:max(13px,calc(var(--u)*3));color:var(--u-gold2)}
+.selGrid{position:absolute;z-index:2;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + var(--u)*15);display:grid;grid-template-columns:repeat(6,max(48px,calc(var(--u)*17)));gap:calc(var(--u)*1.2) calc(var(--u)*1.6)}
+.uSlot{position:relative;height:max(44px,calc(var(--u)*10.5));cursor:pointer;transform:skewX(-12deg);border:1px solid rgba(222,206,186,.4);background:#1b1824;overflow:hidden;transition:box-shadow .15s,border-color .15s}
+.uSlot>i{position:absolute;inset:-2px -14%;background:center 30%/cover no-repeat;transform:skewX(12deg);transition:transform .3s var(--u-ease)}
+.uSlot.soon>i{background-size:auto 92%;background-position:center bottom;opacity:.75}
+.uSlot.lock>i{filter:grayscale(.6) brightness(.55)}
+.uSlot>.uico{position:absolute;right:5px;bottom:4px;width:14px;height:14px;color:var(--u-gold2);transform:skewX(12deg)}
+.uSlot.f{border-color:#f2a24c;box-shadow:0 0 0 1px #f2a24c,0 0 16px rgba(240,138,50,.55)}
+.uSlot.f>i{transform:skewX(12deg) scale(1.08)}
+.uSlot.pick::after{content:'G1';position:absolute;left:4px;top:2px;font-family:var(--u-display);font-size:10px;letter-spacing:.08em;color:var(--u-gold2);transform:skewX(12deg)}
+.selOk{position:absolute;z-index:2;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + var(--u)*2.5);width:min(calc(var(--u)*110),92vw)}
+.selOk .ub.main{height:max(44px,calc(var(--u)*10))}
+/* --- arena (until the full screen of Task 10) --- */
+#sc-arena{justify-content:space-between;background:linear-gradient(180deg,rgba(14,12,22,.5),rgba(14,12,22,.1) 40%,rgba(14,12,22,.6))}
+#sc-arena .uback{position:absolute;left:calc(env(safe-area-inset-left) + var(--u)*5);top:calc(env(safe-area-inset-top) + var(--u)*2.5)}
+#sc-arena .uhead{margin-top:calc(var(--u)*6)}
+.arCards{display:flex;gap:calc(var(--u)*2);align-self:center}
+#sc-arena .umw{width:min(calc(var(--u)*110),92vw);align-self:center}
