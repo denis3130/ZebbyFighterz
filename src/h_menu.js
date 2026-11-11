@@ -18,6 +18,7 @@ function mnPauseRefresh() {
 function menuSync() {
   const st = G.state;
   if (st === 'fight' && NAV.cur) navClear();
+  mnEl('uiLayers').classList.toggle('off', st === 'fight' || st === 'pause');   // the layered scene only behind the menus
   mnEl('hud').style.visibility = st === 'fight' ? '' : 'hidden';   // (the pause screen covers the fight, as in the reference)
   mnEl('tPause').classList.toggle('on', st === 'fight' && !MN.rot);
   mnEl('rotate').classList.toggle('on', MN.rot);
@@ -88,7 +89,7 @@ function mnColumn(r, head, btns, fn) {
   r.appendChild(col);
 }
 function menuScreens() {
-  navRegister({id: 'menu', build(r) {
+  navRegister({id: 'menu', scene: 'menu', layers: () => ({hero: SV.lastChar || 'ren'}), build(r) {
     mnColumn(r, cLogo('l'), [{label: '1 Giocatore · Allenamento', act0: 'train'}, {label: '2 Giocatori', act0: 'vs'}],
       (a, dev) => { if (dev === 'touch') mnFullscreen(); mnStart(a === 'train' ? 'training' : 'versus', dev); });
   }});
@@ -110,6 +111,7 @@ function menuScreens() {
 }
 function menuInit() {
   navInit();
+  layersInit();
   menuScreens();
   uiTap(mnEl('tPause'), menu.pause);
   window.addEventListener('resize', menuOrient);

@@ -59,6 +59,7 @@ function navShow(entry, isBack) {
   if (!def) throw new Error('unknown screen ' + entry.id);
   const r = navRootOf(def);
   NAV.cur = entry.id;
+  if (def.scene && typeof layersSet === 'function') layersSet(def.scene, def.layers ? def.layers(entry.params) : {});   // the layered scene behind this screen
   if (def.enter) def.enter(entry.params, !!isBack);
   r.classList.add('on');
   const items = navItems();
@@ -71,9 +72,9 @@ function navShow(entry, isBack) {
   if (b) { b.classList.remove('go', 'back'); void b.offsetWidth; b.classList.add(isBack ? 'back' : 'go'); }
 }
 function navSaveFocus() { const top = NAV.stack[NAV.stack.length - 1]; if (top) top.focus = Math.max(0, navItems().indexOf(NAV.focus)); }
-function navGo(id, params) { navSaveFocus(); NAV.stack.push({id, params: params || {}, focus: null}); navShow(NAV.stack[NAV.stack.length - 1], false); }
+function navGo(id, params) { navSaveFocus(); NAV.stack.push({id, params: params || {}, focus: null}); navShow(NAV.stack[NAV.stack.length - 1], false); layersShift(1); }
 function navReplace(id, params) { NAV.stack.pop(); NAV.stack.push({id, params: params || {}, focus: null}); navShow(NAV.stack[NAV.stack.length - 1], false); }
-function navReset(id, params) { NAV.stack = [{id, params: params || {}, focus: null}]; navShow(NAV.stack[0], false); }
+function navReset(id, params) { NAV.stack = [{id, params: params || {}, focus: null}]; layersDepth(0); navShow(NAV.stack[0], false); }
 function navClear() { NAV.stack = []; navShow(null); }
 function navBack() {
   const dlg = document.getElementById('uiDlg');
@@ -84,6 +85,7 @@ function navBack() {
   if (NAV.stack.length <= 1) return;
   NAV.stack.pop();
   navShow(NAV.stack[NAV.stack.length - 1], true);
+  layersShift(-1);
 }
 
 // Focus moves to the nearest element in the direction (distance along it + 2 x distance across, between centres); none

@@ -22,7 +22,8 @@ function tick(now){
   }
   menuCheckEnd();
   const t1=performance.now();
-  if(G.state!=='boot'){renderFrame(G.S,now);hudUpdate(G.S);}
+  if(G.state==='title'||G.state==='end')uiFrame(now);   // menus and results: the layered scene covers the arena, which is not drawn
+  else if(G.state!=='boot'){renderFrame(G.S,now);hudUpdate(G.S);}
   menuFps(now,simMs,n,performance.now()-t1);
 }
 // One game step: read the inputs (player 1 is the dummy in training), advance the sim, hand its events to the effects and the HUD.
@@ -46,5 +47,5 @@ function startMatch(mode,o){
   G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
   G.mode=mode; G.state='fight'; G.acc=0; G.last=null; menuSync();
 }
-window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,navRegister,navGo,navBack,navReset,navReplace,navClear,navMove,navPress,navTab,navFocus,navPadPoll,uiTap,cLogo,cHead,cBtn,cItem,cCard,cTabs,cStepper,cStatBar,cProgress,cChip,cBack,uiToast,uiConfirm,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,modelBuild,mdData,mdPoseOf,mdMix,mdSample,mdApply,headTop,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD,UI:{get SV(){return SV;},NAV},saveDefaults,saveLoad,saveWrite,progLevel,progMatchXp,progAddXp,progRecord};
+window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,navRegister,navGo,navBack,navReset,navReplace,navClear,navMove,navPress,navTab,navFocus,navPadPoll,uiTap,cLogo,cHead,cBtn,cItem,cCard,cTabs,cStepper,cStatBar,cProgress,cChip,cBack,uiToast,uiConfirm,layersSet,layersShift,layersDepth,layersQuality,layersFrame,uiFrame,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,modelBuild,mdData,mdPoseOf,mdMix,mdSample,mdApply,headTop,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD,UI:{get SV(){return SV;},NAV,LY},saveDefaults,saveLoad,saveWrite,progLevel,progMatchXp,progAddXp,progRecord};
 boot();

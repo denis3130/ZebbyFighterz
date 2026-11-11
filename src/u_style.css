@@ -156,3 +156,29 @@
 #sc-pause{justify-content:flex-start;background:linear-gradient(90deg,rgba(14,12,22,.9) 0%,rgba(14,12,22,.62) 42%,rgba(14,12,22,.2) 100%)}
 #sc-pause .ucol{width:calc(var(--u)*46);gap:calc(var(--u)*2)}
 #sc-results{align-items:center;background:rgba(14,12,22,.66)}
+/* --- the layered scene behind the menus (u3_layers.js). Parallax moves each layer with transform; the clouds and fog scroll
+   with the separate translate property, the characters breathe with scale: they add up. All set from JS while a menu is
+   shown (layersFrame), never as CSS animations, so nothing keeps animating behind a fight. --- */
+#uiLayers{position:absolute;inset:0;overflow:hidden;pointer-events:none;background:#120f19}
+#uiLayers.off{display:none}
+#uiLayers .ly{position:absolute;pointer-events:none;background-repeat:no-repeat;transition:transform .7s var(--u-ease),opacity .5s}
+#uiLayers.still .ly{transition:none}
+#lySky{inset:-4% -8%;background-position:center 40%;background-size:cover}
+#lyArena{inset:-4% -8%;background-position:center;background-size:cover;opacity:0;filter:brightness(.62) saturate(.85)}
+#lyArena.on{opacity:1}
+#lyClouds{left:0;top:-2%;width:200%;height:42%;background-repeat:repeat-x;background-size:50% 100%;opacity:.5}
+#lyRuins{inset:-4% -8%;background-position:center 40%;background-size:cover}
+#lyFog2{left:0;bottom:16%;width:200%;height:30%;background-repeat:repeat-x;background-size:50% 100%;opacity:.55}
+#lyFog1{left:0;bottom:-2%;width:200%;height:34%;background-repeat:repeat-x;background-size:50% 100%;opacity:.7}
+#lyHero,#lyRival{background-position:center bottom;background-size:contain;transform-origin:50% 100%}
+#lyHero{right:-2%;bottom:-58%;width:62%;height:150%;filter:drop-shadow(0 0 1px rgba(255,160,90,.9)) drop-shadow(0 0 14px rgba(240,138,50,.35))}
+#lyHero[data-c="kael"]{filter:drop-shadow(0 0 1px rgba(200,160,255,.9)) drop-shadow(0 0 14px rgba(143,106,216,.45))}
+#lyRival{right:26%;bottom:-30%;width:44%;height:118%;opacity:.42;filter:brightness(.45) saturate(.7) blur(1.2px)}
+#lyGlow{right:2%;bottom:0;width:60%;height:100%;background:radial-gradient(ellipse at 55% 55%,rgba(240,138,50,.22),rgba(240,138,50,0) 62%)}
+#uiParts{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#lyShade{inset:0;background:radial-gradient(ellipse at 62% 42%,rgba(10,8,14,0) 35%,rgba(10,8,14,.55) 100%),linear-gradient(180deg,rgba(10,8,14,.25),rgba(10,8,14,0) 30%,rgba(10,8,14,0) 70%,rgba(10,8,14,.45))}
+/* per scene: only the menu shows the characters behind the interface; other screens draw their own */
+#uiLayers:not([data-scene="menu"]) #lyHero,#uiLayers:not([data-scene="menu"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
+#uiLayers[data-scene="off"] .ly,#uiLayers[data-scene="off"] #uiParts{opacity:0}
+/* quality: 'bassa' keeps the scene still (no drift, no breathing, no embers) and drops the glows; 'media' has fewer embers */
+#uiLayers.q-bassa #lyHero,#uiLayers.q-bassa #lyRival{filter:none}
