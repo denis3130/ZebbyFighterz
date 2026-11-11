@@ -1,8 +1,8 @@
 // --- style.js: Ren's own way of standing (stage 1 of "make him unique", 11/11/2026; hand-made, no new clips). ---
 // Ren's guard (preset B, chosen by Denis among A/B/C): half-open hands, the lead (left) hand at chin level a little
 // in front, the rear hand by the chin; both trace small slow circles, opposite in phase, riding the bounce of the
-// stance. The guard holds while he walks. Standing still, now and then he does something of his own:
-// tightens the bandage of his lead forearm, or rolls his neck. On the way back from a move the arms flow into it.
+// stance. The guard holds while he walks. Standing still, now and then he rolls his neck. On the way back from a
+// move the arms flow into it. (The bandage-tightening fidget was removed at Denis's request, 11/11/2026.)
 // Arms by a two-bone IK from the clip's arm (its twist kept), the forearm rolling toward the palm's way, the hand set
 // to its fingers' and palm's directions. The lead hand's targets are in the fight-line frame (origin the chest,
 // forward = toward the opponent, RB_LINE, up, side = his left); the rear hand's in the chest's own frame (Spine01:
@@ -35,7 +35,7 @@ const RS = {
   // the chest as an ellipse in the Spine01 frame (m): half-width, front, back, from Spine02 - lo to neck; arm radius
   torso: {w: .16, front: .13, back: .15, lo: .05, arm: .045},
   flow: {period: 150, lead: .035, rear: .028},   // the hands' slow circles: frames per turn, radius (m)
-  fidget: {first: 120, every: 220, len: [84, 54]},   // frames: when the first comes, how often, how long (bandage, neck)
+  fidget: {first: 120, every: 220, len: 54},   // frames: when the neck roll first comes, how often, how long
   // palm normals in each hand's own frame (from the fist curl's direction: the fingers fold toward the palm)
   palmL: new THREE.Vector3(.78, 0, .62).normalize(), palmR: new THREE.Vector3(-.79, 0, .61).normalize(),
   open: ['idle', 'intro', 'walkF', 'walkB', 'guard', 'guardC', 'block'],
@@ -120,13 +120,13 @@ function rsWeight(F, y) {
   return 0;
 }
 
-// The fidget at idle frame af: {kind: 0 bandage | 1 neck, u: 0..1 through it} or null. A pure function of af.
+// The neck roll at idle frame af: {u: 0..1 through it} or null. A pure function of af.
 function rsFidget(F) {
   if (F.act !== 'idle' && F.act !== 'intro') return null;
   const fg = RS.fidget, x = F.af - fg.first;
   if (x < 0) return null;
-  const k = Math.floor(x / fg.every), kind = k % 2, t = x - k * fg.every, len = fg.len[kind];
-  return t < len ? {kind, u: t / len} : null;
+  const t = x % fg.every;
+  return t < fg.len ? {u: t / fg.len} : null;
 }
 
 RB.post.push((md, p, F, S, y) => {
@@ -143,42 +143,9 @@ RB.post.push((md, p, F, S, y) => {
   const lf = rsVec(L.fing, v[2]).applyAxisAngle(RB_LINE, .12 * Math.sin(ph)).normalize(), lpn = rsVec(L.palm, v[3]).normalize();
   const rf = rsChest(md, W, Rr.fing, v[4]).normalize(), rpn = rsChest(md, W, Rr.palm, v[5]).normalize();
   let le = rsVec(L.elbow, new THREE.Vector3()).normalize(), re = rsChest(md, W, Rr.elbow, new THREE.Vector3()).normalize();
-  // the bandage, as one really tightens a hand wrap: the lead forearm comes up in front of the chest, nearly upright,
-  // fist at chin height, elbow down; the rear hand comes from its own side, pinches the end of the wrap at the wrist
-  // and pulls it out sideways twice. He looks at it.
-  const band = fid && fid.kind === 0, c = a => rsChest(md, W, a, new THREE.Vector3());
-  let e = 0, slide = 0;
-  if (band) {
-    const u = fid.u;
-    e = rnSm(u / .2) * (1 - rnSm((u - .8) / .2));   // the lead arm: in, hold, out
-    if (u > .3 && u < .74) { const f = ((u - .3) / .44 * 2) % 1; slide = f < .6 ? rnSm(f / .6) : 1 - rnSm((f - .6) / .4); }   // two pulls
-    lp.lerp(c([.02, .1, .27]).add(C1), e); lf.lerp(c([-.15, 1, .25]).normalize(), e).normalize();
-    lpn.lerp(c([-.35, 0, -1]).normalize(), e).normalize(); le.lerp(c([.25, -1, .1]).normalize(), e).normalize();
-    e = rnSm((u - .06) / .2) * (1 - rnSm((u - .74) / .2));   // the rear hand: a little after it, back a little before
-  }
   rsArm(md, p, W, 'L', lp, le, lf, lpn, w);
-  const W2 = rbFK(md, p, RB.W);
-  if (band) {
-    const El = W2.p[ix.LeftForeArm], Wr = W2.p[ix.LeftHand], ax = Wr.clone().sub(El).normalize();
-    // the rear hand pinches the end of the wrap at the side of the lead wrist and pulls it out sideways, twice, as one
-    // tightens a hand wrap: the hand leaves the forearm on every pull (the arms open, never pile up), its fingers
-    // pinched toward the wrist
-    const G = Wr.clone().lerp(El, .18), sh = W2.p[ix.RightArm];
-    const right = sh.clone().sub(G); right.addScaledVector(ax, -right.dot(ax)).normalize();   // from the forearm toward his right shoulder
-    const fing = c([.15, 0, 1]); fing.addScaledVector(ax, -fing.dot(ax)).normalize();   // round the front of the wrist
-    const out = right.clone().addScaledVector(RS_UP, -.25).normalize();   // the pull: out to his right, a little down
-    const wrist = G.clone().addScaledVector(right, .06).addScaledVector(fing, -.05).addScaledVector(out, .17 * slide);
-    // (coming and going it passes on the outside of the forearm, never through it)
-    rp.lerp(wrist, e).addScaledVector(right, .08 * Math.sin(Math.PI * e)); rf.lerp(fing.clone().addScaledVector(right, -.6 * (1 - slide)).normalize(), e).normalize();
-    rpn.lerp(right.clone().negate().addScaledVector(fing, -.3).normalize(), e).normalize();
-    re.lerp(c([-.8, -1, -.25]).normalize(), e).normalize();
-  }
-  rsArm(md, p, W2, 'R', rp, re, rf, rpn, w);
-  if (band) {   // he looks at what his hands do: the head a little down
-    const k = rnSm(fid.u / .2) * (1 - rnSm((fid.u - .78) / .2)) * w;
-    mdBoneTurn(p, ix.Head, MD_X, 14 * k); mdBoneTurn(p, ix.neck, MD_X, 5 * k);
-  }
-  if (fid && fid.kind === 1) {   // the neck: a slow roll, down to one side, around, up on the other, the eyes back on the opponent
+  rsArm(md, p, rbFK(md, p, RB.W), 'R', rp, re, rf, rpn, w);
+  if (fid) {   // the neck: a slow roll, down to one side, around, up on the other, the eyes back on the opponent
     const e = Math.sin(Math.PI * fid.u), a = 2 * Math.PI * fid.u;
     mdBoneTurn(p, ix.Head, MD_X, 14 * e * Math.max(0, Math.sin(a)));     // (down)
     mdBoneTurn(p, ix.Head, new THREE.Vector3(0, 0, 1), 22 * e * Math.cos(a / 2));   // (side to side)
@@ -192,18 +159,6 @@ rsPreset('B');   // Denis's choice (11/11/2026): half-open hands
 // The hands: the guard's acts as closed as the preset says; the rest as the game has them (open where openHands says).
 RN.curlFor = (it, F) => RS.open.includes(F.act) ? RS.curl : CFG.looks[it.key].openHands.includes(F.act) ? 0 : 1;
 RN.hooks.boot.push(VW => {
-  VW_PLAYS[0][1][0][1] = 480;   // the viewer's guard lasts long enough to show both fidgets
+  VW_PLAYS[0][1][0][1] = 300;   // the viewer's guard lasts long enough to show the neck roll
   VW.rsPreset = rsPreset;   // (tests and the variant sheets)
-});
-
-// The hands during the bandage: the lead one closes to a fist, the rear one grips the forearm (finger bones, after the
-// pose; RN.curlFor gives both hands the same curl).
-RN.hooks.applied.push((it, F) => {
-  const fid = rsFidget(F);
-  if (!it.fingers || !fid || fid.kind !== 0) return;
-  const u = fid.u, e = rnSm(u / .22) * (1 - rnSm((u - .8) / .2));
-  for (let i = 0; i < it.fingers.length; i++) {
-    const f = it.fingers[i], want = /^Left/.test(f.name) ? 1 : .8, k = it.curl + (want - it.curl) * e;
-    f.quaternion.copy(MD_Q1).slerp(it.fist[i], k);
-  }
 });
