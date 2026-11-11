@@ -122,6 +122,26 @@ def eyes_zone(p, n, mid, eye_m, skin):
     return out
 
 
+def eyes_mask(p, n, c, skin2, mid, eye_m, halo=None, skip=None):
+    """Per texel (place p, normal n, colour c; skin2: of a triangle with two corners skin's or more): of the eyes and the
+    brows themselves, which flatten() leaves as painted: in eyes_zone() and what lies within EYE[7] m of it (the crumbs
+    inside the zone that face away or sit a little off the skin), what is not the skin's (their whites, irises, lashes,
+    the brows and their lines) and halo m (HALO[0]) around it; the skin in the rest of the zone is the cheeks'. skip: the
+    texels that are not theirs whatever their colour (the locks kael_fringe.side_paint() paints on the temples by the
+    eyes' corners: hair's colours, they would count as brows and stay soft)."""
+    names = list(PAL); cols = np.array([PAL[k] for k in names], np.float32)
+    eye = eyes_zone(p, n, mid, eye_m, skin2)
+    if skip is not None: eye &= ~skip
+    if eye.any():
+        rest = np.nonzero(~eye & (np.abs(p[:, 0] - mid) < EYE[0] + .004) & (np.abs(p[:, 1] - eye_m - EYE[2]) < EYE[1] + .004) & (True if skip is None else ~skip))[0]
+        dd, _ = cKDTree(p[eye]).query(p[rest], distance_upper_bound=EYE[7]); eye[rest[np.isfinite(dd)]] = True
+    if eye.any():
+        e = np.nonzero(eye)[0]; feat = ~_skinish(c[e], cols, names)
+        if feat.any():
+            dd, _ = cKDTree(p[e[feat]]).query(p[e], distance_upper_bound=HALO[0] if halo is None else halo); eye[e[~np.isfinite(dd)]] = False
+    return eye
+
+
 def _split(c, cols):
     """Each colour c as each flat colour with ink over it: (the ink's share, what is left over), per flat colour."""
     v = np.array(INKC, np.float32)[None] - cols; vv = (v * v).sum(1)
@@ -145,7 +165,7 @@ def _comps(lab, j, ok):
     return connected_components(coo_matrix((np.ones(len(r), np.int8), (r, j[same])), shape=(N, N)).tocsr(), directed=False)[1]
 
 
-def flatten(out, It, ys, xs, ks, pos, nor, hair_v, skin_v, ear_v, collar_v, keep_t, mid, eye_m, chin_m, face_t=None, log=print):
+def flatten(out, It, ys, xs, ks, pos, nor, hair_v, skin_v, ear_v, collar_v, keep_t, mid, eye_m, chin_m, face_t=None, log=print, not_eye=None):
     names = list(PAL); cols = np.array([PAL[k] for k in names], np.float32); nl = len(names)
     use = np.nonzero(keep_t[ks])[0]   # (the triangles left out are not drawn)
     p = pos[use].astype(np.float64); n = nor[use].astype(np.float32); c = out[ys[use], xs[use]].astype(np.float32); T = It[ks[use]]
@@ -158,15 +178,7 @@ def flatten(out, It, ys, xs, ks, pos, nor, hair_v, skin_v, ear_v, collar_v, keep
     ear = ear_v[T].all(1) | (ear_v[T].any(1) & (c[:, 2] - c[:, 1] > 60))
     if face_t is not None: hair &= ~face_t[ks[use]]   # (not the hair's scraps that are part of the face: tools/kael_fringe.py)
     hair3 = hair & (hair_v[T].sum(1) == 3) & ~col & ~ear   # (all hair: the hair's two colours alone; a triangle on the hairline may be part skin)
-    eye = eyes_zone(p, n, mid, eye_m, skin_v[T].sum(1) >= 2)
-    if eye.any():   # (and what lies within EYE[7] m of them: the crumbs inside the zone that face away or sit a little off the skin)
-        rest = np.nonzero(~eye & (np.abs(p[:, 0] - mid) < EYE[0] + .004) & (np.abs(p[:, 1] - eye_m - EYE[2]) < EYE[1] + .004))[0]
-        dd, _ = cKDTree(p[eye]).query(p[rest], distance_upper_bound=EYE[7]); eye[rest[np.isfinite(dd)]] = True
-    if eye.any():   # (of that zone, the eyes and the brows themselves: what is not the skin's (their whites, irises, lashes, the brows and their lines)
-        # and HALO[0] m around it. The skin in the rest of the zone is cleaned as the cheeks': its soft streaks and smudges stayed)
-        e = np.nonzero(eye)[0]; feat = ~_skinish(c[e], cols, names)
-        if feat.any():
-            dd, _ = cKDTree(p[e[feat]]).query(p[e], distance_upper_bound=HALO[0]); eye[e[~np.isfinite(dd)]] = False
+    eye = eyes_mask(p, n, c, skin_v[T].sum(1) >= 2, mid, eye_m, skip=None if not_eye is None else not_eye[use])
     fixed = ear | eye
     allow = np.zeros((len(use), nl), bool)
     allow[np.ix_(~col, [names.index(k) for k in HEAD])] = True; allow[np.ix_(col, [names.index(k) for k in COLLAR])] = True
@@ -284,8 +296,8 @@ if __name__ == '__main__':   # (the pass alone, to work on it: python3 tools/kae
     from scipy import ndimage
     d = np.load(sys.argv[1]); out = d['out'].astype(np.float64); prepare(d['Q'], d['It'])
     flatten(out, d['It'], d['ys'], d['xs'], d['ks'], d['pos'], d['nor'], d['hair_v'], d['skin_v'], d['ear_v'], d['collar_v'], d['keep_t'], float(d['mid']), float(d['eye_m']), float(d['chin_m']),
-            face_t=d['face_t'] if 'face_t' in d else None)
-    TS = out.shape[0]; cov = np.zeros((TS, TS), bool); cov[d['ys'], d['xs']] = True
+            face_t=d['face_t'] if 'face_t' in d else None, not_eye=d['not_eye'] if 'not_eye' in d else None)
+    TS = out.shape[0]; cov = np.zeros((TS, TS), bool); kt = d['keep_t'][d['ks']]; cov[d['ys'][kt], d['xs'][kt]] = True   # (as tools/kael_head.py, but for the eyes' surroundings)
     _, (iy, ix) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], ix[~cov]]
     Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(os.path.join(sys.argv[2], 'kael_head.png'), optimize=True)
     print('written', os.path.join(sys.argv[2], 'kael_head.png'), os.path.getsize(os.path.join(sys.argv[2], 'kael_head.png')), 'bytes')

@@ -25,7 +25,8 @@ src/e_model.js mdHeadHide), the skin under them painted from the side images (si
 image's two locks over his right eye cut short, their tips above the brow (front_edit).
 
 face(...) paints in place and returns (the head's triangles kept, the sheet or None, per side image the triangles hidden
-from it or None, the hair's triangles that are part of the face or None)."""
+from it or None, the hair's triangles that are part of the face or None, the texels side_paint painted by the eyes' outer
+corners where the front image had painted nothing or None)."""
 import json, os
 import numpy as np
 from PIL import Image, ImageDraw
@@ -86,6 +87,7 @@ SCRAP = (40, .0025, .075)         # see face(): the hair's scraps lying on the f
 FREE_LOCK = (.006, 60, .5, .02)   # see free_locks()
 HIDE_WHOLE = 1 / 3                # see side_hide(): a lock hanging before the face is hidden whole from its side if over this share of its area is
 HIDE_IN = (.2, 80., 4)            # see side_hide(): the inner walls behind the hidden locks
+EYE_KEEP = .004                   # see face(): the eyes and the brows as painted before the side images, and this far around them (m): never the side images'
 HIDE_FOOT = (3, 70.)              # see side_hide(): the hidden locks' feet: this many rings of triangles next to them, not further round the head than [1] degrees
 LOCK_FILL = 110                   # see face(): the hair's fill colours (not its lines) are lighter than this
 
@@ -615,7 +617,7 @@ def hide_shares(Q, I, keep, hid):
     return (hs / np.maximum(tot, 1e-12))[wld]
 
 
-def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=None, jm=None, skin_tri=None, is_hair=None, hair_tri=None, free=None, is_purple=None):
+def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=None, jm=None, skin_tri=None, is_hair=None, hair_tri=None, free=None, is_purple=None, keep_zone=None, front_done=None):
     """The head's sides as their images draw them, seen from that side (Meshy's locks there hidden, side_hide): each
     texel on the side (SIDE_PAINT: from [0] degrees around the head, fading in over [1], to [3] behind the ear, fading
     out over [4]: further round it painted the profiles' neck on the hair behind the ears and their edge-on streaks on
@@ -623,15 +625,24 @@ def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_
     image draws) from the side's
     images that see it then (the profile, the 3/4), all of their drawing (the skin, its lines and shading, the locks
     they draw over the temple; not their skin on a lock standing over the face, locks), weighted by how much it faces
-    each (to the power SIDE_POW); blended over what was painted at the fade. Returns how many texels."""
+    each (to the power SIDE_POW); blended over what was painted at the fade. Returns how many texels, and which of
+    them lie by the eyes' outer corners where no image had painted (below)."""
     sm = lambda a, b, x: (lambda q: q * q * (3 - 2 * q))(np.clip((x - a) / (b - a), 0, 1))
     th = np.radians(cams['fronte']['yaw']); fwd_f = np.array([np.sin(th), 0, np.cos(th)])
     az = np.degrees(np.arctan2(pos[:, 0] - mid, pos[:, 2] - PRESS_WIN[4]))
     yw = sm(chin_m - SIDE_PAINT[2][0] - .01, chin_m - SIDE_PAINT[2][0], pos[:, 1]) * (1 - sm(eye_m + SIDE_PAINT[2][1], eye_m + SIDE_PAINT[2][1] + .01, pos[:, 1]))
     zone = feat_zone(pos, nor, fwd_f, mid, eye_m, chin_m)
+    # (by the eyes' outer corners (EYE_ZONE, beyond the features' FEAT[0]) the front image has the say, but there it sees the locks standing
+    # before the temple, not the temple, and paints nothing. The temple kept Meshy's skin with the shadow of those locks, hidden from the
+    # side, or the 3/4 image's shadow alone where that draws skin and the profile a lock: a brown patch between the ear and the eye, the tip
+    # of a drawn lock under it (Denis, 11/11, circling it on the preview). What the front image did not paint there is the side images' as
+    # the rest of the temple; not the eyes and the brows themselves (keep_zone), which stay as they were)
+    loose = np.zeros(len(ks), bool)
+    if front_done is not None and keep_zone is not None:
+        loose = ~front_done & ~keep_zone & (zone > 0) & (np.abs(pos[:, 0] - mid) > FEAT[0]); zone = np.where(loose, 0., zone)
     base = yw * (1 - zone) * ~ear_v[I[ks]].any(1) * ~collar_v[I[ks]].any(1) * keep[ks]   # (the ears too: as the side images draw them, the hair over them)
     if free is not None: base = base * ~free[ks]   # (not the locks hanging free before the face: no image draws them where they are)
-    total = 0
+    total = 0; got_loose = np.zeros(len(ks), bool)
     for side, sign in (('dx', -1), ('sx', 1)):
         wwin = base * sm(SIDE_PAINT[0], SIDE_PAINT[0] + SIDE_PAINT[1], az * sign) * (1 - sm(SIDE_PAINT[3], SIDE_PAINT[3] + SIDE_PAINT[4], az * sign))
         sel = np.nonzero(wwin > 1e-3)[0]
@@ -676,9 +687,9 @@ def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_
             lockc = sk3[ok] & is_hair(got) & ~is_skin(got); a = np.where(lockc[:, None], (a >= .5).astype(float), a)
         out[ys[k], xs[k]] = out[ys[k], xs[k]] * (1 - a) + got * a
         if done is not None: done[k] = True
-        total += int(ok.sum())
-    print('face: %d texels of the temples and the cheeks painted from the side images (as seen from the side)' % total)
-    return total
+        total += int(ok.sum()); got_loose[k] = loose[k]
+    print('face: %d texels of the temples and the cheeks painted from the side images (as seen from the side; %d by the eyes\' corners no image had painted)' % (total, int(got_loose.sum())))
+    return total, got_loose
 
 
 def skin_fill(out, I, ys, xs, ks, pos, hair_v, ear_v, collar_v, done, keep, mid, chin_m, top, is_skin, force=None, standing=None, skin_v=None):
@@ -809,7 +820,7 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
     pr_sel = pressed[I[ks[sel]]].any(1) if pressed is not None else np.zeros(len(sel), bool)
     sm = lambda a, b, x: (lambda q: q * q * (3 - 2 * q))(np.clip((x - a) / (b - a), 0, 1))
     zone = feat_zone(p, n, fwd, mid, eye_m, chin_m)
-    acc = np.zeros((len(sel), 3)); wsum = np.zeros(len(sel)); seen_any = np.zeros(len(sel), bool)
+    acc = np.zeros((len(sel), 3)); wsum = np.zeros(len(sel)); seen_any = np.zeros(len(sel), bool); front_p = np.zeros(len(sel), bool)
     under_ear = under_ears(p, mid) & skin_t[ks[sel]]; neck = (p[:, 1] < chin_m) | (p[:, 2] < 0)
     for view, cam in cams.items():
         D, F = (Dfr, Ffr) if view == 'fronte' else drawing(view); Hv, Wv = F.shape
@@ -843,11 +854,12 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
             band = (p[:, 1] > eye_m - EYE_BAND[0]) & (p[:, 1] < eye_m + EYE_BAND[1])
             w = np.where(band & FM[vi, ui] & ok, w * FACE_PRIO + FACE_PRIO * 1e-9, w)
         w = w * zone if view == 'fronte' else w * (1 - zone)   # (the features: the front image's alone)
-        if view == 'fronte': w = np.where(ok & (zone > 0), np.maximum(w, 1e-6 * zone), w)
+        if view == 'fronte': w = np.where(ok & (zone > 0), np.maximum(w, 1e-6 * zone), w); front_p = w > 0
         acc += w[:, None] * col; wsum += w
     painted = wsum > 0
     out[ys[sel[painted]], xs[sel[painted]]] = acc[painted] / wsum[painted, None]
     done = np.zeros(len(ks), bool); done[sel[painted]] = True
+    fdone = np.zeros(len(ks), bool); fdone[sel[front_p]] = True   # (painted by the front image itself: side_paint)
     under = ~painted & seen_any & (n @ fwd > .3)   # (seen, but every image draws hair there: under the bangs)
     if sheet: out[ys[sel[under]], xs[sel[under]]] = UNDER   # (without the sheet: as it was, the skin with its shadows under Meshy's locks)
     print('face: %d texels painted from the images (%d of the features from the front one), %d under the bangs in the skin\'s shadow' % (
@@ -862,11 +874,15 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
         x0, y0 = np.clip(np.floor(u).astype(int), 0, W - 2), np.clip(np.floor(v).astype(int), 0, H - 2); fx, fy = (u - x0)[:, None], (v - y0)[:, None]
         col = (Dfr[y0, x0] * (1 - fx) + Dfr[y0, x0 + 1] * fx) * (1 - fy) + (Dfr[y0 + 1, x0] * (1 - fx) + Dfr[y0 + 1, x0 + 1] * fx) * fy
         out[ys[sel[k]], xs[sel[k]]] = col[k]
-        done[sel[k]] = True
+        done[sel[k]] = True; fdone[sel[k]] = True
         print('face: %d texels of the forehead painted with the front image\'s bangs' % int(k.sum()))
+    temple = None
     if hide is not None:
-        side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=done, jm=JM, skin_tri=skin_t, is_hair=is_hair,
-                   hair_tri=hair_v[I].sum(1) >= 2, free=free, is_purple=is_purple)
+        import kael_flat   # (the eyes and the brows as its pass keeps them, EYE_KEEP around them)
+        kk = np.nonzero(keep[ks])[0]; eyes_x = np.zeros(len(ks), bool)
+        eyes_x[kk] = kael_flat.eyes_mask(pos[kk].astype(np.float64), nor[kk].astype(np.float32), out[ys[kk], xs[kk]].astype(np.float32), (is_skin(vc)[I].sum(1) >= 2)[ks[kk]], mid, eye_m, halo=EYE_KEEP)
+        _, temple = side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=done, jm=JM, skin_tri=skin_t, is_hair=is_hair,
+                               hair_tri=hair_v[I].sum(1) >= 2, free=free, is_purple=is_purple, keep_zone=eyes_x, front_done=fdone)
         skin_fill(out, I, ys, xs, ks, pos, hair_v, ear_v, collar_v, done, keep, mid, chin_m, top, is_skin, force, locks[HIDE_ORDER[0]], is_skin(vc))
     if lock_t is not None:   # (the skin's colour left on the standing locks, Meshy's own and the side images': as the nearest hair's, not its lines')
         from scipy.spatial import cKDTree
@@ -876,7 +892,7 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
         if bad.any() and len(src):
             _, j_ = cKDTree(pos[src]).query(pos[lt[bad]]); out[ys[lt[bad]], xs[lt[bad]]] = out[ys[src[j_]], xs[src[j_]]]
         print('face: %d skin-coloured texels on the locks standing over the head as the hair next to them' % int(bad.sum()))
-    if not sheet: return keep, None, hide, force
+    if not sheet: return keep, None, hide, force, temple
     # the front image's bangs: a sheet in front of the face (its hair and the lines between its locks, over the face's skin)
     FMf = face_mask(Dfr, Ffr, is_skin, is_hair)
     Za, _ = view_depth(Q, Ik, fr, W, H)
@@ -916,4 +932,4 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
     al = np.zeros((th_, tw)); bm = bangs[max(0, y0):y1, max(0, x0):x1]; al[max(0, y0) - y0:max(0, y0) - y0 + bm.shape[0], max(0, x0) - x0:max(0, x0) - x0 + bm.shape[1]] = bm
     rgba = np.dstack([pad, al * 255]).clip(0, 255).astype(np.uint8)
     print('face: the front image\'s bangs a sheet of %d points, %d triangles (%d x %d px of it)' % (len(sp), len(tris), tw, th_))
-    return keep, (sp, suv, np.array(tris, np.int64), rgba), hide, force
+    return keep, (sp, suv, np.array(tris, np.int64), rgba), hide, force, temple

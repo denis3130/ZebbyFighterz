@@ -338,6 +338,29 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
   - provato e lasciato: ridisporre le isole dell'atlante con spazio tra loro (per quando la testa è piccola e la
     scheda grafica legge le copie ridotte della pittura): a 130 pixel i punti lontani dall'ideale passavano solo dal
     14,3% al 13,8%, con un'immagine grande il doppio. Non è quella la causa di ciò che resta a quella grandezza.
+- **Tempia tra orecchio e occhio, puntini sulla guancia** (11/11, Denis sull'anteprima pubblicata, cerchiando la
+  tempia destra vista da dietro di lato: lì c'era una macchia marrone con sotto la punta di una ciocca dipinta, dove
+  il suo disegno di profilo ha le ciocche pulite davanti all'orecchio):
+  - **causa**: accanto agli angoli esterni degli occhi (`EYE_ZONE`, fino a 56 mm dal centro del viso) dipinge solo il
+    disegno di fronte, perché le ciocche dei disegni di lato non finiscano sugli occhi. Ma di fronte quella striscia
+    di tempia è dietro le ciocche: il disegno di fronte lì non dipingeva niente. La striscia restava con la pelle di
+    Meshy e l'ombra cotta delle ciocche che di lato spariscono (`SHADE`, "sotto le ciocche"), oppure con la sola ombra
+    del disegno di tre quarti dove quello disegna pelle e il profilo una ciocca. Lo stesso su tutti e due i lati;
+  - **cura** (`side_paint` e `face` in `tools/kael_fringe.py`): quello che il disegno di fronte non ha dipinto
+    (`front_done`), oltre la zona dei lineamenti (`FEAT[0]`, 42 mm) e fuori dagli occhi e dalle sopracciglia veri
+    (`eyes_mask` di `tools/kael_flat.py`, più 4 mm: `EYE_KEEP`), è dei disegni di lato come il resto della tempia:
+    ora lì ci sono le ciocche del profilo, intere, fino alla punta sulla guancia. Quei texel non contano come
+    "sopracciglia" nel passaggio dei colori piatti (`not_eye`): sono capelli e vengono puliti come gli altri;
+  - **puntini sulla guancia** (si vedevano nella stessa foto): i texel dei triangoli tolti dal modello (le ciocche di
+    Meshy sopra il viso) tenevano la loro pittura da capelli, e i triangoli disegnati accanto nell'atlante la
+    prendevano lungo i bordi: puntini lavanda e neri sulla guancia sotto la punta di una ciocca. Ora i texel che
+    nessun triangolo disegnato usa prendono il colore del texel disegnato più vicino (`tools/kael_head.py`, alla
+    scrittura della pittura), tranne entro 6 texel dagli occhi, dalle sopracciglia e dagli orecchini (`PAD_KEEP`): lì
+    resta tutto com'era;
+  - **occhi e sopracciglia**: geometria e ciocche nascoste identiche (`kael_head.bin` e `.json` uguali byte per
+    byte); nella pittura, dentro la maschera di occhi e sopracciglia cambiano 13 texel su 52.721, e non sono né occhio
+    né sopracciglio (un'ombra scura vecchia oltre la coda del sopracciglio destro, presa dalla maschera per il
+    colore);
 - **Come cercare un difetto** (strumenti di lavoro, non nel repository): registrare quale passaggio di
   `tools/kael_head.py` ha scritto per ultimo ogni texel (avvolgendo `paint`, `side_paint`, `skin_fill` e confrontando
   la texture prima e dopo), poi disegnare la testa in software da qualunque angolo colorando ogni pixel per passaggio o

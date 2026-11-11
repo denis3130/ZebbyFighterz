@@ -69,6 +69,7 @@ SKIN_SPREAD = 30.
 # hair under other locks (hair[0], [1] as the skin's), turned from Lh (a light from above: a front light put the whole
 # back of the head in shadow, the images draw it lit from every side) under hair[2], and where Meshy's own is darkest (the share hair[3]); their edges smoothed
 # over blur texels (skin, hair). None: the texture's own shading.
+PAD_KEEP = 6                       # texels: see the texture's padding in main()
 SHADE = {'L': (0., .5, .87), 'Lh': (0., 1., .2), 'skin': (.006, .0015, -.15), 'neck': .004, 'hair': (.005, .004, -.2, .13), 'blur': (.8, 2.5)}
 # the head painted from Denis's six head images (10/11/2026, Denis: "l'hai migliorato ma troppo poco"): their cameras
 # (cams: tools/kael_hair_fit.py, fit on the face's skin), each of the hair's texels from the views that see it and draw
@@ -453,11 +454,11 @@ def main(bust):
             out[ys[gi[nr]], xs[gi[nr]]] = out[ys[fill[jj[nr]]], xs[fill[jj[nr]]]]; out[ys[gi[~nr]], xs[gi[~nr]]] = np.array(HAIR[1], float)
             print('hair: %d grey texels on the hair\'s triangles as the nearest painted hair' % len(gi))
         print('painted from the images: %d texels (%.0f%% of the head\'s)' % (n_p, 100 * n_p / len(ys)))
-    keep_t, card, sides_t, face_t = np.ones(len(It), bool), None, None, None
+    keep_t, card, sides_t, face_t, temple_x = np.ones(len(It), bool), None, None, None, None
     if FACE:   # the face from the images, Meshy's locks over it out, the front image's bangs a sheet (tools/kael_fringe.py)
         from kael_fringe import face as face_paint
         cams_ = json.load(open(os.path.join(ROOT, PAINT['cams'])))
-        keep_t, card, sides_t, face_t = face_paint(out, Q, Nq, UV, It, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, FACE_MID, eye_m, chin_m, cams_, is_skin, is_hair, sheet=FACE == 'sheet', paint_bangs=FACE in ('paint', 'all'), paint_all=FACE == 'all', pressed=None if press_w is None else press_w > .05, sides=FACE == 'paint' and SIDES, bary=bary, free=free_t, piece=piece_t)
+        keep_t, card, sides_t, face_t, temple_x = face_paint(out, Q, Nq, UV, It, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, FACE_MID, eye_m, chin_m, cams_, is_skin, is_hair, sheet=FACE == 'sheet', paint_bangs=FACE in ('paint', 'all'), paint_all=FACE == 'all', pressed=None if press_w is None else press_w > .05, sides=FACE == 'paint' and SIDES, bary=bary, free=free_t, piece=piece_t)
     # the earrings in the drawing's purples (EAR_TONES: by how much each facet faces EAR_LIGHT), the bead and the hook in
     # its silver (EAR_SILVER: lit, shaded); their lines black
     # the shelf between the neck and the collar's rim: the bust's collar is pushed out to Kael's, the neck's skin is not, and the
@@ -504,11 +505,20 @@ def main(bust):
     if os.environ.get('KAEL_FLAT_DUMP'):   # (the state before the flat colours' pass, to work on that pass alone: tools/kael_flat.py's own main)
         np.savez(os.environ['KAEL_FLAT_DUMP'], out=out.astype(np.float32), It=It, ys=ys, xs=xs, ks=ks, pos=pos.astype(np.float32), nor=nor.astype(np.float32), hair_v=hair_v, skin_v=is_skin(vc),
                  ear_v=ear_v, collar_v=collar_v, keep_t=keep_t, mid=FACE_MID, eye_m=eye_m, chin_m=chin_m, free_t=free_t if free_t is not None else np.zeros(len(It), bool), Q=Q,
-                 face_t=face_t if face_t is not None else np.zeros(len(It), bool))
+                 face_t=face_t if face_t is not None else np.zeros(len(It), bool), not_eye=temple_x if temple_x is not None else np.zeros(len(ks), bool))
+    fixed_x = None
     if FLAT:   # (the drawings' flat colours, the eyes and the brows left as painted: tools/kael_flat.py)
         import kael_flat
-        kael_flat.prepare(Q, It); kael_flat.flatten(out, It, ys, xs, ks, pos, nor, hair_v, is_skin(vc), ear_v, collar_v, keep_t, FACE_MID, eye_m, chin_m, face_t=face_t)
-    cov = np.zeros((TS, TS), bool); cov[ys, xs] = True
+        kael_flat.prepare(Q, It); fl_ = kael_flat.flatten(out, It, ys, xs, ks, pos, nor, hair_v, is_skin(vc), ear_v, collar_v, keep_t, FACE_MID, eye_m, chin_m, face_t=face_t, not_eye=temple_x)
+        fixed_x = fl_[2][fl_[3]]   # (the eyes', the brows' and the earrings' texels, left as painted)
+    # (the texels no drawn triangle holds as the nearest drawn one's. Those of the triangles left out too (Meshy's locks over the face): they kept
+    # their hair's paint, and the drawn triangles next to them in the texture picked it up along their edges, lavender and black dots on the
+    # cheek under a lock's tip; Denis's screenshot of 11/11. Not within PAD_KEEP texels of the eyes', the brows' and the earrings': there
+    # every texel stays as it was, nothing of theirs changes, "occhi e sopracciglia non si toccano")
+    cov = np.zeros((TS, TS), bool); kt = keep_t[ks]; cov[ys[kt], xs[kt]] = True
+    if fixed_x is not None and len(fixed_x):
+        fm = np.zeros((TS, TS), bool); fm[ys[fixed_x], xs[fixed_x]] = True; allc = np.zeros((TS, TS), bool); allc[ys, xs] = True
+        cov |= allc & ndimage.binary_dilation(fm, iterations=PAD_KEEP)
     _, (iy, ix) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], ix[~cov]]
     # (lossless: a JPEG smears every border between two flat colours, and halves the colours' resolution)
     Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(os.path.join(KAEL_PKG, 'kael_head.png'), optimize=True)
