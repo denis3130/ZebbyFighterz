@@ -340,7 +340,10 @@ function rkAddMove(id, m) {
     let up = rkTrack(k.up, f);
     if (k.bumps) for (const [a, b, h] of k.bumps) up += h * rkArc(f, a, b);
     rkFoot(s, c, st, L, rkTrack(k.heel, f), rkTrack(k.yaw, f), rkTrack(k.x, f) - root, up, rkTrack(k.toe, f));
-    if (k.free) c.auto = false;
+    // a foot in the air (a kick): no automatic heel, and not the standing foot's knee rule (the knee kept over the toes:
+    // with the foot pointed along the leg there is no "over the toes", and the rule would switch on and off): the IK
+    // tells a standing foot by its contact point being the toe tip itself, so the free foot gets an equal copy
+    if (k.free) { c.auto = false; c.loc = L.tpFree || (L.tpFree = L.tp.clone()); }
   };
 }
 // The arm targets of move m at frame f: each arm between the poses of its keys.
@@ -456,10 +459,14 @@ rkAddMove('kick', {
   feet: {
     R: {x: [[0, 0], [.6, 0], [4, .3], [27.8, .3], [32, 0]], bumps: [[0, 5, .025], [27, 33, .02]],
       heel: [[0, 0], [6, 0], [9, 10], [17, 12], [22, 6], [25, 0]], yaw: [[0, 0], [7, 0], [12, -65], [18, -65], [22.5, -6], [23.5, 0]]},   // (turned back while still on its tip)
-    L: {free: true, heel: [[0, 0], [3.5, 0], [5, 16], [25, 16], [27, 0]],   // (it lands on its toes, then the heel comes down)
+    // the kicking foot: up on its toes, off the floor on frame 5, folded under the knee (frame 9.5), out at hip height
+    // (14), back under the knee (21), down on its toes (25), the heel down (27). Its pitch in the world (heel and toe
+    // together: the heel's lift tips the toes down) follows the shin: about 50 degrees down while the shin hangs under the
+    // knee, near level when the leg is out straight (the foot continues the leg's line, the toes pointed)
+    L: {free: true, heel: [[0, 0], [3.5, 0], [5, 16], [25, 16], [27, 0]],
       x: [[0, 0], [5, 0], [9.5, -.2], [14, .36, 'whip'], [16, .36], [21, -.2], [24.8, 0]],
       up: [[0, 0], [5, 0], [9.5, .42], [14, .77, 'whip'], [16, .77], [21, .42], [25, 0]],
-      toe: [[0, 0], [5, 0], [9.5, -30], [14, -60], [16, -60], [21, -30], [24.5, 0]]},
+      toe: [[0, 0], [5, 0], [9.5, -34], [14, 11, 'whip'], [16, 11], [21, -34], [24.5, 0]]},
   },
   arms: {L: [[0, 'guard'], [6, 'kLow'], [18, 'kLow'], [28, 'guard']], R: [[0, 'guard'], [6, 'rChin'], [22, 'rChin'], [30, 'guard']]},
   poses: {
