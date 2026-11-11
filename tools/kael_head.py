@@ -77,6 +77,8 @@ SHADE = {'L': (0., .5, .87), 'Lh': (0., 1., .2), 'skin': (.006, .0015, -.15), 'n
 PAINT = {'cams': 'docs/meshy/kael_head_cams.json', 'seen': .002, 'min': .2, 'pow': 16., 'line': 3, 'ink': 90}
 # the face (tools/kael_fringe.py): painted from the images, Meshy's locks over it out, the front image's bangs a sheet in
 # front of it; FACE_MID: the face's middle (x, m)
+PRESS_SIDES = False              # (FACE 'paint': the temples pressed, see tools/kael_fringe.py press; tried: the front image's locks by the eyes went too)
+SIDES = True                     # (FACE 'paint': Meshy's locks over the temples hidden when seen from the side, the sides painted from the side images: tools/kael_fringe.py side_hide)
 FACE, FACE_MID = 'paint', .0076   # ('sheet': Meshy's locks over the face out, the front image's bangs a sheet; 'paint': Meshy's locks
                                   # over the eyes and the forehead out, the front image's bangs painted on the forehead; 'all': and all of the
                                   # circled area, hair or skin, from the images that see it; 'skin': only the face painted)
@@ -131,10 +133,9 @@ def paint(out, Q, I, ys, xs, ks, pos, nor, sel):
     from cel_light import view_depth
     cams = json.load(open(os.path.join(ROOT, PAINT['cams'])))
     idx = np.nonzero(sel)[0]; acc = np.zeros((len(idx), 3)); wsum = np.zeros(len(idx))
+    from kael_fringe import drawing
     for view, cam in cams.items():
-        D = np.asarray(Image.open(os.path.join(ROOT, 'docs/ref/personaggi/kael_testa_%s.png' % view)).convert('RGB')).astype(np.float64); H, W = D.shape[:2]
-        bg = np.median(D[5:40, 5:40].reshape(-1, 3), 0)
-        F = ndimage.binary_fill_holes(ndimage.binary_opening(np.abs(D - bg).sum(2) > 30, iterations=1))
+        D, F = drawing(view); H, W = D.shape[:2]   # (the front one with the locks over its left eye cut short: kael_fringe.front_edit)
         F = ndimage.binary_erosion(F, iterations=PAINT['line'])
         Z, proj = view_depth(Q, I, cam, W, H); u, v, dep = proj(pos[idx])
         ui, vi = np.clip(np.round(u).astype(int), 0, W - 1), np.clip(np.round(v).astype(int), 0, H - 1)
@@ -337,6 +338,10 @@ def main(bust):
     Wf = Ww[weld]
     top = np.argsort(-Wf, 1)[:, :4]; tw = np.take_along_axis(Wf, top, 1); tw /= np.maximum(tw.sum(1, keepdims=True), 1e-12)
     print('skin: %d on the Head (%d earrings), %d of the neck and the nape toward it (%d of them hair), %d of the collar' % (int(head.sum()), int(ear_v.sum()), len(neck), int(hair_v[neck].sum()), len(cv)))
+    press_w = None
+    if FACE == 'paint' and PRESS_SIDES:   # (the temples and the cheeks pressed onto the skull as the profiles draw them: tools/kael_fringe.py press)
+        from kael_fringe import press
+        press_w = press(Q, Nq, It, vc, hair_v, json.load(open(os.path.join(ROOT, PAINT['cams']))), FACE_MID, eye_m, chin_m, is_skin, is_hair)
     # Kael's own head hidden, and his collar's top (above)
     hide = np.unique(np.r_[np.nonzero(hid)[0], hide_c]).astype(np.uint32)
     print('Kael\'s head: %d triangles hidden (%d of his old head, %d of his collar\'s top)' % (len(hide), int(hid.sum()), len(hide_c)))
@@ -390,11 +395,11 @@ def main(bust):
     if PAINT:   # the head painted from Denis's six head images, see PAINT
         n_p = paint(out, Q, It, ys, xs, ks, pos, nor, body[ys, xs] & ~ear_v[It[ks]].any(1) & ~collar_v[It[ks]].any(1))   # (the hair: on the face the image's bangs fell on the model's skin)
         print('painted from the images: %d texels (%.0f%% of the head\'s)' % (n_p, 100 * n_p / len(ys)))
-    keep_t, card = np.ones(len(It), bool), None
+    keep_t, card, sides_t = np.ones(len(It), bool), None, None
     if FACE:   # the face from the images, Meshy's locks over it out, the front image's bangs a sheet (tools/kael_fringe.py)
         from kael_fringe import face as face_paint
         cams_ = json.load(open(os.path.join(ROOT, PAINT['cams'])))
-        keep_t, card = face_paint(out, Q, Nq, UV, It, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, FACE_MID, eye_m, chin_m, cams_, is_skin, is_hair, sheet=FACE == 'sheet', paint_bangs=FACE in ('paint', 'all'), paint_all=FACE == 'all')
+        keep_t, card, sides_t = face_paint(out, Q, Nq, UV, It, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, FACE_MID, eye_m, chin_m, cams_, is_skin, is_hair, sheet=FACE == 'sheet', paint_bangs=FACE in ('paint', 'all'), paint_all=FACE == 'all', pressed=None if press_w is None else press_w > .05, sides=FACE == 'paint' and SIDES, bary=bary)
     # the earrings in the drawing's purples (EAR_TONES: by how much each facet faces EAR_LIGHT), the bead and the hook in
     # its silver (EAR_SILVER: lit, shaded); their lines black
     jt = np.nonzero(ear_v[It[ks]].all(1))[0]
@@ -412,9 +417,24 @@ def main(bust):
     Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(os.path.join(KAEL_PKG, 'kael_head.jpg'), quality=90, optimize=True)
     # the package (as tools/ren_head.py's)
     It = It[keep_t]   # (without Meshy's locks over the face, FACE)
-    line_w = np.where(ear_v, EAR_LINE, np.where(hair_v, HAIR_LINE_W, 1.))
+    src = np.arange(len(Q)); hmask = None
+    if sides_t:   # (Meshy's locks hidden from the side images, per image: their triangles' corners split from the rest's, each copy with the views it is hidden from; src/e_model.js mdHeadHide)
+        from kael_fringe import HIDE_ORDER
+        tm = np.zeros(len(It), np.int64)
+        for b_, view in enumerate(HIDE_ORDER): tm |= sides_t[view][keep_t].astype(np.int64) << b_
+        pair = It.astype(np.int64) * 16 + tm[:, None]; up, inv_ = np.unique(pair.ravel(), return_inverse=True)
+        src = up // 16; hmask = up % 16; It = inv_.reshape(-1, 3)
+        print('hidden from the side images: %s triangles; %d corners split from their neighbours\' (%d vertices in use)' % (
+            ', '.join('%s %d' % (v_, int((tm >> b_ & 1).sum())) for b_, v_ in enumerate(HIDE_ORDER)), len(src) - len(np.unique(src)), len(src)))
+    Q, Nq, UV, top, tw, ear_v, hair_v, collar_v, vc = Q[src], Nq[src], UV[src], top[src], tw[src], ear_v[src], hair_v[src], collar_v[src], vc[src]
+    if press_w is not None: press_w = press_w[src]
+    # (the hair's outline: its vertices and those of the dark lines Meshy painted between its locks, neither hair's colour nor skin's:
+    # at the full width and not pushed back, their outline was black shards along the locks, over the brow from the side)
+    hairish = hair_v | (~is_skin(vc) & ~ear_v & ~collar_v & (Q[:, 1] > JAW_Y))
+    line_w = np.where(ear_v, EAR_LINE, np.where(hairish, HAIR_LINE_W, 1.))
+    if press_w is not None: line_w = line_w * (1 - np.clip(press_w, 0, 1)) ** 2   # (the pressed temples: their lines the profiles' own, painted)
     lb, n_over = face_back(Q, It, is_skin(vc) & ~hair_v & (Q[:, 1] > JAW_Y), hair_v)
-    if PAINT: lb = np.maximum(lb, np.where(hair_v, HAIR_BACK, 0.))   # (the hair's outline pushed back: only the mane's outer edge drawn, the lines inside it the images')
+    if PAINT: lb = np.maximum(lb, np.where(hairish, HAIR_BACK, 0.))   # (the hair's outline pushed back: only the mane's outer edge drawn, the lines inside it the images')
     print('outline: the hair\'s %.2f of the width, the earrings\' %.2f; %d hair vertices over the face pushed back %.0f mm (%d with the smoothing)' % (
         HAIR_LINE_W, EAR_LINE, n_over, 1000 * FRINGE[0], int((lb > 0).sum())))
     pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
@@ -425,9 +445,15 @@ def main(bust):
     put('pos', Q.astype(np.float32)); put('nor', Nq.astype(np.float32)); put('uv', UV.astype(np.float32))
     put('jnt', top.astype(np.uint8)); put('wgt', tw.astype(np.float32))
     put('idx', It.astype(np.uint16 if len(Q) < 65536 else np.uint32)); put('hide', hide)
-    flat_v = np.ones(len(Q))
+    flat_v = np.ones(int(src.max()) + 1)
     if len(cv): flat_v[cv] = flat_c
+    flat_v = flat_v[src]
     put('lb', lb.astype(np.float32)); put('flat', flat_v.astype(np.float32)); put('line', line_w.astype(np.float32))
+    if hmask is not None:   # (hidden from each side image: src/e_model.js mdHeadHide, by the camera's angle around the head between the images')
+        from kael_fringe import PRESS_WIN, HIDE_ORDER
+        put('hv', np.stack([(hmask >> b_ & 1) for b_ in range(4)], 1).astype(np.float32))
+        cams_ = json.load(open(os.path.join(ROOT, PAINT['cams'])))
+        jo['hideAz'] = [round(float(FACE_MID), 5), PRESS_WIN[4]] + [cams_[v_]['yaw'] for v_ in ('profilo_dx', '34_dx', 'fronte', '34_sx', 'profilo_sx')]
     open(os.path.join(KAEL_PKG, 'kael_head.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_head.json'), 'w'), separators=(',', ':'))
     for ext in ('json', 'bin', 'png'):
         fp = os.path.join(KAEL_PKG, 'kael_fringe.' + ext)

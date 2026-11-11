@@ -122,16 +122,19 @@ function modelBuild(key) {
     const hm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
     // flat light: the sheet's own shading is in its texture (the hit flash's emissive kept); per vertex where the head
     // says so (aFlat: its collar's outside lit as the body, one teal with the vest)
-    const headFlat = perV => sh => {
+    const hideU = head.geo.attributes.aHide ? {value: new THREE.Vector4()} : null;
+    const headFlat = (perV, hu) => sh => {
       if (perV) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
       sh.fragmentShader = (perV ? 'varying float vFlat;\n' : '') + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
         '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + (perV ? 'vFlat * ' : '') + MD_HEAD_FLAT.toFixed(2) + ');');
+      if (hu) mdHideShader(sh, hu);
     };
     const perV = !!head.geo.attributes.aFlat;
-    hm.onBeforeCompile = headFlat(perV); hm.customProgramCacheKey = () => perV ? 'headV' : 'head';
-    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), per: head.geo.attributes.aLine ? ' * aLine' : '', back: MD_HEAD_LINE[1], perBack: !!head.geo.attributes.aBack}));
+    hm.onBeforeCompile = headFlat(perV, hideU); hm.customProgramCacheKey = () => (perV ? 'headV' : 'head') + (hideU ? 'H' : '');
+    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), per: head.geo.attributes.aLine ? ' * aLine' : '', back: MD_HEAD_LINE[1], perBack: !!head.geo.attributes.aBack, hide: hideU}));
     hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
     hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
+    if (hideU) hmesh.onBeforeRender = hline.onBeforeRender = mdHeadHide(hmesh, skel, B('Head'), head.j.hideAz, hideU);
     head.mesh = hmesh; head.line = hline; head.mat = hm;
     if (head.fringe) {   // (flat as the head; alpha-tested: the locks' edges are the sheet's lines; no outline: drawn in it)
       const ft = new THREE.Texture(new Image()); ft.flipY = false; ft.image.src = head.fringe.png;
@@ -220,17 +223,48 @@ function mdFaceShow(face, show) { face.want = show; face.on.value = face.ready &
 // An outline shell's material (the back faces drawn in the outline colour): o = {skinning, w (model units: the push
 // along the normals, '' for none), per (' * aLine': times the per-vertex width), back (m: pushed away from the camera,
 // so the shell shows around the silhouette and not through the body's folds)}.
-function mdLineMat(o) {   // (perBack: a per-vertex extra push back, m, in the attribute aBack)
+function mdLineMat(o) {   // (perBack: a per-vertex extra push back, m, in the attribute aBack; hide: the head's uHide, mdHideShader)
   const m = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide, skinning: !!o.skinning}), per = o.per || '', pb = o.perBack ? ' + aBack' : '';
   m.onBeforeCompile = sh => {
     let v = (per ? 'attribute float aLine;\n' : '') + (pb ? 'attribute float aBack;\n' : '') + sh.vertexShader;
     if (o.w) v = v.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normal * ' + o.w + per + ';');
-    // (the per-vertex push goes along the line of sight: where it is drawn on the screen does not move, only its depth)
-    if (o.back) v = v.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.z -= ' + o.back.toFixed(4) + ';' + (pb ? '\n\tmvPosition.xyz *= 1.0 + aBack / length(mvPosition.xyz);' : '') + '\n\tgl_Position = projectionMatrix * mvPosition;');
+    // (the per-vertex push goes along the line of sight: where it is drawn on the screen does not move, only its depth; with an
+    // orthographic camera, tools/sheet_scan.py's, that is its z: scaled from the eye as for a perspective one, the hair's outline
+    // moved up to 6 mm up the screen there, black shards over the locks that the game does not have)
+    if (o.back) v = v.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.z -= ' + o.back.toFixed(4) + ';'
+      + (pb ? '\n\tif (isOrthographic) mvPosition.z -= aBack; else mvPosition.xyz *= 1.0 + aBack / length(mvPosition.xyz);' : '') + '\n\tgl_Position = projectionMatrix * mvPosition;');
     sh.vertexShader = v;
+    if (o.hide) mdHideShader(sh, o.hide);
   };
-  m.customProgramCacheKey = () => [o.w, per, o.back, pb].join('|');
+  m.customProgramCacheKey = () => [o.w, per, o.back, pb, o.hide ? 'H' : ''].join('|');
   return m;
+}
+
+// The head's locks the side images do not draw (tools/kael_fringe.py side_hide: Kael's, over his temples and cheeks; the
+// front image draws them by his eyes): left out of shader sh as the camera is where an image's was (aHide: per vertex,
+// 1 where hidden from the profile on his right, the 3/4 on his right, on his left, the profile on his left; hu.value: how
+// much the camera is at each, mdHeadHide) over a half. Whole triangles (their corners are split from the rest's).
+function mdHideShader(sh, hu) {
+  sh.uniforms.uHide = hu;
+  sh.vertexShader = 'attribute vec4 aHide;\nuniform vec4 uHide;\nvarying float vHide;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvHide = dot(aHide, uHide);');
+  sh.fragmentShader = 'varying float vHide;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\n\tif (vHide > .5) discard;');
+}
+
+// Before the head is drawn: where the camera is around it, seen from the Head bone (its bind frame: the package's, x his
+// left, z his front): a = (camera's x - az[0], z - az[1]) degrees around; az[2..6] the images' (the profile on his right,
+// the 3/4 there, the front, the 3/4 on his left, the profile there, ascending): hu.value the share of each side image,
+// linear between the two the camera is between (the front's: nothing hidden), the nearest beyond them. hmesh: the head
+// (its bind matrices), skel, hb the Head bone.
+const MD_HV = [new THREE.Matrix4(), new THREE.Matrix4(), new THREE.Vector3()], MD_HW = [0, 0, 0, 0, 0];
+function mdHeadHide(hmesh, skel, hb, az, hu) {
+  const hi = skel.bones.indexOf(hb), A = az.slice(2);
+  return (renderer, scene, camera) => {
+    const M = MD_HV[0].multiplyMatrices(hmesh.matrixWorld, hmesh.bindMatrixInverse).multiply(MD_HV[1].multiplyMatrices(hb.matrixWorld, skel.boneInverses[hi])).multiply(hmesh.bindMatrix);
+    const c = MD_HV[2].setFromMatrixPosition(camera.matrixWorld).applyMatrix4(M.invert()), a = Math.atan2(c.x - az[0], c.z - az[1]) * 180 / Math.PI, w = MD_HW.fill(0);
+    if (a <= A[0]) w[0] = 1; else if (a >= A[4]) w[4] = 1;
+    else for (let k = 0; k < 4; k++) if (a <= A[k + 1]) { const t = (a - A[k]) / (A[k + 1] - A[k]); w[k] = 1 - t; w[k + 1] = t; break; }
+    hu.value.set(w[0], w[1], w[3], w[4]);   // (w[2]: the front's)
+  };
 }
 
 // A sash ribbon r of the look data ({j: its chain's points in the Hips' frame, top to tip; wp: its width at each (w
@@ -528,6 +562,7 @@ function mdHeadData(md, key) {
   if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
   if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
   if (j.line) geo.setAttribute('aLine', new THREE.BufferAttribute(f32(j.line), 1));   // (its outline's width per vertex: Kael's earrings' thin)
+  if (j.hv) geo.setAttribute('aHide', new THREE.BufferAttribute(f32(j.hv), 4));   // (the locks hidden when seen as each side image is: mdHeadHide)
   md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
     noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null, fringe: mdFringeData(md, key)};
   return {j, geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};

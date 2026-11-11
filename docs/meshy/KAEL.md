@@ -140,6 +140,48 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     sopracciglia (sono attaccate alla fronte: la stiravano in strisce), le ciocche tolte dove i profili mostrano il viso
     (dietro ce ne sono altre: buchi e pezzi), tutta l'area cerchiata dipinta dall'immagine migliore per ogni punto
     (capelli a macchie).
+- **Tempie, guance e occhio destro di Kael** (11/11 notte, Denis cerchiandoli nelle viste: "migliora ancora questi punti
+  come nelle immagini", poi "quella ciocca davanti l'occhio rimpiccioliscila mettila davanti con la punta della ciocca
+  sopra al sopracciglio", "accorciare o semplicemente rimuovere senza lasciare tracce"; `tools/kael_fringe.py`,
+  `SIDES = True` in `tools/kael_head.py`):
+  - le immagini non vanno d'accordo tra loro: quella di fronte disegna ciocche accanto agli occhi, i profili e i tre
+    quarti disegnano lì tempia e guancia libere (e il profilo e il tre quarti dello stesso lato discordano sopra
+    l'orecchio). Un solo modello fermo non può darle tutte;
+  - **ciocche nascoste secondo la vista** (`side_hide`, nel gioco `mdHeadHide` in `src/e_model.js`): per ognuna delle
+    4 immagini di lato, le ciocche di Meshy che da lì stanno davanti al viso dove l'immagine disegna pelle hanno un
+    segno per vertice (`hv` nel pacchetto, `aHide`); lo shader le lascia fuori, con il loro contorno, quando la
+    telecamera è dove era quell'immagine (peso lineare tra un'immagine e la vicina, per l'angolo attorno alla testa
+    visto dall'osso Head: segue la testa anche nelle mosse; di fronte non si nasconde niente). Triangoli interi: i loro
+    vertici sono separati da quelli dei vicini (con le quote per vertice si tagliava anche la pelle accanto). Il viso
+    dietro di loro è lo strato più arretrato tra quelli girati verso la telecamera (per colore il bianco degli occhi
+    passava per capelli);
+  - **niente buchi** (`covers_gap`): sotto alcune ciocche la pelle di Meshy ha dei vuoti. Un triangolo non si nasconde
+    né si toglie se in uno dei suoi punti la superficie più vicina dietro è oltre 4 cm (si vedrebbe dentro la
+    testa); se è appoggiato al viso (entro 6 mm) diventa parte del viso, dipinto come la pelle (sulla guancia era
+    un puntino scuro);
+  - sotto le ciocche nascoste c'è la pelle di Meshy: dipinta dalle immagini di lato, ognuna con la testa come si vede
+    da lì (`side_paint`: tutto il disegno, pelle, righe e ciocche; le righe scure solo dall'immagine che vede meglio
+    quel punto; anche le orecchie). Una ciocca che resta in piedi davanti al viso non prende la pelle dell'immagine
+    (dall'altro lato erano pezzi color pelle davanti al viso). La pelle che nessuna immagine vede e che era rimasta
+    color capelli prende la pelle dipinta vicina (`skin_fill`);
+  - i contorni delle ciocche non sono righe del viso (`lock_lines`): prima il contorno della punta di una ciocca
+    dell'immagine di fronte finiva dipinto sulla guancia, due tratti scuri visti di tre quarti;
+  - **occhio destro di Kael** (a sinistra nell'immagine di fronte): l'immagine di fronte ritoccata in codice
+    (`front_edit`, non il file di Denis): le due ciocche sopra l'occhio finiscono a punta sopra il sopracciglio;
+    sotto, occhio, sopracciglio e pelle dall'altro occhio specchiato (accanto al naso il colore della pelle). Tutte le
+    ciocche di Meshy davanti al viso entro 4,6 cm dal centro tolte (anche davanti a occhi e sopracciglia), occhi e
+    sopracciglia dipinti dall'immagine di fronte qualunque fosse il colore di prima (`EYE_ZONE`: Meshy ci aveva
+    dipinto sopra le ciocche);
+  - provato e lasciato: schiacciare le ciocche sulla testa (`press`: sparivano anche di fronte, dove l'immagine le
+    disegna; a strati facevano pezzetti e schegge nere); nasconderle con quote per vertice per lato (buchi nella
+    pelle); togliere le ciocche accanto agli occhi fino a 5,8 cm dal centro (le tagliava a metà: le metà rimaste erano
+    schegge viste dall'altro lato); tenere sulla fronte i triangoli sopra i vuoti (chiazze color pelle tra i capelli);
+  - **lo scanner mostrava schegge nere che nel gioco non ci sono**: il contorno dei capelli è spinto indietro lungo la
+    linea di vista (`aBack`); con la telecamera ortografica di `tools/sheet_scan.py` quella spinta lo spostava fino a
+    6 mm in alto sullo schermo. Ora con una telecamera ortografica la spinta è solo in profondità (`mdLineMat`). Le
+    righe scure che Meshy ha dipinto tra le ciocche hanno il contorno sottile dei capelli (`hairish`);
+  - resta: sopra e davanti all'orecchio, visti di tre quarti, i capelli di Meshy sono più disordinati che
+    nell'immagine (lì profilo e tre quarti disegnano cose diverse sugli stessi punti).
 - Provato e lasciato (`tools/kael_hair_fit.py`, `MODE`): rimodellare i capelli sulle sagome delle 6 immagini. Punto per
   punto alza la sovrapposizione al 86-90% ma fa una zazzera senza punte; tutta la criniera insieme ('radial', 'sweep')
   e le punte allungate ('spikes') guadagnano solo 1-3% e fanno punte sfrangiate. La forma resta quella di Meshy:
