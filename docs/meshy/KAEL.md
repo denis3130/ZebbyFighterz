@@ -10,7 +10,7 @@ pronto in `wip_assets/kael/`: `mk.sh` lo mette solo nell'anteprima di Kael (`vie
 gioco usa un pacchetto Meshy appena lo trova in `assets/` o `viewer_assets/`: `src/d_render.js`, `modelBuild(c) ||
 fighterBuild(c)`). Per metterlo nel gioco: spostare `wip_assets/kael/` in `viewer_assets/kael/`, test, pubblicare.
 
-## Task Meshy e crediti (saldo prima: 1100, dopo: 1000)
+## Task Meshy e crediti (saldo prima: 1100, dopo: 970)
 | Passo | Task | Crediti |
 |---|---|---|
 | Corpo senza capelli né vestiti (`kael_base.png`) — superato | image-to-3d `01a1c4dd-548a-70d1-9dad-05e513084c49` | 30 |
@@ -19,7 +19,8 @@ fighterBuild(c)`). Per metterlo nel gioco: spostare `wip_assets/kael/` in `viewe
 | **Scheletro** (1,8 m) sul modello alleggerito | rigging `01a1c53f-c3ef-76e8-82bd-4186736248a3` | 5 |
 | Animazioni: le 25 di Ren, riportate sul suo scheletro | nessun task | 0 |
 | **Testa e capelli** dalle 4 immagini di Denis (vedi "Testa da Meshy") | multi-image-to-3d `01a1c6e9-6c56-778a-a146-b95efc0bfed6` | 30 |
-| **Totale** | | **100** |
+| **Busto e braccia** dalle 3 viste del foglio del busto senza le code della fascia (vedi "Busto da Meshy") | multi-image-to-3d `01a1cbc9-6df2-76aa-bd39-86e8ff4ee855` | 30 |
+| **Totale** | | **130** |
 
 Il primo corpo (senza vestiti, per vestirlo in codice) è stato lasciato: la forma gonfiata per i pantaloni larghi non
 andava (Denis: "perché l'hai ingrossato così tanto?"), i vestiti solo dipinti sul corpo aderente sembravano una tuta e
@@ -504,7 +505,24 @@ crediti, saldo 1000): Denis ha scelto di tenere le forme e ridipingere ("Solo ri
 - Resta (forme di Meshy, non toccate per scelta di Denis): la fascia è una banda e non un nodo, dietro sui fianchi due
   code e il bordo viola dell'orlo, le strisce viola del davanti sono quelle di Meshy (simili, non le stesse del foglio).
 
-## Look nel gioco
+## Busto da Meshy (11/11 sera, non ancora attaccato a Kael)
+Denis, rimandando il foglio del busto: "creami il modello in 3d su meshy, ricordati se ti conviene creare quella fascia
+viola tu senza meshy dimmelo, che voglio che si animi come quelle arancioni di ren". Le code della fascia le facciamo in
+codice come i nastri di Ren (Meshy le incolla al corpo: quelle di oggi sono attaccate ai pantaloni e non si muovono);
+il nodo in vita resta di Meshy (Denis: "no il nodo in vita no solo togli meglio quella che hai gia tolto").
+- Immagini (`tools/kael_notails.py`, scelte da Denis dopo due giri: "rimuovi meglio la fascia e annerisci leggermente la
+  tuta"): le due code tolte dalle 3 viste, il gilet sotto ridipinto lungo il suo orlo con le ombre nere a punte del
+  foglio, la tuta un po' più scura; ogni vista da sola su un quadrato del fondo:
+  `docs/ref/personaggi/kael_busto_senza_code_{fronte,destra,sinistra}.png` (e il foglio intero, `kael_busto_senza_code.png`).
+- Task: multi-image-to-3d con le 3 viste (fronte, destra, sinistra), texture 4k senza PBR, texture prompt del busto; 30
+  crediti, saldo da 1000 a 970. GLB in `meshy/meshy_output/20261111_kael-busto/busto_k1.glb` (631.722 triangoli,
+  texture 4096; non nel repository).
+- Com'è: davanti, di lato e i tatuaggi come il foglio; dietro Meshy ha inventato la gonna del gilet anche sulla schiena
+  (il foglio della schiena non ce l'ha: lì ci sono i pantaloni sotto la fascia).
+- Prossimi passi: alleggerirlo, metterlo sulle ossa di Kael al posto del suo busto e delle braccia (come la testa,
+  `tools/kael_head.py`), la testa sopra, le gambe di adesso sotto; poi le code della fascia come nastri.
+
+
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,
 luce lisciata, testa alzata di 12° in guardia, la guardia `a191` che respira di Ren, `faceShape` (la ciocca alzata),
 `flatFace` (capelli e viso in luce piatta), `paint` (`kael_painted.jpg`, la pittura pulita; il pulsante "Meshy"
