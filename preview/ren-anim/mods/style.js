@@ -144,9 +144,8 @@ RB.post.push((md, p, F, S, y) => {
   const rf = rsChest(md, W, Rr.fing, v[4]).normalize(), rpn = rsChest(md, W, Rr.palm, v[5]).normalize();
   let le = rsVec(L.elbow, new THREE.Vector3()).normalize(), re = rsChest(md, W, Rr.elbow, new THREE.Vector3()).normalize();
   // the bandage, as one really tightens a hand wrap: the lead forearm comes up in front of the chest, nearly upright,
-  // fist at chin height, elbow down; the rear hand comes from its own side and closes round the lead wrist (palm on
-  // its side, fingers round the front), pulls down twice along the forearm, and lets go. Upright forearm and level
-  // hand make an L, not an X: the arms never cross through each other. He looks at it.
+  // fist at chin height, elbow down; the rear hand comes from its own side, pinches the end of the wrap at the wrist
+  // and pulls it out sideways twice. He looks at it.
   const band = fid && fid.kind === 0, c = a => rsChest(md, W, a, new THREE.Vector3());
   let e = 0, slide = 0;
   if (band) {
@@ -161,13 +160,18 @@ RB.post.push((md, p, F, S, y) => {
   const W2 = rbFK(md, p, RB.W);
   if (band) {
     const El = W2.p[ix.LeftForeArm], Wr = W2.p[ix.LeftHand], ax = Wr.clone().sub(El).normalize();
-    const G = Wr.clone().lerp(El, .12 + .3 * slide);   // the grip on the forearm's line: at the wrist, pulled down twice
-    const right = c([-1, 0, 0]); right.addScaledVector(ax, -right.dot(ax)).normalize();   // from the forearm toward his right
-    const fing = c([.25, 0, 1]); fing.addScaledVector(ax, -fing.dot(ax)).normalize();   // round the front of the forearm
-    const wrist = G.clone().addScaledVector(right, .06).addScaledVector(fing, -.06);   // the palm against the forearm's side
+    // the rear hand pinches the end of the wrap at the side of the lead wrist and pulls it out sideways, twice, as one
+    // tightens a hand wrap: the hand leaves the forearm on every pull (the arms open, never pile up), its fingers
+    // pinched toward the wrist
+    const G = Wr.clone().lerp(El, .18), sh = W2.p[ix.RightArm];
+    const right = sh.clone().sub(G); right.addScaledVector(ax, -right.dot(ax)).normalize();   // from the forearm toward his right shoulder
+    const fing = c([.15, 0, 1]); fing.addScaledVector(ax, -fing.dot(ax)).normalize();   // round the front of the wrist
+    const out = right.clone().addScaledVector(RS_UP, -.25).normalize();   // the pull: out to his right, a little down
+    const wrist = G.clone().addScaledVector(right, .06).addScaledVector(fing, -.05).addScaledVector(out, .17 * slide);
     // (coming and going it passes on the outside of the forearm, never through it)
-    rp.lerp(wrist, e).addScaledVector(right, .08 * Math.sin(Math.PI * e)); rf.lerp(fing.clone().addScaledVector(right, -.35).normalize(), e).normalize(); rpn.lerp(right.clone().negate(), e).normalize();
-    re.lerp(c([-.6, -1, -.2]).normalize(), e).normalize();
+    rp.lerp(wrist, e).addScaledVector(right, .08 * Math.sin(Math.PI * e)); rf.lerp(fing.clone().addScaledVector(right, -.6 * (1 - slide)).normalize(), e).normalize();
+    rpn.lerp(right.clone().negate().addScaledVector(fing, -.3).normalize(), e).normalize();
+    re.lerp(c([-.8, -1, -.25]).normalize(), e).normalize();
   }
   rsArm(md, p, W2, 'R', rp, re, rf, rpn, w);
   if (band) {   // he looks at what his hands do: the head a little down
@@ -199,7 +203,7 @@ RN.hooks.applied.push((it, F) => {
   if (!it.fingers || !fid || fid.kind !== 0) return;
   const u = fid.u, e = rnSm(u / .22) * (1 - rnSm((u - .8) / .2));
   for (let i = 0; i < it.fingers.length; i++) {
-    const f = it.fingers[i], want = /^Left/.test(f.name) ? 1 : .72, k = it.curl + (want - it.curl) * e;
+    const f = it.fingers[i], want = /^Left/.test(f.name) ? 1 : .8, k = it.curl + (want - it.curl) * e;
     f.quaternion.copy(MD_Q1).slerp(it.fist[i], k);
   }
 });
