@@ -110,6 +110,10 @@ HAZE_TOP = [(0, 172), (215, 157), (260, 178), (300, 205), (345, 240), (420, 300)
             (1580, 350), (W0, 340)]
 HAZE_SCALE, SKY_SCALE = .42, .4
 HIDDEN_SOFT = 14
+CLONE_DX = 190   # px: how far right the scenery behind the column is copied from
+# Farther mountains on the left (haze plane): (scale, right edge x, foot row, haze tint), farthest first.
+FAR_MOUNTAINS = [(.42, -150, 455, .42), (.6, 215, 470, .28)]
+HAZE_LEFT_TOP = 330   # row where the haze starts left of the sunlit hill
 
 
 def poly_alpha(polys, w, h, ox=0, oy=0):
@@ -195,6 +199,25 @@ def mirror_fill(img, known):
     out = np.where(known[..., None], img, img[srcy, srcx])
     soft = np.asarray(Image.fromarray(np.uint8(np.clip(out, 0, 255))).filter(ImageFilter.GaussianBlur(1.2)), np.float64)
     return np.where(known[..., None], img, soft)
+
+
+def clone_fill(img, known, region, dx, passes=4):
+    """Fills region's pixels (where unknown) with the picture dx px to their right (the scenery goes on: clouds, the
+    hill, the trees), again further right where that is unknown too; a 3 px soft seam at the region's edge."""
+    H, W = known.shape
+    out, have = img.copy(), known.copy()
+    for k in range(1, passes + 1):
+        need = region & ~have
+        if not need.any():
+            break
+        ys, xs = np.nonzero(need)
+        sx = np.clip(xs + dx * k, 0, W - 1)
+        ok = known[ys, sx]
+        out[ys[ok], xs[ok]] = img[ys[ok], sx[ok]]
+        have[ys[ok], xs[ok]] = True
+    edge = (blur(region.astype(np.float64), 2) * (1 - blur(region.astype(np.float64), 2)) * 4) > .15
+    soft = np.asarray(Image.fromarray(np.uint8(np.clip(out, 0, 255))).filter(ImageFilter.GaussianBlur(1.5)), np.float64)
+    return np.where(edge[..., None], soft, out), have
 
 
 def blur(a, r):
@@ -306,6 +329,10 @@ def main(preview):
     known = (hz_w > .02) & ~unknown
     haze = push_pull(rgb, known)
     haze = np.where(known[..., None], rgb, np.asarray(Image.fromarray(np.uint8(np.clip(haze, 0, 255))).filter(ImageFilter.GaussianBlur(2)), np.float64))
+    # behind the column and its banner (the far left, seen when the camera goes left): the hill, the trees and the
+    # mist just right of it go on, sharp (not the smooth fill)
+    # (from anything painted there, cliff and trees included: so far back they read as one more hill)
+    # (the left mountain itself, smaller and hazier, as farther mountains: see the copies after widening)
     bot, px = round(H0 * PAD_BOTTOM), round(W0 * PAD_X)
     mist_row = np.asarray(Image.fromarray(np.uint8(haze[690:720].mean(0)[None])).filter(ImageFilter.BoxBlur(40)), np.float64)[0]
     BLEND = 60
@@ -316,14 +343,42 @@ def main(preview):
     k = np.linspace(0, 1, bot)[:, None, None]
     haze = np.concatenate([haze, mist_row[None] * (1 - .6 * k) + pale * .6 * k], 0)
     hal = np.concatenate([np.where(ys >= FLOOR_Y - 2, 1., hz), np.ones((bot, W0))], 0)
+    # past both edges it is mirrored (soft haze: nothing sharp to repeat)
     haze = np.pad(haze, ((0, 0), (px, px), (0, 0)), mode='reflect')
     hal = np.pad(hal, ((0, 0), (px, px)), mode='reflect')
+    # Farther mountains on the left (where the column hid the view, and past the painting's edge): the painting's
+    # own left mountain (both its cliffs, crown and rock, as painted), smaller and hazier the farther they are.
+    # left of the sunlit hill the haze itself starts low (at the mountains' feet): above it the sky, and the
+    # mountains' own outline
+    HH = hal.shape[0]
+    rows = np.arange(HH)[:, None]
+    low = np.clip((rows - HAZE_LEFT_TOP) / 40, 0, 1)
+    fx = np.clip((np.arange(hal.shape[1])[None, :] - (px + 120)) / 80, 0, 1)
+    hal = hal * (low * (1 - fx) + fx)
+    src_m = np.maximum(poly_alpha([PLANES[1]['poly'], PLANES[3]['poly']], W0, H0) * S, 0) * (1 - (poly_alpha(CUT, W0, H0) > .01))
+    sx0, sy0, sx1, sy1 = 205, 40, 690, 520
+    src_c, src_a = rgb[sy0:sy1, sx0:sx1], src_m[sy0:sy1, sx0:sx1]
+    src_c = mirror_fill(src_c, src_a > .5)                     # its own colours under its soft edges
+    mist_c = rgb[600:700, 560:680].reshape(-1, 3).mean(0)
+    for scale, right, base, tint in FAR_MOUNTAINS:            # farthest first
+        w, h = round((sx1 - sx0) * scale), round((sy1 - sy0) * scale)
+        c = resized(src_c, w, h) * (1 - tint) + mist_c * tint
+        a = resized(src_a, w, h) * np.clip(np.linspace(1.6, 0, h) , 0, 1)[:, None]   # its foot fades into the mist
+        X0, Y0 = right - w + px, base - h
+        hx0, hx1 = max(0, X0), min(haze.shape[1], X0 + w)
+        sl = (slice(Y0, Y0 + h), slice(hx0, hx1)); cs = (slice(0, h), slice(hx0 - X0, hx1 - X0))
+        a_ = a[cs][..., None]
+        haze[sl] = haze[sl] * (1 - a_) + c[cs] * a_
+        hal[sl] = np.maximum(hal[sl], a[cs])
     islands.append({'name': 'haze', 'box': [-px, 0, W0 + px, H0 + bot], 'rgb': haze, 'm': hal, 'water': None, 'scale': HAZE_SCALE})
 
     # Sky: the rest filled in from the sky; wrapped round past both edges; on top a deeper blue.
     is_sky = (ys < sky_y[None, :] - 3) & ~unknown
     sky = push_pull(rgb, is_sky)
     sky = np.where(is_sky[..., None], rgb, np.asarray(Image.fromarray(np.uint8(np.clip(sky, 0, 255))).filter(ImageFilter.GaussianBlur(2)), np.float64))
+    col_sky = (poly_alpha([CUT[0]], W0, H0) > .5) & (ys < sky_y[None, :] + 4)   # the sunlit clouds go on behind the column
+    cl, got = clone_fill(rgb, is_sky, col_sky, CLONE_DX)
+    sky = np.where((col_sky & got)[..., None], cl, sky)
     top = round(H0 * PAD_TOP)
     sk = wrap_widen(sky, top)
     first = np.asarray(Image.fromarray(np.uint8(sk[top:top + 12].mean(0)[None])).filter(ImageFilter.BoxBlur(150)), np.float64)[0]

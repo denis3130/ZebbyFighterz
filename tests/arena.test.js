@@ -36,7 +36,7 @@ T.test('depth: near moves more than far', () => {
   T.eq(pl.map(p => p.name).join(), 'LF,FL,FR,UL,UR,falls,haze,sky', 'planes nearest first');
   for (const p of pl) T.eq(p.z, d.layers[p.name], p.name + ' depth');
   view(-1200, 1200, 0);
-  const pts = [[d.column.x, 2, d.column.z], [0, 5, d.layers.LF], [0, 5, d.layers.UL], [0, 5, d.layers.falls], [0, 5, d.layers.haze], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
+  const pts = [[d.props.column.x, 2, d.props.column.z], [0, 5, d.layers.LF], [0, 5, d.layers.UL], [0, 5, d.layers.falls], [0, 5, d.layers.haze], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
   const a = at(); V.camera.position.x += 1; V.camera.updateMatrixWorld(); const b = at(); view(-1200, 1200, 0);
   const m = a.map((x, i) => Math.abs(b[i] - x));
   T.ok(m.every((x, i) => i === 0 || (x < m[i - 1] && x > 0)), 'screen shift column > forest > high cliffs > falls > haze > sky: ' + m.map(x => x.toFixed(1)));
@@ -55,15 +55,12 @@ T.test('water flows, stone does not', () => {
   } finally { V.ARENA.leaves.visible = true; V.F3D.forEach(f => f.root.visible = true); }
 });
 
-T.test('slabs top is y=0 under every fighter x', () => {
-  const V = __VF, rc = new THREE.Raycaster(), terr = V.ARENA.group.getObjectByName('stone'), down = new THREE.Vector3(0, -1, 0);
-  let on = 0, n = 0;
+T.test('the floor is at y=0 under every fighter x', () => {
+  const V = __VF, rc = new THREE.Raycaster(), floor = V.ARENA.group.getObjectByName('floor'), down = new THREE.Vector3(0, -1, 0);
   for (const z of [-.05, 0, .05]) for (let x = -6; x <= 6.001; x += .25) {
-    rc.set(new THREE.Vector3(x, 1, z), down); const h = rc.intersectObject(terr)[0];
-    T.ok(h && h.point.y <= .0101 && h.point.y >= -.06, 'nothing or wrong height under x ' + x + ': ' + (h && h.point.y));
-    n++; if (h && Math.abs(h.point.y) < .01) on++;
+    rc.set(new THREE.Vector3(x, 1, z), down); const h = rc.intersectObject(floor)[0];
+    T.ok(h && Math.abs(h.point.y) < .001, 'no floor under x ' + x + ': ' + (h && h.point.y));
   }
-  T.ok(on / n >= .9, 'on a slab ' + on + '/' + n);
 });
 
 T.test('ground stays at 86%', () => { view(-1200, 1200, 0); const g = __VF.toScreen(__VF.cam.x, 0, 0).y; T.near(g / innerHeight, .86, .02); });
@@ -90,8 +87,8 @@ T.test('banner step under 0.2 ms', () => {
 });
 
 T.test("props stay out of the fighters' lane", () => {
-  const V = __VF, p = V.ARENA.group.getObjectByName('stone').geometry.attributes.position;
-  let zMax = -99;   // column, pole, lantern, rocks: the vertex range V.AR.props of the stone mesh
+  const V = __VF, p = V.ARENA.group.getObjectByName('props').geometry.attributes.position;
+  let zMax = -99;   // column, pole, lantern, rocks, tufts: the props mesh
   for (let i = V.AR.props[0]; i < V.AR.props[1]; i++) zMax = Math.max(zMax, p.getZ(i));
   T.ok(zMax < -1.5, 'props reach z ' + zMax.toFixed(2));
   const b = new THREE.Box3().setFromObject(V.ARENA.group.getObjectByName('banner'));

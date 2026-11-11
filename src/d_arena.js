@@ -90,22 +90,18 @@ function arenaBuild(def) {
   AR.def = def; AR.seed = 11; AR.mats = [];
   const g = ARENA.group = new THREE.Group();
   g.name = 'arena';
-  const keys = ['atlas.jpg', 'atlas_m.png', 'mist.png'].map(k => 'arena/cascata_' + k);
-  return Promise.all(keys.map(rdTexture)).then(([col, msk, mist]) => {
+  const keys = ['atlas.jpg', 'atlas_m.png', 'mist.png', 'floor.jpg', 'props.jpg', 'props_a.png'].map(k => 'arena/cascata_' + k);
+  return Promise.all(keys.map(rdTexture)).then(([col, msk, mist, floor, pc, pa]) => {
     for (const t of [col, msk]) {   // seen at about their own size: no mipmaps (cheaper, and WebGL1 has none for them)
       t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     }
     mist.wrapS = THREE.RepeatWrapping;
-    f3Shared();
     arLayers(def, col, msk, mist);
-    const M = arMesh();   // terrace, column and props: one mesh and one outline (each draw costs, on phones too)
-    arTerrace(def, M);
-    AR.props = [M.p.length / 3]; arProps(def, M); AR.props.push(M.p.length / 3);   // the props' vertices (for the tests)
-    const G = arMesh(); arGrass(def, G);
-    const stone = arStoneTex(); stone.minFilter = THREE.LinearFilter; stone.generateMipmaps = false;   // seen magnified
-    arToon(M, stone, def.terrace.line, 'stone', G);
+    arFloor(def, floor);
+    for (const t of [pc, pa]) { t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; }
+    arProps(def, pc, pa);
     scene.add(g, ARENA.far);
-    for (const t of [col, msk, mist]) renderer.initTexture(t);
+    for (const t of [col, msk, mist, floor, pc, pa]) renderer.initTexture(t);
   });
 }
 
@@ -225,15 +221,6 @@ function arQuad(M, a, b, c, d, nrm, uvs, col) {
   for (const u of uvs) M.uv.push(u[0], u[1]);
   M.i.push(o, o + 1, o + 2, o, o + 2, o + 3);
 }
-// A box x0..x1, y0..y1, z0..z1 without its bottom; uv from world coordinates times us.
-function arBox(M, x0, x1, y0, y1, z0, z1, col, us) {
-  const U = (a, b) => [a * us, b * us];
-  arQuad(M, [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], [U(x0, z1), U(x1, z1), U(x1, z0), U(x0, z0)], col);
-  arQuad(M, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], [U(x0, y0), U(x1, y0), U(x1, y1), U(x0, y1)], col);
-  arQuad(M, [x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], [U(x1, y0), U(x0, y0), U(x0, y1), U(x1, y1)], col);
-  arQuad(M, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], [U(z0, y0), U(z1, y0), U(z1, y1), U(z0, y1)], col);
-  arQuad(M, [x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], [U(z1, y0), U(z0, y0), U(z0, y1), U(z1, y1)], col);
-}
 function arGeo(M) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(M.p, 3));
@@ -243,241 +230,162 @@ function arGeo(M) {
   g.setIndex(M.i);
   return g;
 }
-// A geometry (any three geometry) appended to M, moved by matrix mx, in colour col (or per-vertex colFn(x, y, z, nrm)).
-function arAppend(M, geo, mx, col, colFn) {
-  const g = geo.index ? geo : geo, p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.uv;
-  const o = M.p.length / 3, v = new THREE.Vector3(), nm = new THREE.Matrix3().getNormalMatrix(mx), w = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i).applyMatrix4(mx); w.fromBufferAttribute(n, i).applyMatrix3(nm).normalize();
-    M.p.push(v.x, v.y, v.z); M.n.push(w.x, w.y, w.z);
-    M.uv.push(uv ? uv.getX(i) : 0, uv ? uv.getY(i) : 0);
-    const c = colFn ? colFn(v.x, v.y, v.z, w) : col;
-    M.c.push(c.r, c.g, c.b);
-  }
-  if (g.index) for (let i = 0; i < g.index.count; i++) M.i.push(o + g.index.getX(i));
-  else for (let i = 0; i < p.count; i++) M.i.push(o + i);
-}
-// The fighters' toon light (f3Lights: the sun through the 3-band gradient F3.grad, plus the sky/stone hemisphere)
-// for normal n, as an RGB factor. The arena's pieces do not move, so it is baked into their vertex colours once
-// (same look as MeshToonMaterial, without per-pixel lighting).
-const AR_SUN = new THREE.Vector3(-4, 6, 5).normalize(), AR_SUN_C = new THREE.Color(0xfff2dc).multiplyScalar(.75);
-const AR_SKY = new THREE.Color(0xdcecff), AR_GROUND = new THREE.Color(0x6b5a4a), AR_BANDS = [90 / 255, 170 / 255, 1];
-function arLight(nx, ny, nz) {
-  const g = Math.min(2, Math.floor((Math.max(-1, nx * AR_SUN.x + ny * AR_SUN.y + nz * AR_SUN.z) * .5 + .5) * 3));
-  const w = ny * .5 + .5, b = AR_BANDS[g];
-  return [AR_SUN_C.r * b + (AR_GROUND.r + (AR_SKY.r - AR_GROUND.r) * w) * .5,
-    AR_SUN_C.g * b + (AR_GROUND.g + (AR_SKY.g - AR_GROUND.g) * w) * .5,
-    AR_SUN_C.b * b + (AR_GROUND.b + (AR_SKY.b - AR_GROUND.b) * w) * .5];
-}
-// A mesh with the toon light baked in, and the outline shell (width w) of M; G (optional) joins the mesh without an
-// outline (the grass blades).
-function arToon(M, map, w, name, G) {
-  for (const X of G ? [M, G] : [M]) for (let i = 0; i < X.c.length; i += 3) {
-    const L = arLight(X.n[i], X.n[i + 1], X.n[i + 2]);
-    X.c[i] *= L[0]; X.c[i + 1] *= L[1]; X.c[i + 2] *= L[2];
-  }
-  const line = w > 0 ? f3OutlineGeo(arGeo(M)) : null;
-  if (G) {
-    const o = M.p.length / 3;
-    M.p.push(...G.p); M.n.push(...G.n); M.uv.push(...G.uv); M.c.push(...G.c); for (const i of G.i) M.i.push(o + i);
-  }
-  const mesh = new THREE.Mesh(arGeo(M), new THREE.MeshBasicMaterial({map, vertexColors: true}));
-  mesh.name = name; ARENA.group.add(mesh);
-  if (line) {
-    const om = F3.outMat.clone(); om.uniforms.uW.value = w;
-    const out = new THREE.Mesh(line, om); out.name = name + '.line'; ARENA.group.add(out);
-  }
-  return mesh;
-}
 
-// A canvas texture (size px) painted by draw(ctx, size, rand), repeating.
-function arCanvas(size, draw) {
-  const t = rdCanvasTexture(size, (g, n) => draw(g, n, arRand));
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-// Pale mottled stone with a few cracks and moss flecks (tinted by the vertex colours).
-function arStoneTex() {
-  return arCanvas(256, (g, n, r) => {
-    g.fillStyle = '#e9e4dc'; g.fillRect(0, 0, n, n);
-    for (let i = 0; i < 260; i++) {
-      const x = r() * n, y = r() * n, s = 4 + r() * 22, l = 70 + r() * 25;
-      g.fillStyle = 'hsla(30,12%,' + l.toFixed(0) + '%,.22)';
-      for (const dx of [-n, 0, n]) for (const dy of [-n, 0, n]) { g.beginPath(); g.arc(x + dx, y + dy, s, 0, 6.283); g.fill(); }
-    }
-    g.strokeStyle = 'rgba(70,58,50,.45)'; g.lineWidth = 1.2;
-    for (let i = 0; i < 7; i++) {
-      let x = r() * n, y = r() * n; g.beginPath(); g.moveTo(x, y);
-      for (let k = 0; k < 5; k++) { x += (r() - .5) * 40; y += (r() - .3) * 30; g.lineTo(x, y); }
-      g.stroke();
-    }
-    for (let i = 0; i < 90; i++) { g.fillStyle = 'rgba(110,140,60,' + (.15 + r() * .25).toFixed(2) + ')'; g.fillRect(r() * n, r() * n, 2 + r() * 4, 2 + r() * 3); }
-  });
-}
-
-// --- Terrace ---
-// Rows of slabs from the front (z = front) to the back (z = back), staggered, tops at y = 0, the dark grout bed under
-// the gaps, the back step (lip) and its drop; one mesh and one outline. Colours: warm (sun) on the left, cool on the right.
-function arTerrace(def, M) {
-  const T = def.terrace, warm = T.warm.map(c => new THREE.Color(c)), cool = T.cool.map(c => new THREE.Color(c));
-  const col = new THREE.Color(), tmp = new THREE.Color();
-  AR.rows = [];
-  for (let zf = T.front; zf > T.back + .01;) {
-    let zb = zf - T.row[0] - arRand() * T.row[1];
-    if (Math.abs(zb) < T.keep * .5) zb = -T.keep * .5;   // no gap between rows under the fighters' feet
-    if (zb - T.back < T.row[0] * .6) zb = T.back;   // no thin last row
-    AR.rows.push(zf);
-    for (let x = -T.half - arRand() * T.len[0]; x < T.half;) {
-      const L = T.len[0] + arRand() * T.len[1], xm = x + L / 2;
-      const k = Math.min(1, Math.max(0, (xm + 7) / 14)), pick = arRand();
-      col.copy(warm[pick < .5 ? 0 : 1]).lerp(tmp.copy(cool[pick < .5 ? 0 : 1]), k).multiplyScalar(.86 + arRand() * .2);
-      const o = M.c.length;
-      arBox(M, x + T.gap / 2, x + L - T.gap / 2, -T.depth, 0, zb + T.gap / 2, zf - T.gap / 2, col, .32);
-      for (let j = o; j < o + 12; j += 3) { const f = .93 + arRand() * .12; M.c[j] *= f; M.c[j + 1] *= f; M.c[j + 2] *= f; }   // top corners: a little uneven
-      x += L;
-    }
-    zf = zb;
-  }
-  const grout = new THREE.Color(0x4a3f3a), lip = new THREE.Color(T.cool[1]).multiplyScalar(.95);
-  arQuad(M, [-T.half, T.grout, T.front], [T.half, T.grout, T.front], [T.half, T.grout, T.back], [-T.half, T.grout, T.back],
-    [0, 1, 0], [[0, 0], [1, 0], [1, 1], [0, 1]], grout);
-  for (let x = -T.half; x < T.half;) {   // the lip: blocks a little higher than the slabs, then the drop
-    const L = 1.1 + arRand() * .8;
-    arBox(M, x + .02, Math.min(T.half, x + L) - .02, -2.5, T.lip[1] * (.75 + arRand() * .5), T.back - T.lip[0], T.back - .01,
-      col.copy(lip).multiplyScalar(.9 + arRand() * .14), .55);
-    x += L;
-  }
-}
-
-// Grass tufts as blades of real geometry (thin triangles, dark at the root and light at the tip, both windings so
-// they show from either side) in G: no texture, no transparency (cheap to draw, on phones too). In the gaps between
-// rows (never in the fighters' lane), along the lip, round the rocks and props, and dense clumps for the bushes.
-function arGrass(def, G) {
-  const T = def.terrace, spots = [], rows = AR.rows;
-  for (let i = 0; i < T.grass; i++) {
-    const z = rows[Math.floor(arRand() * rows.length)];
-    if (Math.abs(z) < T.keep) continue;
-    spots.push([(arRand() * 2 - 1) * (T.half - .5), z, .12 + arRand() * .14, 7]);
-  }
-  for (let x = -T.half + .3; x < T.half; x += .35 + arRand() * .9) spots.push([x, T.back - T.lip[0] * .5, .22 + arRand() * .25, 7]);
-  for (const [x, z, r] of def.rocks) for (let k = 0; k < 4; k++)
-    spots.push([x + (arRand() - .5) * r * 3, z + .2 + arRand() * .4, .2 + arRand() * .2, 7]);
-  for (const [x, z, r] of def.bushes) for (let k = 0; k < 9; k++)
-    spots.push([x + (arRand() - .5) * r * 1.6, z + (arRand() - .5) * r * .6, r * (.55 + arRand() * .45), 10]);
-  for (let k = 0; k < 5; k++) spots.push([def.column.x + (arRand() - .5) * 1.2, def.column.z + .35 + arRand() * .3, .25 + arRand() * .2, 8]);
-  for (let k = 0; k < 3; k++) spots.push([def.lantern.x + (arRand() - .5) * 1, def.lantern.z + .3 + arRand() * .3, .22 + arRand() * .18, 8]);
-  const root = new THREE.Color(0x3f6a24), tips = [0x79a83a, 0x94b842, 0xc8d66a].map(c => new THREE.Color(c)), up = [0, 1, 0];
-  const tip = new THREE.Color(), base = new THREE.Color();
-  for (const [x, z, s, n] of spots) {
-    const y = z < T.back - .05 ? T.lip[1] * .8 : 0, b = .8 + arRand() * .2;
-    for (let k = 0; k < n; k++) {
-      const rx = x + (arRand() - .5) * s * .5, rz = z + (arRand() - .5) * s * .3, a = (arRand() - .5) * 1.4, yaw = arRand() * 6.283;
-      const h = s * (.45 + arRand() * .6), w = s * (.05 + arRand() * .03);
-      const tx = rx + Math.sin(a) * Math.cos(yaw) * h, ty = y + Math.cos(a) * h, tz = rz + Math.sin(a) * Math.sin(yaw) * h * .4;
-      base.copy(root).multiplyScalar(b); tip.copy(tips[Math.floor(arRand() * 3)]).multiplyScalar(b);
-      const o = G.p.length / 3;
-      G.p.push(rx - w, y, rz, rx + w, y, rz, tx, ty, tz);
-      for (let v = 0; v < 3; v++) { G.n.push(...up); G.uv.push(.5, .5); }
-      G.c.push(base.r, base.g, base.b, base.r, base.g, base.b, tip.r, tip.g, tip.b);
-      G.i.push(o, o + 1, o + 2, o, o + 2, o + 1);
-    }
-  }
+// --- Floor ---
+// The painted floor (tools/make_props.py: the painting's slabs seen from above, so at the start camera it looks
+// exactly like the painting and it stays on the floor when the camera moves), one flat mesh at y = 0: the slabs from
+// the front (z = terrace.front) to the painting's back edge, and on both sides a ledge going on further back, where
+// the column and the lantern stand. Its colours are the painting's own light (no light of its own, no outline).
+function arFloor(def, tex) {
+  const T = def.terrace, F = ASSETS['arena/cascata_floor.json'], [x0, z1, x1, zb] = F.rect, M = arMesh();
+  const U = (x, z) => [(x - x0) / (x1 - x0), 1 - (z - z1) / (zb - z1)];
+  const quad = (xa, xb, za, zf, col) => arQuad(M, [xa, 0, zf], [xb, 0, zf], [xb, 0, za], [xa, 0, za], [0, 1, 0],
+    [U(xa, zf), U(xb, zf), U(xb, za), U(xa, za)], col);
+  quad(-T.half, T.half, F.back, T.front, new THREE.Color(1, 1, 1));
+  const moss = new THREE.Color(...T.moss);   // the ledges: the stone gone mossy and dark under the grass
+  quad(-T.half, T.ledge[0], T.ledge[2], F.back, moss);
+  quad(T.ledge[1], T.half, T.ledge[2], F.back, moss);
+  tex.wrapS = tex.wrapT = THREE.MirroredRepeatWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const mesh = new THREE.Mesh(arGeo(M), new THREE.MeshBasicMaterial({map: tex, vertexColors: true}));
+  mesh.name = 'floor'; ARENA.group.add(mesh);
+  AR.back = F.back;
 }
 
 // --- Props ---
-// A deterministic jitter in [-1, 1] of a position (so the copies of a vertex shared by faces move together).
-function arJit(x, y, z, k) {
-  const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + k * 19.3) * 43758.5453;
-  return (h - Math.floor(h)) * 2 - 1;
+// The near pieces wear the painting itself (tools/make_props.py cuts them out: cascata_props.jpg, their outlines in
+// cascata_props_a.png): each vertex takes the painting's colour where the start camera sees it, so at the start
+// camera they look exactly as painted, and when the camera moves they turn as the 3D shapes they are. The outlines
+// (alpha) cut the shapes: the broken capital, the lantern's see-through windows, the banner's tears.
+
+// Painting px (X, Y down) of world point (x, y, z), through the start camera on the ref screen (arPaintToWorld's inverse).
+function arToPainting(def, P, x, y, z) {
+  const k = CFG.cam, t = Math.tan(k.fov * Math.PI / 360), asp = def.ref.w / def.ref.h, L = k.dist0 - z, [iw, ih] = def.ref.img;
+  const y0 = k.dist0 * (k.footScreen - .5) * 2 * t;
+  const sx = (x / (L * t * asp) + 1) / 2, sy = ((y - y0) / (L * t) + 1) / 2;
+  return [(P.px + sx * P.su) * iw, (1 - (P.py + sy * P.sv)) * ih];
 }
-// Ivy on the column: a few vines climbing from the foot, small leaves (diamonds facing out of the shaft) in four greens.
-function arIvy(def, M, shaftH) {
-  const C = def.column, greens = [0x4f7f2a, 0x6f9e34, 0x9cc048, 0x3d6522].map(c => new THREE.Color(c)), R = C.r * 1.03 + .012;
-  for (let v = 0; v < 6; v++) {
-    let a = arRand() * 6.283, y = .4;
-    const top = .36 + shaftH * (.35 + arRand() * .55);
-    while (y < top) {
-      const n = 1 + Math.round(arRand() * 2 * (1 - y / (top + .3)));
-      for (let k = 0; k < n; k++) {
-        const b = a + (arRand() - .5) * .35, h = y + (arRand() - .5) * .06, s = .045 + arRand() * .035;
-        const nx = Math.sin(b), nz = Math.cos(b), cx = C.x + R * nx, cz = C.z + R * nz, tx = nz * s * .75, tz = -nx * s * .75;
-        arQuad(M, [cx, h - s, cz], [cx + tx, h, cz + tz], [cx, h + s, cz], [cx - tx, h, cz - tz], [nx, 0, nz],
-          [[.5, 0], [1, .5], [.5, 1], [0, .5]], greens[Math.floor(arRand() * 4)]);
-      }
-      a += (arRand() - .5) * .5; y += .06 + arRand() * .05;
-    }
+// Metres per painting px at depth z (at the start camera).
+function arPxSize(def, P, z) {
+  const k = CFG.cam;
+  return 2 * (k.dist0 - z) * Math.tan(k.fov * Math.PI / 360) * def.ref.w / def.ref.h / (def.ref.img[0] * P.su);
+}
+// The props atlas uv of painting px (X, Y) in prop key's crop (clamped to it).
+function arPropUV(key, X, Y) {
+  const b = AR.pm[key].box, uv = AR.pm[key].uv;
+  const fx = Math.min(1, Math.max(0, (X - b[0]) / (b[2] - b[0]))), fy = Math.min(1, Math.max(0, (Y - b[1]) / (b[3] - b[1])));
+  return [uv[0] + fx * (uv[2] - uv[0]), uv[3] - fy * (uv[3] - uv[1])];
+}
+// geo (any three geometry) appended to M where matrix mx puts it, painted from prop key's crop with the painting's
+// colours where the start camera sees it at mPaint (default: where it stands; a copy elsewhere keeps the original's
+// paint).
+function arPainted(M, geo, mx, key, mPaint) {
+  const def = AR.def, p = geo.attributes.position, v = new THREE.Vector3(), w = new THREE.Vector3(), o = M.p.length / 3;
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i); w.copy(v).applyMatrix4(mPaint || mx); v.applyMatrix4(mx);
+    const [X, Y] = arToPainting(def, AR.P, w.x, w.y, w.z), uv = arPropUV(key, X, Y);
+    M.p.push(v.x, v.y, v.z); M.n.push(0, 1, 0); M.uv.push(uv[0], uv[1]); M.c.push(1, 1, 1);
   }
+  if (geo.index) for (let i = 0; i < geo.index.count; i++) M.i.push(o + geo.index.getX(i));
+  else for (let i = 0; i < p.count; i++) M.i.push(o + i);
+}
+// A flat card facing the camera (a tuft of grass or ivy): prop key's picture, w x h metres, its foot at (x, y, z).
+function arCard(M, key, x, y, z, w, h, flip) {
+  const uv = AR.pm[key].uv, u0 = flip ? uv[2] : uv[0], u1 = flip ? uv[0] : uv[2];
+  arQuad(M, [x - w / 2, y, z], [x + w / 2, y, z], [x + w / 2, y + h, z], [x - w / 2, y + h, z], [0, 0, 1],
+    [[u0, uv[1]], [u1, uv[1]], [u1, uv[3]], [u0, uv[3]]], new THREE.Color(1, 1, 1));
+}
+// A tuft card where the painting has it (its crop's box seen at depth z): same size and place as painted.
+function arCardAt(M, key, z) {
+  const def = AR.def, P = AR.P, b = AR.pm[key].box, s = arPxSize(def, P, z), [iw, ih] = def.ref.img;
+  const [x, y] = arPaintToWorld(def, P, (b[0] + b[2]) / 2 / iw, 1 - b[3] / ih, z);
+  arCard(M, key, x, y, z, (b[2] - b[0]) * s, (b[3] - b[1]) * s);
 }
 
-function arProps(def, M) {
-  const C = def.column, white = new THREE.Color(0xd6cdbf), stoneC = new THREE.Color(0xcbc1b2), mx = new THREE.Matrix4();
-  // Column: base, shaft, capital, broken stub with a jagged top.
-  const box = (w, h, d, x, y, z, ry) => { const g = new THREE.BoxGeometry(w, h, d); mx.makeRotationY(ry || 0).setPosition(x, y, z); return g; };
-  arAppend(M, box(.98, .2, .98, C.x, .1, C.z), mx, white);
-  arAppend(M, box(.82, .16, .82, C.x, .28, C.z, .05), mx, white);
-  const shaftH = C.h - .62, shaft = new THREE.CylinderGeometry(C.r, C.r * 1.06, shaftH, 14, 4);
-  mx.makeRotationY(.2).setPosition(C.x, .36 + shaftH / 2, C.z); arAppend(M, shaft, mx, white);
-  arAppend(M, box(.86, .3, .86, C.x + .03, .36 + shaftH + .15, C.z, -.08), mx, white);
-  // The broken top: two tilted chunks of the capital's upper block, one corner lower than the rest.
-  const chunk = (w, h, d, x, y, z, rx, ry, rz) => {
-    const g = new THREE.BoxGeometry(w, h, d), p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) p.setY(i, p.getY(i) - h * .6 * Math.max(0, arJit(Math.sign(p.getX(i)), 0, Math.sign(p.getZ(i)), 4)));
-    g.computeVertexNormals();
-    mx.makeRotationFromEuler(new THREE.Euler(rx, ry, rz)).setPosition(x, y, z); arAppend(M, g, mx, stoneC);
+function arProps(def, pc, pa) {
+  AR.P = arRefPlace(def); AR.pm = ASSETS['arena/cascata_props.json'];
+  const D = def.props, C = D.column, M = arMesh(), mx = new THREE.Matrix4(), q = new THREE.Quaternion(), E = new THREE.Euler();
+  const at = (x, y, z, ry, sx, sy, sz) => mx.compose(new THREE.Vector3(x, y, z), q.setFromEuler(E.set(0, ry || 0, 0)),
+    new THREE.Vector3(sx || 1, sy || 1, sz || 1)).clone();
+  // The column: a square shaft and its broken capital (the painted outline breaks it), facing the camera.
+  arPainted(M, new THREE.BoxGeometry(C.shaft[0], C.shaft[2], C.shaft[1], 2, 12, 2), at(C.x, C.shaft[2] / 2, C.z), 'column');
+  arPainted(M, new THREE.BoxGeometry(C.cap[0], C.cap[3] - C.cap[2], C.cap[1], 3, 4, 2), at(C.x + C.cap[4], (C.cap[2] + C.cap[3]) / 2, C.z), 'column');
+  // The pole, from the column's face to its knob, slanting towards the camera as painted.
+  const pp = AR.pm.pole_ends, [iw, ih] = def.ref.img, P = AR.P;
+  const S = new THREE.Vector3(...arPaintToWorld(def, P, pp[0][0] / iw, 1 - pp[0][1] / ih, D.pole[0]), D.pole[0]);
+  const Ee = new THREE.Vector3(...arPaintToWorld(def, P, pp[1][0] / iw, 1 - pp[1][1] / ih, D.pole[1]), D.pole[1]);
+  const len = S.distanceTo(Ee), rod = new THREE.CylinderGeometry(.045, .045, len, 8, 1);
+  mx.lookAt(S, Ee, new THREE.Vector3(0, 1, 0));
+  const rot = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+  const pm = new THREE.Matrix4().copy(mx).multiply(rot).setPosition(S.clone().add(Ee).multiplyScalar(.5));
+  arPainted(M, rod, pm, 'pole');
+  arPainted(M, new THREE.SphereGeometry(.065, 10, 8), at(Ee.x, Ee.y, Ee.z), 'pole');
+  // The lantern, corner-on as painted: base, platform, firebox, roof, knob.
+  const L = D.lantern, Q = Math.PI / 4;
+  arPainted(M, new THREE.BoxGeometry(.46, .4, .46), at(L.x, .2, L.z, Q), 'lantern');
+  arPainted(M, new THREE.BoxGeometry(.6, .11, .6), at(L.x, .455, L.z, Q), 'lantern');
+  arPainted(M, new THREE.BoxGeometry(.4, .3, .4, 2, 2, 2), at(L.x, .66, L.z, Q), 'lantern');
+  arPainted(M, new THREE.ConeGeometry(.6, .3, 4, 1), at(L.x, .93, L.z), 'lantern');
+  arPainted(M, new THREE.SphereGeometry(.11, 10, 8), at(L.x, 1.15, L.z), 'lantern');
+  // The rock at the column's foot, and smaller copies of it (wearing its paint) by the lantern.
+  const R = D.rock, rock = new THREE.IcosahedronGeometry(1, 1), mR = at(R[0], R[1], R[2], 0, R[3], R[4], R[5]);
+  arPainted(M, rock, mR, 'rock');
+  for (const [x, z, s, w] of [[4.55, -2.45, .55, 1.2], [6.2, -2.55, .7, .9], [-6.4, -2.35, .6, 1.1]])   // not turned: the paint faces the camera
+    arPainted(M, rock, at(x, R[1] * s, z, 0, R[3] * s * w, R[4] * s, R[5] * s), 'rock', mR);
+  // Grass and ivy, painted: the tufts where the painting has them, then many more along both ledges.
+  arCardAt(M, 'ivy', C.z + .45);
+  arCardAt(M, 'grass_l', R[2] + .05);
+  arCardAt(M, 'grass_m', L.z + .3);
+  arCardAt(M, 'grass_r', L.z + .3);
+  // a hedge of painted grass along both ledges' front edge (two rows), hiding the ledge's edge as the painting does
+  const T = def.terrace, back = AR.back, keys = ['grass_l', 'grass_m', 'grass_r'], s0 = arPxSize(def, P, -2.3);
+  for (const [a, b] of [[-T.half + .2, T.ledge[0] + .1], [T.ledge[1] - .1, T.half - .2]])
+    for (const row of [1, 0]) for (let x = a + arRand() * .3; x < b; x += D.tufts.step[0] + arRand() * D.tufts.step[1]) {
+      const key = keys[Math.floor(arRand() * 3)], bx = AR.pm[key].box, k = D.tufts.scale[0] + arRand() * D.tufts.scale[1];
+      arCard(M, key, x, 0, back - .04 - row * .3 - arRand() * .12, (bx[2] - bx[0]) * s0 * k, (bx[3] - bx[1]) * s0 * k, arRand() < .5);
+    }
+  const mat = new THREE.MeshBasicMaterial({map: pc, alphaMap: pa, transparent: true, alphaTest: .04});
+  const mesh = new THREE.Mesh(arGeo(M), mat);
+  mesh.name = 'props'; ARENA.group.add(mesh);
+  AR.props = [0, M.p.length / 3];
+  arBanner(def, S, Ee, pc, pa);
+}
+
+// The banner: a cols x rows cloth hanging from the pole (top row fixed along it, between where the painted banner
+// starts and ends), moved by gravity and a gusty wind from the left (Verlet, fixed 1/60 s steps, iters constraint
+// passes); it wears the painted banner, unrolled onto the cloth (its folds and tears). Graphics only.
+function arBanner(def, S, E, pc, pa) {
+  const B = def.banner, n = B.cols * B.rows, pm = AR.pm, ed = pm.banner_edges, pp = pm.pole_ends;
+  const along = X => (X - pp[0][0]) / (pp[1][0] - pp[0][0]);
+  const A = S.clone().lerp(E, along(ed.left[0][0])), Bp = S.clone().lerp(E, along(ed.right[0][0]));
+  const dy = B.h / (B.rows - 1), pos = new Float32Array(n * 3), cur = new THREE.Vector3();
+  for (let r = 0; r < B.rows; r++) for (let c = 0; c < B.cols; c++) {
+    cur.copy(A).lerp(Bp, c / (B.cols - 1)); pos.set([cur.x, cur.y - r * dy, cur.z], (r * B.cols + c) * 3);
+  }
+  const C = def.props.column;
+  AR.cloth = {pos, prev: pos.slice(), rest: pos.slice(0, B.cols * 3), dx: A.distanceTo(Bp) / (B.cols - 1), dy, t: 0,
+    xMin: C.x + C.shaft[0] / 2 + .04};
+  // uv: row r at fraction r/(rows-1) down both painted edges (by length), column c between them
+  const walk = (pl, f) => {
+    const seg = []; let tot = 0;
+    for (let i = 1; i < pl.length; i++) { const l = Math.hypot(pl[i][0] - pl[i - 1][0], pl[i][1] - pl[i - 1][1]); seg.push(l); tot += l; }
+    let d = f * tot;
+    for (let i = 0; i < seg.length; i++) {
+      if (d <= seg[i] || i === seg.length - 1) { const k = Math.min(1, d / seg[i]); return [pl[i][0] + (pl[i + 1][0] - pl[i][0]) * k, pl[i][1] + (pl[i + 1][1] - pl[i][1]) * k]; }
+      d -= seg[i];
+    }
   };
-  chunk(.62, .34, .7, C.x - .1, .36 + shaftH + .47, C.z, 0, .3, .07);
-  chunk(.3, .26, .36, C.x + .2, .36 + shaftH + .42, C.z + .1, .1, -.4, -.25);
-  arIvy(def, M, shaftH);
-
-  // Pole (bronze), lantern, rocks.
-  const P = M, bronze = new THREE.Color(0x8a6a3c), pole = C.pole, px0 = C.x + C.r * .6, pz = C.z + .12;
-  const rod = new THREE.CylinderGeometry(.032, .032, pole.len, 8);
-  mx.makeRotationZ(Math.PI / 2).setPosition(px0 + pole.len / 2, pole.y, pz); arAppend(P, rod, mx, bronze);
-  mx.makeTranslation(px0 + pole.len, pole.y, pz); arAppend(P, new THREE.SphereGeometry(.055, 8, 6), mx, bronze);
-  const Lt = def.lantern, k = Lt.h / 1.55, stone = new THREE.Color(0xc9c2b6), dark = new THREE.Color(0x2b2622);
-  const moss = (base) => (x, y, z, n) => n.y > .55 && arJit(x, y, z, 2) > -.2 ? new THREE.Color(0x8fae4a) : base;
-  const lb = (w, h, d, y, col, ry) => { mx.makeRotationY(ry || 0).setPosition(Lt.x, y * k, Lt.z); arAppend(P, new THREE.BoxGeometry(w * k, h * k, d * k), mx, null, moss(col)); };
-  lb(.62, .12, .62, .06, stone); lb(.44, .1, .44, .17, stone);
-  mx.makeTranslation(Lt.x, .51 * k, Lt.z); arAppend(P, new THREE.CylinderGeometry(.1 * k, .12 * k, .58 * k, 8), mx, stone);
-  lb(.52, .08, .52, .84, stone); lb(.36, .34, .36, 1.05, stone);
-  mx.makeTranslation(Lt.x, 1.05 * k, Lt.z + .181 * k); arAppend(P, new THREE.BoxGeometry(.17 * k, .17 * k, .01), mx, dark);
-  mx.makeTranslation(Lt.x - .181 * k, 1.05 * k, Lt.z); arAppend(P, new THREE.BoxGeometry(.01, .17 * k, .17 * k), mx, dark);
-  mx.makeRotationY(Math.PI / 4).setPosition(Lt.x, 1.35 * k, Lt.z); arAppend(P, new THREE.ConeGeometry(.46 * k, .26 * k, 4), mx, null, moss(stone));
-  mx.makeTranslation(Lt.x, 1.53 * k, Lt.z); arAppend(P, new THREE.SphereGeometry(.07 * k, 8, 6), mx, stone);
-  // Rocks: low icosahedra, jittered, mossy on top.
-  for (const [x, z, r] of def.rocks) {
-    const g = new THREE.IcosahedronGeometry(r, 1), p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) { const f = 1 + .22 * arJit(p.getX(i), p.getY(i), p.getZ(i), 3); p.setXYZ(i, p.getX(i) * f, p.getY(i) * f * .62, p.getZ(i) * f); }
-    g.computeVertexNormals();
-    mx.makeRotationY(x).setPosition(x, r * .3, z); arAppend(P, g, mx, null, moss(new THREE.Color(0xa49d96)));
-  }
-  arBanner(def, px0, pz);
-}
-
-// The banner: a cols x rows cloth hanging from the pole (top row fixed), torn at the bottom, moved by gravity and a
-// gusty wind from the left (Verlet, fixed 1/60 s steps, iters constraint passes). Graphics only.
-function arBanner(def, px0, pz) {
-  const B = def.banner, C = def.column, n = B.cols * B.rows, x0 = px0 + .12, y0 = C.pole.y - .03;
-  const dx = B.w / (B.cols - 1), dy = B.h / (B.rows - 1), pos = new Float32Array(n * 3);
-  for (let r = 0; r < B.rows; r++) for (let c = 0; c < B.cols; c++) pos.set([x0 + c * dx, y0 - r * dy, pz], (r * B.cols + c) * 3);
-  AR.cloth = {pos, prev: pos.slice(), rest: pos.slice(0, B.cols * 3), dx, dy, t: 0, xMin: C.x + C.r + .04};
-  const tex = rdCanvasTexture(128, (g, w) => {   // 128 x 128 stretched on the banner: red, darker hems, torn bottom
-    g.clearRect(0, 0, w, w);
-    g.fillStyle = '#c8372d'; g.beginPath(); g.moveTo(0, 0); g.lineTo(w, 0);
-    for (let i = 0; i <= 12; i++) {   // the tear: higher on the left, a long tail on the right
-      const x = w - i * w / 12, base = w * (.98 - .32 * (i / 12) ** 1.4);
-      g.lineTo(x, base - (i % 2 ? w * (.04 + .05 * arRand()) : 0));
+  const geo = new THREE.PlaneGeometry(1, 1, B.cols - 1, B.rows - 1), uv = geo.attributes.uv;
+  for (let r = 0; r < B.rows; r++) {
+    const l = walk(ed.left, r / (B.rows - 1)), rr = walk(ed.right, r / (B.rows - 1));
+    for (let c = 0; c < B.cols; c++) {
+      const k = c / (B.cols - 1), t = arPropUV('banner', l[0] + (rr[0] - l[0]) * k, l[1] + (rr[1] - l[1]) * k);
+      uv.setXY(r * B.cols + c, t[0], t[1]);
     }
-    g.closePath(); g.fill();
-    g.globalCompositeOperation = 'source-atop';   // hems and flecks only on the cloth
-    g.fillStyle = 'rgba(90,16,14,.55)'; g.fillRect(0, 0, w, w * .045); g.fillRect(0, 0, w * .05, w); g.fillRect(w * .95, 0, w * .05, w);
-    g.fillStyle = 'rgba(255,170,120,.18)';
-    for (let i = 0; i < 18; i++) g.fillRect(arRand() * w, arRand() * w * .8, 2 + arRand() * 6, 2 + arRand() * 10);
-  });
-  const geo = new THREE.PlaneGeometry(B.w, B.h, B.cols - 1, B.rows - 1);
+  }
   geo.attributes.position.array.set(pos);
-  const mesh = new THREE.Mesh(geo, new THREE.MeshToonMaterial({color: 0xffffff, map: tex, alphaTest: .5,
-    side: THREE.DoubleSide, gradientMap: F3.grad}));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({map: pc, alphaMap: pa, transparent: true, alphaTest: .04,
+    side: THREE.DoubleSide}));
   mesh.name = 'banner'; mesh.frustumCulled = false;
   ARENA.banner = mesh; ARENA.group.add(mesh);
   for (let i = 0; i < 240; i++) arClothStep(def);   // settled before the first frame

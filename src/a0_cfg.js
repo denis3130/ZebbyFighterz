@@ -69,11 +69,14 @@ const CFG={
   //   times that; beat = s between the two copies' swaps (each stream at its own moment); mix = how much; crest =
   //   painting rows over which it starts below the crest; foam = painting rect [x0, x1, row0, row1] of the boiling
   //   spray at the foot of the fall, spray = its strength, sprayRate = how fast it rises;
-  //  terrace = the stone slabs: x half width, z front/back, row depth, slab length range [min, spread], gap, slab
-  //   thickness, lip (back step: depth, height above the slabs), grout = the dark bed under the gaps, line = outline
-  //   width, warm/cool = slab colours (left in the sun, right in the shade), grass = tufts, keep = no grass nearer
-  //   than this to z 0 (the fighters' lane);
-  //  column, banner, lantern, rocks, bushes = the props (x, z, sizes); banner wind = [steady, gust] m/s^2 along +x,
+  //  terrace = the painted floor (tools/make_props.py): half width, front z, ledge = [x of the left ledge's inner end,
+  //   of the right one's, their back z] (behind the painted floor's back edge, where the column and the lantern
+  //   stand), moss = the ledges' tint (mossy, under the grass);
+  //  props = the near pieces, painted with the painting's own colours (tools/make_props.py): column = its square
+  //   shaft [width, depth, height] and broken capital [width, depth, bottom y, top y, x offset] at x, z; pole = the z
+  //   of its two ends (it slants towards the camera as painted); lantern (seen corner-on), rock [x, y, z, sizes];
+  //   tufts = the painted grass hedge along the ledges: spacing [min, spread] metres, scale [min, spread];
+  //  banner = the cloth (cols x rows points) hanging h metres from the pole; wind = [steady, gust] m/s^2 along +x,
   //   flutter = its sideways (z) ripple m/s^2;
   //  leaves = number of drifting leaves.
   arenaOn:'cascata',
@@ -86,13 +89,10 @@ const CFG={
     mistLift:.12,
     contrast:.92, lift:.03, skyDrift:.012, skyPeriod:140,
     water:{v:[45, 230], rows:[262, 640], beat:.6, mix:.85, crest:[256, 320], foam:[680, 1200, 495, 700], spray:.9, sprayRate:1.3},
-    terrace:{half:14, front:4.2, back:-3.5, row:[1.05, .45], len:[1.3, 1.1], gap:.03, depth:.25, lip:[.4, .09], grout:-.05,
-      line:.01, warm:[0xe0b88e, 0xc99a74], cool:[0xb0a39a, 0x948c8e], grass:46, keep:.7},
-    column:{x:-5.05, z:-2.6, r:.34, h:3.15, pole:{y:2.72, len:1.05}},
-    banner:{w:.78, h:2.3, cols:10, rows:14, color:0xc8372d, wind:[.9, 1.5], flutter:2.2, drag:.975, iters:3},
-    lantern:{x:5.25, z:-2.75, h:1.55},
-    rocks:[[-4.15, -2.35, .32], [-5.9, -2.2, .42], [4.45, -2.5, .28], [6.1, -2.45, .36]],
-    bushes:[[-4.55, -2.95, .55], [5.95, -3.05, .6], [-6.6, -2.9, .5]],
+    terrace:{half:14, front:4.2, ledge:[-3.1, 3.25, -3.2], moss:[.42, .5, .3]},
+    props:{column:{x:-5.29, z:-2.6, shaft:[.62, .62, 3.95], cap:[1.12, .82, 3.62, 4.85, .16]}, pole:[-2.45, -2.3],
+      lantern:{x:5.31, z:-2.75}, rock:[-4.48, .25, -2.25, .56, .33, .4], tufts:{step:[.32, .3], scale:[.75, .55]}},
+    banner:{h:2.3, cols:10, rows:14, wind:[.9, 1.5], flutter:2.2, drag:.975, iters:3},
     leaves:10}},
   // Fighter animation (graphics only): blend = frames over which the pose eases into a new free or movement action;
   // the Meshy fighters ease over model frames (their clips' poses differ more: a mid-stride walk to the wide stance) and
