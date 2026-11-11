@@ -25,7 +25,8 @@ const RN_D = {F: null, S: null};
 function rnDrawState(k) {
   if (!RN.on) return VW.S;
   const F = VW.F, D = RN_D.F || (RN_D.F = {}), S = RN_D.S || (RN_D.S = {frame: 0, sides: [{team: [D], cur: 0}], int: VW.S});
-  if (k === undefined) k = RN.opt.smooth && !VW.hold && VW.speed > 0 ? Math.max(0, Math.min(1, VW.acc / VW_DT)) : 0;
+  if (k === undefined) k = VW.hold ? RN_D.k || 0 : RN.opt.smooth && VW.speed > 0 ? Math.max(0, Math.min(1, VW.acc / VW_DT)) : 0;   // (held: where it stopped)
+  RN_D.k = k;
   Object.assign(D, F);
   D.af = F.af + k; S.frame = VW.S.frame + k; S.k = k;
   if (k) {
