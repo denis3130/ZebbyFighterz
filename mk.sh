@@ -14,7 +14,11 @@ PY
 V="a0_cfg.js c1_sim.js e_poses.js e_fighter3d.js e_model.js v_viewer.js"
 python3 build.py viewer.html 0 --head=viewer_head.html --char=ren --assets=viewer_assets $V >/dev/null
 python3 build.py viewer_kael.html 0 --head=viewer_head.html --char=kael --assets=wip_assets --drop=ren/,ui/ $V >/dev/null
+# arena.html = "Anteprima dell'arena" (the arena alone, free camera; its own page, not committed: rebuilt here)
+A="a0_cfg.js c1_sim.js c2_moves.js c3_dummy.js d_arena.js d_render.js e_poses.js e_fighter3d.js e_model.js f_fx.js v_arena.js"
+python3 build.py arena.html 0 --head=arena_head.html --drop=arena/cascata.jpg,arena/cascata_mask.png,ren/,kael/,ui/ $A >/dev/null
 python3 -c "
 import re;s=open('game_w.html').read();open('g.js','w').write(re.findall(r'<script>\n(.*?)\n</script>',s,re.S)[0])
-s=open('viewer.html').read();open('gv.js','w').write(re.findall(r'<script>\n(.*?)\n</script>',s,re.S)[0])" && node --check g.js && node --check gv.js && echo SYNTAX_OK
+s=open('viewer.html').read();open('gv.js','w').write(re.findall(r'<script>\n(.*?)\n</script>',s,re.S)[0])
+s=open('arena.html').read();open('ga.js','w').write(re.findall(r'<script>\n(.*?)\n</script>',s,re.S)[0])" && node --check g.js && node --check gv.js && node --check ga.js && echo SYNTAX_OK
 python3 tools/make_play.py

@@ -1,0 +1,52 @@
+<title>Anteprima arena</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:ital,wght@1,600;1,700&display=swap" rel="stylesheet">
+<style>
+/* The arena alone with a free camera: the game's dark night blue and its orange; Bebas for the name, Barlow italic for
+   the controls (as the character previews). */
+:root{--dark:#14121c;--panel:rgba(20,18,28,.72);--line:rgba(255,255,255,.16);--ink:#f4f1fb;--dim:#c4bfd3;--orange:#ff7a1a;--cyan:#35d8ff;
+  --display:'Bebas Neue',Impact,'Arial Narrow',sans-serif;--body:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;color-scheme:dark}
+html,body{height:100%}
+body{margin:0;background:var(--dark);color:var(--ink);font-family:var(--body);font-style:italic;font-weight:700;overflow:hidden;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+#game{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+#game:active{cursor:grabbing}
+.ui{position:fixed;z-index:2;left:0;right:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.ui>*{pointer-events:auto}
+#top{top:0;padding-top:calc(10px + env(safe-area-inset-top,0px));display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+#name{pointer-events:none;font-family:var(--display);font-style:normal;font-size:44px;line-height:.9;letter-spacing:.04em;transform:skewX(-8deg);text-shadow:0 3px 0 var(--orange),0 6px 14px #000}
+#name small{display:block;font-family:var(--body);font-style:italic;font-size:16px;letter-spacing:.06em;color:var(--dim);text-shadow:0 1px 3px #000}
+#fps{pointer-events:none;font-size:18px;color:var(--orange);text-shadow:0 1px 3px #000;text-align:right;min-width:70px}
+#fps small{display:block;color:var(--dim);font-size:14px}
+#bottom{bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button{font:inherit;font-size:17px;letter-spacing:.03em;color:var(--ink);background:var(--panel);border:1px solid var(--line);padding:8px 15px 7px;
+  min-height:40px;transform:skewX(-10deg);cursor:pointer;transition:transform .08s,background .15s;touch-action:none}
+button>span{display:inline-block;transform:skewX(10deg)}
+button:active,button.held{transform:skewX(-10deg) scale(.93)}
+button[aria-pressed="true"]{background:var(--orange);border-color:var(--orange);color:#1a0f05}
+button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.sep{width:10px}
+#hint{pointer-events:none;color:var(--dim);font-size:14px;text-shadow:0 1px 3px #000}
+@media (max-height:430px){#name{font-size:34px}#name small{font-size:14px}button{font-size:15px;padding:6px 12px 5px;min-height:36px}#hint{font-size:13px}}
+@media (prefers-reduced-motion:reduce){button{transition:none}}
+</style>
+<canvas id="game"></canvas>
+<div class="ui" id="top"><div id="name">La Grande Cascata<small>Anteprima dell'arena, telecamera libera</small></div><div id="fps">FPS --<small>arena</small></div></div>
+<div class="ui" id="bottom">
+  <div class="row">
+    <button id="mMove" aria-pressed="true"><span>Sposta</span></button>
+    <button id="mTurn" aria-pressed="false"><span>Ruota</span></button>
+    <span class="sep"></span>
+    <button id="fwd"><span>Avanti</span></button>
+    <button id="back"><span>Indietro</span></button>
+    <span class="sep"></span>
+    <button id="reset"><span>Telecamera del gioco</span></button>
+    <span class="sep"></span>
+    <button id="rGame" aria-pressed="true"><span>Come nel gioco</span></button>
+    <button id="rFree" aria-pressed="false"><span>Libera</span></button>
+  </div>
+  <div id="hint">Trascina per spostarti (o ruotare), pizzica o rotella per avvicinarti, doppio tocco per tornare. "Come nel gioco": fin poco oltre dove arriva la telecamera del gioco. "Libera": molto più in là, dove si vedono i bordi dello sfondo dipinto. Tastiera: A D, W S, R F, frecce. Controller: levette, LB RB, A.</div>
+</div>

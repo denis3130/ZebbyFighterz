@@ -454,7 +454,7 @@ def main(preview):
     islands.append({'name': 'haze', 'box': [-px, 0, W0 + px, H0 + bot], 'rgb': haze, 'm': hal, 'water': None, 'scale': HAZE_SCALE})
 
     # Sky: the rest filled in from the sky; wrapped round past both edges; on top a deeper blue.
-    is_sky = (ys < sky_y[None, :] - 3) & ~unknown
+    is_sky = (ys < sky_y[None, :] - 14) & ~unknown      # (not right above the sky line: tree tops poke out there)
     sky = push_pull(rgb, is_sky)
     sky = np.where(is_sky[..., None], rgb, np.asarray(Image.fromarray(np.uint8(np.clip(sky, 0, 255))).filter(ImageFilter.GaussianBlur(2)), np.float64))
     # the sun's glow on the far left: the right side's sky and clouds, mirrored
