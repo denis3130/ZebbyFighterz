@@ -534,6 +534,16 @@ il nodo in vita resta di Meshy (Denis: "no il nodo in vita no solo togli meglio 
   specchiato e appoggiato sulla spalla destra; le isole scure di Meshy nella pelle e i pezzetti rimasti sulle spalle
   sono pelle; le mani: dita pelle pulita, guanto viola scuro con le sue ombre nere grandi, bordi lisciati, niente viola
   oltre il polsino.
+- **Pollici e bordi neri** (Denis: "sistema i pollici che sono buggati e dipingi meglio i bordi neri delle dita e del
+  resto"; `finish` in `tools/kael_bust.py`, versione `busto_k4.glb`): la forma dei pollici era a posto (vista col
+  render con z-buffer e il contorno come nel gioco), era la pittura: guanto attraverso il pollice e macchie di pelle sul
+  palmo accanto, il pollice sembrava tagliato in due. Ora il pollice è tutto pelle dalla base (lungo la superficie dalla
+  punta, `THUMB`), tra pollice e indice guanto; il bordo del guanto sulle dita è quello di Meshy lisciato su 1,2 cm
+  (`GLOVE_R`, prima a sfrangiature), il nero del guanto solo nelle pieghe grandi e non accanto al bordo; dietro le spalle
+  i tatuaggi che Meshy aveva fatto viola scuro col bordo nero sono viola col bordo viola scuro, come nel foglio della
+  schiena; poi le linee nere dove le disegna il foglio: tra pelle e stoffa o viola (bordo dei guanti, scalfi, collo),
+  attorno a fascia, polsini e bordo del colletto, tra le pieghe della fascia; non attorno alle strisce del gilet né ai
+  tatuaggi. Le dita hanno il loro contorno dal contorno del gioco (dipinte negli incavi erano cunei neri).
 - Prossimi passi: metterlo sulle ossa di Kael al posto del suo busto e delle braccia (come la testa,
   `tools/kael_head.py`), la testa sopra, le gambe di adesso sotto; poi le code della fascia come nastri.
 
