@@ -21,10 +21,9 @@
 const RB = {
   ext: .965,          // a leg in contact is never straighter than this share of its length
   heelMax: 30,        // degrees a heel may lift (the shoe is rigid: it turns on its toe tip)
-  ankle: 28,          // degrees a pinned foot's direction may be off its knee's: beyond, the foot turns with the knee
   travel: [.2, .3],   // metres the pelvis may follow the feet's captured place: both feet planted, one foot (kicks)
   blend: 6, hitBlend: 3,   // frames: easing into a new free act / into a hit reaction
-  md: null, W: null, sty: null, con: null, pol: 'none',
+  md: null, W: null, sty: null, con: null, pol: 'none', rawOk: {},
   // Per move, what the style adds to the clip. hip/chest = twist at the impact (degrees; the sign follows the hitting
   // side), coil = share wound the other way first, lean = pitch at the impact (degrees, < 0 back) and leanCoil in the
   // coil, dip = pelvis drop in the coil and rise at the impact (shares of the height), back/fwd = metres the pelvis
@@ -100,7 +99,7 @@ function rbInit(md) {
   const mk = () => ({w: 0, G: new T.Vector3(), Q: new T.Quaternion(), T: new T.Vector3(), yaw: 0, heel: 0, auto: false, flat: null, loc: null});
   RB.con = {L: mk(), R: mk()}; RB.sav = {L: mk(), R: mk()};
   RB.sty = {h: {L: 0, R: 0}};
-  RB.t = {dir: new T.Vector3(), res: new T.Vector3(), lift: 0, q: [0, 1, 2, 3, 4, 5].map(() => new T.Quaternion()), v: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => new T.Vector3()), m: new T.Matrix4(), qHead: new T.Quaternion(),
+  RB.t = {dir: new T.Vector3(), lift: 0, raw: {L: null, R: null}, rawOf: {L: {dir: new T.Vector3(), lift: 0}, R: {dir: new T.Vector3(), lift: 0}}, q: [0, 1, 2, 3, 4, 5].map(() => new T.Quaternion()), v: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => new T.Vector3()), m: new T.Matrix4(), qHead: new T.Quaternion(),
     cb: {L: new T.Vector3(), R: new T.Vector3()}, ca: {L: new T.Vector3(), R: new T.Vector3()}, cq: {L: new T.Quaternion(), R: new T.Quaternion()}};
 }
 
@@ -115,7 +114,8 @@ function rbStance(md, F) {
     const L = RB.leg[s], q = W.q[L.ia].clone(), n = L.up.clone().applyQuaternion(q);
     q.premultiply(new T.Quaternion().setFromUnitVectors(n, RB_UP));   // the sole flat on the floor
     const f = L.tb.clone().applyQuaternion(q).setY(0).normalize();
-    st[s] = {G: new T.Vector3(W.p[L.it].x + f.x * L.far, 0, W.p[L.it].z + f.z * L.far), Q: q, fwd: f, axis: new T.Vector3().crossVectors(RB_UP, f).normalize()};   // G: the toe tip, on the floor
+    st[s] = {G: new T.Vector3(W.p[L.it].x + f.x * L.far, 0, W.p[L.it].z + f.z * L.far), B: new T.Vector3(W.p[L.it].x, 0, W.p[L.it].z), Q: q, fwd: f,
+      axis: new T.Vector3().crossVectors(RB_UP, f).normalize()};   // G: the toe tip, B: under the ball of the foot, both on the floor
   }
   st.yaw = rbYaw(W.q[0]); st.rear = st.L.G.z < st.R.G.z ? 'L' : 'R'; st.front = st.rear === 'L' ? 'R' : 'L';
   F0.act = 'crouch'; st.crouch = mdPoseOf(F0, {frame: 0});
@@ -207,6 +207,7 @@ RN.pure = function (md, F, S) {
   const pol = F.air ? 'air' : RB.keep[act] ? 'keep' : RB.pin[act] || CFG.moves[act] ? 'pin' : 'none';
   RB.pol = pol; RB.floor = F.air ? -F.y / 1000 : 0;   // the floor in the model's frame (under a fighter in the air)
   rbBody(md, p, y);
+  rbRawFeet(md, F, y);
   if (fix && y.box > 0) { p.h[0] += fix.x * y.box; p.h[1] += fix.y * y.box; p.h[2] += fix.z * y.box; }
   if (pol !== 'none') { rbContacts(md, p, y, st, pol, t0); rbLegs(md, p); }
   return p;
@@ -292,13 +293,19 @@ function rbContacts(md, p, y, st, pol, t0) {
       // back on its spot with the stance
       c.w = y.free === s ? Math.max(y.back, y.freeW < 0 ? 1 - rnSm((hb - .02) / .1) : y.freeW) : 1;
       c.G.copy(st[s].G); c.flat = st[s]; c.loc = L.tp; c.auto = !y.move;
-      rbFootOf(t.cq[s], L);
-      const ref = t0 ? t0[s] : st[s].fwd, lim = (y.free && y.free !== s ? 90 : y.move ? 30 : 60) * RB_R;
-      const turn = lim * Math.tanh(Math.atan2(ref.z * t.dir.x - ref.x * t.dir.z, ref.x * t.dir.x + ref.z * t.dir.z) / lim) * y.foot;
-      const lift = Math.min(RB.heelMax, t.lift * y.lift + y.h[s]);
+      // the clip's own foot: for a foot the clip entry holds in place (plant), the capture's foot before that hold
+      // (the hold freezes it as it stood on the move's first frame: the body turned over a foot that did not)
+      if (t.raw[s]) { t.dir.copy(t.raw[s].dir); t.lift = t.raw[s].lift; } else rbFootOf(t.cq[s], L);
+      // its turn: the clip's foot against its first pose (a move) or against the stance, softly limited: 160 degrees
+      // for a kick's support foot (it pivots as the actor's), 20 in a punch (he stepped), 60 otherwise; a kicking foot
+      // takes the clip's direction over the first half of the startup, so it does not spin as it leaves the floor
+      const kicker = y.free === s, ref = t0 && !kicker ? t0[s] : st[s].fwd, lim = (kicker ? 170 : y.free ? 160 : y.move ? 20 : 60) * RB_R;
+      const raw = Math.atan2(ref.z * t.dir.x - ref.x * t.dir.z, ref.x * t.dir.x + ref.z * t.dir.z), ar = Math.abs(raw);
+      const turn = Math.sign(raw) * (ar <= .7 * lim ? ar : .7 * lim + .3 * lim * Math.tanh((ar - .7 * lim) / (.3 * lim))) * (kicker ? 1 - Math.max(y.freeB, y.back) : y.foot);
+      const lift = Math.min(RB.heelMax, t.lift * (kicker ? 1 - Math.max(y.freeB, y.back) : y.lift) + y.h[s]);
       c.Q.copy(st[s].Q);
       if (lift > 0) c.Q.premultiply(q[1].setFromAxisAngle(st[s].axis, lift * RB_R));
-      if (turn) c.Q.premultiply(q[1].setFromAxisAngle(RB_UP, turn));
+      if (turn) { c.Q.premultiply(q[1].setFromAxisAngle(RB_UP, turn)); c.G.sub(st[s].B).applyAxisAngle(RB_UP, turn).add(st[s].B); }   // on the ball of the foot
       const wb = y.free === s ? Math.max(y.back, Math.min(c.w, y.freeB)) : 1;   // this foot's say in where the pelvis goes
       if (wb > 0) { const tip = t.v[4].copy(L.tp).applyQuaternion(c.Q).add(t.ca[s]); ox += (c.G.x - tip.x) * wb; oz += (c.G.z - tip.z) * wb; n += wb; }
     } else {
@@ -312,6 +319,31 @@ function rbContacts(md, p, y, st, pol, t0) {
     const d = Math.hypot(ox, oz), lim = RB.travel[1] + (RB.travel[0] - RB.travel[1]) * Math.max(0, Math.min(1, n - 1)), k = d > 1e-6 ? lim * Math.tanh(d / lim) / d : 1;   // (a soft limit)
     p.h[0] += ox * k; p.h[2] += oz * k;
   }
+}
+// The capture's own feet of a move whose clip entry holds them in place (plant): their directions and heel lifts
+// (RB.t.raw.L / .R, null for a foot the entry does not hold), read from the clip itself at the move's time counted
+// evenly (not eased: the feet turn all through the startup, not in its last frames). A foot whose capture turns more
+// than 150 degrees somewhere in the move is left held (a spin: its turn has no single direction).
+function rbRawFeet(md, F, y) {
+  const t = RB.t, lk = CFG.looks[F.char], e = y.move && !F.air ? (lk && lk.clips ? mdLookClips(lk) : CFG.clips)[F.act] : null;
+  t.raw.L = t.raw.R = null;
+  if (!e || !e.plant || !e.t) return;
+  const m = y.move.m, h = md.hitT[F.act] === undefined ? (e.t[0] + e.t[1]) / 2 : md.hitT[F.act], af = F.af, r = m.r === 'land' ? 8 : m.r;
+  const ok = RB.rawOk[F.act] || (RB.rawOk[F.act] = rbRawOk(md, e));
+  const time = af <= m.s ? e.t[0] + (h - e.t[0]) * Math.max(0, af) / m.s : af <= m.s + m.a ? h : h + (e.t[1] - h) * Math.min(1, (af - m.s - m.a) / r);
+  const W = rbFK(md, mdSample(md, e.c, time, false), RB.W);
+  for (const s of e.plant) { if (!ok[s]) continue; const L = RB.leg[s], o = t.rawOf[s]; rbFootOf(W.q[L.ia], L); o.dir.copy(t.dir); o.lift = t.lift; t.raw[s] = o; }
+}
+function rbRawOk(md, e) {
+  const ok = {L: true, R: true}, d0 = {};
+  for (let k = 0; k <= 24; k++) {
+    const W = rbFK(md, mdSample(md, e.c, e.t[0] + (e.t[1] - e.t[0]) * k / 24, false), RB.W);
+    for (const s of ['L', 'R']) {
+      rbFootOf(W.q[RB.leg[s].ia], RB.leg[s]);
+      if (!k) d0[s] = RB.t.dir.clone(); else if (d0[s].dot(RB.t.dir) < -.866) ok[s] = false;
+    }
+  }
+  return ok;
 }
 // The planted feet's directions at the start of move F.act (its clip's first pose), once per move.
 function rbT0(md, F, S) {
@@ -330,21 +362,6 @@ function rbLegs(md, p) {
   const qH = q[0].fromArray(p.q, 0), h = v[0].fromArray(p.h);
   const hip = (s, out) => out.copy(RB.leg[s].tu).applyQuaternion(qH).add(h);
   const ankle = (s, out) => out.copy(con[s].loc).applyQuaternion(con[s].Q).negate().add(con[s].G);
-  // a pinned foot follows its knee: turned on its toe tip by what the knee's direction is off the foot's beyond
-  // RB.ankle degrees (an ankle does not twist further), twice (the ankle moves with the turn)
-  for (const s of ['L', 'R']) {
-    const c = con[s], L = RB.leg[s];
-    if (!c.flat || c.w <= 0) continue;
-    const qU = q[1].copy(qH).multiply(q[2].fromArray(p.q, L.iu * 4)), A = hip(s, v[5]), knee = v[7].fromArray(md.bones[L.il].t).applyQuaternion(qU).add(A);
-    const fa = v[8].fromArray(md.bones[L.ia].t).applyQuaternion(q[2].copy(qU).multiply(q[3].fromArray(p.q, L.il * 4))).add(knee);
-    for (let k = 0; k < 2; k++) {
-      const dir = ankle(s, v[6]).sub(A).normalize(), P = rbPole(L, A, dir, qU, knee, fa, q[4], v[1]).setY(0), f = v[2].copy(L.sd).applyQuaternion(c.Q).setY(0);
-      if (P.lengthSq() < .04 || f.lengthSq() < .04) break;   // (a knee that points up or down has no say)
-      const ang = Math.atan2(f.z * P.x - f.x * P.z, f.x * P.x + f.z * P.z), over = Math.abs(ang) - RB.ankle * RB_R;
-      if (over <= 0) break;
-      c.Q.premultiply(q[3].setFromAxisAngle(RB_UP, Math.sign(ang) * over * c.w * (1 - rnSm((Math.abs(ang) - 2.7) / .35))));
-    }
-  }
   // a short leg first lifts its heel (smoothly with what is missing: 4 cm = 10 degrees), on standing feet only
   for (const s of ['L', 'R']) {
     const c = con[s], L = RB.leg[s];
@@ -360,17 +377,6 @@ function rbLegs(md, p) {
     if (ex > 0) h.addScaledVector(d, ex / n * c.w);
   }
   h.toArray(p.h);
-  // one foot pinned, the other free (a kick): the pinned foot is not quite where the clip's leg would put it, so the
-  // free foot near the floor moves by the same amount: the two feet keep the clip's own arrangement (the kicking foot
-  // steps beside the standing one as the actor's did, not through it)
-  let res = null;
-  if (RB.pol === 'pin') for (const s of ['L', 'R']) {
-    const c = con[s], o = con[s === 'L' ? 'R' : 'L'], L = RB.leg[s];
-    if (c.w < 1 || !c.flat || o.w >= 1) continue;
-    const qU = q[1].copy(qH).multiply(q[2].fromArray(p.q, L.iu * 4)), knee = v[7].fromArray(md.bones[L.il].t).applyQuaternion(qU).add(hip(s, v[5]));
-    const fa = v[8].fromArray(md.bones[L.ia].t).applyQuaternion(qU.multiply(q[3].fromArray(p.q, L.il * 4))).add(knee);
-    res = ankle(s, t.res).sub(fa).setY(0);
-  }
   // each leg: on its contact; partly free (a foot leaving or coming back to its spot: it steps, a little off the
   // floor); or free, as the pelvis carries the clip's leg. No foot under the floor, none tilted on its edge near it.
   for (const s of ['L', 'R']) {
@@ -384,7 +390,6 @@ function rbLegs(md, p) {
         const far = Math.hypot(ankle(s, tgt).x - fa.x, tgt.z - fa.z);   // a foot that travels steps: off the floor by how far it goes
         tgt.lerpVectors(fa, tgt, c.w); Qf.slerp(c.Q, c.w); tgt.y += Math.min(.05, .3 * far) * Math.sin(Math.PI * c.w);
       } else tgt.copy(fa);
-      if (res) { const k = (1 - c.w) * (1 - rnSm((fa.y - RB.floor - L.ank - .1) / .5)); tgt.x += res.x * k; tgt.z += res.z * k; }
     }
     if (!c.flat || c.w < 1) {
       const fl = RB.floor, ball = v[6].copy(L.tb).applyQuaternion(Qf).add(tgt), near = 1 - rnSm((ball.y - fl - L.ball) / .14);
