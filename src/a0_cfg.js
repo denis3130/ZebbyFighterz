@@ -58,7 +58,9 @@ const CFG={
   //  view = the widest view to cover (aspect, camera x reach and shake, metres);
   //  layers: z of each far painted plane (tools/make_layers.py cuts them): base = the painted mist at the mountains'
   //   feet, one band in front of all of them; L and R = the two mountains, each one whole piece as painted (left and
-  //   right of the waterfall); falls; far = pale mountains in the haze past their outer slopes; haze; sky. At the
+  //   right of the waterfall), each going on outwards as more of itself (quilted from its own painting) down into the
+  //   mist; falls; sky; around them a sky dome (the painting's colours by elevation, its distant mist below the
+  //   horizon: never an edge, wherever the camera looks). At the
   //   start camera they add up to the painting whatever their depths (each is scaled for its own); the depths only
   //   set how much they slide apart when the camera moves; mists = drifting mist banks (none since 11/11, Denis:
   //   "c'è troppa nebbia"); sway = the far planes' slow breathing (metres, seconds), so their depth shows with the
@@ -70,9 +72,9 @@ const CFG={
   //   times that; beat = s between the two copies' swaps (each stream at its own moment); mix = how much; crest =
   //   painting rows over which it starts below the crest; foam = painting rect [x0, x1, row0, row1] of the boiling
   //   spray at the foot of the fall, spray = its strength, sprayRate = how fast it rises;
-  //  terrace = the painted floor (tools/make_props.py): half width, front z, ledge = [x of the left ledge's inner end,
-  //   of the right one's, their back z] (behind the painted floor's back edge, where the column and the lantern
-  //   stand), moss = the ledges' tint (mossy, under the grass);
+  //  terrace = the painted floor (tools/make_props.py): half width, front z (both past what the preview's free camera
+  //   can see), ledge = [x of the left ledge's inner end, of the right one's, their back z] (behind the painted floor's
+  //   back edge, where the column and the lantern stand), moss = the ledges' tint (mossy, under the grass);
   //  props = the near pieces, painted with the painting's own colours (tools/make_props.py): column = its square
   //   shaft [width, depth, height] and broken capital [width, depth, bottom y, top y, x offset] at x, z; pole = the z
   //   of its two ends (it slants towards the camera as painted); lantern (seen corner-on), rock [x, y, z, sizes];
@@ -84,13 +86,13 @@ const CFG={
   arenas:{cascata:{
     ref:{w:844, h:390, footRow:.83, cover:1.1, img:[1672, 941]},
     view:{aspect:2.45, xPad:.4},
-    layers:{base:-7, L:-15, R:-15, falls:-36, far:-60, haze:-80, sky:-300},
+    layers:{base:-7, L:-15, R:-15, falls:-36, sky:-300},
     mists:[],
     sway:{amp:.25, period:24},
     mistLift:.12,
     contrast:.92, lift:.03, skyDrift:.012, skyPeriod:140,
     water:{v:[45, 230], rows:[262, 640], beat:.6, mix:.85, crest:[256, 320], foam:[680, 1200, 495, 700], spray:.9, sprayRate:1.3},
-    terrace:{half:14, front:4.2, ledge:[-3.1, 3.25, -3.2], moss:[.42, .5, .3]},
+    terrace:{half:60, front:30, ledge:[-3.1, 3.25, -3.2], moss:[.42, .5, .3]},
     props:{column:{x:-5.29, z:-2.6, shaft:[.62, .62, 3.95], cap:[1.12, .82, 3.62, 4.85, .16]}, pole:[-2.45, -2.3],
       lantern:{x:5.31, z:-2.75}, rock:[-4.48, .25, -2.25, .56, .33, .4], tufts:{step:[.32, .3], scale:[.75, .55]}},
     banner:{h:2.3, cols:10, rows:14, wind:[.9, 1.5], flutter:2.2, drag:.975, iters:3},

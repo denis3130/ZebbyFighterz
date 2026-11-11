@@ -1,11 +1,12 @@
 // Renderer: the WebGL canvas, the side camera, the 3D arena (d_arena.js), drifting leaves, the fighters
 // (e_fighter3d.js), their blob shadows and toScreen. Graphics only: it reads the sim state and never writes it.
 // The 3D world is in metres: x = F.x/1000, y = F.y/1000, z = 0 (side 0 at +0.05, side 1 at -0.05); the camera looks
-// along -z without pitch; the arena's far planes reach z = -300 (the sky), hence the far plane.
+// along -z without pitch; the arena's sky plane is at z = -300 and as wide as the arena preview's free camera can turn
+// (src/v_arena.js: about 60 degrees to each side, seen up to about 600 m deep), hence the far plane.
 
 const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('game'), antialias: false});
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(CFG.cam.fov, 1, .1, 400);
+const camera = new THREE.PerspectiveCamera(CFG.cam.fov, 1, .1, 1000);
 const cam = {x: 0, y: 0, dist: CFG.cam.dist0};   // the camera as computed, in metres (y follows from dist)
 // Private state: W, H = screen in CSS px, v = scratch vector, shadows = one disc per side.
 const RD = {W: 1, H: 1, v: new THREE.Vector3(), shadows: [], seed: 7};

@@ -1,14 +1,16 @@
-// The 3D arena: far painted depth planes, like an anime multiplane camera (the dark forest low on the left, the near
-// cliffs, the high cliffs, the waterfall, the far haze, the sky, with drifting mist banks between them), and near 3D
-// pieces in the fighters' toon style (stone terrace with grass, column with a waving banner, lantern, rocks). Built
+// The 3D arena: far painted depth planes, like an anime multiplane camera (the mist at the mountains' feet, the two
+// mountains, the waterfall, the sky; around them a sky dome with the painting's colours by elevation, its distant mist
+// below the horizon), and near 3D pieces wearing the painting (stone terrace with grass, column with a waving banner,
+// lantern, rocks). Built
 // from CFG.arenas[name] (arenaBuild) and animated once per drawn frame (arenaStep). Graphics only: it reads the sim
 // state and never writes it. Metres; the fighters stand at z ~ 0 on y = 0 (the slabs' tops); the camera looks along
 // -z (d_render.js).
 
 // group = the near 3D arena; far = the far planes' group; layers = {planes: [{name, z, rect, box}] nearest first,
-// mists: [{z, rect}]}; banner = the cloth mesh; leaves = the drifting leaves (d_render.js); waterMat = the waterfall
-// plane's ShaderMaterial; stats() = {draws, tris} of the arena (near and far).
-const ARENA = {group: null, far: null, layers: {}, banner: null, leaves: new THREE.Group(), waterMat: null, stats: arStats};
+// mists: [{z, rect}]}; dome = the sky dome's mesh; banner = the cloth mesh; leaves = the drifting leaves (d_render.js);
+// waterMat = the waterfall plane's ShaderMaterial; stats() = {draws, tris} of the arena (near and far).
+const ARENA = {group: null, far: null, layers: {}, dome: null, banner: null, leaves: new THREE.Group(), waterMat: null,
+  stats: arStats};
 // Private: def = the arena's CFG entry, seed = render-only generator, cloth = the banner's points, mats = the far
 // planes' materials (their time uniforms), skyK = sky sway per painting width.
 const AR = {def: null, seed: 11, cloth: null, last: -1, mats: [], skyK: 1};
@@ -36,10 +38,11 @@ const AR_FAR_FRAG = {
   // A plane: its colours by its alpha (the colour is read only where it shows).
   // No discard anywhere: with it the GPU would shade the pixels the near scene hides before testing their depth.
   plane: `void main(){ float a = texture2D(uM, vUv).r; vec3 c = vec3(0.); if (a > .003) c = arGrade(texture2D(uC, vUv).rgb); gl_FragColor = vec4(c, a); }`,
-  // The sky: opaque, the clouds sway in u (mirrored past the edges); uAt = its atlas rect (u0, v0, du, dv).
+  // The sky: the clouds sway in u (colour and alpha together; past its sides and top it fades into the dome);
+  // uAt = its atlas rect (u0, v0, du, dv).
   sky: `uniform vec4 uAt; uniform float uSkyOff;
-void main(){ vec2 u = vec2(1. - abs(1. - mod(vU.x + uSkyOff + 2., 2.)), vU.y);
-  gl_FragColor = vec4(arGrade(texture2D(uC, uAt.xy + clamp(u, .002, .998) * uAt.zw).rgb), 1.); }`,
+void main(){ vec2 t = uAt.xy + clamp(vec2(vU.x + uSkyOff, vU.y), .002, .998) * uAt.zw;
+  gl_FragColor = vec4(arGrade(texture2D(uC, t).rgb), texture2D(uM, t).r); }`,
   // A mist bank: the noise band drifting in u, in the painting's mist colour.
   mist: `uniform vec3 uColor; uniform float uRep, uDrift, uOpacity;
 void main(){ float a = texture2D(uMist, vec2(vU.x * uRep + mod(uTime * uDrift, 1.), vU.y)).r * uOpacity;
@@ -76,6 +79,20 @@ void main(){
   }
   gl_FragColor = vec4(arGrade(c), a);
 }`};
+
+// The sky dome: one triangle over the whole screen at the far plane (drawn after the opaque scene, only where nothing
+// is), coloured by the elevation of its view direction (uDome: the colours from uE.x to uE.y radians, tools/
+// make_layers.py dome_colours): wherever the camera turns, past the painted planes there is sky above and the
+// distant mist below the horizon.
+const AR_DOME_VERT = `uniform mat4 uProjInv, uCamWorld;
+varying vec3 vDir;
+void main(){ vec4 v = uProjInv * vec4(position.xy, 1., 1.); vDir = (uCamWorld * vec4(v.xyz / v.w, 0.)).xyz;
+  gl_Position = vec4(position.xy, 1., 1.); }`;
+const AR_DOME_FRAG = `uniform sampler2D uDome; uniform vec3 uE; uniform float uContrast, uLift;
+varying vec3 vDir;
+void main(){ float e = asin(clamp(normalize(vDir).y, -1., 1.));
+  vec3 c = texture2D(uDome, vec2((.5 + clamp((e - uE.x) / (uE.y - uE.x), 0., 1.) * (uE.z - 1.)) / uE.z, .5)).rgb;
+  gl_FragColor = vec4((c - .5) * uContrast + .5 + uLift, 1.); }`;
 
 // Render-only generator (mulberry32 on AR.seed), so the arena is built the same every time.
 function arRand() {
@@ -197,17 +214,12 @@ function arLayers(def, col, msk, mist) {
   const zs = [...byZ.keys()].sort((a, b) => b - a);
   for (const z of zs) {
     const pls = byZ.get(z), name = pls.map(p => p.name).join('+'), rank = 10 + zs.indexOf(z);
-    if (name === 'sky') {
-      AR.skyK = iw / (pls[0].box[2] - pls[0].box[0]);
-      const st = pls[0].strips[0];
-      arFarMesh('sky', [{rect: pls[0].rect, f: st.f, uv: st.uv}], z, arFarMat('sky', {uAt: U(at(st)), uSkyOff: U(0)}, true), rank);
-      continue;
-    }
     const W = def.water, uni = name === 'falls' ? () => ({uBox: U(new THREE.Vector4(...pls[0].box)), uAt: U(at(pls[0].strips[0])),
       uFoam: U(new THREE.Vector4(...W.foam)), uFlowV: U(new THREE.Vector4(W.v[0], W.v[1], W.beat, W.mix)),
       uRows: U(new THREE.Vector2(...W.rows)), uSpray: U(new THREE.Vector2(W.spray, W.sprayRate)), uCrest: U(new THREE.Vector2(...W.crest)),
-      }) : () => ({});
-    const kind = name === 'falls' ? 'water' : 'plane';
+      }) : name === 'sky' ? () => ({uAt: U(at(pls[0].strips[0])), uSkyOff: U(0)}) : () => ({});
+    if (name === 'sky') AR.skyK = iw / (pls[0].box[2] - pls[0].box[0]);
+    const kind = name === 'falls' ? 'water' : name === 'sky' ? 'sky' : 'plane';
     arFarMesh(name + '.core', arQuads(pls, true), z, arFarMat(kind, uni(), true), rank);
     const edge = arFarMesh(name, arQuads(pls, false), z, arFarMat(kind, uni()), Math.round(z));
     if (name === 'falls') ARENA.waterMat = edge.material;
@@ -224,6 +236,25 @@ function arLayers(def, col, msk, mist) {
   }
   planes.sort((a, b) => b.z - a.z);
   ARENA.layers = {planes: planes.map(p => ({name: p.name, z: p.z, rect: p.rect, box: p.box})), mists};
+  arDome(def, meta.dome);
+}
+
+// The sky dome (AR_DOME_*): its colours by elevation in a 1-texel-high texture; it follows the camera that draws it.
+function arDome(def, D) {
+  const n = D.colors.length, data = new Uint8Array(n * 4);
+  D.colors.forEach((c, i) => data.set([...c.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255)), 255], i * 4));
+  const tex = new THREE.DataTexture(data, n, 1, THREE.RGBAFormat);
+  tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.needsUpdate = true;
+  const U = v => ({value: v}), g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+  const mat = new THREE.ShaderMaterial({vertexShader: AR_DOME_VERT, fragmentShader: AR_DOME_FRAG, depthWrite: false,
+    uniforms: {uDome: U(tex), uE: U(new THREE.Vector3(D.e0, D.e1, n)), uContrast: U(def.contrast), uLift: U(def.lift),
+      uProjInv: U(new THREE.Matrix4()), uCamWorld: U(new THREE.Matrix4())}});
+  const mesh = ARENA.dome = new THREE.Mesh(g, mat);
+  mesh.name = 'dome'; mesh.frustumCulled = false;
+  mesh.renderOrder = 100;   // after every opaque piece (the near scene, the planes' cores), before the blended ones
+  mesh.onBeforeRender = (r, s, c) => { mat.uniforms.uProjInv.value.copy(c.projectionMatrixInverse); mat.uniforms.uCamWorld.value.copy(c.matrixWorld); };
+  ARENA.far.add(mesh);
 }
 
 // --- Geometry helpers ---
@@ -249,17 +280,29 @@ function arGeo(M) {
 // --- Floor ---
 // The painted floor (tools/make_props.py: the painting's slabs seen from above, so at the start camera it looks
 // exactly like the painting and it stays on the floor when the camera moves), one flat mesh at y = 0: the slabs from
-// the front (z = terrace.front) to the painting's back edge, and on both sides a ledge going on further back, where
-// the column and the lantern stand. Its colours are the painting's own light (no light of its own, no outline).
+// the painting's front edge to its back edge, on both sides a ledge going on further back, where the column and the
+// lantern stand. Its colours are the painting's own light (no light of its own, no outline). Past the painting, as far
+// as the arena preview's free camera sees (terrace.half, terrace.front): the slabs mirrored over and over sideways
+// (the texture's mirrored repeat) and, in front, their rows mirrored back and forth between the painting's front edge
+// and SAFE m before its back edge (not the mist the texture holds behind that edge, which would make a pale line
+// across the floor).
+const AR_FLOOR_SAFE = .85;
 function arFloor(def, tex) {
   const T = def.terrace, F = ASSETS['arena/cascata_floor.json'], [x0, z1, x1, zb] = F.rect, M = arMesh();
   const U = (x, z) => [(x - x0) / (x1 - x0), 1 - (z - z1) / (zb - z1)];
-  const quad = (xa, xb, za, zf, col) => arQuad(M, [xa, 0, zf], [xb, 0, zf], [xb, 0, za], [xa, 0, za], [0, 1, 0],
-    [U(xa, zf), U(xb, zf), U(xb, za), U(xa, za)], col);
-  quad(-T.half, T.half, F.back, T.front, new THREE.Color(1, 1, 1));
-  const moss = new THREE.Color(...T.moss);   // the ledges: the stone gone mossy and dark under the grass
-  quad(-T.half, T.ledge[0], T.ledge[2], F.back, moss);
-  quad(T.ledge[1], T.half, T.ledge[2], F.back, moss);
+  const white = new THREE.Color(1, 1, 1), moss = new THREE.Color(...T.moss);   // the ledges: mossy and dark under the grass
+  // a quad from x xa to xb, z za (back) to zf (front), texture rows vb (at za) and vf (at zf)
+  const quad = (xa, xb, za, zf, vb, vf, col) => arQuad(M, [xa, 0, zf], [xb, 0, zf], [xb, 0, za], [xa, 0, za], [0, 1, 0],
+    [[U(xa, 0)[0], vf], [U(xb, 0)[0], vf], [U(xb, 0)[0], vb], [U(xa, 0)[0], vb]], col);
+  quad(-T.half, T.half, F.back, z1, U(0, F.back)[1], U(0, z1)[1], white);
+  const vF = U(0, z1)[1], vS = U(0, F.back + AR_FLOOR_SAFE)[1], seg = z1 - F.back - AR_FLOOR_SAFE;
+  for (let z = z1, k = 0; z < T.front - 1e-6; z += seg, k++) {   // in front: back and forth over the safe rows
+    const z2 = Math.min(T.front, z + seg), f = (z2 - z) / seg, a = k % 2 ? vS : vF, b = k % 2 ? vF : vS;
+    quad(-T.half, T.half, z, z2, a, a + (b - a) * f, white);
+  }
+  const ld = T.ledge[2] - F.back, vL = vS + (vF - vS) * ld / -seg;   // the ledges: the safe rows again
+  quad(-T.half, T.ledge[0], T.ledge[2], F.back, vL, vS, moss);
+  quad(T.ledge[1], T.half, T.ledge[2], F.back, vL, vS, moss);
   tex.wrapS = tex.wrapT = THREE.MirroredRepeatWrapping;
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   const mesh = new THREE.Mesh(arGeo(M), new THREE.MeshBasicMaterial({map: tex, vertexColors: true}));

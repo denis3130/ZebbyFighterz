@@ -1,4 +1,5 @@
-// The 3D arena (d_arena.js): no holes in any game view, real depth, feet on the slabs, flowing water, the banner, cost.
+// The 3D arena (d_arena.js): no holes in any game view nor anywhere the preview's free camera can look, real depth,
+// feet on the slabs, a floor past the free camera's views, flowing water, the banner, cost.
 // Run at 640x360, 844x390, 1280x720 and 960x720 (see docs/HANDOFF.md).
 const AD = () => __VF.CFG.arenas[__VF.CFG.arenaOn];
 // Reads the pixel at u, v (0..1, v from the top) of what was just drawn (same JS turn).
@@ -15,6 +16,12 @@ function view(x0, x1, y0) {
 }
 const VIEWS = {start: [-1200, 1200, 0], far: [-2750, 2750, 0], left: [-6000, -2000, 0], right: [2000, 6000, 0], jump: [-600, 600, 2314]};
 const EDGE = [[0, 0], [.5, 0], [1, 0], [0, .5], [1, .5], [0, 1], [.5, 1], [1, 1], [.5, .5], [.25, .02], [.75, .02], [.02, .75], [.98, .75]];
+// The preview's free camera at its widest ("Libera", src/v_arena.js VA_LIMS.free): x, y, z, yaw, pitch ranges.
+const FREE = {x: [-11, 11], y: [.35, 9], z: [-1, 22], yaw: [-.45, .45], pitch: [-.35, .42]};
+function freeCam(x, y, z, yaw, pitch) {
+  const c = __VF.camera; c.position.set(x, y, z); c.rotation.set(pitch, yaw, 0, 'YXZ'); c.updateMatrixWorld();
+}
+const isHole = p => p[0] > 240 && p[1] < 20 && p[2] > 240;
 
 T.test('no holes at the camera extremes', () => {
   const V = __VF; V.startMatch('versus', {seed: 1}); V.F3D.forEach(f => f.root.visible = false);
@@ -31,15 +38,53 @@ T.test('no holes at the camera extremes', () => {
   } finally { V.renderer.setClearColor(0x000000, 1); V.F3D.forEach(f => f.root.visible = true); view(-1200, 1200, 0); }
 });
 
+T.test('the sky dome: no hole anywhere the free camera looks', () => {
+  const V = __VF; V.F3D.forEach(f => f.root.visible = false); V.ARENA.leaves.visible = false;
+  V.renderer.setClearColor(0xff00ff, 1);
+  const shot = name => { V.renderer.clear(); V.renderer.render(V.scene, V.camera);
+    for (const [u, v] of EDGE) T.ok(!isHole(readAt(u, v)), name + ' hole at ' + u + ',' + v); };
+  try {
+    for (const x of FREE.x) for (const y of FREE.y) for (const z of FREE.z) for (const yaw of FREE.yaw) for (const pitch of FREE.pitch) {
+      freeCam(x, y, z, yaw, pitch); shot([x, y, z, yaw, pitch].join());
+    }
+    for (const [yaw, pitch] of [[0, 1.5], [0, -1.5], [Math.PI, 0], [Math.PI / 2, .3], [-Math.PI / 2, -.3]]) {   // anywhere at all
+      freeCam(0, 2, 6, yaw, pitch); shot('turned ' + yaw.toFixed(2) + ',' + pitch);
+    }
+    // above the horizon the dome is the painting's sky (blue), below it its mist (pale)
+    freeCam(0, 2, 6, Math.PI, .6); V.renderer.clear(); V.renderer.render(V.scene, V.camera);
+    const up = readAt(.5, .5); T.ok(up[2] > up[0] + 40, 'sky above: ' + up);
+    freeCam(0, 2, 6, Math.PI, -.04); V.renderer.clear(); V.renderer.render(V.scene, V.camera);   // past the floor's front
+    const lo = readAt(.5, .5); T.ok(lo[0] > 150 && lo[2] >= lo[0] - 10, 'mist below: ' + lo);
+  } finally {
+    V.renderer.setClearColor(0x000000, 1); V.camera.rotation.set(0, 0, 0); V.F3D.forEach(f => f.root.visible = true);
+    V.ARENA.leaves.visible = true; view(-1200, 1200, 0);
+  }
+});
+
+T.test('the floor goes on past the free camera views (sides and front)', () => {
+  const V = __VF, rc = new THREE.Raycaster(), floor = V.ARENA.group.getObjectByName('floor'), ndc = new THREE.Vector2();
+  try {
+    for (const x of FREE.x) for (const y of FREE.y) for (const z of [4.5, FREE.z[1]]) for (const yaw of FREE.yaw) {
+      freeCam(x, y, z, yaw, FREE.pitch[0]);
+      for (const [u, v] of [[-1, -1], [0, -1], [1, -1]]) {   // the bottom corners and middle of the screen
+        rc.setFromCamera(ndc.set(u, v), V.camera);
+        const t = -rc.ray.origin.y / rc.ray.direction.y, p = rc.ray.origin.clone().addScaledVector(rc.ray.direction, t);
+        if (p.z < V.AR.back) continue;   // behind the terrace's back edge: the mist, as painted
+        T.ok(rc.intersectObject(floor).length > 0, 'no floor at ' + p.x.toFixed(1) + ',' + p.z.toFixed(1) + ' from ' + [x, y, z, yaw].join());
+      }
+    }
+  } finally { V.camera.rotation.set(0, 0, 0); view(-1200, 1200, 0); }
+});
+
 T.test('depth: near moves more than far', () => {
   const V = __VF, d = AD(), pl = V.ARENA.layers.planes;
-  T.eq(pl.map(p => p.name).join(), 'base,L,R,falls,far,haze,sky', 'planes nearest first');
+  T.eq(pl.map(p => p.name).join(), 'base,L,R,falls,sky', 'planes nearest first');
   for (const p of pl) T.eq(p.z, d.layers[p.name], p.name + ' depth');
   view(-1200, 1200, 0);
-  const pts = [[d.props.column.x, 2, d.props.column.z], [0, 5, d.layers.base], [0, 5, d.layers.L], [0, 5, d.layers.falls], [0, 5, d.layers.far], [0, 5, d.layers.haze], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
+  const pts = [[d.props.column.x, 2, d.props.column.z], [0, 5, d.layers.base], [0, 5, d.layers.L], [0, 5, d.layers.falls], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
   const a = at(); V.camera.position.x += 1; V.camera.updateMatrixWorld(); const b = at(); view(-1200, 1200, 0);
   const m = a.map((x, i) => Math.abs(b[i] - x));
-  T.ok(m.every((x, i) => i === 0 || (x < m[i - 1] && x > 0)), 'screen shift column > base mist > mountains > falls > far > haze > sky: ' + m.map(x => x.toFixed(1)));
+  T.ok(m.every((x, i) => i === 0 || (x < m[i - 1] && x > 0)), 'screen shift column > base mist > mountains > falls > sky: ' + m.map(x => x.toFixed(1)));
 });
 
 T.test('water flows, stone does not', () => {

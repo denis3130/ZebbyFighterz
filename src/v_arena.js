@@ -5,8 +5,8 @@
 // fingers = pinch to go forwards and backwards, drag to move; wheel = forwards/backwards; double tap = back to the game
 // camera. Keyboard: A/D, W/S, R/F to move, arrows to look, Home or 0 to reset. Controller: left stick to move, right
 // stick to look, LB/RB down/up, A to reset. Two ranges for the camera (buttons): "Come nel gioco" (default), a little
-// past what the game's camera can reach: the arena is made for these views and shows no edge there; "Libera", much
-// wider: there the painted planes' edges show (they are paintings, flat, with an end).
+// past what the game's camera can reach; "Libera", much wider: the mountains, the mist, the sky and the floor go on
+// as far as it can see (Denis, 11/11: "mantieni lo stile delle montagne fino ai limiti della modalità libera").
 
 const VA = {x: 0, y: 0, z: 0, yaw: 0, pitch: 0, mode: 'move', ptrs: new Map(), pinch: 0, mid: null, keys: new Set(),
   hold: 0, last: 0, frames: 0, fpsT: 0, tap: 0};
@@ -141,7 +141,6 @@ function vaBoot() {
   renderInit().then(() => {
     F3D.forEach(f => { f.root.visible = false; });
     rdShadowsStep(null);
-    renderer.setClearColor(0x7fb6e8, 1);              // (past the painted sky, at the far edges: the sky's blue)
     vaHome(); vaInput();
     requestAnimationFrame(vaLoop);
   });
