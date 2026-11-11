@@ -91,12 +91,18 @@ T.test('water flows, stone does not', () => {
   const V = __VF, d = AD(), P = V.arRefPlace(d); V.ARENA.leaves.visible = false; V.F3D.forEach(f => f.root.visible = false);
   try {
     view(-1200, 1200, 0);
-    const w = V.arPaintToWorld(d, P, 900 / 1672, 1 - 420 / 941, d.layers.falls), ws = V.toScreen(w[0], w[1], d.layers.falls);
-    const st = V.toScreen(V.cam.x + .8, 0, 1.2), u = [ws.x / innerWidth, ws.y / innerHeight], su = [st.x / innerWidth, st.y / innerHeight];
-    T.ok(u[0] > 0 && u[0] < 1 && u[1] > 0 && u[1] < 1, 'waterfall on screen');
-    V.renderFrame(V.G.S, 3000); const a = readAt(...u), s = readAt(...su);
-    V.renderFrame(V.G.S, 3500); const b = readAt(...u), s2 = readAt(...su);
-    T.ok(diff(a, b) > 6, 'water still: ' + a + ' / ' + b); T.ok(diff(s, s2) <= 2, 'stone moved: ' + s + ' / ' + s2);
+    // a few points on the water (painting px): the painted water slides down, so most of them change
+    const us = [];
+    for (const X of [760, 840, 920, 1000, 1080]) for (const Y of [360, 420, 480]) {
+      const w = V.arPaintToWorld(d, P, X / 1672, 1 - Y / 941, d.layers.falls), ws = V.toScreen(w[0], w[1], d.layers.falls);
+      us.push([ws.x / innerWidth, ws.y / innerHeight]);
+    }
+    const st = V.toScreen(V.cam.x + .8, 0, 1.2), su = [st.x / innerWidth, st.y / innerHeight];
+    T.ok(us.every(u => u[0] > 0 && u[0] < 1 && u[1] > 0 && u[1] < 1), 'waterfall on screen');
+    V.renderFrame(V.G.S, 3000); const a = us.map(u => readAt(...u)), s = readAt(...su);
+    V.renderFrame(V.G.S, 3500); const b = us.map(u => readAt(...u)), s2 = readAt(...su);
+    const moved = a.filter((p, i) => diff(p, b[i]) > 6).length;
+    T.ok(moved >= us.length / 2, 'water still: ' + moved + ' of ' + us.length + ' points changed'); T.ok(diff(s, s2) <= 2, 'stone moved: ' + s + ' / ' + s2);
   } finally { V.ARENA.leaves.visible = true; V.F3D.forEach(f => f.root.visible = true); }
 });
 
