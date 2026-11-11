@@ -16,7 +16,9 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
 - `mods/swag.js`: entrata (si scioglie, poi scatta in guardia con un anello d'acqua a terra) e provocazione
   ("no-no" col dito), fatte a mano posa per posa.
 - `mods/kit.js`: le tecniche di Ren dalle quattro tavole di Denis (12/11/2026): guardia elastica, passo radente,
-  palmo a scatto, gomito spezzaguardia, deviazione circolare, calcio a frusta, passo spezzato. Tutte partono e tornano
+  palmo a scatto, gomito spezzaguardia, deviazione circolare, calcio a frusta, passo spezzato, e la camminata in
+  guardia avanti e indietro (senza tavola, nel suo stile: passi bassi che non incrociano i piedi, guidata dalla
+  distanza percorsa, quindi senza piedi che scivolano a qualsiasi velocità). Tutte partono e tornano
   alla stessa guardia (tre quarti, gambe larghe e basse, braccio avanti dritto a pugno chiuso, mano dietro socchiusa
   sullo stomaco). Ogni mossa è una tabella (tempi, corpo, piedi, braccia, mani) letta dalle stesse poche funzioni.
   Piedi messi a mano (quello in appoggio non si muove), tempi e numeri tutti proposte (il progetto non li definisce

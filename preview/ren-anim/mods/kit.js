@@ -585,6 +585,59 @@ rkAddMove('ps', {
   },
 });
 
+// --- Camminata in guardia: forward and back, the guard held (Denis's choice, 12/11/2026) ---
+// A step-and-follow shuffle that never crosses the feet: forward, the front foot steps L, then the rear foot follows
+// L; back, the rear foot steps back L, then the front foot follows. Each foot glides low (2-3 cm); a rear foot rolls
+// onto its ball before it leaves and lands on it, then the heel comes down; a front foot moving forward leads with
+// its toes up and lands flat. The body sinks a little as the stance opens and rises as it closes, the hips turn a touch
+// with each step (the shoulders do not: the guard stays square to the opponent), the eyes on the opponent. The walk is
+// driven by the distance travelled (phase = distance / L): no foot slides at any speed. The distance eases in over the
+// first half cycle and out over the last (the first and last steps a little slower), so the body never starts or
+// stops at once. In the game the distance would be F.x, as the clip walks use it (mdWalkT).
+// PROPOSALS: L 0.30 m a cycle (a step of each foot); forward 18 frames a cycle (1.0 m/s = 16.7 mm a frame), back 22
+// (0.82 m/s = 13.6 mm a frame), the same ratio as the game's CFG.walk (75 and 58 mm a frame: 4.5 and 3.5 m/s, at which
+// steps that never cross would come 11 to a second).
+const RK_WALK = {L: .3, Tf: 18, Tb: 22, cycles: 4, ramp: .5};
+function rkWalk(id, name, fwd) {
+  const W = RK_WALK, L = W.L, T = fwd ? W.Tf : W.Tb, n = W.cycles, N = n * T, dir = fwd ? 1 : -1, al = W.ramp * T / N, vm = 1 / (1 - al);
+  // the walk's phase (cycles done) at frame f: n cycles over N frames, eased in and out (a smooth trapezoid of speed)
+  const ph = f => {
+    const t = Math.max(0, Math.min(1, f / N));
+    const g = t < al ? vm * t * t / (2 * al) : t <= 1 - al ? vm * (t - al / 2) : 1 - vm * (1 - t) * (1 - t) / (2 * al);
+    return n * g;
+  };
+  // the share of a cycle when each foot travels: forward the front (L) first, back the rear (R) first
+  const win = s => (s === 'L') === fwd ? [.02, .40] : [.52, .90];
+  // its steps so far: it travels inside its lift (off the floor before it moves, still before it comes down: no skid)
+  const prog = (s, f) => { const p = ph(f), c = Math.floor(p), [a, b] = win(s); return c + rkEase((p - c - a - .05) / (b - a - .1)); };
+  const arc = (s, f) => { const p = ph(f), [a, b] = win(s); return rkArc(p - Math.floor(p), a, b); };
+  const open = f => fwd ? prog('L', f) - prog('R', f) : prog('R', f) - prog('L', f);   // 0 the guard's stance .. 1 a step wider
+  const u = f => { const p = ph(f); return p - Math.floor(p); };
+  // heels (deg) through a cycle: a rear foot rolls onto its ball before it leaves and lands on it; back, a front foot
+  // lifts its heel a little to push off
+  const heel = fwd ? {R: [[0, 0], [.3, 0], [.5, 14], [.86, 10], [.9, 8], [1, 0]]}
+    : {R: [[0, 0], [.02, 0], [.12, 10], [.4, 9], [.58, 0], [1, 0]], L: [[0, 0], [.46, 0], [.54, 7], [.86, 4], [.9, 0], [1, 0]]};
+  const foot = s => ({x: f => dir * L * prog(s, f), up: f => (s === 'L' ? .03 : .025) * arc(s, f),
+    heel: heel[s] ? f => rkKey(heel[s], u(f)) : 0,
+    toe: s === 'L' && fwd ? f => 9 * arc('L', f) : 0});   // (the front foot leads with its toes up)
+  const yaw = f => dir * 2.5 * (arc('R', f) - arc('L', f));   // (the hip of the stepping foot goes with it)
+  rkAddMove(id, {
+    len: N, name, phase: [[0, 'in guardia']],
+    root: f => dir * L * ph(f),
+    body: {
+      yaw, chest: f => -.6 * yaw(f),
+      leanL: f => fwd ? 3 + 1.5 * open(f) : -2 - open(f),
+      dip: f => .004 + .036 * open(f),
+      lx: f => fwd ? 0 : -.07 * open(f),   // (back: the weight goes onto the rear foot as it lands, so its leg bends to take it)
+    },
+    feet: {L: foot('L'), R: foot('R')},
+    arms: {L: [[0, 'wGuard']]},
+    poses: {wGuard: (A, f) => ({p: A.G.L.p.clone().addScaledVector(RB_UP, -.008 * open(f)), f: A.G.L.f, n: A.G.L.n, e: A.G.L.e})},   // (the lead fist dips with the stance)
+  });
+}
+rkWalk('gwF', 'Camminata avanti', true);
+rkWalk('gwB', 'Camminata indietro', false);
+
 // --- The viewer: the plays, the game's speed, a floor grid, the fighter carried along his steps ---
 VW_PLAYS.length = 0;
 // (short labels on the buttons, so all seven fit on a phone; the full name shows top right while it plays)
@@ -594,7 +647,8 @@ VW_PLAYS.push(['Guardia', [['idle', 2 * RK.loop]]],
   ['Gomito', [['idle', 40], ['elbow', RK.len.elbow], ['idle', 50]]],
   ['Deviazione', [['idle', 40], ['dev', RK.len.dev], ['idle', 50]]],
   ['Calcio a frusta', [['idle', 40], ['kick', RK.len.kick], ['idle', 50]]],
-  ['Passo spezzato', [['idle', 40], ['ps', RK.len.ps], ['idle', 50]]]);
+  ['Passo spezzato', [['idle', 40], ['ps', RK.len.ps], ['idle', 50]]],
+  ['Camminata', [['idle', 30], ['gwF', RK.len.gwF], ['idle', 24], ['gwB', RK.len.gwB], ['idle', 30]]]);
 Object.assign(VW_NAMES, {idle: 'Guardia elastica', pr: 'Passo radente', palm: 'Palmo a scatto'});
 
 // the fighter's travel along the step (mm), at a (fractional) frame of the act
