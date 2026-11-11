@@ -6,6 +6,7 @@
 //   RN.pure(md, F, S) -> the same without blending or any state: a pure function of F and S, continuous in F.af
 //     (fractional frames are valid: the viewer draws between two sim frames, the trail samples sub-frames).
 //   RN.moveT(t, m, af, hit) -> optional: a move's clip time (replaces mdMoveT's linear startup and recovery).
+//   RN.curlFor(it, F) -> optional: how closed the hands are (0 open .. 1 fist) for this act.
 // Hooks (arrays of functions):
 //   boot(VW)              once, the scene, camera and model are built;
 //   hold(VW)              before each sim step: true holds the step (hitstop: nothing moves), another truthy value
@@ -48,7 +49,7 @@ function rnSync(it, side, S) {
   it.root.rotation.y = F.face * F3_YAW;
   it.body.scale.x = it.scale * F.face;
   if (it.fingers) {
-    const k = CFG.looks[it.key].openHands.includes(F.act) ? 0 : 1;
+    const k = RN.curlFor ? RN.curlFor(it, F) : CFG.looks[it.key].openHands.includes(F.act) ? 0 : 1;   // (0 open .. 1 fist)
     if (F !== it.F || F.act !== it.act) it.curl0 = F === it.F ? it.curl : k;
     it.curl = it.curl0 + (k - it.curl0) * Math.min(1, Math.max(0, F.af) / MD_CURL);
     for (let i = 0; i < it.fingers.length; i++) it.fingers[i].quaternion.copy(MD_Q1).slerp(it.fist[i], it.curl);

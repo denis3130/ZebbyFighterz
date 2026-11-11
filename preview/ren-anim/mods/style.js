@@ -1,7 +1,7 @@
 // --- style.js: Ren's own way of standing (stage 1 of "make him unique", 11/11/2026; hand-made, no new clips). ---
-// The "flowing water" guard: open hands, the lead (left) hand reaching toward the opponent with its fingers up and its
-// palm turned in, the rear hand open in front of the chest; both trace slow circles, opposite in phase, riding the
-// bounce of the stance. The guard holds while he walks. Standing still, now and then he does something of his own:
+// Ren's guard (preset B, chosen by Denis among A/B/C): half-open hands, the lead (left) hand at chin level a little
+// in front, the rear hand by the chin; both trace small slow circles, opposite in phase, riding the bounce of the
+// stance. The guard holds while he walks. Standing still, now and then he does something of his own:
 // tightens the bandage of his lead forearm, or rolls his neck. On the way back from a move the arms flow into it.
 // Arms by a two-bone IK from the clip's arm (its twist kept), the forearm rolling toward the palm's way, the hand set
 // to its fingers' and palm's directions. The lead hand's targets are in the fight-line frame (origin the chest,
@@ -12,10 +12,26 @@
 const RS = {
   // hand targets (metres from the chest: [forward, up, side]), fingers' and palm's ways ([forward, up, side]), elbow
   // hint ([forward, up, side]): lead = left, rear = right
-  lead: {pos: [.46, .05, .03], fing: [.55, .8, -.1], palm: [0, 0, -1], elbow: [0, -1, .45]},
-  // rear: in the chest frame [across, up, forward]: in front of the right of the chin, fingers up and in, palm toward
-  // the lead hand, elbow down and out
-  rear: {pos: [-.05, .17, .32], fing: [.35, .9, .15], palm: [.75, 0, .65], elbow: [-.55, -1, .1]},
+  // rear: in the chest frame [across, up, forward]. curl = how closed the hands are (0 open .. 1 fist), armW = how much
+  // of the arms is this guard (0: the clip's). Set by a preset (RS.presets, rsPreset).
+  lead: null, rear: null, curl: 0, armW: 1,
+  presets: {
+    // A: a fighter's real guard, hands loosely closed: lead hand at eye level a forearm in front of the face, rear hand
+    // by the cheek, elbows in over the ribs
+    A: {curl: .78, armW: 1, flow: {period: 150, lead: .018, rear: .012},
+      lead: {pos: [.3, .14, .01], fing: [.55, .8, -.15], palm: [0, -.25, -1], elbow: [0, -1, .25]},
+      rear: {pos: [-.07, .21, .2], fing: [.15, .95, .25], palm: [.9, 0, .4], elbow: [-.2, -1, .2]}},
+    // B: half-open hands, a little more reach in the lead hand, at chin level
+    B: {curl: .5, armW: 1, flow: {period: 150, lead: .025, rear: .018},
+      lead: {pos: [.38, .09, .02], fing: [.55, .8, -.12], palm: [0, -.2, -1], elbow: [0, -1, .35]},
+      rear: {pos: [-.05, .18, .25], fing: [.25, .92, .2], palm: [.85, 0, .5], elbow: [-.35, -1, .15]}},
+    // C: the clip's boxing guard (fists), only the stance's own bounce
+    C: {curl: 1, armW: 0, flow: {period: 150, lead: 0, rear: 0}},
+    // O: the open hands of the first proposal
+    O: {curl: 0, armW: 1, flow: {period: 150, lead: .035, rear: .028},
+      lead: {pos: [.46, .05, .03], fing: [.55, .8, -.1], palm: [0, 0, -1], elbow: [0, -1, .45]},
+      rear: {pos: [-.05, .17, .32], fing: [.35, .9, .15], palm: [.75, 0, .65], elbow: [-.55, -1, .1]}},
+  },
   // the chest as an ellipse in the Spine01 frame (m): half-width, front, back, from Spine02 - lo to neck; arm radius
   torso: {w: .16, front: .13, back: .15, lo: .05, arm: .045},
   flow: {period: 150, lead: .035, rear: .028},   // the hands' slow circles: frames per turn, radius (m)
@@ -98,7 +114,7 @@ function rsArm(md, p, W, s, tgt, eh, fd, pn, w) {
 // How much of the guard style the act takes (0..1): standing and walking all of it, a move's way back as it eases into
 // the stance (y.back), nothing else.
 function rsWeight(F, y) {
-  if (F.air) return 0;
+  if (F.air || !RS.armW) return 0;
   if ({idle: 1, intro: 1, walkF: 1, walkB: 1}[F.act]) return 1;
   if (y.move && y.backTo === 'idle') return y.back;
   return 0;
@@ -146,13 +162,12 @@ RB.post.push((md, p, F, S, y) => {
   }
 });
 
+// A preset of the guard (RS.presets) by name.
+function rsPreset(name) { const o = RS.presets[name]; RS.preset = name; RS.curl = o.curl; RS.armW = o.armW; RS.flow = o.flow; if (o.lead) { RS.lead = o.lead; RS.rear = o.rear; } }
+rsPreset('B');   // Denis's choice (11/11/2026): half-open hands
+// The hands: the guard's acts as closed as the preset says; the rest as the game has them (open where openHands says).
+RN.curlFor = (it, F) => RS.open.includes(F.act) ? RS.curl : CFG.looks[it.key].openHands.includes(F.act) ? 0 : 1;
 RN.hooks.boot.push(VW => {
-  const lk = CFG.looks.ren;
-  for (const a of RS.open) if (!lk.openHands.includes(a)) lk.openHands.push(a);
   VW_PLAYS[0][1][0][1] = 480;   // the viewer's guard lasts long enough to show both fidgets
-});
-RN.hooks.opt.push((k, v) => {   // the old animation: fists as the page had them
-  if (k !== 'on') return;
-  const lk = CFG.looks.ren;
-  lk.openHands = v ? lk.openHands.concat(RS.open.filter(a => !lk.openHands.includes(a))) : lk.openHands.filter(a => !RS.open.includes(a));
+  VW.rsPreset = rsPreset;   // (tests and the variant sheets)
 });
