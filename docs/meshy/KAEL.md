@@ -480,6 +480,14 @@ crediti, saldo 1000): Denis ha scelto di tenere le forme e ridipingere ("Solo ri
   nei colori del gilet (`COLLAR_OUT` in `tools/kael_flat.py`), scelti con quelli di prima.
 - La pittura è un PNG (`kael_painted.png`, colori piatti senza le sbavature del JPEG); `mk.sh` toglie il JPEG dalla
   pagina dell'anteprima.
+- **Niente colori sovrapposti sul vestito** (versione 14; Denis sulla 13: "ci sei quasi alcuni colori si sovrappongono
+  ancora sul vestito"): `kael_fix.py` aveva messo le pieghe nere anche sui pezzi viola (fascia, code, strisce) e i viola
+  sbordavano sulla stoffa di un texel o due. Ora ogni texel sa di che pezzo è (stoffa, viola, pelle: dalla pittura di
+  Meshy, che nei pezzi viola tiene il viola anche nelle pieghe, lisciata sulla superficie; dove dipinge il foglio, il
+  suo): sul viola il nero diventa l'ombra viola e il viola scuro della stoffa il viola; sulla stoffa i viola diventano
+  stoffa e ombra nera (`MAT`). Poi i puntini sotto 8 mm² (righe sotto 1) prendono il colore attorno e i bordi sono
+  lisciati (`SPECK`, `SMOOTH`); pelle e tatuaggi restano come sono. Su questo modello: 30.141 texel di stoffa sui
+  pezzi viola, 4.630 di viola sulla stoffa, 8.086 di puntini.
 - Resta (forme di Meshy, non toccate per scelta di Denis): la fascia è una banda e non un nodo, dietro sui fianchi due
   code e il bordo viola dell'orlo, le strisce viola del davanti sono quelle di Meshy (simili, non le stesse del foglio).
 

@@ -45,7 +45,9 @@ ARM_SKIN = .45                                  # the arms' (shoulders' to hands
 RECOLOUR = {(46, 45, 48): 'plum', (14, 13, 15): 'black'}   # tools/kael_fix.py's suit tones (lit, folds) -> the drawings'
 TAT = (.006, .5, 1, 20, .25)                   # see the tattoos in main(): rim (m), its skin share, edge (texels); the least piece (texels), its inside's share
 UPPER, BACK_FACING = .3, .5                    # the shoulders' and upper arms' bones' share; the back sheet: the least facing
-SPECK, INK_MIN = (6., 1.), .5                  # mm2: specks of a colour (cloth, lines) taken by what is around them; ink all or none
+SPECK = (8., 1.)                               # mm2: specks of a colour (cloth, lines) taken by what is around them
+MAT = (25, 45, 40, 30.)                        # Meshy's purple: blue over green by [0], blue over [1], red under blue plus [2]; pieces under [3] mm2 as around them
+SMOOTH = (2, 1)                                # rounds of the pieces' smoothing (wide), of the colours' borders (near)
 
 
 def nearest(c, cols):
@@ -137,10 +139,40 @@ def main(pkg, debug=None):
     tt = tat[ys, xs] & use; cur[tt] = PAL['purple']; te = edge[ys, xs] & use; cur[te] = PAL['purpleS']
     print('body: %d pieces of the arms\' tattoos (%d texels) to the drawings\' purple' % (nt, int(tt.sum())))
     print('body: %d texels painted from the views, %d recoloured to the palette' % (int(painted.sum()), int((use & ~painted).sum())))
-    # 3. the flat colours
-    k, dist = nearest(cur, cols); a_ = np.zeros(len(ks))
-    ink = (cur.mean(1) < 22) & (dist > 12)
-    newc = cols[k]; newc[ink] = INKC
+    # 3. the flat colours, one piece's colours never over another's (Denis, 11/11, on the first repaint: "ci sei quasi alcuni colori si
+    # sovrappongono ancora sul vestito"): kael_fix.py painted the folds black over the purple pieces as over the suit, and its purples
+    # spilled on the suit by a texel or two. Each texel's piece (MAT: the suit, a purple piece, the skin) is Meshy's own paint's (kael.jpg:
+    # its purple pieces keep their hue in their folds), smoothed on the surface; where a view painted, the drawing's. On a purple piece
+    # the suit's black is the purple's shadow and its plum the purple; on the suit a purple is the plum and the purple's shadow the black.
+    # Then the specks of each colour (SPECK mm2) take what is around them and the borders are smoothed (SMOOTH rounds); the skin and the
+    # tattoos (tools/kael_arms.py's arms) as they are
+    import kael_flat as KF
+    KF.prepare(P, I); names_ = names + ['ink']; cols_ = np.vstack([cols, INKC]); u_ = np.nonzero(use)[0]
+    k, dist = nearest(cur[u_], cols); lab = k.copy(); lab[(cur[u_].mean(1) < 22) & (dist > 12)] = len(names)
+    cnt = np.bincount(ks, minlength=len(I)).astype(float); area = KF.TRI_AREA[ks[u_]] * 1e6 / np.maximum(cnt[ks[u_]], 1)
+    jw, okw, ok = KF._graph(pos[u_], nor[u_].astype(np.float32), np.sqrt(area) * 1e-3); j = jw[:, :KF.KNN - 1]
+    mo = np.asarray(Image.open(os.path.join(pkg, name + '.jpg')).convert('RGB')).astype(np.float64)[ys[u_], xs[u_]]
+    r_, g_, b_ = mo[:, 0], mo[:, 1], mo[:, 2]
+    mat = np.zeros(len(u_), np.int64)                                            # 0 the suit
+    mat[(b_ - g_ > MAT[0]) & (b_ > MAT[1]) & (r_ < b_ + MAT[2])] = 1              # 1 a purple piece
+    mat[(r_ > 120) & (r_ - b_ > 40) & (g_ > 70)] = 2                               # 2 the skin
+    pc = sheet_scan.classes(cur[u_]); pv = painted[u_]
+    mat[pv] = np.where(pc[pv] == 4, 1, np.where(pc[pv] == 1, 2, 0))
+    keep = (lab == names.index('skin')) | (lab == names.index('skinS')) | tt[u_] | te[u_]   # (the skin and the tattoos as they are)
+    for _ in range(SMOOTH[0]):
+        mm = KF._mode(mat, jw, okw, 3, keep=pv); mat = np.where(pv, mat, mm)
+    KF._small(mat, j, ok, area, np.full(len(u_), MAT[3]), pv | keep)
+    i_pl, i_bk, i_pu, i_ps = names.index('plum'), names.index('black'), names.index('purple'), names.index('purpleS')
+    on_p = (mat == 1) & ~keep; on_s = (mat == 0) & ~keep
+    n1 = int((on_p & (lab == i_bk)).sum()) + int((on_p & (lab == i_pl)).sum()); n2 = int((on_s & ((lab == i_pu) | (lab == i_ps))).sum())
+    lab[on_p & (lab == i_bk)] = i_ps; lab[on_p & (lab == i_pl)] = i_pu
+    lab[on_s & (lab == i_pu)] = i_pl; lab[on_s & (lab == i_ps)] = i_bk
+    print('body: %d texels of the suit\'s colours on the purple pieces, %d of the purples on the suit, to their own piece\'s' % (n1, n2))
+    ns = KF._small(lab, j, ok, area, np.where(lab == len(names), SPECK[1], SPECK[0]), keep)
+    for _ in range(SMOOTH[1]):
+        mm = KF._mode(lab, j, ok, len(names_), keep=keep); lab = np.where(keep, lab, mm)
+    print('body: %d texels of specks as what is around them, the borders smoothed %d times' % (ns, SMOOTH[1]))
+    newc = np.zeros((len(ks), 3)); newc[u_] = cols_[lab]
     out[ys[use], xs[use]] = newc[use]
     cov = np.zeros((TS, TS), bool); cov[ys[use], xs[use]] = True
     _, (iy, ix) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], ix[~cov]]
