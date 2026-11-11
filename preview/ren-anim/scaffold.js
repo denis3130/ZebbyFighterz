@@ -30,7 +30,7 @@ function rnDrawState(k) {
   Object.assign(D, F);
   D.af = F.af + k; S.frame = VW.S.frame + k; S.k = k;
   if (k) {
-    if (F.air) D.y = Math.max(0, F.y + F.vy * k);
+    if (F.air) { D.y = Math.max(0, F.y + F.vy * k); D.vy = F.vy - CFG.jump.g * k; }
     if (VW.mode === 'walkF') D.x += CFG.walk.f * F.face * k;
     else if (VW.mode === 'walkB') D.x -= CFG.walk.b * F.face * k;
     else if (VW.mode === 'dash') D.x += (F.act === 'dashF' ? 1 : -1) * 100 * F.face * k;

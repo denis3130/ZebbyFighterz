@@ -2,48 +2,49 @@
 // Graphics only and pure: RN.pure(md, F, S) is a function of the fighter's act and frame (fractional frames are valid).
 // Model space (metres): +y up, +z forward (the way the fighter faces), +x the fighter's left.
 //
-// 1. The clip's pose (mdPoseOf), with the move's clip time warped: a slow coil, a whip into the hit, a lock, a settle.
-// 2. Style on the pelvis and the spine: twist (the hips lead, the chest follows a little later), lean, dip and rise,
-//    weight shifted back in the coil and onto the front foot at the hit, a short vibration after the impact. The head
-//    keeps most of the clip's own direction (the eyes stay on the opponent while the body turns under it).
-// 3. Feet. Every standing, crouching or striking act shares ONE stance: the balls of the feet stay where the guard
-//    pose has them (no slide between acts). A foot is free to pivot on its ball and to lift its heel: the driving foot
-//    of a punch follows the hips, the support foot of a kick pivots; a heel also lifts by itself when the leg would
-//    not reach. Then the pelvis is brought within reach of both legs (a leg never straighter than RB.ext), the knees
-//    are placed by a pole (between where the pelvis carries them and over the toes), the toes stay flat on the floor.
-//    Walks, dashes and the throw keep the clip's own foot placement (held through the style), never under the floor.
-// 4. Balance: the body's mass (pelvis and chest) stays over the feet in contact, within RB.bal metres.
+// The Meshy clips are motion capture of an actor who travels while striking (the heavy kick's hips move 60 cm, the jab
+// steps half a metre), played here on a fighter who stays on his spot. So:
+// 1. Feet. Every standing, crouching or striking act shares ONE stance: the toe tips stay where the guard pose has them
+//    (no slide between acts, a rigid shoe turning on its tip). In a strike each planted foot turns and lifts its heel as
+//    the actor's did (eased in over the startup, out over the recovery; its sideways tilt removed, its heel lift capped).
+// 2. Pelvis. It goes where the capture has it RELATIVE TO THE FEET: moved by the mean of what separates the pinned feet
+//    from where the clip's legs would put them (within RB.travel metres). The legs then stay close to the captured
+//    ones: the hips' own travel comes back as a weight shift over the feet instead of stretched or folded legs.
+// 3. Legs by IK from the captured leg, changed as little as possible (its twist kept): a leg never straighter than
+//    RB.ext (the pelvis comes down), the knee kept on its side, pulled toward the toes only beyond 40 degrees.
+// 4. A little style on top: a twist of hips then chest, a lean, a dip (a coil the other way first, then the hit, then a
+//    settle), the clip's time eased (slower coil, faster release). The head keeps most of the clip's own direction.
 // 5. Hit accuracy: on the active frames the hitting limb is brought inside the move's box (the pelvis moves, the feet stay).
-// The last part of a grounded move's recovery eases back into the stance, so the next act starts from the guard.
+// Everything is continuous in the frame: no stepwise search, no threshold that flips. The last part of a grounded
+// move's recovery eases back into the stance, so the next act starts from the guard.
 
 const RB = {
   ext: .965,          // a leg in contact is never straighter than this share of its length
   heelMax: 30,        // degrees a heel may lift (the shoe is rigid: it turns on its toe tip)
-  bal: .1,            // metres the mass may be off the support before the pelvis is brought back
+  travel: [.2, .3],   // metres the pelvis may follow the feet's captured place: both feet planted, one foot (kicks)
   blend: 6, hitBlend: 3,   // frames: easing into a new free act / into a hit reaction
   md: null, W: null, sty: null, con: null, pol: 'none',
-  // Per move. hip/chest = twist at the impact (degrees; the sign follows the hitting side), coil = share wound the other
-  // way first, lean = pitch at the impact (degrees, < 0 back) and leanCoil in the coil, dip = pelvis drop in the coil and
-  // rise at the impact (shares of the height; rise < 0 sinks into the hit), back/fwd = metres the pelvis moves back in
-  // the coil and forward at the hit, heel = degrees the driving (punch) or support (kick) foot lifts its heel, heel2 =
-  // the other foot's, vib = degrees of the impact's vibration, smear = stretch of the hitting limb just before the hit.
+  // Per move, what the style adds to the clip. hip/chest = twist at the impact (degrees; the sign follows the hitting
+  // side), coil = share wound the other way first, lean = pitch at the impact (degrees, < 0 back) and leanCoil in the
+  // coil, dip = pelvis drop in the coil and rise at the impact (shares of the height), back/fwd = metres the pelvis
+  // moves back in the coil and forward at the hit, smear = stretch of the hitting limb just before the hit ("Allungo").
   moves: {
-    p1: {hip: 8, chest: 12, coil: .6, lean: 6, dip: .012, rise: 0, back: .02, fwd: .06, heel: 7, vib: .8, smear: .22},
-    p2: {hip: 16, chest: 18, coil: .8, lean: 9, dip: .02, rise: 0, back: .03, fwd: .09, heel: 20, vib: 1.1, smear: .28},
-    p3: {hip: 18, chest: 22, coil: .9, lean: 4, dip: .03, rise: -.01, back: .03, fwd: .05, heel: 14, vib: 1.5, smear: .3},
-    hp: {hip: 24, chest: 28, coil: 1, lean: 14, leanCoil: -7, dip: .05, rise: -.015, back: .07, fwd: .14, heel: 26, heel2: 0, vib: 2.6, smear: .5},
-    k1: {hip: 6, chest: -8, coil: .6, lean: -7, dip: .015, rise: 0, back: 0, fwd: .02, heel: 6, vib: .8, smear: .22},
-    k2: {hip: 12, chest: -12, coil: .8, lean: -11, dip: .025, rise: .005, back: 0, fwd: .02, heel: 9, vib: 1.2, smear: .3},
-    hk: {hip: 20, chest: -20, coil: 1, lean: -15, leanCoil: 6, dip: .045, rise: .01, back: 0, fwd: .03, heel: 12, vib: 2.6, smear: .5},
-    cp: {hip: 10, chest: 14, coil: .7, lean: 9, dip: .01, rise: 0, back: .03, fwd: .1, heel: 12, vib: .8, smear: .22},
-    ck: {hip: 6, chest: -6, coil: .6, lean: -3, dip: .008, rise: 0, back: 0, fwd: .02, heel: 6, vib: .7, smear: .2},
-    chp: {hip: 14, chest: 20, coil: 1, lean: -9, leanCoil: 12, dip: .055, rise: .05, back: .02, fwd: .05, heel: 24, heel2: 14, vib: 2.2, smear: .45},
-    chk: {hip: 10, chest: -12, coil: 1, lean: -12, leanCoil: 8, dip: .05, rise: .025, back: 0, fwd: .03, heel: 14, vib: 2.2, smear: .45},
-    jp: {hip: 8, chest: 12, coil: .7, lean: 6, dip: 0, rise: 0, back: 0, fwd: 0, heel: 0, vib: .8, smear: .22},
-    jk: {hip: 8, chest: -10, coil: .7, lean: 5, dip: 0, rise: 0, back: 0, fwd: 0, heel: 0, vib: .9, smear: .25},
-    jhp: {hip: 12, chest: 18, coil: 1, lean: 9, dip: 0, rise: 0, back: 0, fwd: 0, heel: 0, vib: 2, smear: .45},
-    jhk: {hip: 12, chest: -14, coil: 1, lean: 8, dip: 0, rise: 0, back: 0, fwd: 0, heel: 0, vib: 2, smear: .45},
-    spec: {hip: 14, chest: 14, coil: 1.3, lean: 12, leanCoil: -6, dip: .05, rise: -.01, back: .07, fwd: .11, heel: 20, vib: 2.2, smear: 0, fd: {s: 14, a: 4, r: 26}, limb: 'handR'},
+    p1: {hip: 4, chest: 6, coil: .5, lean: 3, dip: .008, rise: 0, back: .01, fwd: .03, smear: .22},
+    p2: {hip: 6, chest: 9, coil: .7, lean: 5, dip: .012, rise: 0, back: .02, fwd: .04, smear: .28},
+    p3: {hip: 7, chest: 10, coil: .8, lean: 2, dip: .015, rise: 0, back: .015, fwd: .02, smear: .3},
+    hp: {hip: 9, chest: 13, coil: 1, lean: 7, leanCoil: -3, dip: .025, rise: 0, back: .03, fwd: .06, smear: .5},
+    k1: {hip: 3, chest: -4, coil: .5, lean: -3, dip: .008, rise: 0, back: 0, fwd: .01, smear: .22},
+    k2: {hip: 5, chest: -6, coil: .7, lean: -5, dip: .012, rise: 0, back: 0, fwd: .01, smear: .3},
+    hk: {hip: 8, chest: -9, coil: 1, lean: -7, leanCoil: 3, dip: .02, rise: 0, back: 0, fwd: .015, smear: .5},
+    cp: {hip: 5, chest: 8, coil: .6, lean: 5, dip: .006, rise: 0, back: .02, fwd: .06, smear: .22},
+    ck: {hip: 3, chest: -3, coil: .5, lean: -2, dip: .005, rise: 0, back: 0, fwd: .01, smear: .2},
+    chp: {hip: 7, chest: 10, coil: 1, lean: -5, leanCoil: 7, dip: .03, rise: .02, back: .01, fwd: .03, smear: .45},
+    chk: {hip: 5, chest: -6, coil: .8, lean: -6, leanCoil: 4, dip: .025, rise: .01, back: 0, fwd: .015, smear: .45},
+    jp: {hip: 5, chest: 8, coil: .7, lean: 4, dip: 0, rise: 0, back: 0, fwd: 0, smear: .22},
+    jk: {hip: 5, chest: -6, coil: .7, lean: 4, dip: 0, rise: 0, back: 0, fwd: 0, smear: .25},
+    jhp: {hip: 7, chest: 10, coil: 1, lean: 6, dip: 0, rise: 0, back: 0, fwd: 0, smear: .45},
+    jhk: {hip: 7, chest: -8, coil: 1, lean: 6, dip: 0, rise: 0, back: 0, fwd: 0, smear: .45},
+    spec: {hip: 7, chest: 8, coil: 1, lean: 6, leanCoil: -3, dip: .025, rise: 0, back: .03, fwd: .05, smear: 0, fd: {s: 14, a: 4, r: 26}, limb: 'handR'},
   },
   pin: {idle: 1, intro: 1, guard: 1, crouch: 1, guardC: 1, block: 1, hitStun: 1, thrown: 1, jumpSquat: 1, landing: 1, spec: 1},
   keep: {walkF: 1, walkB: 1, dashF: 1, dashB: 1, thr: 1, win: 1},
@@ -89,13 +90,16 @@ function rbInit(md) {
     const tip = new T.Vector3(ball0.x + f0.x * far, 0, ball0.z + f0.z * far).sub(W.p[ia]).applyQuaternion(W.q[ia].clone().invert());
     RB.leg[s] = {iu, il, ia, it, tp: tip, far, a: tl.length(), b: ta.length(), tu: new T.Vector3().fromArray(md.bones[iu].t),
       tb: new T.Vector3().fromArray(md.bones[it].t), Mu: frame(iu, tl), Ml: frame(il, ta),
+      hu: new T.Vector3(1, 0, 0).applyQuaternion(W.q[iu].clone().invert()),   // the knee's hinge axis in the thigh's frame
       up: new T.Vector3(0, 1, 0).applyQuaternion(W.q[ia].clone().invert()),   // the sole's normal in the foot's frame
+      sd: f0.clone().applyQuaternion(W.q[ia].clone().invert()),   // the sole's direction (heel to toes) and its side-to-side axis there
+      lat: new T.Vector3().crossVectors(RB_UP, f0).normalize().applyQuaternion(W.q[ia].clone().invert()),
       toe: new T.Quaternion().fromArray(md.bones[it].q), ball: W.p[it].y, ank: W.p[ia].y};
   }
   const mk = () => ({w: 0, G: new T.Vector3(), Q: new T.Quaternion(), T: new T.Vector3(), yaw: 0, heel: 0, auto: false, flat: null, loc: null});
   RB.con = {L: mk(), R: mk()}; RB.sav = {L: mk(), R: mk()};
-  RB.sty = {h: {L: 0, R: 0}, p: {L: 0, R: 0}, auto: {L: false, R: false}};
-  RB.t = {q: [0, 1, 2, 3, 4, 5].map(() => new T.Quaternion()), v: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => new T.Vector3()), m: new T.Matrix4(), qHead: new T.Quaternion(),
+  RB.sty = {h: {L: 0, R: 0}};
+  RB.t = {dir: new T.Vector3(), lift: 0, q: [0, 1, 2, 3, 4, 5].map(() => new T.Quaternion()), v: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => new T.Vector3()), m: new T.Matrix4(), qHead: new T.Quaternion(),
     cb: {L: new T.Vector3(), R: new T.Vector3()}, ca: {L: new T.Vector3(), R: new T.Vector3()}, cq: {L: new T.Quaternion(), R: new T.Quaternion()}};
 }
 
@@ -119,102 +123,111 @@ function rbStance(md, F) {
 function rbYaw(q) { const v = RB.t.v[9].set(0, 0, 1).applyQuaternion(q); return Math.atan2(v.x, v.z); }
 
 // --- Timing ---
-// The style's curve of a move at frame af: 0, down to -coil (wound the other way, quick then held), a whip up to +1 at
-// the impact, held through the active frames and the lock (first tenth of the recovery), then a settle that passes a
-// little under 0 and is back at 0 by 62% of the recovery.
+// The style's curve of a move at frame af: 0, down to -coil (wound the other way), up to +1 at the impact, held through
+// the active frames, then a smooth settle back to 0 by 60% of the recovery. Smooth everywhere (no corner).
 function rbCurve(af, s, a, r, coil) {
   if (af <= 0) return 0;
   if (af <= s) {
-    const u = af / s, uc = s <= 5 ? .45 : .55, c = coil * Math.min(1, s / 7);
-    if (u < uc) { const x = 1 - u / uc; return -c * (1 - x * x * x); }
-    const x = (u - uc) / (1 - uc); return -c + (1 + c) * x * x * x;
+    const u = af / s, uc = .5, c = coil * Math.min(1, s / 8);
+    return u < uc ? -c * Math.sin(Math.PI / 2 * rnSm(u / uc)) : -c + (1 + c) * rnSm((u - uc) / (1 - uc));
   }
   if (af <= s + a) return 1;
-  const v = (af - s - a) / r;
-  if (v >= .62) return 0;
-  if (v < .1) return 1;
-  const w = (v - .1) / .52;
-  return (1 - w) * (1 - w) * Math.cos(1.5 * Math.PI * w);
+  return 1 - rnSm((af - s - a) / (.6 * r));
 }
-// A move's clip time: it stays near its start while the body coils, whips to the hit frame, holds it through the
-// active frames and the lock, and is at its end by 70% of the recovery.
+// A move's clip time: a little slower through the coil, faster into the hit frame, held on it through the active
+// frames, and at its end by 75% of the recovery.
 RN.moveT = function (t, m, af, hit) {
   const h = hit === undefined ? (t[0] + t[1]) / 2 : hit, s = m.s;
-  if (af <= s) {
-    const u = Math.max(0, af) / s, uc = .55;
-    const g = s <= 5 ? Math.pow(u, 1.6) : u < uc ? .12 * u / uc : .12 + .88 * Math.pow((u - uc) / (1 - uc), 2.2);
-    return t[0] + (h - t[0]) * g;
-  }
+  if (af <= s) { const u = Math.max(0, af) / s; return t[0] + (h - t[0]) * (.35 * u + .65 * u * u * (s <= 5 ? 1 : u)); }
   if (af <= s + m.a) return h;
-  const v = Math.min(1, (af - s - m.a) / (m.r === 'land' ? 8 : m.r)), x = 1 - Math.min(1, Math.max(0, v - .1) / .6);
+  const x = 1 - Math.min(1, (af - s - m.a) / (.75 * (m.r === 'land' ? 8 : m.r)));
   return h + (t[1] - h) * (1 - x * x);
 };
 
 // --- Style: what the act asks of the body at this frame (RB.sty, reused) ---
 function rbStyle(F, S, st) {
   const y = RB.sty, act = F.act, H = RB.H, t = S.frame + 23 * F.side, af = F.af;
-  y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = 0; y.stab = .8; y.free = null; y.back = 0; y.backTo = null; y.box = 0; y.move = null;
-  y.h.L = y.h.R = 0; y.p.L = y.p.R = .3; y.auto.L = y.auto.R = false;
+  y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = 0; y.stab = .6; y.free = null; y.freeW = 1; y.back = 0; y.backTo = null; y.box = 0; y.move = null; y.foot = 1; y.lift = 1; y.freeB = 1;
+  y.h.L = y.h.R = 0;
   const mv = RB.moves[act], m = mv && (CFG.moves[act] || mv.fd);
   if (mv && m) {
     const s = m.s, a = m.a, r = m.r === 'land' ? 14 : m.r, e = CFG.clips[act] || {};
     const limb = e.limb || (e.up && e.up.limb) || m.limb || mv.limb, side = /R$/.test(limb) ? 1 : -1, kick = /^foot/.test(limb);
-    const kH = rbCurve(af, s, a, r, mv.coil), kC = rbCurve(af - Math.min(2, s * .18), s, a, r, mv.coil), up = Math.max(0, kH), dn = Math.max(0, -kH);
-    const ti = af - s, vib = ti > 0 && ti < 14 ? mv.vib * Math.exp(-ti / 3.5) * Math.sin(ti * 2.26) : 0;
-    y.yaw = side * (mv.hip * kH + vib * .5); y.chest = side * (mv.chest * kC + vib);
+    const kH = rbCurve(af, s, a, r, mv.coil), kC = rbCurve(af - Math.min(1.5, s * .15), s, a, r, mv.coil), up = Math.max(0, kH), dn = Math.max(0, -kH);
+    y.yaw = side * mv.hip * kH; y.chest = side * mv.chest * kC;
     y.lean = mv.lean * up + (mv.leanCoil === undefined ? -.3 * mv.lean : mv.leanCoil) * dn;
     y.dip = H * (mv.dip * dn - mv.rise * up); y.sz = mv.fwd * up - mv.back * dn;
-    const own = side > 0 ? 'R' : 'L', other = side > 0 ? 'L' : 'R';
-    if (kick) { y.free = own; y.freeW = Math.max(1 - rnSm(af / 2.5), 0); y.h[other] = mv.heel * up; y.p[other] = .8; }   // (the support foot: no heel lifting by itself, the pelvis comes down instead)
-    else { y.h[own] = mv.heel * up; y.p[own] = .75; y.auto[own] = true; y.h[other] = (mv.heel2 || 0) * up; y.p[other] = .25; y.auto[other] = true; }
+    y.foot = 1; y.lift = rnSm(af / 3);   // the planted feet turn as the actor's did since the move began, and lift their heels as his
+    if (kick) { y.free = side > 0 ? 'R' : 'L'; y.freeW = e.kick ? 1 - rnSm(af / Math.max(2.5, Math.min(5, .45 * s))) : -1;   // (-1: by how high the clip lifts the foot)
+      y.freeB = 1 - rnSm(af / (.5 * s)); }   // the weight leaves the kicking foot over the first half of the startup
     y.move = {id: act, m, limb, mv, s, a};
     if (!F.air) {
       const v = (af - s - a) / r;
-      if (v > .55) { y.back = rnSm((v - .55) / .45); y.backTo = CROUCHED[act] ? 'crouch' : 'idle'; if (y.backTo === 'idle') rbIdle(y, t, y.back, st); }
-      if (kick) y.freeW = Math.max(y.freeW, y.back);   // the kicking foot is back on its spot with the stance
+      if (v > .5) {   // back into the stance: the pose, the feet's turn and (kicks) the kicking foot on its spot
+        y.back = rnSm((v - .5) / .5); y.backTo = CROUCHED[act] ? 'crouch' : 'idle'; y.foot = 1 - y.back; y.lift *= 1 - y.back;
+        if (y.backTo === 'idle') rbIdle(y, t, y.back, st);
+      }
     }
-    if (CFG.moves[act]) y.box = af <= s - 1 || af >= s + a + 2 ? 0 : af <= s ? af - (s - 1) : af <= s + a ? 1 : 1 - (af - s - a) / 2;
+    if (CFG.moves[act]) { const n = Math.max(2, .45 * s); y.box = af <= s ? rnSm((af - (s - n)) / n) : af <= s + a ? 1 : 1 - rnSm((af - s - a) / 3); }
     return y;
   }
   switch (act) {
     case 'idle': case 'intro': rbIdle(y, t, 1, st); break;
     case 'guard': case 'guardC': case 'crouch': y.chest = 1.5 * Math.sin(t * .075); y.dip = .003 * H * (1 + Math.sin(t * .15)); break;
-    case 'walkF': y.lean = 6; y.chest = 4 * Math.sin(F.x / 1000 * 4.4); break;
-    case 'walkB': y.lean = -2; y.chest = -3 * Math.sin(F.x / 1000 * 4.4); break;
-    case 'dashF': { const u = rnSm(af / 4) * (1 - rnSm((af - 12) / 6)); y.lean = 17 * u; y.dip = .03 * H * u; break; }
-    case 'dashB': { const u = rnSm(af / 4) * (1 - rnSm((af - 12) / 8)); y.lean = -9 * u; y.dip = .02 * H * u; break; }
-    case 'jumpSquat': { const u = rnSm(af / 3); y.dip = .06 * H * u; y.lean = 7 * u; y.h.L = y.h.R = 6 * u; break; }
-    case 'landing': { const u = Math.exp(-af / 3.5) * (1 - Math.exp(-af * 1.4)) * 1.6; y.dip = .085 * H * u; y.lean = 9 * u; break; }
-    case 'air': { const u = mdUp((CFG.jump.v - F.vy) / (2 * CFG.jump.v)); y.lean = 7 - 12 * u; break; }   // rising: forward, falling: opening up
-    case 'hitStun': case 'thrown': { const u = Math.exp(-af / 5), w = Math.sin(Math.min(af, 9) * .9) * Math.exp(-af / 4);
-      y.lean = -13 * u; y.head = -15 * u; y.stab = 0; y.chest = -9 * u + 3 * w; y.yaw = -4 * u; y.sz = -.07 * u; y.dip = .03 * H * u; y.h[st.front] = 9 * u; break; }
-    case 'block': { const u = Math.exp(-af / 4), w = Math.sin(Math.min(af, 8) * 1.3) * Math.exp(-af / 3);
-      y.lean = -6 * u; y.sz = -.035 * u; y.dip = .028 * H * u; y.chest = 2 * w; y.head = 5 * u; break; }
+    case 'walkF': y.lean = 4; y.chest = 3 * Math.sin(F.x / 1000 * 4.4); break;
+    case 'walkB': y.lean = -2; y.chest = -2 * Math.sin(F.x / 1000 * 4.4); break;
+    case 'dashF': { const u = rnSm(af / 4) * (1 - rnSm((af - 12) / 6)); y.lean = 12 * u; y.dip = .02 * H * u; break; }
+    case 'dashB': { const u = rnSm(af / 4) * (1 - rnSm((af - 12) / 8)); y.lean = -7 * u; y.dip = .015 * H * u; break; }
+    case 'jumpSquat': { const u = rnSm(af / 3); y.dip = .04 * H * u; y.lean = 5 * u; break; }
+    case 'landing': { const u = Math.exp(-af / 3.5) * (1 - Math.exp(-af * 1.4)) * 1.6; y.dip = .06 * H * u; y.lean = 6 * u; break; }
+    case 'air': { const u = mdUp((CFG.jump.v - F.vy) / (2 * CFG.jump.v)); y.lean = 5 - 9 * u; break; }   // rising: forward, falling: opening up
+    case 'hitStun': case 'thrown': { const u = Math.exp(-af / 5) * rnSm(af / 1.5);
+      y.lean = -9 * u; y.head = -10 * u; y.stab = 0; y.chest = -6 * u; y.yaw = -3 * u; y.sz = -.05 * u; y.dip = .02 * H * u; break; }
+    case 'block': { const u = Math.exp(-af / 4) * rnSm(af / 1.5); y.lean = -5 * u; y.sz = -.03 * u; y.dip = .02 * H * u; y.head = 4 * u; break; }
   }
   return y;
 }
-// The guard's bounce on the balls of the feet (weight k): the pelvis bobs, both heels stay off the floor (the rear one
-// more) and lift with it, the weight passes from one foot to the other at half the pace, the shoulders answer.
+// The guard's bounce on the balls of the feet (weight k): the pelvis bobs, the heels leave the floor a little with it
+// (the rear one more), the weight passes from one foot to the other at half the pace, the shoulders answer.
 function rbIdle(y, t, k, st) {
   const ph = t * (2 * Math.PI / 26), up = (1 - Math.cos(ph)) / 2, sw = Math.sin(ph / 2);
-  y.dip += k * (.014 - .026 * up);
-  y.h[st.front] += k * (1 + 5 * up); y.h[st.rear] += k * (4 + 8 * up);
-  y.sz += k * .02 * sw; y.chest += k * 2.4 * Math.sin(ph / 2 + .9); y.yaw += k * 1.2 * sw;
+  y.dip += k * (.01 - .02 * up);
+  y.h[st.front] += k * (1 + 4 * up); y.h[st.rear] += k * (3 + 6 * up);
+  y.sz += k * .015 * sw; y.chest += k * 2 * Math.sin(ph / 2 + .9); y.yaw += k * sw;
 }
 
 // --- The pose ---
 RN.pure = function (md, F, S) {
   rbInit(md);
-  const st = rbStance(md, F), act = F.act, y = rbStyle(F, S, st);
+  const st = rbStance(md, F), act = F.act, t0 = RB.moves[act] && !F.air ? rbT0(md, F, S) : null,
+    fix = CFG.moves[act] && RB.moves[act] ? (RB.inFix ? RB.fix.of[act] : rbBoxFix(md, F, S)) : null, y = rbStyle(F, S, st);
   let p = mdPoseOf(F, S) || mdRest(md);
   if (y.back > 0) p = mdMix(p, y.backTo === 'crouch' ? st.crouch : rbIdlePose(F, S), y.back);
-  const pol = F.air ? 'none' : RB.pin[act] || CFG.moves[act] ? 'pin' : RB.keep[act] ? 'keep' : 'none';
-  RB.pol = pol;
+  const pol = F.air ? 'air' : RB.pin[act] || CFG.moves[act] ? 'pin' : RB.keep[act] ? 'keep' : 'none';
+  RB.pol = pol; RB.floor = F.air ? -F.y / 1000 : 0;   // the floor in the model's frame (under a fighter in the air)
   rbBody(md, p, y);
-  if (pol !== 'none') { rbContacts(md, p, y, st, pol); rbLegs(md, p, pol === 'pin'); }
-  if (y.box > 0 && rbBox(md, p, F, y, pol)) rbBox(md, p, F, y, pol);   // (twice: the legs may pull the pelvis back a little)
+  if (fix && y.box > 0) { p.h[0] += fix.x * y.box; p.h[1] += fix.y * y.box; p.h[2] += fix.z * y.box; }
+  if (pol !== 'none') { rbContacts(md, p, y, st, pol, t0); rbLegs(md, p); }
   return p;
 };
+// The shift of the pelvis that puts move F.act's hitting limb inside its box (15 mm in from its edges) on its first
+// active frame, found once per move on that frame's pose: RN.pure brings it in and out smoothly around the active frames.
+function rbBoxFix(md, F, S) {
+  const id = F.act, key = RB.stance.key;
+  if (!RB.fix || RB.fix.key !== key) RB.fix = {key, of: {}};
+  if (RB.fix.of[id]) return RB.fix.of[id];
+  const m = CFG.moves[id], e = CFG.clips[id] || {}, limb = e.limb || (e.up && e.up.limb) || m.limb, meta = md.meta.limbs[limb], bi = md.index[meta.b], k = m.box, g = 15;
+  const D = Object.assign({}, F, {af: m.s + 1}), fix = RB.fix.of[id] = {x: 0, y: 0, z: 0}, v = new THREE.Vector3();
+  RB.inFix = true;   // RN.pure below uses the shift found so far (and does not come back here)
+  for (let i = 0; i < 4; i++) {   // (the legs answer the shift, so a few rounds)
+    const W = rbFK(md, RN.pure(md, D, S), RB.W), pt = v.fromArray(meta.p).applyQuaternion(W.q[bi]).add(W.p[bi]), x = pt.dot(RB_LINE) * 1000, yy = pt.y * 1000;
+    const ex = x < k[0] + g ? k[0] + g - x : x > k[1] - g ? k[1] - g - x : 0, ey = yy < k[2] + g ? k[2] + g - yy : yy > k[3] - g ? k[3] - g - yy : 0;
+    if (!ex && !ey) break;
+    fix.x += RB_LINE.x * ex / 1000; fix.z += RB_LINE.z * ex / 1000; fix.y += ey / 1000;
+  }
+  RB.inFix = false;
+  return fix;
+}
 function rbIdlePose(F, S) {
   const D = RB.idleF || (RB.idleF = {}); Object.assign(D, F); D.act = 'idle'; D.af = 99; D.air = false; D.hit = 0;
   return mdPoseOf(D, S);
@@ -250,64 +263,78 @@ function rbBody(md, p, y) {
   if (y.head) mdBoneTurn(p, ix.Head, MD_X, y.head);
 }
 
-// The feet's contacts (RB.con) for pose p. 'pin': the shared stance's balls, each foot flat there, turned on its ball
-// with the pelvis (by its pivot share) and its heel lifted as the style asks; the kicking leg is free (the clip's, as
-// the pelvis carries it). 'keep': where the clip has the foot, never under the floor, free by how high the clip lifts it.
-function rbContacts(md, p, y, st, pol) {
-  const t = RB.t, T = THREE, dyaw = rbYaw(t.q[0].fromArray(p.q, 0)) - st.yaw;
+// The direction (on the floor) and the heel lift (degrees, 0..RB.heelMax) of a foot of rotation q: RB.t.dir, RB.t.lift.
+// From the foot's side-to-side axis, which stays level however high the heel is (the sole's own direction, flattened,
+// flips when the foot stands on its toes).
+function rbFootOf(q, L) {
+  const t = RB.t, k = t.v[1].copy(L.lat).applyQuaternion(q).setY(0);
+  if (k.lengthSq() < 1e-8) k.set(1, 0, 0);
+  t.dir.crossVectors(k.normalize(), RB_UP);
+  t.lift = Math.max(0, Math.min(RB.heelMax, Math.asin(Math.max(-1, Math.min(1, -t.v[2].copy(L.sd).applyQuaternion(q).y))) / RB_R));
+}
+
+// The feet's contacts (RB.con) for pose p. 'pin': the shared stance's toe tips. Each foot is the stance's (flat, a
+// rigid shoe), turned on its tip by as much as the clip's foot has turned (in a strike: since the move began, so it
+// starts as it stands; else: from the stance's direction), within 60 degrees (90 for a kick's support foot), its heel
+// lifted as the clip's and as the style asks; the kicking leg is free (the clip's). Then the pelvis moves by the mean
+// of what separates the pinned tips from where the clip's legs put them (within RB.travel): the capture's place of the
+// pelvis over the feet. 'keep': each foot where the clip has it, never under the floor, free by how high the clip
+// lifts it. 'air': the clip's legs.
+function rbContacts(md, p, y, st, pol, t0) {
+  const t = RB.t, q = t.q;
+  let ox = 0, oz = 0, n = 0;
   for (const s of ['L', 'R']) {
     const L = RB.leg[s], c = RB.con[s], hb = t.cb[s].y - L.ball;
-    c.flat = null; c.auto = false; c.heel = 0; c.yaw = 0;
+    c.flat = null; c.auto = false;
     if (pol === 'pin') {
-      c.w = y.free === s ? y.freeW : 1;   // the kicking leg is the clip's (free) but at the move's two ends
-      c.G.copy(st[s].G); c.flat = st[s]; c.auto = y.auto[s]; c.loc = L.tp;
-      c.yaw = Math.max(-.9, Math.min(.9, y.p[s] * Math.atan2(Math.sin(dyaw), Math.cos(dyaw))));
-      c.heel = Math.min(RB.heelMax, y.h[s] + Math.abs(c.yaw) / RB_R * .2);
-      rbFoot(c, L);
+      // the kicking leg is the clip's (free) once the clip lifts its foot (a kick made by IK: after the first frames), and
+      // back on its spot with the stance
+      c.w = y.free === s ? Math.max(y.back, y.freeW < 0 ? 1 - rnSm((hb - .02) / .1) : y.freeW) : 1;
+      c.G.copy(st[s].G); c.flat = st[s]; c.loc = L.tp; c.auto = !y.move;
+      rbFootOf(t.cq[s], L);
+      const ref = t0 ? t0[s] : st[s].fwd, lim = (y.free && y.free !== s ? 90 : 60) * RB_R;
+      const turn = lim * Math.tanh(Math.atan2(ref.z * t.dir.x - ref.x * t.dir.z, ref.x * t.dir.x + ref.z * t.dir.z) / lim) * y.foot;
+      const lift = Math.min(RB.heelMax, t.lift * y.lift + y.h[s]);
+      c.Q.copy(st[s].Q);
+      if (lift > 0) c.Q.premultiply(q[1].setFromAxisAngle(st[s].axis, lift * RB_R));
+      if (turn) c.Q.premultiply(q[1].setFromAxisAngle(RB_UP, turn));
+      const wb = y.free === s ? Math.max(y.back, Math.min(c.w, y.freeB)) : 1;   // this foot's say in where the pelvis goes
+      if (wb > 0) { const tip = t.v[4].copy(L.tp).applyQuaternion(c.Q).add(t.ca[s]); ox += (c.G.x - tip.x) * wb; oz += (c.G.z - tip.z) * wb; n += wb; }
     } else {
-      c.w = 1 - rnSm((hb - .04) / .1);
+      c.w = pol === 'air' ? 0 : 1 - rnSm((hb - .04) / .1);   // in the air: the clip's legs, kept above the floor that comes up
       c.G.copy(t.cb[s]); if (c.G.y < L.ball) c.G.y = L.ball;
       c.Q.copy(t.cq[s]); c.loc = L.tb;
     }
   }
+  if (n) {
+    ox /= n; oz /= n;
+    const d = Math.hypot(ox, oz), lim = RB.travel[1] + (RB.travel[0] - RB.travel[1]) * Math.max(0, Math.min(1, n - 1)), k = d > 1e-6 ? lim * Math.tanh(d / lim) / d : 1;   // (a soft limit)
+    p.h[0] += ox * k; p.h[2] += oz * k;
+  }
 }
-// A pinned foot's orientation: flat on the floor, heel lifted about the ball's axis, turned about the vertical.
-function rbFoot(c, L) {
-  const q = RB.t.q;
-  c.Q.copy(c.flat.Q);
-  if (c.heel) c.Q.premultiply(q[1].setFromAxisAngle(c.flat.axis, c.heel * RB_R));
-  if (c.yaw) c.Q.premultiply(q[1].setFromAxisAngle(RB_UP, c.yaw));
+// The planted feet's directions at the start of move F.act (its clip's first pose), once per move.
+function rbT0(md, F, S) {
+  const id = F.act, key = RB.stance.key;
+  if (!RB.t0 || RB.t0.key !== key) RB.t0 = {key, of: {}};
+  if (RB.t0.of[id]) return RB.t0.of[id];
+  const W = rbFK(md, mdPoseOf(Object.assign({}, F, {af: 0}), S), RB.W), o = {};
+  for (const s of ['L', 'R']) { rbFootOf(W.q[RB.leg[s].ia], RB.leg[s]); o[s] = RB.t.dir.clone(); }
+  return RB.t0.of[id] = o;
 }
 
-// Legs of pose p onto their contacts: heels that lift by themselves when a leg is short, the mass over the feet, the
-// pelvis within reach of both legs, then each leg by IK (a free leg stays as the pelvis carries it). balance = also
-// keep the mass over the support.
-function rbLegs(md, p, balance) {
-  const t = RB.t, v = t.v, q = t.q, W = rbFK(md, p, RB.W), ix = md.index, con = RB.con;
+// Legs of pose p onto their contacts: a standing foot lifts its heel a little when its leg is short, the pelvis comes
+// within reach of the legs in contact, then each leg by IK (a free leg stays as the pelvis carries it, above the floor).
+function rbLegs(md, p) {
+  const t = RB.t, v = t.v, q = t.q, con = RB.con;
   const qH = q[0].fromArray(p.q, 0), h = v[0].fromArray(p.h);
   const hip = (s, out) => out.copy(RB.leg[s].tu).applyQuaternion(qH).add(h);
   const ankle = (s, out) => out.copy(con[s].loc).applyQuaternion(con[s].Q).negate().add(con[s].G);
-  // balance: pelvis and chest over the feet in contact
-  if (balance) {
-    const com = v[1].copy(W.p[ix.Spine]).multiplyScalar(.45).addScaledVector(h, .55).setY(0), l = con.L.w > .5, r = con.R.w > .5;
-    if (l || r) {
-      const near = v[2];
-      if (l && r) {
-        const ab = v[3].subVectors(con.L.G, con.R.G).setY(0), k = Math.max(.12, Math.min(.88, v[4].subVectors(com, con.R.G).setY(0).dot(ab) / ab.lengthSq()));
-        near.copy(con.R.G).addScaledVector(ab, k).setY(0);
-      } else near.copy(l ? con.L.G : con.R.G).setY(0);
-      const d = near.sub(com), n = d.length(), lim = l && r ? RB.bal : RB.bal + .04;
-      if (n > lim) { h.addScaledVector(d, .8 * (n - lim) / n); }
-    }
-  }
-  // a heel lifts by itself, in steps, while its leg would be too straight
+  // a short leg first lifts its heel (smoothly with what is missing: 4 cm = 10 degrees), on standing feet only
   for (const s of ['L', 'R']) {
     const c = con[s], L = RB.leg[s];
-    if (c.w < .5 || !c.auto) continue;
-    for (let k = 0; k < 9 && c.heel < RB.heelMax; k++) {
-      if (hip(s, v[5]).distanceTo(ankle(s, v[6])) <= (L.a + L.b) * RB.ext) break;
-      c.heel += 4; rbFoot(c, L);
-    }
+    if (c.w < 1 || !c.auto) continue;
+    const ex = hip(s, v[5]).distanceTo(ankle(s, v[6])) - (L.a + L.b) * RB.ext;
+    if (ex > 0) { const f = v[1].copy(L.tp).applyQuaternion(c.Q).setY(0).normalize(); c.Q.premultiply(q[1].setFromAxisAngle(v[2].crossVectors(RB_UP, f).normalize(), Math.min(12, ex * 250) * RB_R)); }
   }
   // the pelvis within reach of the legs in contact
   for (let k = 0; k < 4; k++) for (const s of ['L', 'R']) {
@@ -318,72 +345,71 @@ function rbLegs(md, p, balance) {
   }
   h.toArray(p.h);
   // each leg: on its contact; partly free (a foot leaving or coming back to its spot: it steps, a little off the
-  // floor); or free, as the pelvis carries the clip's leg. No foot under the floor, none rolled on its edge near it.
+  // floor); or free, as the pelvis carries the clip's leg. No foot under the floor, none tilted on its edge near it.
   for (const s of ['L', 'R']) {
     const c = con[s], L = RB.leg[s], A = hip(s, v[5]), tgt = c.T, Qf = q[5];
     const qU = q[1].copy(qH).multiply(q[2].fromArray(p.q, L.iu * 4)), knee = v[7].fromArray(md.bones[L.il].t).applyQuaternion(qU).add(A);
-    let solve = c.w > 0;
+    const qL = q[2].copy(qU).multiply(q[3].fromArray(p.q, L.il * 4)), fa = v[8].fromArray(md.bones[L.ia].t).applyQuaternion(qL).add(knee);
     if (c.w >= 1) { ankle(s, tgt); Qf.copy(c.Q); }
     else {
-      const qL = q[2].copy(qU).multiply(q[3].fromArray(p.q, L.il * 4)), fa = v[8].fromArray(md.bones[L.ia].t).applyQuaternion(qL).add(knee);
-      qL.multiply(q[3].fromArray(p.q, L.ia * 4));   // the carried foot
-      if (c.w > 0) { ankle(s, tgt).lerpVectors(fa, tgt, c.w); Qf.copy(qL).slerp(c.Q, c.w); tgt.y += .05 * Math.sin(Math.PI * c.w); }
-      else { tgt.copy(fa); Qf.copy(qL); }
+      Qf.copy(qL).multiply(q[3].fromArray(p.q, L.ia * 4));   // the carried foot
+      if (c.w > 0) {
+        const far = Math.hypot(ankle(s, tgt).x - fa.x, tgt.z - fa.z);   // a foot that travels steps: off the floor by how far it goes
+        tgt.lerpVectors(fa, tgt, c.w); Qf.slerp(c.Q, c.w); tgt.y += Math.min(.05, .3 * far) * Math.sin(Math.PI * c.w);
+      } else tgt.copy(fa);
     }
     if (!c.flat || c.w < 1) {
-      const ball = v[6].copy(L.tb).applyQuaternion(Qf).add(tgt), near = 1 - rnSm((ball.y - L.ball) / .08);
+      const fl = RB.floor, ball = v[6].copy(L.tb).applyQuaternion(Qf).add(tgt), near = 1 - rnSm((ball.y - fl - L.ball) / .08);
       if (near > 0) {   // near the floor: the sole's sideways tilt taken out
         const f = v[1].copy(L.tb).applyQuaternion(Qf).setY(0), n = v[2].copy(L.up).applyQuaternion(Qf);
-        if (f.lengthSq() > 1e-6) {
-          f.normalize();
-          const roll = Math.atan2(n.dot(v[3].crossVectors(RB_UP, f)), n.y);
-          if (Math.abs(roll) > .03) { Qf.premultiply(q[3].setFromAxisAngle(f, roll * near)); solve = true; ball.copy(L.tb).applyQuaternion(Qf).add(tgt); }
-        }
+        if (f.lengthSq() > 1e-6) { f.normalize(); Qf.premultiply(q[3].setFromAxisAngle(f, Math.atan2(n.dot(v[3].crossVectors(RB_UP, f)), n.y) * near)); ball.copy(L.tb).applyQuaternion(Qf).add(tgt); }
       }
-      const low = Math.max(L.ball - ball.y, -(v[1].copy(L.tp).applyQuaternion(Qf).y + tgt.y), .07 - tgt.y);   // ball, toe tip and ankle above the floor
-      if (low > 0) { tgt.y += low; solve = true; }
+      const low = Math.max(L.ball + fl - ball.y, fl - (v[1].copy(L.tp).applyQuaternion(Qf).y + tgt.y), .07 + fl - tgt.y);   // ball, toe tip and ankle above the floor
+      if (low > 0) tgt.y += low;
     }
-    if (!solve) continue;
-    rbIK(md, p, L, qH, A, tgt, Qf, knee, c.w >= 1 && !!c.flat);
+    rbIK(md, p, L, qH, A, tgt, Qf, qU, qL, knee, fa, c.w >= 1 && !!c.flat, c.loc === L.tp ? c.w : 0);   // (the clip's own foot: its knee is right)
   }
 }
 
-// One leg by IK: hip joint A, ankle target tgt, the foot's rotation Qf, knee = where the knee is now (its side of the
-// leg is kept, pulled over the toes: never more than 40 degrees from the foot's direction), rigid = the shoe keeps its
-// rest shape (a pinned foot turns on its toe tip as one piece: bent at the toes this boot folds badly).
-function rbIK(md, p, L, qH, A, tgt, Qf, knee, rigid) {
+// One leg by IK, from the leg as the pelvis carries it (qU, qL = its thigh's and shin's rotations, knee, ank = its
+// knee and ankle): hip joint A, ankle target tgt, the foot's rotation Qf. The carried leg is swung as one piece so that
+// it points at the target (its own twist and the side its knee bends to are kept: the knee's hinge goes with it), a
+// foot on the floor then turns it about that line to bring the knee toward its toes by what exceeds 40 degrees (by the
+// contact's weight w; a free leg keeps the clip's knee), and the knee opens or closes about its hinge to the target's
+// distance. Solving an already solved leg changes nothing. rigid = the shoe keeps its rest shape (a pinned foot turns
+// on its toe tip as one piece: bent at the toes this boot folds badly).
+function rbIK(md, p, L, qH, A, tgt, Qf, qU, qL, knee, ank, rigid, w) {
   const T = THREE, a = L.a, b = L.b;
   const dir = new T.Vector3().subVectors(tgt, A), full = dir.length(), d = Math.max(Math.abs(a - b) + 1e-3, Math.min((a + b) * .999, full));
   dir.multiplyScalar(1 / (full || 1e-9));
-  const Pf = L.tb.clone().applyQuaternion(Qf).setY(0); Pf.addScaledVector(dir, -Pf.dot(dir));
-  if (Pf.lengthSq() < 1e-8) Pf.set(0, 0, 1).addScaledVector(dir, -dir.z);
-  Pf.normalize();
-  const Pc = new T.Vector3().subVectors(knee, A); Pc.addScaledVector(dir, -Pc.dot(dir));
-  const P = Pc.lengthSq() < 1e-6 ? Pf.clone() : Pc.normalize().lerp(Pf, .5).normalize();
-  for (let k = 0; k < 3 && P.dot(Pf) < .766; k++) P.lerp(Pf, .5).normalize();
+  const cd = new T.Vector3().subVectors(ank, A).normalize(), R = new T.Quaternion().setFromUnitVectors(cd, dir);   // the swing
+  // the knee's side: where the carried leg's own knee lies off its hip-ankle line, swung with it (a straight carried
+  // leg has none: then forward of the thigh's hinge)
+  const P = new T.Vector3().subVectors(knee, A); P.addScaledVector(cd, -P.dot(cd));
+  const off = rnSm((P.length() - .03) / .09), Ph = new T.Vector3().crossVectors(dir, L.hu.clone().applyQuaternion(qU).applyQuaternion(R));
+  if (Ph.lengthSq() < 1e-8) Ph.set(0, 0, 1).addScaledVector(dir, -dir.z);
+  Ph.normalize();
+  if (off > 1e-4) P.applyQuaternion(R).normalize().multiplyScalar(off).addScaledVector(Ph, 1 - off); else P.copy(Ph);
+  if (P.lengthSq() < 1e-8) P.copy(Ph);
+  P.addScaledVector(dir, -P.dot(dir)).normalize();
+  if (w > 0) {
+    const Pf = L.tb.clone().applyQuaternion(Qf); Pf.addScaledVector(dir, -Pf.dot(dir));
+    if (Pf.lengthSq() > 1e-6) {
+      Pf.normalize();
+      // by what exceeds 40 degrees, and not at all when the knee is opposite the toes (no side to choose)
+      const ang = Math.acos(Math.max(-1, Math.min(1, P.dot(Pf)))), turn = w * Math.max(0, ang - 40 * RB_R) * (1 - rnSm((ang - 2.7) / .35));
+      if (turn > 1e-5) { const tw = new T.Quaternion().setFromAxisAngle(new T.Vector3().crossVectors(P, Pf).normalize(), turn); P.applyQuaternion(tw); R.premultiply(tw); }
+    }
+  }
   const cos = (a * a + d * d - b * b) / (2 * a * d), sin = Math.sqrt(Math.max(0, 1 - cos * cos));
-  const dU = dir.clone().multiplyScalar(cos).addScaledVector(P, sin), B = A.clone().addScaledVector(dU, a);
-  const dL = A.clone().addScaledVector(dir, d).sub(B).normalize(), n = new T.Vector3().crossVectors(P, dir).normalize();
-  const m = RB.t.m, z = new T.Vector3();
-  const qU = new T.Quaternion().setFromRotationMatrix(m.makeBasis(n, dU, z.crossVectors(n, dU)).multiply(L.Mu));
-  const qL = new T.Quaternion().setFromRotationMatrix(m.makeBasis(n, dL, z.crossVectors(n, dL)).multiply(L.Ml));
-  const inv = new T.Quaternion();
-  inv.copy(qH).invert().multiply(qU).toArray(p.q, L.iu * 4);
-  inv.copy(qU).invert().multiply(qL).toArray(p.q, L.il * 4);
-  inv.copy(qL).invert().multiply(Qf).toArray(p.q, L.ia * 4);
+  const B = A.clone().addScaledVector(dir, a * cos).addScaledVector(P, a * sin), end = A.clone().addScaledVector(dir, d);
+  const d1 = new T.Quaternion().setFromUnitVectors(new T.Vector3().subVectors(knee, A).applyQuaternion(R).normalize(), new T.Vector3().subVectors(B, A).normalize()).multiply(R);
+  const d2 = new T.Quaternion().setFromUnitVectors(new T.Vector3().subVectors(ank, knee).applyQuaternion(d1).normalize(), end.sub(B).normalize());
+  const nU = d1.clone().multiply(qU), nL = d2.multiply(d1).multiply(qL), inv = new T.Quaternion();
+  inv.copy(qH).invert().multiply(nU).toArray(p.q, L.iu * 4);
+  inv.copy(nU).invert().multiply(nL).toArray(p.q, L.il * 4);
+  inv.copy(nL).invert().multiply(Qf).toArray(p.q, L.ia * 4);
   if (rigid) L.toe.toArray(p.q, L.it * 4);
-}
-
-// The hitting limb inside its move's box (15 mm in from its edges) on the active frames, eased in and out by y.box:
-// the pelvis moves by what is missing (along the fight line and up or down), the legs follow on their contacts.
-function rbBox(md, p, F, y, pol) {
-  const mvn = y.move, k = mvn.m.box, meta = md.meta.limbs[mvn.limb], i = md.index[meta.b], v = RB.t.v, W = rbFK(md, p, RB.W);
-  const pt = v[1].fromArray(meta.p).applyQuaternion(W.q[i]).add(W.p[i]), x = pt.dot(RB_LINE) * 1000, yy = pt.y * 1000, g = 15;
-  const ex = x < k[0] + g ? k[0] + g - x : x > k[1] - g ? k[1] - g - x : 0, ey = yy < k[2] + g ? k[2] + g - yy : yy > k[3] - g ? k[3] - g - yy : 0;
-  if (!ex && !ey) return false;
-  p.h[0] += RB_LINE.x * ex / 1000 * y.box; p.h[2] += RB_LINE.z * ex / 1000 * y.box; p.h[1] += ey / 1000 * y.box;
-  if (pol !== 'none') rbLegs(md, p, false);
-  return true;
 }
 
 // --- The drawn pose: RN.pure eased in from the last drawn pose when the act changes ---
@@ -395,7 +421,7 @@ RN.pose = function (it, F, S) {
   let p = RN.pure(md, F, S);
   const pol = RB.pol, m = CFG.moves[F.act] || (RB.moves[F.act] && RB.moves[F.act].fd);
   const hit = {hitStun: 1, block: 1, thrown: 1, knock: 1, juggle: 1}[F.act];
-  const n = m ? Math.min(CFG.anim.strikeIn, m.s - 1) : hit ? RB.hitBlend : {getup: 1, rollF: 1, rollB: 1}[F.act] ? 0 : RB.blend;
+  const n = m ? Math.min(CFG.anim.strikeIn, m.s - 1) : hit ? RB.hitBlend : {getup: 1, rollF: 1, rollB: 1}[F.act] ? 4 : RB.blend;
   if (F !== it.F) it.from = null;
   else if (F.act !== it.act || F.af < it.af - .5) { it.from = n > 0 ? it.pose : null; it.fromPin = it.pin; }
   if (it.from && F.af < n) {
@@ -409,7 +435,7 @@ RN.pose = function (it, F, S) {
         c.w = sav[s].w * (same ? 1 : k); c.flat = null; c.auto = false;   // (c.loc: the new pose's pinned point)
         c.Q.copy(W.q[L.ia]); c.G.copy(sav[s].G);
       }
-      rbLegs(md, p, false);
+      rbLegs(md, p);
     }
   }
   it.pin = pol === 'pin';
@@ -418,7 +444,7 @@ RN.pose = function (it, F, S) {
 
 // --- Smear ("Allungo"): the hitting forearm or shin stretched along itself just before the impact (about 3 frames),
 // thinner as it gets longer; on the first active frame it has its true size again (the hit is exact). ---
-RN.hooks.boot.push(() => rnOpt('smear', 'Allungo', true));
+RN.hooks.boot.push(() => rnOpt('smear', 'Allungo', false));   // off until Denis asks for it: a stretched limb reads as a distortion
 RN.hooks.applied.push((it, F) => {
   const md = mdData(it.key), ix = md.index, mv = RB.moves[F.act], m = mv && (CFG.moves[F.act] || mv.fd);
   let on = null, sc = 1;
