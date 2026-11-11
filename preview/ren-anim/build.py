@@ -23,9 +23,11 @@ PATCHES = [
      '    <div class="opt"><button id="spin"><span>Gira</span></button></div>\n'
      '    <div class="opt" id="fps"></div>'),
     ("Trascina per girare Ren, pizzica o usa la rotella per avvicinarti, doppio tocco per tornare al centro.",
-     "Trascina per girare Ren, pizzica o usa la rotella per avvicinarti, doppio tocco per tornare al centro. "
-     "Tastiera: 1-0 mosse, N nuove/vecchie, M manichino, L allungo, spazio velocità. "
-     "Controller: dorsali = mossa, A nuove/vecchie, B velocità, X manichino, Y allungo."),
+     "Trascina per girare, pizzica o usa la rotella per avvicinarti, doppio tocco per tornare al centro."
+     "<span class=kb> Tastiera: 1-0 mosse, N nuove/vecchie, M manichino, L allungo, spazio velocità. "
+     "Controller: dorsali = mossa, A nuove/vecchie, B velocità, X manichino, Y allungo.</span>"),
+    ("@media (prefers-reduced-motion:reduce){button{transition:none}}",
+     "@media (prefers-reduced-motion:reduce){button{transition:none}}\n@media (pointer:coarse){#hint .kb{display:none}}"),
     # --- a move's clip time: the layer's own, when it has one ---
     ("function mdMoveT(t, m, af, hit) {\n",
      "function mdMoveT(t, m, af, hit) {\n  if (RN.on && RN.moveT) return RN.moveT(t, m, af, hit);\n"),
@@ -35,6 +37,8 @@ PATCHES = [
     ("  Object.assign(VW.F, {x: 0, y: 0, vy: 0, air: false, hit: 0}); vwNext();\n",
      "  Object.assign(VW.F, {x: 0, y: 0, vy: 0, air: false, hit: 0}); vwNext(); rnReset();\n"),
     ("function vwStep() {\n", "function vwStep0() {\n"),
+    # (the energy shot for its whole length: startup and recovery, as in the sim)
+    ("  ['Speciale', ['spec']],", "  ['Speciale', [['spec', CFG.spec.spawn + CFG.spec.rec]]],"),
     ("  const it = VW.it, F = VW.F;\n  mdSync(it, 0, VW.S);\n",
      "  const it = VW.it, S = rnDrawState(), F = fighterOf(S, 0);\n  rnSync(it, 0, S);\n"),
     ("c = VW.camera, d = VW.fit * VW.zoom;", "c = VW.camera, d = VW.fit * VW.zoom * VW.wide;"),

@@ -8,7 +8,8 @@
 //   RN.moveT(t, m, af, hit) -> optional: a move's clip time (replaces mdMoveT's linear startup and recovery).
 // Hooks (arrays of functions):
 //   boot(VW)              once, the scene, camera and model are built;
-//   hold(VW) -> bool      before each sim step: true holds the step (hitstop);
+//   hold(VW)              before each sim step: true holds the step (hitstop: nothing moves), another truthy value
+//                         means the hook made its own step instead;
 //   step(VW)              after each sim step;
 //   applied(it, F, S, p)  each drawn frame after the pose is on the bones and before the sash (bone scales, springs);
 //   draw(VW, dtMs, cam)   each drawn frame after the camera is placed and before the render;
@@ -61,7 +62,7 @@ function rnSync(it, side, S) {
 // One sim step of the viewer, unless a hold hook holds it (hitstop).
 function vwStep() {
   VW.hold = 0;
-  for (const f of RN.hooks.hold) if (RN.on && f(VW)) { VW.hold = 1; return; }
+  for (const f of RN.hooks.hold) { const r = RN.on && f(VW); if (r) { VW.hold = r === true ? 1 : 0; return; } }   // true: frozen (hitstop); other: the hook stepped something itself
   vwStep0();
   if (RN.on) for (const f of RN.hooks.step) f(VW);
 }
@@ -95,7 +96,7 @@ function rnBoot() {
   VW.aimX = 0; VW.wide = 1; VW.hold = 0;
   document.getElementById('aNew').addEventListener('click', () => vwAnim(true));
   document.getElementById('aOld').addEventListener('click', () => vwAnim(false));
-  rnOpt('smooth', 'Fluido', true);
+  RN.opt.smooth = true;   // the pose drawn between two sim frames (no button: there is nothing to choose)
   for (const f of RN.hooks.boot) f(VW);
   vwPress('aNew', RN.on); vwPress('aOld', !RN.on);
   const cycle = () => vwSpeed(VW.speed === 1 ? .5 : VW.speed === .5 ? .25 : 1), n = VW_PLAYS.length;
