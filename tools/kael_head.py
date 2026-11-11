@@ -70,6 +70,7 @@ SKIN_SPREAD = 30.
 # back of the head in shadow, the images draw it lit from every side) under hair[2], and where Meshy's own is darkest (the share hair[3]); their edges smoothed
 # over blur texels (skin, hair). None: the texture's own shading.
 PAD_KEEP = 6                       # texels: see the texture's padding in main()
+STUMP = (10, .007, (.02, .05), -.015, .02, .04, 6, (.003, .008), .004, .8, .005)   # see cheek_stumps()
 SHADE = {'L': (0., .5, .87), 'Lh': (0., 1., .2), 'skin': (.006, .0015, -.15), 'neck': .004, 'hair': (.005, .004, -.2, .13), 'blur': (.8, 2.5)}
 # the head painted from Denis's six head images (10/11/2026, Denis: "l'hai migliorato ma troppo poco"): their cameras
 # (cams: tools/kael_hair_fit.py, fit on the face's skin), each of the hair's texels from the views that see it and draw
@@ -107,6 +108,62 @@ EAR_TONES = ((232, 164, 245), (156, 75, 198), (107, 50, 143), (76, 36, 109))
 EAR_SILVER = ((204, 182, 218), (146, 124, 162))   # (the drawn link and bead: lit, shade; medians over the crystals in the profile images)
 FRINGE = (.02, .008, .004, 3, .002)
 HEAD_TEX = 2048
+
+
+def cheek_stumps(Q, I, skin, mid, eye_m, chin_m, T, uv):
+    """The stumps of the locks left out on the cheeks (tools/kael_fringe.py face(): its scraps kept as part of the face, the lock's
+    root standing up to 4 mm off the cheek, some of its triangles turned inward) and the holes in the skin under them: from his right,
+    the stump's sides were back faces, their outline's shell two black specks on the cheek, and the hole showed the inside of the head
+    (Denis's screenshot of 11/11). A hole (welded open edges' loop) of at most STUMP[0] edges and STUMP[1] m across, on the cheeks'
+    front (|x - middle| in STUMP[2], y under the eyes plus STUMP[3], over the chin plus STUMP[4], z over STUMP[5]) with at least
+    STUMP[6] all-skin triangles around it (STUMP[7] m away: the cheek's surface, its normal): within STUMP[8] m of it the triangles
+    turned from the cheek by more than acos(STUMP[9]) go, and what they leave open is capped with a fan of new triangles on one texel
+    of the cheek's flat skin (uv; T the texture), the outline within STUMP[10] m the cheek's own. Returns (the triangles kept, the
+    caps as (rim vertices, centre, normal), the vertices whose outline is reset, the caps' uv) or None."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    _, wv = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_inverse=True); wv = wv.ravel(); P = np.zeros((wv.max() + 1, 3)); P[wv] = Q
+    C = Q[I].mean(1); fn = np.cross(Q[I[:, 1]] - Q[I[:, 0]], Q[I[:, 2]] - Q[I[:, 0]]); ar = .5 * np.linalg.norm(fn, axis=1); fn /= np.maximum(2 * ar[:, None], 1e-12)
+    def loops(T_):
+        E = np.sort(np.stack([wv[I[T_][:, [0, 1]]], wv[I[T_][:, [1, 2]]], wv[I[T_][:, [2, 0]]]], 1).reshape(-1, 2), 1)
+        u, c = np.unique(E, axis=0, return_counts=True); op = u[c == 1]
+        if not len(op): return op, np.zeros(0, np.int64)
+        ov = np.unique(op); ix = np.full(wv.max() + 1, -1); ix[ov] = np.arange(len(ov))
+        _, lab = connected_components(coo_matrix((np.ones(len(op)), (ix[op[:, 0]], ix[op[:, 1]])), shape=(len(ov), len(ov))), directed=False)
+        return op, lab[ix[op[:, 0]]]
+    sk = np.nonzero(skin[I].all(1))[0]; op, el = loops(np.arange(len(I))); keep = np.ones(len(I), bool); holes = []
+    for l in np.unique(el):
+        e = op[el == l]; vs = np.unique(e); c0 = P[vs].mean(0); ext = np.ptp(P[vs], axis=0).max(); dx = abs(c0[0] - mid)
+        if not (len(e) <= STUMP[0] and ext <= STUMP[1] and STUMP[2][0] < dx < STUMP[2][1] and c0[1] < eye_m + STUMP[3] and c0[1] > chin_m + STUMP[4] and c0[2] > STUMP[5]): continue
+        d = np.linalg.norm(C[sk] - c0, axis=1); ring = sk[(d > STUMP[7][0]) & (d < STUMP[7][1])]
+        if len(ring) < STUMP[6]: continue
+        nrm = (fn[ring] * ar[ring, None]).sum(0); nrm /= np.linalg.norm(nrm)
+        near = np.nonzero(np.linalg.norm(C - c0, axis=1) < STUMP[8])[0]; st = near[fn[near] @ nrm < STUMP[9]]; keep[st] = False; holes.append((c0, nrm))
+        print('cheek: a hole of %d edges at %+.1f mm from the middle, %.1f mm under the eyes: %d triangles of a stump round it out (%.1f mm2)' % (
+            len(e), 1e3 * (c0[0] - mid), 1e3 * (eye_m - c0[1]), len(st), 1e6 * ar[st].sum()))
+    if not holes: return None
+    op2, el2 = loops(np.nonzero(keep)[0]); caps = []; reset = np.zeros(len(Q), bool)
+    for c0, nrm in holes:
+        reset |= np.linalg.norm(Q - c0, axis=1) < STUMP[10]
+        for l in np.unique(el2):
+            e = op2[el2 == l]; vs = np.unique(e)
+            if np.linalg.norm(P[vs].mean(0) - c0) > 2 * STUMP[8] or len(e) > 3 * STUMP[0]: continue
+            nb = {}
+            for a, b in e: nb.setdefault(a, []).append(b); nb.setdefault(b, []).append(a)
+            if any(len(v) != 2 for v in nb.values()): print('cheek: a loop there not simple, left open'); continue
+            ring_ = [e[0][0], nb[e[0][0]][0]]
+            while True:
+                nx = [v for v in nb[ring_[-1]] if v != ring_[-2]][0]
+                if nx == ring_[0]: break
+                ring_.append(nx)
+            caps.append((ring_, P[ring_].mean(0), nrm)); print('cheek: its hole capped, %d edges' % len(e))
+    # (the caps' texel: of the flat skin, in the middle of a cheek triangle near the first hole, 5 x 5 texels of skin round it)
+    TS = T.shape[0]; skin_c = np.array([247, 188, 146]); c0 = holes[0][0]; uv0 = None
+    for t in sk[np.argsort(np.linalg.norm(C[sk] - c0, axis=1))][:400]:
+        u_ = uv[I[t]].mean(0); r, c = int(u_[1] * TS), int(u_[0] * TS)
+        if 2 <= r < TS - 2 and 2 <= c < TS - 2 and np.abs(T[r - 2:r + 3, c - 2:c + 3] - skin_c).max() <= 2: uv0 = u_; break
+    assert uv0 is not None, 'no flat skin texel near the cheek\'s hole'
+    return keep, [([np.nonzero(wv == w)[0][np.argmax(skin[wv == w])] for w in r], c, n) for r, c, n in caps], reset, uv0
 
 
 def face_back(Q, I, skin, hair):
@@ -566,6 +623,24 @@ def main(bust):
     lb = np.where(ear_v, 0., lb)   # (the earrings' outline not pushed back: the hook, hair's colour, was pushed behind the head with the fringe, a pale strip with no contour)
     print('outline: the hair\'s %.2f of the width, the earrings\' %.2f; %d hair vertices over the face pushed back %.0f mm (%d with the smoothing)' % (
         HAIR_LINE_W, EAR_LINE, n_over, 1000 * FRINGE[0], int((lb > 0).sum())))
+    n_add = 0
+    if STUMP and FACE:   # (the stumps of the locks left out on the cheeks, and the holes under them: cheek_stumps())
+        cs = cheek_stumps(Q, It, is_skin(vc), FACE_MID, eye_m, chin_m, np.clip(out, 0, 255).round(), UV)
+        if cs is not None:
+            keep_c, caps, reset, uv0 = cs; line_w = line_w.copy(); lb = lb.copy(); line_w[reset] = 1.; lb[reset] = 0.
+            nv, nt, nn = [], [], []
+            for rim, cen, nrm in caps:   # (their own vertices: the rim's places and skinning, the cheek's normal, on the one texel; full outline, never hidden)
+                base = len(Q) + len(nv); nv += [(Q[v], v) for v in rim] + [(cen, rim[0])]; nn += [nrm] * (len(rim) + 1); cen_i = base + len(rim)
+                for a in range(len(rim)):
+                    t = [cen_i, base + a, base + (a + 1) % len(rim)]; pa = [cen, Q[rim[a]], Q[rim[(a + 1) % len(rim)]]]
+                    nt.append(t if np.cross(pa[1] - pa[0], pa[2] - pa[0]) @ nrm > 0 else [t[0], t[2], t[1]])
+            if nv:
+                n_add = len(nv); sv = np.array([v for _, v in nv]); nrm_ = np.array(nn)
+                Q = np.concatenate([Q, np.array([p for p, _ in nv])]); Nq = np.concatenate([Nq, nrm_]); UV = np.concatenate([UV, np.tile(uv0, (n_add, 1))])
+                top = np.concatenate([top, top[sv]]); tw = np.concatenate([tw, tw[sv]]); line_w = np.concatenate([line_w, np.ones(n_add)]); lb = np.concatenate([lb, np.zeros(n_add)])
+                if hmask is not None: hmask = np.concatenate([hmask, np.zeros(n_add, hmask.dtype)])
+            It = np.concatenate([It[keep_c], np.array(nt, It.dtype).reshape(-1, 3)])
+            print('cheek: %d triangles out, %d in, %d vertices added, the outline reset on %d' % (int((~keep_c).sum()), len(nt), n_add, int(reset.sum())))
     pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
     blob = b''; jo = {'v': 1, 'verts': int(len(Q)), 'tris': int(len(It)), 'scale': round(float(s), 5)}
     def put(key, arr):
@@ -576,7 +651,7 @@ def main(bust):
     put('idx', It.astype(np.uint16 if len(Q) < 65536 else np.uint32)); put('hide', hide)
     flat_v = np.ones(int(src.max()) + 1)
     if len(cv): flat_v[cv] = flat_c
-    flat_v = flat_v[src]
+    flat_v = np.concatenate([flat_v[src], np.ones(n_add)])
     put('lb', lb.astype(np.float32)); put('flat', flat_v.astype(np.float32)); put('line', line_w.astype(np.float32))
     if hmask is not None:   # (hidden from his right side, from his left: src/e_model.js mdHeadHide, by the camera's angle around the head, switching midway between the front image's and each 3/4's)
         cams_ = json.load(open(os.path.join(ROOT, PAINT['cams'])))

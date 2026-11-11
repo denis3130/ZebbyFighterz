@@ -357,6 +357,13 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     nessun triangolo disegnato usa prendono il colore del texel disegnato più vicino (`tools/kael_head.py`, alla
     scrittura della pittura), tranne entro 6 texel dagli occhi, dalle sopracciglia e dagli orecchini (`PAD_KEEP`): lì
     resta tutto com'era;
+  - **i due puntini neri sulla guancia destra** (versione 12): non erano pittura ma il moncone di una ciocca tolta,
+    alto fino a 4 mm sulla guancia con alcuni triangoli girati verso l'interno, e sotto un buco nella pelle: di lato i
+    suoi fianchi erano facce di dietro e il guscio del contorno li disegnava neri, dal buco si vedeva l'interno della
+    testa. Ora (`cheek_stumps` in `tools/kael_head.py`, `STUMP`) un buco piccolo sul davanti delle guance con la pelle
+    attorno perde i triangoli girati di oltre 37° entro 4 mm, e quello che resta aperto è chiuso con un ventaglio di
+    triangoli nuovi su un texel di pelle piatta, col contorno della guancia. Su questa testa: un posto, 10 triangoli
+    tolti e 5 aggiunti; provato nel motore vero da 16 angoli;
   - **occhi e sopracciglia**: geometria e ciocche nascoste identiche (`kael_head.bin` e `.json` uguali byte per
     byte); nella pittura, dentro la maschera di occhi e sopracciglia cambiano 13 texel su 52.721, e non sono né occhio
     né sopracciglio (un'ombra scura vecchia oltre la coda del sopracciglio destro, presa dalla maschera per il
