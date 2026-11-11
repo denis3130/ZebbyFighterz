@@ -1,0 +1,2120 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Anteprima 3D di Ren</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:ital,wght@1,600;1,700&display=swap" rel="stylesheet">
+<style>
+/* The fighter on a stage: the game's dark night blue and its orange; Bebas for names, Barlow italic for the controls. */
+:root{--dark:#14121c;--panel:rgba(20,18,28,.78);--line:rgba(255,255,255,.14);--ink:#f4f1fb;--dim:#b9b3c9;--orange:#ff7a1a;--cyan:#35d8ff;
+  --display:'Bebas Neue',Impact,'Arial Narrow',sans-serif;--body:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;color-scheme:dark}
+html,body{height:100%}
+body{margin:0;background:var(--dark);color:var(--ink);font-family:var(--body);font-style:italic;font-weight:700;overflow:hidden;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+#stage{position:fixed;inset:0;background:var(--dark) center 80%/cover no-repeat}
+#stage::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,18,28,.35),rgba(20,18,28,.05) 40%,rgba(20,18,28,.75))}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:1;cursor:grab}
+#view:active{cursor:grabbing}
+.ui{position:fixed;z-index:2;left:0;right:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#top{top:0;padding-top:calc(10px + env(safe-area-inset-top,0px));display:flex;align-items:flex-start;justify-content:space-between;gap:12px;pointer-events:none}
+#name{font-family:var(--display);font-style:normal;font-size:52px;line-height:.9;letter-spacing:.04em;transform:skewX(-8deg);text-shadow:0 3px 0 var(--orange),0 6px 14px #000}
+#name small{display:block;font-family:var(--body);font-style:italic;font-size:16px;letter-spacing:.06em;color:var(--dim);text-shadow:0 1px 3px #000;transform:none}
+#now{font-size:18px;color:var(--orange);text-shadow:0 1px 3px #000;text-align:right;min-width:0}
+#now small{display:block;color:var(--dim);font-size:14px}
+#bottom{bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;font-size:17px;letter-spacing:.03em;color:var(--ink);background:var(--panel);border:1px solid var(--line);padding:7px 14px 6px;
+  transform:skewX(-10deg);cursor:pointer;transition:transform .08s,background .15s}
+button>span{display:inline-block;transform:skewX(10deg)}
+button:active{transform:skewX(-10deg) scale(.93)}
+button[aria-pressed="true"]{background:var(--orange);border-color:var(--orange);color:#1a0f05}
+button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.opt{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:15px}
+.opt button{font-size:15px;padding:5px 10px 4px}
+#hint{color:var(--dim);font-size:14px;text-shadow:0 1px 3px #000}
+@media (max-height:430px){#name{font-size:40px}button{font-size:15px;padding:5px 11px 4px}.opt button{font-size:13px}}
+@media (prefers-reduced-motion:reduce){button{transition:none}}
+</style>
+<div id="stage"><canvas id="view"></canvas></div>
+<div class="ui" id="top"><div id="name">REN<small>Anteprima 3D, senza giocare</small></div><div id="now"></div></div>
+<div class="ui" id="bottom">
+  <div class="row" id="moves"></div>
+  <div class="row">
+    <div class="opt">Pittura <button id="pDraw"><span>Disegno</span></button><button id="pMeshy"><span>Meshy</span></button></div>
+    <div class="opt">Luce <button id="lToon"><span>3D</span></button><button id="lFlat"><span>Piatta</span></button></div>
+    <div class="opt">Velocità <button id="s1"><span>1×</span></button><button id="s2"><span>½×</span></button><button id="s4"><span>¼×</span></button></div>
+    <div class="opt"><button id="spin"><span>Gira</span></button></div>
+  </div>
+  <div id="hint">Trascina per girare Ren, pizzica o usa la rotella per avvicinarti, doppio tocco per tornare al centro.</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(()=>{
+// Every balance number lives here. Units: logic in mm, mm/frame and frames (60 = 1 s);
+// in fx, cam and arena (graphics only) metres and milliseconds. Later tasks add their sections.
+const CFG={
+  ver:1,
+  stage:{half:6000, startX:1200, maxSep:5500},
+  body:{push:260, hurt:250, head:150, headH:300, h:1800, hCrouch:1050, hAir:1500, passY:1000, hp:1000, meterMax:3000},   // in the air above passY a fighter neither pushes nor is pushed
+  walk:{f:75, b:58},
+  jump:{squat:4, v:147, g:7, vxF:62, vxB:-52, superV:180, land:2, landAtk:5},
+  dash:{f:{n:18, v0:170, v1:40}, b:{n:20, v0:150, v1:30}, tap:10},   // speed eases from v0 to v1 over n frames; tap = double-tap window
+  input:{hold:12, chargeShow:4, both:3, buffer:8},
+  phys:{pushFric:2},
+  combo:{scaleFrom:3, scaleStep:10, minScale:30, decayFrom:6, decay:1, minStun:6, juggleMax:6, lift:60},
+  stop:{light:6, mid:8, heavy:11, spec:8, thr:10, ko:40, blockLight:5, blockHeavy:8},
+  meter:{hit:1, block:.5, taken:.5},
+  knock:{ground:36, getup:16, roll:22, rollDist:1300},
+  // Throw: s/a = startup/active frames, range = max centre distance, whiff = recovery of a miss, anim = frames of a
+  // grab, hitF = the grab's frame of the damage, then the opponent is knocked down (vx away, vy up). No height: no block.
+  thr:{range:900, s:4, a:2, whiff:24, anim:40, hitF:30, dmg:120, vx:60, vy:60, stop:'thr', knock:true},
+  // Special (energy shot): spawn = frame the projectile appears, rec = frames after it; speed in mm/frame; box = half-size;
+  // x, y = spawn point (forward of the fighter, from the ground); hs/bs/chip as a move's (chip = damage on a block).
+  spec:{spawn:14, rec:30, speed:120, box:150, dmg:70, hs:20, bs:16, chip:8, x:500, y:1100, h:'mid', push:0, stop:'spec'},
+  // Rounds: intro/end in frames, timerS in seconds, wins to take the match; ko = the fall of a fighter KO'd on the ground.
+  round:{intro:100, timerS:99, end:150, wins:2, ko:{vx:50, vy:50}},
+  training:{refill:60},   // frames out of a combo before health refills
+  dummy:{min:30, max:60},   // the random dummy changes what it does every min..max frames
+  // The plan's move table. s/a/r = startup/active/recovery frames (r 'land' = until landing, then jump.landAtk);
+  // hs/bs = hitstun/blockstun; h = height; box = [x0,x1,y0,y1] mm, x forward from the centre, y from the feet;
+  // push = pushback speed of the one hit; stop = hitstop class. Chains, once the move has touched: tapP/tapK = move
+  // for a P/K tap, heavy = true (any heavy of the posture) or a list, spec = into the Special, jc = super jump (hit only).
+  // limb = model part that must sit in the box (Task 8). Effects: knock (knocked down with vx, vy), launch (juggle with
+  // vx, vy), airKnock (knocked down, airborne opponent only), spike (slammed down with vx, vy, airborne opponent only).
+  // p3 pushes like p1 and p2 (24, not the plan's 35), so P,P,P then the held P lands all 4 hits from the walk-up range
+  // (up to ~790 mm apart; with 35 the defender slid out of hp's reach from beyond point blank).
+  moves:{
+    p1:{s:4, a:2, r:7, dmg:30, hs:14, bs:10, h:'mid', box:[200,700,900,1550], push:24, stop:'light', tapP:'p2', tapK:'k1', heavy:true, spec:true, limb:'handL'},
+    p2:{s:5, a:3, r:9, dmg:35, hs:15, bs:11, h:'mid', box:[200,760,900,1550], push:24, stop:'light', tapP:'p3', tapK:'k1', heavy:true, spec:true, limb:'handR'},
+    p3:{s:7, a:3, r:14, dmg:50, hs:18, bs:12, h:'mid', box:[200,780,900,1500], push:24, stop:'mid', heavy:true, spec:true, limb:'handL'},
+    k1:{s:6, a:3, r:10, dmg:40, hs:15, bs:11, h:'mid', box:[200,820,700,1100], push:24, stop:'light', tapP:'p2', tapK:'k2', heavy:true, spec:true, limb:'footL'},
+    k2:{s:8, a:3, r:15, dmg:55, hs:18, bs:12, h:'mid', box:[250,900,1100,1500], push:30, stop:'mid', heavy:true, spec:true, limb:'footR'},
+    hp:{s:12, a:4, r:18, dmg:90, hs:22, bs:15, h:'mid', box:[250,900,900,1550], push:40, stop:'heavy', heavy:['chk'], spec:true, limb:'handR'},
+    hk:{s:14, a:4, r:20, dmg:100, bs:16, h:'mid', box:[300,1000,1000,1600], stop:'heavy', spec:true, limb:'footR', knock:true, vx:70, vy:70},
+    cp:{s:5, a:2, r:8, dmg:25, hs:13, bs:10, h:'mid', box:[200,700,700,1000], push:22, stop:'light', tapP:'p2', tapK:'ck', heavy:true, spec:true, limb:'handR'},
+    ck:{s:6, a:3, r:10, dmg:30, hs:14, bs:10, h:'low', box:[250,900,0,300], push:24, stop:'light', heavy:true, spec:true, limb:'footL'},
+    chp:{s:9, a:4, r:20, dmg:80, hs:20, bs:14, h:'mid', box:[150,650,1300,2100], push:30, stop:'heavy', spec:true, limb:'handR', airKnock:{vx:30, vy:50}},
+    chk:{s:11, a:4, r:22, dmg:70, bs:14, h:'mid', box:[200,700,800,1900], stop:'heavy', spec:true, jc:true, limb:'footR', launch:true, vx:10, vy:160},
+    jp:{s:5, a:4, r:'land', dmg:40, hs:15, bs:10, h:'high', box:[150,600,300,900], push:20, stop:'light', tapK:'jk', heavy:true, limb:'handR'},
+    jk:{s:6, a:5, r:'land', dmg:45, hs:16, bs:11, h:'high', box:[150,700,-300,500], push:20, stop:'light', heavy:true, limb:'footR'},
+    jhp:{s:10, a:4, r:'land', dmg:75, hs:20, bs:13, h:'high', box:[150,700,0,800], push:20, stop:'heavy', limb:'handR', spike:true, vx:0, vy:-120},
+    jhk:{s:11, a:5, r:'land', dmg:80, hs:21, bs:14, h:'high', box:[150,800,-400,400], push:20, stop:'heavy', limb:'footR'},
+  },
+  // Side camera (graphics only, metres): fov = vertical degrees; dist from dist0 out to distMax so that both fighters
+  // fit with marginX each side and the highest head with marginTop above it; the ground always sits at footScreen of
+  // the screen height; smooth = share of the gap closed per drawn frame; xMax = limit of the camera's x.
+  cam:{fov:30, dist0:6.5, distMax:9.6, footScreen:.86, marginX:1.0, marginTop:.35, smooth:.15, xMax:3.0},
+  // Painted backdrop: footRow = image row (share of its height) where the feet stand; cover = times the smallest scale
+  // that fills the screen; parX = image widths of shift per metre of camera x; zoomPar = exponent of the zoom with
+  // the camera distance; contrast/lift = colour grade; flow/streak/wobble = the waterfall's flow speed, streak
+  // strength and shimmer; leaves = number of drifting leaves. footRow and cover keep the waterfall's crest and the
+  // temple on top (image rows 213-255) in view, with some sky, on 20:9 phones; footRow stays on the painted floor.
+  arena:{footRow:.83, cover:1.1, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
+  // Fighter animation (graphics only): blend = frames over which the pose eases into a new free or movement action;
+  // the Meshy fighters ease over model frames (their clips' poses differ more: a mid-stride walk to the wide stance) and
+  // ease a strike in over its first strikeIn frames (at most its startup minus 1: the active frames stay exact).
+  anim:{blend:5, model:10, strikeIn:4},
+  // Meshy fighters (graphics only, e_model.js): per act the clip (Meshy action id, 'a89') and its times in seconds.
+  // loop = cycle on S.frame; walk = clip time from the distance walked (1 = the clip's planted-foot speed, measured at
+  // load; else that speed in m/s); at = a held pose; t = [t0, t1] of a move: startup from t0 to the hit frame (found at
+  // load: the frame whose limb point lies deepest in the move's box, both facings), held through the active frames,
+  // recovery to t1 (air moves: in 8 frames, then held until the landing); k = [[x, t], ...] piecewise linear in F.af
+  // (in u, 0 at take-off to 1 falling, for the air and flight poses); low/up = hips and legs from one entry, the rest
+  // from the other. Options: y = the hips' height in m (poses in the air; 'cap' = never above the rest pose, for clips
+  // that hop while the sim stays on the floor), plant = feet held by IK where the t[0] pose has them ('L', 'R', 'LR':
+  // grounded strikes neither slide nor lift the support foot), pitch = degrees leaning forward (air attacks
+  // strike downward), limb = the hitting point when the clip strikes with another limb than CFG.moves names.
+  // kick = a base entry whose leg ('L'/'R') reaches 'to' (ankle, model space m) by IK: in startup, held, back in recovery.
+  clips:{
+    idle:{c:'a89', loop:1}, intro:{c:'a89', loop:1}, walkF:{c:'a21', walk:1}, walkB:{c:'a20', walk:1},
+    dashF:{c:'a16', walk:4}, dashB:{c:'a20', walk:1},
+    crouch:{low:{c:'a54', at:.67}, up:{c:'a89', loop:1}}, guard:{c:'a138', at:1}, guardC:{low:{c:'a54', at:.67}, up:{c:'a138', at:1}},
+    jumpSquat:{c:'a466', k:[[0,0],[4,.3]]}, air:{c:'a466', k:[[0,.53],[.5,.8],[1,1.07]], y:.95}, landing:{c:'a466', k:[[0,1.1],[5,1.4]]},
+    p1:{c:'a191', t:[.2,1], plant:'LR'}, p2:{c:'a192', t:[.3,1.2], plant:'LR'}, p3:{c:'a193', t:[0,.8], plant:'LR'},
+    hp:{c:'a210', t:[1.45,2.6], plant:'LR'}, k1:{c:'a209', t:[.35,1.15], limb:'footR', plant:'L'},
+    k2:{c:'a215', t:[.5,1.6], plant:'L', y:'cap'}, hk:{c:'a215', t:[.3,1.6], plant:'L', y:'cap'},
+    cp:{low:{c:'a54', at:.67}, up:{c:'a192', t:[.3,1.2]}},
+    ck:{kick:{low:{c:'a54', at:.67}, up:{c:'a89', loop:1}}, leg:'L', to:[.1,.1,.72]},
+    chp:{c:'a194', t:[.1,1], plant:'LR'}, chk:{c:'a422', t:[0,1], limb:'footL', plant:'R', y:'cap'},
+    jp:{c:'a457', t:[1.1,1.6], y:.95, pitch:20, limb:'handL'}, jhp:{c:'a457', t:[1.1,1.6], y:.95, pitch:30, limb:'handL'},
+    jk:{c:'a422', t:[.13,.6], y:.95, pitch:40, limb:'footL'}, jhk:{c:'a422', t:[.13,.6], y:.95, pitch:45, limb:'footL'},
+    spec:{c:'a214', k:[[0,.33],[14,1.53],[24,2.1],[44,3.2]]},
+    thr:{c:'a421', k:[[0,.6],[6,1.4]]}, thrHit:{c:'a421', k:[[0,1.4],[22,2],[30,2.53],[40,3.3]]}, thrWhiff:{c:'a421', k:[[0,1.4],[24,.3]]},
+    hitStun:{c:'a174', k:[[0,.47],[8,1.1]]}, fly:{c:'a7', k:[[0,.1],[1,.6]], y:.6}, down:{c:'a7', at:1.5},
+    getup:{c:'a3', k:[[0,.15],[16,1.6]]}, roll:{c:'a3', k:[[0,.15],[22,1.6]]}, win:{c:'a17', k:[[0,0],[18,.3]]},
+  },
+  // The "Ren dipinto" look (Denis's choices, 7/11/2026), off in the game until he approves it in the viewer: fists =
+  // the fingers curled on their own bones (ASSETS '<char>/<char>_look.json|bin', tools/ren_look.py), open in the acts
+  // of openHands; headUp = degrees the head is raised in every pose (the face shows at the game's camera);
+  // spikes = anime hair spikes on the sides, back and top of the hair; faceLine = a thin outline on the front of the face
+  // and on the fingers; line = the outline {w: width m, back: m pushed away from the camera, so it shows around the
+  // silhouette and not through the folds of the body, the hair and the hands}, null: the game's (e_model MD_OUTLINE);
+  // flatFace = the front of the head without the toon light (the drawing painted there has its own shading); sash = the
+  // sash's tails as ribbons of their own, swinging with gravity (e_model mdSash) instead of painted on the legs;
+  // faceShape = the shape as drawn (tools/ren_look.py drawn_shape: the face smooth below the eyes with a small nose,
+  // the fringe off the eyes, the collar's points) and the drawn face's features, the jaw's line and the neck's shadow
+  // under it as a decal of their own (e_model mdFaceMat); head = the new head from Denis's 3-view sheet (tools/ren_head.py:
+  // its old head, neck and collar's top hidden); paint = the drawing painted on the model (tools/paint_from_drawing.py,
+  // ASSETS '<char>/<char>_painted.jpg') instead of Meshy's own paint; clips = CFG.clips entries of its own (by act).
+  looks:{ren:{fists:false, openHands:['spec','thr','thrWhiff'], headUp:0, spikes:false, faceLine:false, line:null, flatFace:false, sash:false, faceShape:false, head:false, smoothNormals:false,
+    paint:false, clips:null}},
+  // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
+  // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
+  // duration ms], spark = size m of the hit spark (light, heavy, block; hold = share of its life at full size and opacity), proj = size m
+  // of the projectile's white core, halo and coloured rim.
+  fx:{on:true, flashMs:60, squashMs:110, squash:[1.1,.9], shakeHeavy:[.06,180], shakeKO:[.12,400], spark:{light:.45, heavy:.95, block:.6, hold:.4}, proj:{core:.36, halo:.8, rim:.95}},
+  // HUD (frames): chipDelay = wait before the red lost part of a bar drains, chipRate = bars drained per second,
+  // comboHide = how long the combo counter stays after its combo ends.
+  hud:{chipDelay:30, chipRate:.8, comboHide:60},
+  menu:{endGuardMs:600},   // the end screen ignores confirm/back this long, so a mashing player does not skip the result
+  loop:{maxSteps:4},   // real-time loop: at most this many fixed steps per drawn frame
+};
+
+// Fight simulation core: buttons, state, seeded generator, the fixed step, physics, pushboxes, facing, and hits
+// (contacts, damage, hitstop, hitstun, juggle, knockdown and getup).
+// Pure and deterministic: integers only (mm, mm/frame, frames), no THREE, DOM, clock or Math.random.
+// One step = one frame at 60 per second, fed one integer of buttons per player; graphics only read the state.
+
+const BTN={U:1, D:2, L:4, R:8, P:16, K:32, S:64, DASH:128, GUARD:256};   // directions are absolute (L = screen left)
+
+// af = frame of the current action (1 on its first frame); hold = frames P/K held (see inputPhase);
+// prev = last frame's clean buttons; tap = last horizontal press {dir: BTN.L|BTN.R, f: frame}, dir 0 = none;
+// land = recovery frames of the current landing; hit = the move in progress has touched (1 hit, 2 blocked);
+// stun = hitstun frames left; inv = invulnerable frames left; juggle = hits taken in this juggle;
+// buf = the command waiting for the fighter to be free ({cmd, left} frames); sj = this jump is a super jump;
+// mute = P/K bits whose release (and heavy) is ignored until released, after a throw command (see readCommand).
+function newFighter(side, char) {
+  return {side, char, x: side ? CFG.stage.startX : -CFG.stage.startX, y: 0, vx: 0, vy: 0, face: side ? -1 : 1,
+    hp: CFG.body.hp, meter: 0, act: 'idle', af: 0, air: false, stun: 0, combo: 0, comboDmg: 0, juggle: 0,
+    hit: 0, inv: 0, hold: [0, 0], prev: 0, tap: {dir: 0, f: 0}, buf: {cmd: null, left: 0}, sj: false, land: 0, mute: 0};
+}
+
+// opts = {seed, mode: 'versus'|'training', chars: [c0, c1], dummy: 'fermo'|'casuale'}.
+// Starts in the round-1 'intro'. timer = frames left in the round (-1 = none, in training); pf = frames in the
+// phase; dum = the training dummy's state (c3_dummy.js); rf = frames each fighter has been out of a combo (training refill).
+function simCreate(o) {
+  const chars = o.chars || ['ren', 'kael'], training = o.mode === 'training';
+  return {frame: 0, rng: o.seed | 0, mode: o.mode || 'versus', phase: 'intro', pf: 0, round: 1,
+    timer: training ? -1 : CFG.round.timerS * 60, rf: [0, 0],
+    wins: [0, 0], winner: -1, stop: 0, sides: [0, 1].map(i => ({team: [newFighter(i, chars[i])], cur: 0})),
+    proj: [], ev: [], dummy: o.dummy || 'fermo', dum: [{act: null, left: 0}, {act: null, left: 0}]};
+}
+
+function fighterOf(S, side) { const s = S.sides[side]; return s.team[s.cur]; }
+
+// Deep copy: the state is plain JSON (numbers, strings, booleans, null, arrays and objects).
+function simClone(S) { return JSON.parse(JSON.stringify(S)); }
+
+// 32-bit FNV-1a, in hex, of the state without this frame's events.
+function simHash(S) {
+  const {ev, ...state} = S, s = JSON.stringify(state);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+// Seeded generator (mulberry32 on the integer S.rng): an integer in [0, n).
+function simRand(S, n) {
+  const a = S.rng = S.rng + 0x6D2B79F5 | 0;
+  let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) % n;
+}
+
+// Adds an event of this frame, {t, side, x, y, move, dmg, heavy}: at the fighter's position unless o overrides it.
+function simEmit(S, t, F, o) {
+  const e = {t, side: F.side, x: F.x, y: F.y, move: null, dmg: 0, heavy: false};
+  S.ev.push(o ? Object.assign(e, o) : e);
+}
+
+// Input phase, before the command: SOCD-clean buttons (L+R = no horizontal, U+D = no vertical) and the hold
+// counters. hold[i] = frames P (i=0) / K (i=1) has been held in this press; on the release frame it still holds
+// the press length, so the command reader can tell a tap from a heavy, and the frame after it is back to 0.
+function inputPhase(F, raw) {
+  let b = raw & 511;   // the 9 BTN bits; a missing input becomes 0
+  if ((b & BTN.L) && (b & BTN.R)) b &= ~(BTN.L | BTN.R);
+  if ((b & BTN.U) && (b & BTN.D)) b &= ~(BTN.U | BTN.D);
+  for (let i = 0; i < 2; i++) {
+    const btn = i ? BTN.K : BTN.P;
+    if (b & btn) F.hold[i] = F.prev & btn ? F.hold[i] + 1 : 1;
+    else if (!(F.prev & btn)) F.hold[i] = 0;
+  }
+  return b;
+}
+
+// This frame's horizontal press if it completes a double tap (same direction twice within dash.tap frames), else 0.
+function doubleTapDir(S, F, bits) {
+  const h = bits & ~F.prev & (BTN.L | BTN.R);
+  return h && h === F.tap.dir && S.frame - F.tap.f <= CFG.dash.tap ? h : 0;
+}
+
+// Input history, once the command has read it: this frame's buttons, the muted buttons still held and the last
+// horizontal tap (a double tap uses the tap up, so a third press starts a new pair).
+function rememberInput(S, F, bits) {
+  F.mute &= bits;
+  const h = bits & ~F.prev & (BTN.L | BTN.R);
+  if (h) { F.tap.dir = doubleTapDir(S, F, bits) ? 0 : h; F.tap.f = S.frame; }
+  F.prev = bits;
+}
+
+// Velocity, gravity and touchdown at y = 0.
+function fighterPhysics(S, F) {
+  F.x += F.vx;
+  if (!F.air) return;
+  F.y += F.vy; F.vy -= CFG.jump.g;
+  if (F.y <= 0) { F.y = 0; F.vx = 0; F.vy = 0; F.air = false; touchdown(S, F); }
+}
+
+// Pushboxes, walls and maximum separation. Overlapping pushboxes split the overlap half and half, but not while
+// either fighter is in the air above body.passY, so a jump can cross over. Walls stop the centres at
+// ±(stage.half - body.push), and a fighter in the corner makes the other one take the whole push. Beyond
+// stage.maxSep the excess is taken back from whoever moved away this frame (x0 = x before physics, by side).
+function pushApart(a, b, x0) {
+  const P2 = 2 * CFG.body.push, W = CFG.stage.half - CFG.body.push;
+  const solid = a.y <= CFG.body.passY && b.y <= CFG.body.passY;
+  const aLeft = a.x !== b.x ? a.x < b.x : a.face >= b.face;
+  const l = aLeft ? a : b, r = aLeft ? b : a;
+  if (solid && r.x - l.x < P2) { const ov = P2 - (r.x - l.x), h = ov >> 1; l.x -= h; r.x += ov - h; }
+  l.x = Math.max(-W, Math.min(W, l.x)); r.x = Math.max(-W, Math.min(W, r.x));
+  if (solid && r.x - l.x < P2) { if (l.x === -W) r.x = l.x + P2; else l.x = r.x - P2; }
+  const ex = r.x - l.x - CFG.stage.maxSep;
+  if (ex > 0) {
+    const outL = Math.max(0, x0[l.side] - l.x), outR = Math.max(0, r.x - x0[r.side]);
+    let tl = Math.min(outL, Math.max(ex >> 1, ex - outR));   // half each when both moved away
+    const tr = Math.min(outR, ex - tl);
+    tl += (ex - tl - tr) >> 1;   // more than this frame's motion (fighters placed by hand): split the rest
+    l.x += tl; r.x -= ex - tl;
+  }
+}
+
+// Fighters in a free ground state or landing turn to face the opponent (a jump, a dash, a move and a stun keep their
+// facing). The landing turns so that back, forward and a dash pressed in it already count for the side it landed on.
+function faceOpponent(F, O) { if ((FREE[F.act] || F.act === 'landing') && O.x !== F.x) F.face = O.x > F.x ? 1 : -1; }
+
+// --- Hits ---
+
+// Damage of the n-th hit of a combo, in %: full for the first scaleFrom-1 hits, then scaleStep less per hit, down to minScale.
+function scaleFor(n) { const c = CFG.combo; return Math.max(c.minScale, 100 - c.scaleStep * Math.max(0, n - c.scaleFrom + 1)); }
+
+// Hitstun of the n-th hit of a combo: base up to hit decayFrom-1, then decay frames less per hit, down to minStun.
+function hitstunFor(base, n) { const c = CFG.combo; return Math.max(c.minStun, base - c.decay * Math.max(0, n - c.decayFrom + 1)); }
+
+// Knocked down or getting up: always invulnerable (inv counts the frames left, see knockLeft).
+const KNOCKED = {knock: 1, getup: 1, rollF: 1, rollB: 1};
+// Actions with the crouching hurtbox height (and block while down is held: a crouching block, see isBlocking).
+const CROUCHED = {crouch: 1, guardC: 1, cp: 1, ck: 1, chp: 1, chk: 1};
+
+// A hit can touch F: not invulnerable, not knocked down, not KO'd, getting up or held in a throw, and a juggle still under combo.juggleMax hits.
+function canBeHit(F) { return F.inv <= 0 && !KNOCKED[F.act] && F.act !== 'ko' && F.act !== 'thrown' && !(F.act === 'juggle' && F.juggle >= CFG.combo.juggleMax); }
+
+// Hurtboxes in absolute mm, [body, head]: the body is ±body.hurt from the feet to the height minus body.headH,
+// the head ±body.head from there to the height (body.h standing, hCrouch crouching or blocking with down held,
+// hAir in the air).
+function hurtBoxes(F) {
+  const b = CFG.body, low = CROUCHED[F.act] || (F.act === 'block' && (F.prev & BTN.D));
+  const top = F.y + (F.air ? b.hAir : low ? b.hCrouch : b.h), neck = top - b.headH;
+  return [{x0: F.x - b.hurt, x1: F.x + b.hurt, y0: F.y, y1: neck}, {x0: F.x - b.head, x1: F.x + b.head, y0: neck, y1: top}];
+}
+
+// The box of move id in absolute mm, mirrored by the facing, while F is in that move's active frames; else null.
+function moveBox(F, id) {
+  const m = CFG.moves[id];
+  if (!m || F.act !== id || F.af <= m.s || F.af > m.s + m.a) return null;
+  const k = m.box, y0 = F.y + k[2], y1 = F.y + k[3];
+  return F.face > 0 ? {x0: F.x + k[0], x1: F.x + k[1], y0, y1} : {x0: F.x - k[1], x1: F.x - k[0], y0, y1};
+}
+
+// Where A's move touches D, or null: the centre of the overlap of the move box with D's first hurtbox it
+// overlaps (body, then head). Only a move in its active frames that has not touched yet, on a fighter that can be hit.
+function touchPoint(A, D) {
+  const box = A.hit ? null : moveBox(A, A.act);
+  if (!box || !canBeHit(D)) return null;
+  for (const h of hurtBoxes(D)) {
+    const x0 = Math.max(box.x0, h.x0), x1 = Math.min(box.x1, h.x1), y0 = Math.max(box.y0, h.y0), y1 = Math.min(box.y1, h.y1);
+    if (x0 < x1 && y0 < y1) return {x: (x0 + x1) >> 1, y: (y0 + y1) >> 1};
+  }
+  return null;
+}
+
+// States that can guard (with GUARD or back held at the moment of contact).
+const GUARDING = {idle: 1, walkB: 1, crouch: 1, guard: 1, guardC: 1, block: 1};
+
+// F blocks an attack of this height now: on the ground in a guarding state, holding GUARD or back, and for the
+// height: mid either way, low only crouching (D held), high only standing. The held buttons are F.prev (this frame's).
+function isBlocking(F, height) {
+  if (!GUARDING[F.act] || F.air || !(F.prev & (BTN.GUARD | backBit(F)))) return false;
+  const crouching = (F.prev & BTN.D) !== 0;
+  return height === 'low' ? crouching : height === 'high' ? !crouching : true;
+}
+
+// End of the step: both fighters are checked before either hit lands, so two moves can trade on the same frame.
+// Then the throws and the projectiles. Contacts resolve only in the 'fight' phase: after a KO or time-up the hp stays
+// as it was when the round ended (a grab under way plays out without its damage). A held fighter whose thrower got
+// hit meanwhile (a projectile can), or whose grab ended, is released.
+function contactPhase(S, fs) {
+  if (S.phase === 'fight') {
+    const id0 = fs[0].act, id1 = fs[1].act, p0 = touchPoint(fs[0], fs[1]), p1 = touchPoint(fs[1], fs[0]);
+    if (p0) fs[0].hit = resolveHit(S, fs[0], fs[1], CFG.moves[id0], id0, p0, fs[0].face);
+    if (p1) fs[1].hit = resolveHit(S, fs[1], fs[0], CFG.moves[id1], id1, p1, fs[1].face);
+    throwPhase(S, fs);
+    projectilePhase(S, fs);
+  }
+  for (const D of fs) if (D.act === 'thrown' && !(fs[1 - D.side].act === 'thr' && fs[1 - D.side].hit)) setAct(D, 'idle');
+}
+
+// Move m (id in the events: a move, 'spec' or 'thr') of A touches D, pushing the way dir points. Returns 1 for a
+// hit, 2 for a block (what A.hit holds). A blocked move (m.h set, see isBlocking) costs D m.chip, gives A
+// meter.block of its damage, hitstops for the block class and leaves D in 'block' for m.bs frames. A hit: damage
+// scaled by its number in the combo, meter to both, the hitstop of the move's class, the event at the contact
+// point, then D's reaction. The projectile ('spec') has its own events and never sets A.hit (the caller does).
+function resolveHit(S, A, D, m, id, pt, dir) {
+  const proj = id === 'spec', max = CFG.body.meterMax;
+  if (m.h && isBlocking(D, m.h)) {
+    const chip = Math.min(D.hp, m.chip || 0);
+    D.hp -= chip;
+    A.meter = Math.min(max, A.meter + Math.floor(m.dmg * CFG.meter.block));
+    S.stop = Math.max(S.stop, CFG.stop[m.stop === 'light' ? 'blockLight' : 'blockHeavy']);
+    simEmit(S, proj ? 'projBlock' : 'block', A, {x: pt.x, y: pt.y, move: id, dmg: chip, heavy: m.stop === 'heavy'});
+    setAct(D, 'block'); D.stun = m.bs;
+    if (dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
+    else D.vx = dir * m.push;
+    return 2;
+  }
+  const n = D.combo + 1, dmg = Math.floor(m.dmg * scaleFor(n) / 100);
+  D.hp = Math.max(0, D.hp - dmg); D.combo = n; D.comboDmg += dmg;
+  A.meter = Math.min(max, A.meter + Math.floor(dmg * CFG.meter.hit));
+  D.meter = Math.min(max, D.meter + Math.floor(dmg * CFG.meter.taken));
+  S.stop = Math.max(S.stop, CFG.stop[m.stop]);
+  simEmit(S, proj ? 'projHit' : 'hit', A, {x: pt.x, y: pt.y, move: id, dmg, heavy: m.stop === 'heavy'});
+  hitReaction(A, D, m, n, dir);
+  return 1;
+}
+
+// A throw (act 'thr', see c2_moves.js) of fighter A: in its active frames it grabs D if the centres are within
+// thr.range and D stands on the ground free of stun, not invulnerable and not already held ('thr' event: A plays
+// the grab from af 1, D is 'thrown'); at af thr.hitF of the grab the throw hits through resolveHit (it has no height,
+// so no block) and D is knocked down. Side 0 goes first, so it wins a grab on the same frame.
+function throwPhase(S, fs) {
+  const t = CFG.thr;
+  for (const A of fs) {
+    const D = fs[1 - A.side];
+    if (A.act !== 'thr') continue;
+    if (!A.hit) {
+      if (A.af <= t.s || A.af > t.s + t.a || Math.abs(A.x - D.x) > t.range) continue;
+      if (D.air || D.y > 0 || D.stun > 0 || !canBeHit(D)) continue;
+      A.hit = 1; A.af = 1; A.vx = 0; D.vx = 0;
+      setAct(D, 'thrown'); D.stun = 0;
+      simEmit(S, 'thr', A, {x: D.x, y: D.y + CFG.spec.y});
+    } else if (A.af === t.hitF) {
+      resolveHit(S, A, D, t, 'thr', {x: D.x, y: D.y + CFG.spec.y}, A.face);
+    }
+  }
+}
+
+// Projectiles move at the start of a free step. Here, after the fighters' contacts: two that touch vanish together
+// ('projClash'); one that touches the other side's fighter (hurtbox, one that can be hit) hits or is blocked through
+// resolveHit and vanishes, and one beyond stage.half + 1000 vanishes too.
+function projectilePhase(S, fs) {
+  const k = CFG.spec, P = S.proj;
+  if (P.length === 2 && Math.abs(P[0].x - P[1].x) <= 2 * k.box && Math.abs(P[0].y - P[1].y) <= 2 * k.box) {
+    simEmit(S, 'projClash', fs[P[0].side], {x: (P[0].x + P[1].x) >> 1, y: P[0].y});
+    P.length = 0;
+    return;
+  }
+  const keep = [];
+  for (const p of P) {
+    const D = fs[1 - p.side], pt = canBeHit(D) ? projTouch(p, D) : null;
+    if (pt) resolveHit(S, fs[p.side], D, k, 'spec', pt, p.vx > 0 ? 1 : -1);
+    else if (Math.abs(p.x) <= CFG.stage.half + 1000) keep.push(p);
+  }
+  P.length = 0; for (const p of keep) P.push(p);
+}
+
+// Centre of the overlap of projectile p (a square of half-size spec.box) with D's first hurtbox it overlaps, or null.
+function projTouch(p, D) {
+  const b = CFG.spec.box;
+  for (const h of hurtBoxes(D)) {
+    const x0 = Math.max(p.x - b, h.x0), x1 = Math.min(p.x + b, h.x1), y0 = Math.max(p.y - b, h.y0), y1 = Math.min(p.y + b, h.y1);
+    if (x0 < x1 && y0 < y1) return {x: (x0 + x1) >> 1, y: (y0 + y1) >> 1};
+  }
+  return null;
+}
+
+// D's reaction to the n-th hit of a combo, pushed toward dir (the way the attack or projectile goes):
+// - knocked down (knock, or airKnock / spike on an airborne D): flies with the move's vx, vy, invulnerable;
+// - launched (launch) or hit in the air: juggle, rising at least at the move's vy (else combo.lift), with the
+//   move's vx (else its push); one more juggle hit;
+// - else hitstun (hitstunFor) and a pushback of push that slides (groundSpeed); at the wall D stays and an
+//   attacker on the ground slides back instead (a move without push, like the projectile, moves nobody).
+function hitReaction(A, D, m, n, dir) {
+  const down = m.knock ? m : D.air ? m.airKnock || (m.spike ? m : null) : null;
+  D.stun = 0;
+  if (down) {
+    setAct(D, 'knock'); D.air = true; D.vx = down.vx ? dir * down.vx : 0; D.vy = down.vy; D.inv = CFG.knock.ground;
+  } else if (m.launch || D.air) {
+    const vx = m.vx !== undefined ? m.vx : m.push;
+    setAct(D, 'juggle'); D.air = true; D.juggle++; D.vx = vx ? dir * vx : 0;
+    D.vy = Math.max(D.vy, m.vy !== undefined ? m.vy : CFG.combo.lift);
+  } else {
+    setAct(D, 'hitStun'); D.stun = hitstunFor(m.hs, n);
+    if (m.push && dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
+    else D.vx = dir * m.push;
+  }
+}
+
+// Leaving hitstun or a knockdown: the combo against F is over.
+function recoverFrom(F, act) { setAct(F, act); F.combo = 0; F.comboDmg = 0; F.juggle = 0; }
+
+// At the end of a knockdown's ground time: a roll while a direction is held (forward or back for the facing), else a getup.
+function wakeAct(F, bits) { return bits & fwdBit(F) ? 'rollF' : bits & backBit(F) ? 'rollB' : 'getup'; }
+
+// Invulnerable frames left while knocked down or getting up: the whole ground time while still flying,
+// then to the end of the current action.
+function knockLeft(F) { return F.act === 'knock' && F.air ? CFG.knock.ground : actLength(F) - F.af + 1; }
+
+// Roll speed on frame af (1..knock.roll): integer steps that add up to knock.rollDist.
+function rollSpeed(af) { const k = CFG.knock; return Math.floor(k.rollDist * af / k.roll) - Math.floor(k.rollDist * (af - 1) / k.roll); }
+
+// --- Rounds ---
+
+// Round phases: 'intro' (round.intro frames, inputs ignored) -> 'fight' -> 'ko' | 'timeup' (inputs ignored, physics
+// runs on and the actions under way run out, but no command, contact or projectile: the hp is the one of the frame
+// the round ended) -> round.end frames later the round is scored -> next 'intro' or 'end'. In training there is no timer
+// and no KO: hp stays at 1 or more and refills, once, when the fighter has been out of a combo (and not blocking)
+// for training.refill frames.
+function roundStep(S, fs) {
+  const R = CFG.round, training = S.mode === 'training';
+  if (training) trainingStep(S, fs);
+  if (S.phase === 'intro') {
+    if (S.pf === 0) simEmit(S, 'round', fs[0]);   // the HUD reads S.round
+    if (++S.pf >= R.intro) { S.phase = 'fight'; S.pf = 0; simEmit(S, 'fight', fs[0]); }
+  } else if (S.phase === 'fight') {
+    S.pf++;
+    if (fs[0].hp <= 0 || fs[1].hp <= 0) endRound(S, fs, 'ko');   // whatever the source (chip damage too)
+    else if (S.timer > 0 && --S.timer === 0) endRound(S, fs, 'timeup');
+  } else if (S.phase === 'end') {
+    S.pf++;
+  } else if (++S.pf >= R.end) scoreRound(S, fs);   // 'ko' or 'timeup'
+}
+
+function trainingStep(S, fs) {
+  for (const F of fs) {
+    F.hp = Math.max(1, F.hp);
+    S.rf[F.side] = F.combo > 0 || F.act === 'block' ? 0 : Math.min(CFG.training.refill + 1, S.rf[F.side] + 1);
+    if (S.rf[F.side] === CFG.training.refill) F.hp = CFG.body.hp;   // once, so a hp set by hand is not undone
+  }
+}
+
+// The round is over: 'ko' (the fighters at 0 hp fall, the KO hitstop) or 'timeup'. Projectiles in flight vanish.
+function endRound(S, fs, kind) {
+  S.phase = kind; S.pf = 0; S.proj.length = 0;
+  if (kind === 'timeup') { simEmit(S, 'timeup', fs[0]); return; }
+  S.stop = CFG.stop.ko;
+  for (const F of fs) {
+    if (F.hp > 0) continue;
+    setAct(F, 'ko'); F.stun = 0;
+    if (!F.air) { F.air = true; F.vy = CFG.round.ko.vy; F.vx = (F.x < fs[1 - F.side].x ? -1 : 1) * CFG.round.ko.vx; }
+    simEmit(S, 'ko', F);
+  }
+}
+
+// More hp takes the round; equal hp gives it to both. Then the match ends (winner 0, 1 or 2 = both) or the next round starts.
+function scoreRound(S, fs) {
+  const d = fs[0].hp - fs[1].hp;
+  if (d) { const w = d > 0 ? 0 : 1; S.wins[w]++; simEmit(S, 'win', fs[w]); }
+  else { S.wins[0]++; S.wins[1]++; simEmit(S, 'draw', fs[0]); }
+  const w0 = S.wins[0] >= CFG.round.wins, w1 = S.wins[1] >= CFG.round.wins;
+  S.pf = 0;
+  if (w0 || w1) { S.phase = 'end'; S.winner = w0 && w1 ? 2 : w0 ? 0 : 1; return; }
+  for (const side of S.sides) { const old = side.team[side.cur]; side.team[side.cur] = Object.assign(newFighter(old.side, old.char), {meter: old.meter}); }
+  S.round++; S.phase = 'intro'; S.stop = 0;
+  S.timer = S.mode === 'training' ? -1 : CFG.round.timerS * 60;
+}
+
+// One frame. Input first: clean buttons and hold counters, then the 'charge' event. In hitstop (S.stop > 0) nothing
+// else moves: only the buffer takes this frame's command (without expiring) and the input history updates.
+// Otherwise: per fighter command and action (c2_moves.js), then the input history -> physics -> pushboxes, walls,
+// max separation -> facing -> contacts (a hit sets the next hitstop). Then the round flow. frame++ either way.
+// Commands are read only in the 'fight' phase (see actionStep).
+function simStep(S, in0, in1) {
+  S.ev.length = 0;
+  const live = S.phase === 'fight';
+  if (!live) { in0 = 0; in1 = 0; }   // intro, KO, time up and the end ignore the buttons
+  const fs = [fighterOf(S, 0), fighterOf(S, 1)], bits = [inputPhase(fs[0], in0), inputPhase(fs[1], in1)];
+  for (let i = 0; i < 2; i++) chargeEvent(S, fs[i], bits[i]);
+  if (S.stop > 0) {
+    S.stop--;
+    for (let i = 0; i < 2; i++) { if (live) bufferCommand(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
+  } else {
+    for (const p of S.proj) p.x += p.vx;
+    for (let i = 0; i < 2; i++) { actionStep(S, fs[i], bits[i]); rememberInput(S, fs[i], bits[i]); }
+    const x0 = [fs[0].x, fs[1].x];
+    for (const f of fs) fighterPhysics(S, f);
+    pushApart(fs[0], fs[1], x0);
+    faceOpponent(fs[0], fs[1]); faceOpponent(fs[1], fs[0]);
+    contactPhase(S, fs);
+  }
+  roundStep(S, fs);
+  S.frame++;
+}
+
+// Key poses of the placeholder fighters (data for e_fighter3d.js, which resolves, blends and solves them).
+// A pose: {joint: [x, y, z] degrees (Euler XYZ in the parent joint's frame), pos: [x, y, z] pelvis offset (m)}, and
+// optionally fL / fR: an ankle target (model space, m; 0.08 up = standing) that the leg reaches by IK. Signs:
+// pelvis/spine/chest/neck/head x+ = bend forward, y+ = turn the right shoulder forward, z+ = lean right; shoulder x- =
+// arm forward, shL z+ / shR z- = arm out; elbow x- = bend; hip x- = leg forward, knee x+ = bend; ankle x+ = toes down.
+// Key poses (b = based on another key; a key that sets a leg's angles drops the inherited target of that leg).
+const F3_KEY = {
+  // Fighting stance, left side forward: lead fist high, rear fist at the chin, knees soft.
+  stance: {pos: [0, -.07, 0], fL: [.11, .08, .21], fR: [-.13, .08, -.2], pelvis: [0, -4, 0], spine: [6, -2, 0], chest: [4, -4, 0],
+    neck: [0, 6, 0], head: [-8, 10, 0], shL: [-55, -10, 15], elL: [-105, 0, 0], shR: [-30, 10, -20], elR: [-130, 0, 0]},
+  // Walks sit a little lower than the stance, so every step stays within the legs' reach (the feet never slide).
+  walkF: {b: 'stance', pos: [0, -.1, 0]},
+  walkB: {b: 'stance', pos: [0, -.1, 0], pelvis: [-4, -4, 0], spine: [2, -2, 0], head: [-4, 10, 0], shL: [-62, -14, 14], elL: [-112, 0, 0]},
+  // Guard: lower, forearms up in front of the face.
+  guard: {b: 'stance', pos: [0, -.14, -.03], spine: [14, -4, 0], chest: [10, -6, 0], head: [-6, 8, 0],
+    shL: [-88, -10, -4], elL: [-128, 0, 0], shR: [-80, 10, 6], elR: [-132, 0, 0]},
+  // Block: the guard pushed back; blockHitC is the crouching block (down held).
+  blockHit: {b: 'guard', pos: [0, -.13, -.09], pelvis: [-6, -8, 0], spine: [2, -4, 0], head: [-20, 8, 0]},
+  blockHitC: {b: 'guardC', pos: [0, -.62, -.05], pelvis: [13, -8, 0], spine: [14, -4, 0], head: [-24, 8, 0]},
+  // Crouch: low (the crouching hurtbox is 1.05 m), leaning in, the head up to watch the opponent.
+  crouch: {pos: [0, -.6, .02], fL: [.13, .08, .34], fR: [-.15, .08, -.13], pelvis: [15, -8, 0], spine: [16, -4, 0], chest: [12, -8, 0],
+    neck: [-10, 6, 0], head: [-26, 10, 0], shL: [-90, -10, 15], elL: [-100, 0, 0], shR: [-70, 10, -20], elR: [-125, 0, 0]},
+  guardC: {b: 'crouch', head: [-16, 8, 0], shL: [-112, -10, -4], elL: [-128, 0, 0], shR: [-104, 10, 6], elR: [-132, 0, 0]},
+  squat: {b: 'stance', pos: [0, -.26, .03], spine: [16, -4, 0], shL: [-40, -10, 22], shR: [-20, 10, -26]},
+  // In the air the feet stay at the root (F.y) or above it and the body spans about 1.6 m (the airborne hurtbox is 1.5).
+  airUp: {pos: [0, -.3, 0], pelvis: [-10, 0, 0], spine: [12, 0, 0], head: [-10, 0, 0], hipL: [-95, 0, 8], knL: [110, 0, 0],
+    anL: [20, 0, 0], hipR: [-60, 0, -8], knR: [120, 0, 0], anR: [30, 0, 0], shL: [-80, 0, 30], elL: [-80, 0, 0], shR: [-50, 0, -30], elR: [-100, 0, 0]},
+  airDown: {b: 'airUp', pos: [0, -.26, 0], fL: [.1, .1, .14], fR: [-.12, .1, -.1]},
+  // Dashes skim off the floor: forward low with the arms trailing, back in a hop.
+  dashF: {pos: [0, -.12, .05], fL: [.11, .26, .32], fR: [-.13, .2, -.5], pelvis: [15, -5, 0], spine: [20, 0, 0], chest: [10, -5, 0],
+    head: [-25, 5, 0], shL: [40, 0, 20], elL: [-30, 0, 0], shR: [45, 0, -20], elR: [-30, 0, 0]},
+  dashB: {b: 'stance', pos: [0, -.1, -.05], fL: [.11, .2, .18], fR: [-.13, .16, -.18], pelvis: [-8, -8, 0], spine: [-5, -4, 0]},
+  // Hit: head and chest thrown back, arms flung.
+  hurt: {pos: [0, -.1, -.08], fL: [.12, .08, .2], fR: [-.14, .08, -.22], pelvis: [-8, 5, 0], spine: [-12, 5, 0], chest: [-10, 5, 0],
+    neck: [-10, 0, 0], head: [-25, -10, 0], shL: [-20, 0, 40], elL: [-40, 0, 0], shR: [-10, 0, -45], elR: [-35, 0, 0]},
+  // Knocked into the air (tilting back as it falls), lying on the back, getting up (sitting, then on one knee),
+  // rolling as a ball. The feet on the floor are IK targets, so the blends between these never sink into it.
+  flyUp: {pos: [0, -.35, 0], pelvis: [-35, 0, 0], spine: [-15, 0, 0], chest: [-10, 0, 0], head: [-20, 0, 0], shL: [-150, 0, 40],
+    elL: [-30, 0, 0], shR: [-140, 0, -40], elR: [-40, 0, 0], hipL: [-40, 0, 10], knL: [60, 0, 0], hipR: [-20, 0, -10], knR: [40, 0, 0]},
+  flyDown: {b: 'flyUp', pos: [0, -.8, 0], pelvis: [-85, 0, 0], spine: [-5, 0, 0], chest: [0, 0, 0], head: [10, 0, 0],
+    hipL: [-30, 0, 10], knL: [70, 0, 0], hipR: [-15, 0, -10], knR: [50, 0, 0]},
+  down: {pos: [0, -.81, 0], fL: [.12, .09, .8], fR: [-.12, .08, .86], pelvis: [-90, 0, 0], spine: [-3, 0, 0], neck: [25, 0, 0],
+    head: [10, 50, 0], shL: [-10, 0, 25], elL: [-20, 0, 0], shR: [-10, 0, -25], elR: [-20, 0, 0]},
+  koDown: {b: 'down', fL: [.26, .08, .8], fR: [-.2, .08, .84], head: [10, 65, 0], shL: [-60, 0, 70], elL: [-10, 0, 0], shR: [-70, 0, -60], elR: [-15, 0, 0]},
+  sit: {pos: [0, -.8, -.08], fL: [.12, .08, .45], fR: [-.13, .08, .36], pelvis: [-40, 0, 0], spine: [25, 0, 0], chest: [15, 0, 0], head: [-5, 0, 0],
+    shL: [22, 0, 30], elL: [-20, 0, 0], shR: [22, 0, -30], elR: [-20, 0, 0]},
+  kneel: {pos: [0, -.45, -.08], fL: [.12, .08, .3], fR: [-.13, .08, -.35], pelvis: [8, -5, 0], spine: [12, 0, 0], chest: [6, -5, 0], head: [-14, 8, 0],
+    shL: [-40, 0, 10], elL: [-60, 0, 0], shR: [-30, 0, -15], elR: [-100, 0, 0]},
+  tuck: {spine: [55, 0, 0], chest: [55, 0, 0], neck: [45, 0, 0], head: [30, 0, 0], shL: [-75, 0, 12], elL: [-95, 0, 0],
+    shR: [-75, 0, -12], elR: [-95, 0, 0], hipL: [-120, 0, 10], knL: [150, 0, 0], anL: [30, 0, 0], hipR: [-120, 0, -10], knR: [150, 0, 0], anR: [30, 0, 0]},
+  // Throw: reach with both hands, hold, pull back, shove; the one thrown doubles over.
+  reach: {b: 'stance', pos: [0, -.1, .06], fL: [.11, .08, .3], spine: [12, 0, 0], chest: [6, 0, 0], head: [-14, 0, 0],
+    shL: [-80, 0, 10], elL: [-15, 0, 0], shR: [-80, 0, -10], elR: [-15, 0, 0]},
+  clinch: {b: 'reach', spine: [15, 0, 0], shL: [-75, 0, 18], elL: [-55, 0, 0], shR: [-75, 0, -18], elR: [-55, 0, 0]},
+  tossW: {b: 'clinch', pos: [0, -.12, -.02], pelvis: [0, 20, 0], spine: [6, 15, 0], chest: [0, 20, 0], shL: [-50, 0, 10], elL: [-90, 0, 0], shR: [-30, 0, -25], elR: [-110, 0, 0]},
+  toss: {b: 'reach', pos: [0, -.14, .1], fL: [.11, .08, .36], pelvis: [0, -10, 0], spine: [16, -5, 0], shL: [-85, 0, 0], elL: [-5, 0, 0], shR: [-85, 0, 0], elR: [-5, 0, 0]},
+  held: {pos: [0, -.15, .05], fL: [.12, .08, .18], fR: [-.14, .08, -.18], pelvis: [15, 0, 0], spine: [20, 0, 0], chest: [15, 0, 0], head: [10, 0, 0],
+    shL: [-30, 0, 10], elL: [-20, 0, 0], shR: [-30, 0, -10], elR: [-20, 0, 0]},
+  // Special: both palms drawn back to the right hip, then thrust forward where the shot appears.
+  specW: {b: 'stance', pos: [0, -.14, -.04], pelvis: [0, 20, 0], spine: [8, 15, 0], chest: [0, 20, 0], shL: [-20, 0, -25], elL: [-100, 0, 0],
+    shR: [10, 0, -15], elR: [-90, 0, 0]},
+  specH: {b: 'stance', pos: [0, -.14, .06], fL: [.11, .08, .3], fR: [-.13, .08, -.25], pelvis: [0, 0, 0], spine: [10, 0, 0], chest: [4, 0, 0],
+    head: [-10, 0, 0], shL: [-85, 0, -8], elL: [-10, 0, 0], wrL: [60, 0, 0], shR: [-85, 0, 8], elR: [-10, 0, 0], wrR: [60, 0, 0]},
+  win: {pos: [0, -.02, 0], fL: [.13, .08, .05], fR: [-.13, .08, -.05], chest: [-5, 0, 0], head: [-10, 0, 0], shL: [10, 0, 35], elL: [-80, 0, 0],
+    shR: [-170, 0, -10], elR: [-20, 0, 0]},
+  intro: {pos: [0, -.01, 0], fL: [.1, .08, .02], fR: [-.1, .08, -.02], head: [5, 0, 0], shL: [-45, 0, -20], elL: [-95, 0, 0], shR: [-45, 0, 20], elR: [-95, 0, 0]},
+  // Moves: <id>W = wind-up (end of startup), <id>H = the strike (active frames). Limb in its box (see CFG.moves).
+  // Air punches let the legs hang back, so the fist shows in front of the body.
+  p1W: {b: 'stance', chest: [4, -4, 0], shL: [-50, -10, 18], elL: [-120, 0, 0]},
+  p1H: {b: 'stance', spine: [8, -8, 0], chest: [6, -11, 0], head: [-8, 22, 0], shL: [-90, -8, 9], elL: [-12, 0, 0]},
+  p2W: {b: 'stance', chest: [4, -14, 0], shR: [-40, 10, -18], elR: [-135, 0, 0]},
+  p2H: {b: 'stance', pos: [0, -.09, .04], fL: [.11, .08, .24], pelvis: [0, 15, 0], spine: [8, 10, 0], chest: [6, 4, 0], head: [-8, -20, 0],
+    shR: [-91, 8, -11], elR: [-8, 0, 0], shL: [-45, -10, 25], elL: [-125, 0, 0]},
+  p3W: {b: 'stance', pos: [0, -.1, -.02], chest: [4, 10, 0], shL: [-40, -10, 30], elL: [-110, 0, 0]},
+  p3H: {b: 'stance', pos: [0, -.12, .08], fL: [.11, .08, .32], pelvis: [0, -25, 0], spine: [10, -15, 0], chest: [6, 4, 0], head: [-8, 30, 0],
+    shL: [-81, -10, 21], elL: [-22, 0, 0]},
+  k1W: {b: 'stance', fL: [.1, .4, .2], fR: [-.1, .08, -.08], pelvis: [-5, -5, 0]},
+  k1H: {b: 'stance', pos: [0, -.06, -.06], fR: [-.1, .08, -.08], pelvis: [-10, -5, 0], spine: [-4, 0, 0], hipL: [-88, 0, -2], knL: [17, 0, 0], anL: [35, 0, 0]},
+  k2W: {b: 'stance', fL: [.1, .08, .05], fR: [-.3, .5, .05], pelvis: [0, 30, -5]},
+  k2H: {b: 'stance', fL: [.1, .08, .05], pelvis: [0, 92, -18], spine: [0, -10, 10], chest: [0, -15, 0], head: [0, -25, -10],
+    hipR: [-3, 0, -101], knR: [10, 0, 0], anR: [40, 0, 0]},
+  hpW: {b: 'stance', pos: [0, -.12, -.04], pelvis: [0, -20, 0], chest: [4, -25, 0], shR: [-20, 10, -30], elR: [-130, 0, 0]},
+  hpH: {b: 'stance', pos: [0, -.12, .12], fL: [.12, .08, .42], fR: [-.14, .08, -.28], pelvis: [0, 25, 0], spine: [12, 0, 0], chest: [8, 4, 0],
+    head: [-12, -30, 0], shR: [-97, 0, -13], elR: [-9, 0, 0], shL: [-40, 0, 40], elL: [-110, 0, 0]},
+  hkW: {b: 'stance', fL: [.1, .08, .05], fR: [-.25, .55, .12], pelvis: [-5, 25, -5]},
+  hkH: {b: 'stance', fL: [.1, .08, .02], pelvis: [-10, 75, -31], spine: [-5, -10, 10], chest: [0, -15, 0], head: [0, -25, -10],
+    hipR: [-50, 0, -71], knR: [5, 0, 0], anR: [40, 0, 0]},
+  cpW: {b: 'crouch', chest: [10, -18, 0], shR: [-40, 10, -18], elR: [-130, 0, 0]},
+  cpH: {b: 'crouch', spine: [13.5, 10, 0], chest: [8, -4.5, 0], head: [-26, -15, 0], shR: [-110.5, 5, 24.5], elR: [-45, 0, 0]},
+  ckW: {b: 'crouch', fL: [.12, .14, .32]},
+  ckH: {b: 'crouch', fL: [.08, .1, .66], fR: [-.15, .08, -.3], pelvis: [12, -25, 0], spine: [14, 4, 0], chest: [8, 8, 0], head: [-30, 15, 0]},
+  chpW: {b: 'crouch', pos: [0, -.6, 0], chest: [10, -15, 0], shR: [-20, 10, -20], elR: [-120, 0, 0]},
+  chpH: {b: 'crouch', pos: [0, -.58, .04], fL: [.12, .08, .3], fR: [-.15, .16, -.08], pelvis: [10, 5, 0], spine: [7, 15, 0], chest: [2, 25, 0],
+    head: [-35, -20, 0], shR: [-172, 0, 8], elR: [-6.5, 0, 0], shL: [-40, -10, 25], elL: [-120, 0, 0]},
+  chkW: {b: 'crouch', pos: [0, -.58, 0], fL: [.1, .08, .14], fR: [-.12, .42, .2], pelvis: [5, 10, 0]},
+  chkH: {b: 'crouch', pos: [0, -.55, -.02], fL: [.1, .08, .14], fR: [-.08, 1, .5], pelvis: [-28, 15, 0], spine: [-8, 0, 0], chest: [-6, 0, 0],
+    head: [12, -10, 0]},
+  jpW: {b: 'airUp', chest: [10, -20, 0], shR: [-30, 10, -20], elR: [-130, 0, 0]},
+  jpH: {b: 'airUp', pos: [0, -.22, 0], spine: [25, 20, 0], chest: [15, 15, 0], head: [-10, -20, 0], shR: [-55, 10, -15], elR: [-12, 0, 0], hipL: [-35, 0, 8], knL: [105, 0, 0], hipR: [-5, 0, -8], knR: [95, 0, 0]},
+  jkW: {b: 'airUp', hipR: [-90, 0, -8], knR: [120, 0, 0]},
+  jkH: {b: 'airUp', pelvis: [-15, 13, 0], hipR: [-36, 0, -1], knR: [9, 0, 0], anR: [35, 0, 0]},
+  jhpW: {b: 'airUp', spine: [0, -10, 0], chest: [-10, -15, 0], shR: [-170, 0, -15], elR: [-60, 0, 0]},
+  jhpH: {b: 'airUp', pos: [0, -.22, 0], spine: [40, 20, 0], chest: [20, 15, 0], head: [-20, -15, 0], shR: [-63, 0, -18], elR: [-18, 0, 0], hipL: [-35, 0, 8], knL: [105, 0, 0], hipR: [-5, 0, -8], knR: [95, 0, 0]},
+  jhkW: {b: 'airUp', pelvis: [-5, 10, 0], hipR: [-100, 0, -8], knR: [130, 0, 0]},
+  jhkH: {b: 'airUp', pelvis: [-7, 19, 0], hipR: [-38, 0, -6], knR: [0, 0, 0], anR: [30, 0, 0]},
+};
+// Cosmetic timings: walk stride (two steps, m), foot lift and fade-in frames; breathing rate (rad/frame) and depth.
+const F3_WALK = {stride: .72, lift: .07, fade: 4}, F3_BREATH = {rate: .08, chest: 1.5, rise: .008};
+// The posture each move starts from and returns to (the others: the stance, or the air pose for air moves).
+const F3_FROM = {cp: 'crouch', ck: 'crouch', chp: 'crouch', chk: 'crouch'};
+// The roll's ball: centre (y, z in the pelvis frame) and radius of the tuck pose, measured on the meshes: measure again
+// if the tuck or the shapes change.
+const F3_TUCK = {y: -.037, z: .238, r: .4};
+
+// Placeholder fighters (Tappa 1; the Meshy models replace them in Tappa 2): a rig of THREE.Group joints carrying
+// toon-shaded parts, each with a black outline shell, posed on every drawn frame from the sim state. Graphics only:
+// it reads the state and never writes it. d_render.js builds them (fighterBuild) and calls f3Sync(S) per frame.
+// Model space: forward +z, up +y, the fighter's left +x, metres, the root at the feet; 1.8 m tall. The root turns to
+// face the opponent (face * 90°), 25° of it back toward the camera.
+
+const F3D = [];   // per side: {root, joints: {name: Group}, limbs: {handL, handR, footL, footR}: Object3D, mats: {slot: material}}
+// Shared by both fighters: toon gradient, outline material, shapes (and their outline shells), scratch objects.
+const F3 = {grad: null, outMat: null, geo: {}, out: new Map(), v: new THREE.Vector3(), e: new THREE.Euler(),
+  m: new THREE.Matrix4(), m2: new THREE.Matrix4(), m3: new THREE.Matrix4(), memo: {}};
+const F3_DEG = Math.PI / 180, F3_YAW = 65 * F3_DEG, F3_OUTLINE = {w: .018, color: 0x0b0a10};
+// Material slots (the brief's palette). main = the outfit's main colour: Ren's vest, Kael's suit.
+const F3_COL = {
+  ren: {skin: 0xe8b48a, hair: 0x2a2230, main: 0x2f6f6e, inner: 0x3a3040, sash: 0xf07a22, pants: 0x3b3340, wrap: 0xe9e2d6,
+    fist: 0xe8b48a, boot: 0x2f6f6e, sole: 0x1b1b1f},
+  kael: {skin: 0xe8b48a, hair: 0xece8f4, main: 0x3a2d4a, inner: 0x9b5fe0, sash: 0x9b5fe0, pants: 0x3a2d4a, wrap: 0x2a2233,
+    fist: 0x2a2233, boot: 0x2a2233, sole: 0x9b5fe0},
+};
+// Rest skeleton, parents first: joint -> [parent, x, y, z] offset from the parent. Arms and legs hang straight down.
+const F3_BONE = {pelvis: [null, 0, 1, 0], spine: ['pelvis', 0, .11, 0], chest: ['spine', 0, .19, 0], neck: ['chest', 0, .21, 0],
+  head: ['neck', 0, .07, 0], shL: ['chest', .22, .17, 0], elL: ['shL', 0, -.29, 0], wrL: ['elL', 0, -.26, 0],
+  shR: ['chest', -.22, .17, 0], elR: ['shR', 0, -.29, 0], wrR: ['elR', 0, -.26, 0], hipL: ['pelvis', .1, -.05, 0],
+  knL: ['hipL', 0, -.43, 0], anL: ['knL', 0, -.44, 0], hipR: ['pelvis', -.1, -.05, 0], knR: ['hipR', 0, -.43, 0], anR: ['knR', 0, -.44, 0]};
+const F3_J = Object.keys(F3_BONE);
+// The points that hit (limbWorld): fist centres and boot centres (0.05 m up when standing).
+const F3_LIMB = {handL: ['wrL', 0, -.055, 0], handR: ['wrR', 0, -.055, 0], footL: ['anL', 0, -.03, .045], footR: ['anR', 0, -.03, .045]};
+// Parts: [joint, material slot, shape]. 22 meshes per fighter, each with its outline shell.
+const F3_PART = [['pelvis', 'pants', 'hips'], ['pelvis', 'sash', 'sash'], ['spine', 'main', 'belly'], ['chest', 'main', 'chest'],
+  ['chest', 'inner', 'panel'], ['neck', 'skin', 'neck'], ['head', 'skin', 'head'], ['head', 'hair', 'hair'],
+  ['shL', 'skin', 'upper'], ['elL', 'wrap', 'fore'], ['wrL', 'fist', 'fist'], ['shR', 'skin', 'upper'], ['elR', 'wrap', 'fore'],
+  ['wrR', 'fist', 'fist'], ['hipL', 'pants', 'thigh'], ['knL', 'pants', 'shin'], ['anL', 'boot', 'boot'], ['anL', 'sole', 'sole'],
+  ['hipR', 'pants', 'thigh'], ['knR', 'pants', 'shin'], ['anR', 'boot', 'boot'], ['anR', 'sole', 'sole']];
+
+// --- Shapes ---
+// Built once, shared by both fighters; metres in the joint's frame, baked (never scaled on the mesh, so the outline
+// keeps its width). Pieces merged into one shape share its material.
+function f3Cyl(rt, rb, h, x, y, z, seg, sz) { return new THREE.CylinderGeometry(rt, rb, h, seg || 8).scale(1, 1, sz || 1).translate(x, y, z); }
+function f3Sph(r, x, y, z, sx, sy, sz, ws, hs) { return new THREE.SphereGeometry(r, ws || 10, hs || 7).scale(sx, sy, sz).translate(x, y, z); }
+function f3Box(w, h, d, x, y, z) { return new THREE.BoxGeometry(w, h, d).translate(x, y, z); }
+// A cone from base point (x, y, z) along direction (dx, dy, dz), length len, base radius r.
+function f3Spike(x, y, z, dx, dy, dz, len, r) {
+  const g = new THREE.ConeGeometry(r, len, 5).translate(0, len / 2, 0), d = new THREE.Vector3(dx, dy, dz).normalize();
+  return g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d))).translate(x, y, z);
+}
+// Positions, normals and indices of indexed geometries in one geometry (the uvs are not needed: no textures).
+function f3Merge(gs) {
+  let n = 0, m = 0;
+  for (const g of gs) { n += g.attributes.position.count; m += g.index.count; }
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), idx = new Uint16Array(m);
+  let v = 0, k = 0;
+  for (const g of gs) {
+    pos.set(g.attributes.position.array, v * 3); nor.set(g.attributes.normal.array, v * 3);
+    for (let i = 0; i < g.index.count; i++) idx[k++] = g.index.array[i] + v;
+    v += g.attributes.position.count; g.dispose();
+  }
+  const o = new THREE.BufferGeometry();
+  o.setAttribute('position', new THREE.BufferAttribute(pos, 3)); o.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  o.setIndex(new THREE.BufferAttribute(idx, 1));
+  return o;
+}
+// Hair: a cap over the top and back of the head plus spikes [x, y, z, dx, dy, dz, len, r] (head frame).
+function f3Hair(cap, spikes) { return f3Merge([f3Sph(cap, 0, .125, -.008, 1, .96, 1.06, 12, 8)].concat(spikes.map(s => f3Spike(...s)))); }
+const F3_SHAPE = {
+  hips: () => f3Cyl(.15, .162, .2, 0, -.05, 0, 10, .86),
+  // Waist band, a knot at the front and two tails hanging down the front (seen from either side).
+  sash: () => f3Merge([f3Cyl(.166, .168, .075, 0, .02, 0, 10, .88), f3Sph(.047, .03, .02, .142, 1, .9, .8, 8, 6),
+    f3Box(.07, .3, .02, .052, -.13, .15).rotateZ(.1), f3Box(.06, .25, .02, .002, -.105, .152).rotateZ(-.08)]),
+  belly: () => f3Cyl(.165, .15, .2, 0, .09, 0, 10, .84),
+  // Tapered chest: broad shoulders.
+  chest: () => f3Cyl(.225, .165, .25, 0, .1, 0, 10, .74),
+  // A flat triangle on the front, point down, and the standing collar: Ren's shirt in the open vest, Kael's purple.
+  panel: () => f3Merge([new THREE.ConeGeometry(.1, .26, 3).rotateY(Math.PI / 3).rotateZ(Math.PI).scale(1, 1, .25).translate(0, .1, .14),
+    f3Cyl(.09, .105, .09, 0, .235, -.01, 10)]),
+  neck: () => f3Cyl(.056, .064, .12, 0, .05, 0, 8),
+  head: () => f3Sph(.105, 0, .11, .01, .9, 1.1, 1, 12, 9),
+  // Deltoid, upper arm and elbow ball.
+  upper: () => f3Merge([f3Sph(.086, 0, -.02, 0, 1, 1, 1), f3Cyl(.072, .056, .29, 0, -.145, 0), f3Sph(.055, 0, -.29, 0, 1, 1, 1, 8, 6)]),
+  // Forearm with two raised wraps (Ren's bandages, Kael's glove bands).
+  fore: () => f3Merge([f3Cyl(.059, .046, .26, 0, -.13, 0), f3Cyl(.063, .061, .025, 0, -.09, 0), f3Cyl(.056, .053, .025, 0, -.19, 0)]),
+  fist: () => f3Sph(.064, 0, -.055, .005, .9, 1, 1.05, 9, 7),
+  // Baggy trousers: wider at the knee, gathered at the ankle.
+  thigh: () => f3Cyl(.1, .128, .45, 0, -.215, 0, 10),
+  shin: () => f3Cyl(.128, .07, .4, 0, -.18, 0, 10),
+  boot: () => f3Merge([f3Cyl(.062, .066, .15, 0, .04, 0), f3Box(.11, .085, .25, 0, -.035, .05)]),
+  sole: () => f3Box(.118, .025, .26, 0, -.0675, .05),
+  hair_ren: () => f3Hair(.12, [[0, .2, -.04, 0, .75, -.66, .2, .055], [.05, .2, -.03, .45, .8, -.4, .17, .05], [-.05, .2, -.03, -.45, .8, -.4, .17, .05],
+    [0, .14, -.09, 0, .2, -1, .17, .055], [.06, .08, -.08, .6, -.1, -.8, .13, .045], [-.06, .08, -.08, -.6, -.1, -.8, .13, .045],
+    [.09, .13, -.02, 1, .25, -.1, .11, .04], [-.09, .13, -.02, -1, .25, -.1, .11, .04], [.01, .21, .04, .1, .9, .4, .14, .05],
+    [0, .19, .07, 0, -.5, .87, .1, .035], [.04, .18, .07, .35, -.6, .7, .09, .03], [-.04, .18, .07, -.35, -.6, .7, .09, .03]]),
+  hair_kael: () => f3Hair(.122, [[0, .21, -.02, 0, 1, -.3, .24, .06], [.05, .2, -.02, .5, .85, -.25, .2, .055], [-.05, .2, -.02, -.5, .85, -.25, .2, .055],
+    [0, .17, -.08, 0, .5, -.87, .22, .06], [.06, .13, -.08, .55, .3, -.78, .18, .05], [-.06, .13, -.08, -.55, .3, -.78, .18, .05],
+    [.09, .14, 0, .95, .3, .1, .14, .045], [-.09, .14, 0, -.95, .3, .1, .14, .045], [.085, .1, .03, .5, -.85, .2, .14, .035],
+    [-.085, .1, .03, -.5, -.85, .2, .14, .035], [.02, .2, .05, .2, .6, .78, .15, .05], [-.02, .18, .075, -.2, -.5, .85, .11, .035]]),
+};
+
+// The outline shell's push per vertex: the mean of the distinct normals found at that position, lengthened so every
+// face moves out by the full width (so box edges and cylinder rims stay closed); at most twice, on sharp tips.
+function f3OutlineGeo(g) {
+  const p = g.attributes.position, nr = g.attributes.normal, at = new Map(), out = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const key = Math.round(p.getX(i) * 1e4) + ',' + Math.round(p.getY(i) * 1e4) + ',' + Math.round(p.getZ(i) * 1e4);
+    if (!at.has(key)) at.set(key, []);
+    at.get(key).push(i);
+  }
+  for (const ids of at.values()) {
+    const ns = [], a = new THREE.Vector3();
+    for (const i of ids) { const n = new THREE.Vector3().fromBufferAttribute(nr, i); if (!ns.some(u => u.dot(n) > .999)) ns.push(n); }
+    for (const n of ns) a.add(n);
+    if (a.lengthSq() < 1e-8) a.copy(ns[0]); else a.normalize();
+    let lo = 1;
+    for (const n of ns) lo = Math.min(lo, a.dot(n));
+    a.multiplyScalar(1 / Math.max(.5, lo));
+    for (const i of ids) out.set([a.x, a.y, a.z], i * 3);
+  }
+  const o = new THREE.BufferGeometry();
+  o.setAttribute('position', p); o.setAttribute('aOut', new THREE.BufferAttribute(out, 3)); o.setIndex(g.index);
+  g.computeBoundingSphere(); o.boundingSphere = g.boundingSphere.clone(); o.boundingSphere.radius += 2 * F3_OUTLINE.w;
+  return o;
+}
+
+// The shared gradient (3 bands), outline material and shapes, once.
+function f3Shared() {
+  if (F3.grad) return;
+  const d = new Uint8Array([90, 90, 90, 255, 170, 170, 170, 255, 255, 255, 255, 255]);
+  F3.grad = new THREE.DataTexture(d, 3, 1, THREE.RGBAFormat);
+  F3.grad.minFilter = F3.grad.magFilter = THREE.NearestFilter; F3.grad.generateMipmaps = false; F3.grad.needsUpdate = true;
+  F3.outMat = new THREE.ShaderMaterial({side: THREE.BackSide,
+    uniforms: {uW: {value: F3_OUTLINE.w}, uColor: {value: new THREE.Color(F3_OUTLINE.color)}},
+    vertexShader: 'attribute vec3 aOut;\nuniform float uW;\nvoid main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position + aOut * uW, 1.); }',
+    fragmentShader: 'uniform vec3 uColor;\nvoid main(){ gl_FragColor = vec4(uColor, 1.); }'});
+  for (const k in F3_SHAPE) { const g = F3_SHAPE[k](); F3.geo[k] = g; F3.out.set(g, f3OutlineGeo(g)); }
+}
+
+// The fighters' light: a warm sun from the upper left (as in the painting, and a little in front) and a sky/stone fill.
+function f3Lights() {
+  const sun = new THREE.DirectionalLight(0xfff2dc, .75);
+  sun.position.set(-4, 6, 5);
+  return [sun, new THREE.HemisphereLight(0xdcecff, 0x6b5a4a, .5)];
+}
+
+// One fighter ('ren' | 'kael'): joints, toon parts with outlines, limb points and its own materials (so effects can
+// flash one fighter). Not yet in the scene.
+function fighterBuild(char) {
+  f3Shared();
+  const col = F3_COL[char], mats = {}, joints = {}, limbs = {}, root = new THREE.Group();
+  for (const k in col) mats[k] = new THREE.MeshToonMaterial({color: col[k], gradientMap: F3.grad});
+  for (const j of F3_J) { const b = F3_BONE[j], g = new THREE.Group(); g.position.set(b[1], b[2], b[3]); joints[j] = g; (b[0] ? joints[b[0]] : root).add(g); }
+  for (const [j, slot, shape] of F3_PART) {
+    const g = F3.geo[shape === 'hair' ? 'hair_' + char : shape], mesh = new THREE.Mesh(g, mats[slot]);
+    mesh.name = j + '.' + shape;
+    mesh.add(new THREE.Mesh(F3.out.get(g), F3.outMat));
+    joints[j].add(mesh);
+  }
+  for (const l in F3_LIMB) { const b = F3_LIMB[l], o = new THREE.Object3D(); o.position.set(b[1], b[2], b[3]); joints[b[0]].add(o); limbs[l] = o; }
+  return {root, joints, limbs, mats};
+}
+
+// Every drawn frame: each side's fighter at its sim position (feet at F.x, F.y; side 0 in front), facing and pose.
+// S null (no match): hidden. Render-side smoothing: when the action changes to a free or movement one (F3_EASE), the
+// pose eases from the last drawn one into the new action's over its first CFG.anim.blend frames (by F.af, so it
+// follows the sim). Strikes, hits and throws snap: a strike shows exactly on its first active frame.
+const F3_EASE = {idle: 1, walkF: 1, walkB: 1, crouch: 1, guard: 1, guardC: 1, jumpSquat: 1, air: 1, dashF: 1, dashB: 1, win: 1};
+function f3Sync(S) {
+  for (let i = 0; i < F3D.length; i++) {
+    const it = F3D[i];
+    if (it.kind === 'model') { mdSync(it, i, S); continue; }   // a Meshy fighter (e_model.js)
+    it.root.visible = !!S;
+    if (!S) { it.F = null; continue; }
+    const F = fighterOf(S, i), n = CFG.anim.blend;
+    it.root.position.set(F.x / 1000, F.y / 1000, i ? -.05 : .05);
+    it.root.rotation.y = F.face * F3_YAW;
+    let p = f3Raw(F, S);
+    if (F !== it.F) it.from = null;   // a new fighter (new match or round): nothing to ease from
+    else if (F.act !== it.act) it.from = F3_EASE[F.act] ? it.pose : null;
+    if (it.from && F.af < n) p = f3Mix(it.from, p, Math.max(0, F.af) / n);
+    it.F = F; it.act = F.act; it.pose = p;   // the drawn pose, legs solved below, ankle targets kept for the next ease
+    f3Apply(it, f3Solve(p));
+  }
+}
+
+function f3Apply(it, p) {
+  const J = it.joints, D = F3_DEG, b = F3_BONE.pelvis;
+  for (const j of F3_J) { const r = p[j]; J[j].rotation.set(r[0] * D, r[1] * D, r[2] * D); }
+  J.pelvis.position.set(b[1] + p.pos[0], b[2] + p.pos[1], b[3] + p.pos[2]);
+}
+
+// World position (metres) of a limb point of side's fighter, as last posed.
+function limbWorld(side, limb) { return F3D[side].limbs[limb].getWorldPosition(new THREE.Vector3()); }
+
+// --- Poses --- (the key-pose table F3_KEY and the cosmetic timings are in e_poses.js)
+function f3Lerp3(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
+function f3Smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+
+// A key pose, resolved once (every joint, legs with a target solved).
+function f3Key(name) {
+  if (F3.memo[name]) return F3.memo[name];
+  const k = F3_KEY[name], base = k.b ? f3Key(k.b) : null, p = {};
+  for (const j of F3_J) p[j] = (k[j] || (base ? base[j] : [0, 0, 0])).slice();
+  p.pos = (k.pos || (base ? base.pos : [0, 0, 0])).slice();
+  [['fL', 'hipL', 'knL', 'anL'], ['fR', 'hipR', 'knR', 'anR']].forEach(([f, h, kn, an], side) => {
+    const t = k[f] || (!k[h] && !k[kn] && !k[an] && base && base[f]);
+    if (t) { p[f] = t.slice(); f3Leg(p, side, p[f]); }
+  });
+  return F3.memo[name] = p;
+}
+
+// The pose between a and b (t from 0 to 1); ankle targets blend when both poses have one.
+function f3Mix(a, b, t) {
+  const o = {pos: f3Lerp3(a.pos, b.pos, t)};
+  for (const j of F3_J) o[j] = f3Lerp3(a[j], b[j], t);
+  if (a.fL && b.fL) o.fL = f3Lerp3(a.fL, b.fL, t);
+  if (a.fR && b.fR) o.fR = f3Lerp3(a.fR, b.fR, t);
+  return o;
+}
+
+// Two-bone IK for one leg (side 0 left, 1 right): hip flexion and abduction and knee bend so the ankle reaches t
+// (model space), then the ankle undoes the chain so the sole is level and turned with the pelvis.
+function f3Leg(p, side, t) {
+  const B = F3_BONE, h = side ? B.hipR : B.hipL, L1 = -B.knL[2], L2 = -B.anL[2], D = F3_DEG, v = F3.v, m = F3.m, m2 = F3.m2, e = F3.e;
+  const P = p.pelvis, pel = F3.m3.makeRotationFromEuler(e.set(P[0] * D, P[1] * D, P[2] * D));
+  // The target from the hip, in the pelvis frame.
+  v.set(h[1], h[2], h[3]).applyMatrix4(pel);
+  v.set(t[0] - B.pelvis[1] - p.pos[0] - v.x, t[1] - B.pelvis[2] - p.pos[1] - v.y, t[2] - B.pelvis[3] - p.pos[2] - v.z);
+  v.applyMatrix4(m.copy(pel).transpose());
+  const len = v.length(), d = Math.min(L1 + L2 - 1e-4, Math.max(.05, len));
+  v.multiplyScalar(d / len);
+  // Knee bend from the distance; the bent leg (ankle at (0, vy, vz) in the hip frame) turned onto the target:
+  // abduction g about z, then flexion a about x.
+  const cosK = Math.max(-1, Math.min(1, (d * d - L1 * L1 - L2 * L2) / (2 * L1 * L2))), k = Math.acos(cosK);
+  const vy = -L1 - L2 * cosK, vz = -L2 * Math.sin(k), g = Math.asin(Math.max(-1, Math.min(1, -v.x / vy)));
+  let a = Math.atan2(v.z, v.y) - Math.atan2(vz, vy * Math.cos(g));
+  a = Math.atan2(Math.sin(a), Math.cos(a));
+  p[side ? 'hipR' : 'hipL'] = [a / D, 0, g / D]; p[side ? 'knR' : 'knL'] = [k / D, 0, 0];
+  // Ankle = (pelvis * hip * knee)^-1 * (the pelvis's turn): the sole level, pointing where the hips point.
+  m.copy(pel).multiply(m2.makeRotationFromEuler(e.set(a, 0, g))).multiply(m2.makeRotationX(k)).transpose();
+  e.setFromRotationMatrix(m.multiply(m2.makeRotationY(P[1] * D)));
+  p[side ? 'anR' : 'anL'] = [e.x / D, e.y / D, e.z / D];
+}
+
+// Legs with a target solved, then only the joints and pos (a fresh object).
+function f3Solve(p) {
+  if (p.fL) f3Leg(p, 0, p.fL);
+  if (p.fR) f3Leg(p, 1, p.fR);
+  const o = {pos: p.pos};
+  for (const j of F3_J) o[j] = p[j];
+  return o;
+}
+
+// The pose of fighter F now: a pure function of F.act, F.af, F.x and F.face (walk), F.air, F.vy, F.hit (throw),
+// F.stun (hit and block recovery), F.prev (a block with down held is crouched), F.land (landing) and S.frame (breathing).
+function poseOf(F, S) { return f3Solve(f3Raw(F, S)); }
+// The same before the legs are solved (ankle targets kept, for blending). Crouched on the ground (the sim's crouching
+// hurtbox: crouch, guardC, the crouching moves, a block with down held) the head stays within F3_HEADROOM of the
+// hurtbox's top: if a pose would raise it higher, the pelvis drops by the difference (the planted feet follow by IK).
+const F3_HEADROOM = .1;
+function f3Raw(F, S) {
+  const m = CFG.moves[F.act], p = m ? f3Move(F, m) : f3Act(F, S);
+  if (F.air) return p;
+  const top = (hurtBoxes(F)[1].y1 - F.y) / 1000;
+  if (top < CFG.body.h / 1000) {
+    const over = f3Point(p, F3_HEAD, 0, .11, .01)[1] + F3_HEAD_R - top - F3_HEADROOM;
+    if (over > 0) p.pos = [p.pos[0], p.pos[1] - over, p.pos[2]];
+  }
+  return p;
+}
+
+// Moves follow their frame data: from the posture to the wind-up by the end of startup, the strike held through the
+// active frames, back to the posture by the end of recovery; kicks fold back through the wind-up (the chamber) first.
+// Air moves hold a recovery pose until landing: kicks the chamber, punches most of the way back to the air pose.
+function f3Move(F, m) {
+  const id = F.act, af = F.af, air = m.r === 'land', from = air ? f3Air(F) : f3Key(F3_FROM[id] || 'stance');
+  const W = F3_KEY[id + 'W'] ? f3Key(id + 'W') : from, H = F3_KEY[id + 'H'] ? f3Key(id + 'H') : from;
+  if (af <= m.s) return f3Mix(from, W, f3Smooth(af / m.s));
+  if (af <= m.s + m.a) return f3Mix(H, H, 0);
+  const kick = m.limb[0] === 'f', since = af - m.s - m.a;
+  if (air) return kick ? f3Mix(H, W, f3Smooth(since / 8)) : f3Mix(H, from, .6 * f3Smooth(since / 8));
+  const t = since / m.r;
+  if (kick) return t < .5 ? f3Mix(H, W, f3Smooth(2 * t)) : f3Mix(W, from, f3Smooth(2 * t - 1));
+  return f3Mix(H, from, f3Smooth(t));
+}
+
+// The air pose: tucked while rising, legs reaching down while falling.
+function f3Air(F) { return f3Mix(f3Key('airUp'), f3Key('airDown'), f3Smooth((CFG.jump.v - F.vy) / (2 * CFG.jump.v))); }
+
+function f3Act(F, S) {
+  const K = f3Key, af = F.af, st = K('stance');
+  switch (F.act) {
+    case 'walkF': case 'walkB': return f3Walk(F);
+    case 'crouch': case 'guard': case 'guardC': return f3Breathe(f3Mix(K(F.act), K(F.act), 0), S);
+    case 'jumpSquat': return f3Mix(K('squat'), K('squat'), 0);
+    case 'landing': return f3Mix(K('squat'), st, f3Smooth(af / Math.max(1, F.land)));
+    case 'air': return f3Air(F);
+    case 'dashF': case 'dashB': return f3Mix(K(F.act), K(F.act), 0);
+    // Block and hit snap into their recoil on the contact frame (it holds through the hitstop), then ease back to the
+    // guard / the stance as the stun runs out. A block with down held is the crouching block (as in the sim).
+    case 'block': {
+      const low = F.prev & BTN.D;
+      return f3Mix(K(low ? 'guardC' : 'guard'), K(low ? 'blockHitC' : 'blockHit'), f3Smooth(F.stun / 6));
+    }
+    case 'hitStun': return f3Mix(st, K('hurt'), f3Smooth(F.stun / 8));
+    case 'juggle': case 'knock': case 'ko': {   // flying (tilting back as it falls), then lying on the floor
+      if (F.air) return f3Mix(K('flyUp'), K('flyDown'), f3Smooth((60 - F.vy) / 140));
+      const down = K(F.act === 'ko' ? 'koDown' : 'down');
+      return f3Mix(down, down, 0);
+    }
+    case 'getup': return af < 5 ? f3Mix(K('down'), K('sit'), f3Smooth(af / 5)) : af < 10 ? f3Mix(K('sit'), K('kneel'), f3Smooth((af - 5) / 5))
+      : f3Mix(K('kneel'), st, f3Smooth((af - 10) / 6));
+    case 'rollF': case 'rollB': return f3Roll(F);
+    case 'thr': return f3Throw(F);
+    case 'thrWhiff': return f3Mix(K('reach'), st, f3Smooth((af - 4) / 18));
+    case 'thrown': return f3Mix(K('held'), K('held'), 0);
+    case 'spec': return f3Spec(af);
+    case 'win': return f3Breathe(f3Mix(K('win'), K('win'), 0), S);
+    case 'intro': return f3Breathe(f3Mix(K('intro'), K('intro'), 0), S);
+    default: return f3Breathe(f3Mix(st, st, 0), S);   // idle
+  }
+}
+
+// Breathing on the free stances: the chest and shoulders rise and fall (the IK keeps the feet planted).
+function f3Breathe(p, S) {
+  const B = F3_BREATH, b = Math.sin(S.frame * B.rate);
+  p.chest[0] += B.chest * b; p.pos[1] += B.rise * b; p.shL[2] += B.chest * b; p.shR[2] -= B.chest * b;
+  return p;
+}
+
+// Walk: the stance's feet step along the walking line (the world x axis seen from the model) by distance, F.x * face:
+// each foot is planted for half a stride, moving back under the body exactly as far as the body moves, then swings.
+function f3Walk(F) {
+  const W = F3_WALK, k = f3Smooth(F.af / W.fade), p = f3Mix(f3Key('stance'), f3Key(F.act), k);
+  const ph = F.x * F.face / 1000 / W.stride, wx = F.face * Math.cos(F3_YAW), wz = Math.sin(F3_YAW), D = W.stride / 2;
+  [['fL', 0], ['fR', .5]].forEach(([f, o]) => {
+    const u = ((ph + o) % 1 + 1) % 1, sw = u >= .5, s = sw ? D * (2 * u - 1.5) : D * (.5 - 2 * u);
+    const t = p[f], lift = sw ? W.lift * Math.sin(Math.PI * (2 * u - 1)) : 0;
+    p[f] = [t[0] + wx * s * k, t[1] + lift * k, t[2] + wz * s * k];
+  });
+  return p;
+}
+
+// Rolls: lying on the back the body tucks into a ball, which then tumbles (450° forward, 270° back: both end upright)
+// about its own centre, opens into the crouch (the feet go straight down to the floor: IK from where the ball's feet
+// are) and rises into the stance; F3_TUCK (e_poses.js) is the ball's centre and radius.
+function f3Roll(F) {
+  const t = F.af / CFG.knock.roll, spin = F.act === 'rollF' ? 450 : -270, cr = f3Key('crouch');
+  if (t >= .8) return f3Mix(cr, f3Key('stance'), f3Smooth((t - .8) / .2));
+  const a = -90 + spin * f3Smooth((t - .15) / .6), r = a * F3_DEG, c = F3_TUCK, p = f3Mix(f3Key('down'), f3Key('tuck'), f3Smooth(t / .2));
+  const y = c.r - F3_BONE.pelvis[2] - (c.y * Math.cos(r) - c.z * Math.sin(r)), z = -(c.y * Math.sin(r) + c.z * Math.cos(r));
+  p.pelvis[0] = a; p.pos = f3Lerp3(f3Key('down').pos, [0, y, z], f3Smooth(t / .2));
+  if (t < .65) return p;
+  const end = f3Mix(cr, cr, 0);
+  end.pelvis[0] += spin - 90;   // the crouch's pitch, after the whole turn
+  p.fL = f3Ankle(p, 0); p.fR = f3Ankle(p, 1);
+  return f3Mix(p, end, f3Smooth((t - .65) / .15));
+}
+
+// Model-space position of point (x, y, z) of the last joint of chain (root first) in pose p: forward kinematics, as
+// the rig computes it. F3_HEAD = the chain to the head; F3_HEAD_R = the head sphere's largest radius (its centre is at
+// (0, .11, .01) in the head frame, see the head shape).
+const F3_HEAD = ['pelvis', 'spine', 'chest', 'neck', 'head'], F3_HEAD_R = .1155;
+function f3Point(p, chain, x, y, z) {
+  const v = F3.v.set(x, y, z), D = F3_DEG;
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const j = chain[i], r = p[j], b = F3_BONE[j], o = j === 'pelvis' ? p.pos : [0, 0, 0];
+    v.applyMatrix4(F3.m.makeRotationFromEuler(F3.e.set(r[0] * D, r[1] * D, r[2] * D)));
+    v.set(v.x + b[1] + o[0], v.y + b[2] + o[1], v.z + b[3] + o[2]);
+  }
+  return [v.x, v.y, v.z];
+}
+function f3Ankle(p, side) { return f3Point(p, side ? ['pelvis', 'hipR', 'knR', 'anR'] : ['pelvis', 'hipL', 'knL', 'anL'], 0, 0, 0); }
+
+// Throw: the reach on the attempt (a miss goes on in thrWhiff); after a grab (F.hit, af from 1 again) hold, pull back
+// and shove at thr.hitF, the frame the throw hits, then back to the stance.
+function f3Throw(F) {
+  const K = f3Key, af = F.af, t = CFG.thr;
+  if (!F.hit) return f3Mix(K('stance'), K('reach'), f3Smooth(af / t.s));
+  if (af <= t.hitF - 8) return f3Mix(K('reach'), K('clinch'), f3Smooth(af / 6));
+  if (af < t.hitF) return f3Mix(K('clinch'), K('tossW'), f3Smooth((af - t.hitF + 8) / 6));
+  return f3Mix(K('toss'), K('stance'), f3Smooth((af - t.hitF - 2) / (t.anim - t.hitF - 2)));
+}
+
+// Special: charge until 2 frames before the shot, thrust on the spawn frame, hold, then back to the stance.
+function f3Spec(af) {
+  const K = f3Key, n = CFG.spec.spawn, r = CFG.spec.rec;
+  if (af <= n - 2) return f3Mix(K('stance'), K('specW'), f3Smooth(af / (n - 2)));
+  if (af <= n) return f3Mix(K('specW'), K('specH'), f3Smooth((af - n + 2) / 2));
+  return f3Mix(K('specH'), K('stance'), f3Smooth((af - n - 10) / (r - 10)));
+}
+
+// The Meshy fighters (Tappa 2a): a character packed by tools/meshy_pack.py (ASSETS '<key>/<key>.json', '.bin', '.jpg'),
+// drawn as a toon SkinnedMesh with a skinned outline. Its pose is a pure function of the sim state (mdPoseOf), put on the
+// bones on every drawn frame (mdSync, called by f3Sync for the items of kind 'model'). Graphics only: it reads the
+// state and never writes it. Model space as the placeholder's: metres, the feet at y=0, forward +z.
+
+const MD = {};   // decoded packages by key (see mdData)
+const MD_OUTLINE = .012;   // outline width, metres in the world
+
+// The decoded package of key: {meta, nb, bones, index (bone name -> index), geo, clips: {id: {n, fps, q, h}}}, or null
+// when ASSETS has no such package. Memoised per meta object (a package swapped in ASSETS is decoded again).
+function mdData(key) {
+  const meta = ASSETS[key + '/' + key + '.json'], b64 = ASSETS[key + '/' + key + '.bin'];
+  if (!meta || !b64) return null;
+  if (MD[key] && MD[key].meta === meta) return MD[key];
+  const s = atob(b64), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  const buf = u8.buffer, m = meta.mesh, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(f32(m.pos), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(f32(m.nor), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(f32(m.uv), 2));
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint8Array(buf, m.jnt[0], m.jnt[1]), 4));
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(m.wgt), 4));
+  geo.setIndex(new THREE.BufferAttribute(m.verts > 65535 ? new Uint32Array(buf, m.idx[0], m.idx[1]) : new Uint16Array(buf, m.idx[0], m.idx[1]), 1));
+  const clips = {}, index = {};
+  for (const id in meta.clips) { const c = meta.clips[id]; clips[id] = {n: c.n, fps: c.fps, q: f32(c.q), h: f32(c.h)}; }
+  meta.bones.forEach((b, i) => { index[b.n] = i; });
+  return MD[key] = {meta, nb: meta.bones.length, bones: meta.bones, index, geo, clips};
+}
+
+// One Meshy fighter (an F3D item), or null without its package: bones in the rest pose, the toon mesh and its outline
+// (same geometry, same skeleton), the limb points and one material (mats.main: the hit flash). Not yet in the scene.
+// Where CFG.looks[key] asks for them, the look data's parts: finger bones (fists), hair spikes, the face's thin outline,
+// the face's flat light, the outline's own width, the face's shape and its decal (the drawn features).
+function modelBuild(key) {
+  const md = mdData(key);
+  if (!md) return null;
+  f3Shared();
+  const root = new THREE.Group(), body = new THREE.Group(), s = CFG.body.h / 1000 / md.meta.height;
+  body.scale.setScalar(s); root.add(body);
+  const bones = md.bones.map(b => { const o = new THREE.Bone(); o.name = b.n; o.position.fromArray(b.t); o.quaternion.fromArray(b.q); return o; });
+  md.bones.forEach((b, i) => (b.p < 0 ? body : bones[b.p]).add(bones[i]));
+  const B = n => bones[md.index[n]], lk = CFG.looks[key] || {}, look = (lk.fists || lk.spikes || lk.faceLine || lk.flatFace || lk.sash || lk.faceShape || lk.smoothNormals) && mdLookData(md, key);
+  const head = lk.head && mdHeadData(md, key);   // the new head (its old one, neck and collar's top hidden)
+  // fists: the fingers' bones under the hands (after the package's in the skeleton, as the look's skin counts them)
+  const fingers = look && lk.fists ? look.fingers.map(f => { const o = new THREE.Bone(); o.name = f.n; o.position.fromArray(f.t); return o; }) : [];
+  fingers.forEach((o, k) => (B(look.fingers[k].p) || fingers.find(g => g.name === look.fingers[k].p)).add(o));
+  // sash: a chain of bones under the Hips for each ribbon (after the fingers in the skeleton)
+  const sash = look && lk.sash && look.sash ? look.sash.ribbons.map(r => r.j.slice(0, -1).map((p, k) => {
+    const o = new THREE.Bone(); o.name = 'Sash' + k; o.position.fromArray(k ? p.map((v, i) => v - r.j[k - 1][i]) : p); return o; })) : [];
+  sash.forEach(ch => ch.forEach((o, k) => (k ? ch[k - 1] : B('Hips')).add(o)));
+  const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, shape = look && lk.faceShape && !head && look.move;   // (with the new head: the old head is hidden and the old collar keeps its own shape, its pulled points stuck out beside the new collar)
+  const smoothN = look && lk.smoothNormals && look.nor;   // (the light's normals smoothed: clean bands, not Meshy's lumps)
+  const geo = fingers.length || per || flat || shape || head || smoothN ? new THREE.BufferGeometry() : md.geo;
+  if (geo !== md.geo) {   // the package's geometry, its attributes shared (not copied), with the look's skin and outline widths
+    for (const a in md.geo.attributes) geo.setAttribute(a, md.geo.attributes[a]);
+    geo.setIndex(md.geo.index);
+    if (head) {   // without the triangles the new head replaces
+      const src = md.geo.index.array, drop = new Uint8Array(src.length / 3), keep = [];
+      head.hide.forEach(t => { drop[t] = 1; });
+      for (let t = 0; t < drop.length; t++) if (!drop[t]) keep.push(src[3 * t], src[3 * t + 1], src[3 * t + 2]);
+      geo.setIndex(new THREE.BufferAttribute(src instanceof Uint32Array ? Uint32Array.from(keep) : Uint16Array.from(keep), 1));
+    }
+    if (fingers.length) { geo.setAttribute('skinIndex', look.skin[0]); geo.setAttribute('skinWeight', look.skin[1]); }
+    if (smoothN) { geo.userData.bindNormal = md.geo.attributes.normal; geo.setAttribute('normal', look.nor); }
+    if (per) geo.setAttribute('aLine', look.line);
+    if (flat) geo.setAttribute('aFlat', look.flat);
+    if (shape) {   // the face's shape: copies of the positions and normals, the moved vertices changed
+      const p = new Float32Array(md.geo.attributes.position.array), n = new Float32Array((smoothN || md.geo.attributes.normal).array), m = look.move;
+      m.idx.forEach((v, i) => { p.set(m.pos.subarray(i * 3, i * 3 + 3), v * 3); n.set(m.nor.subarray(i * 3, i * 3 + 3), v * 3); });
+      geo.setAttribute('position', new THREE.BufferAttribute(p, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+    }
+  }
+  // The texture appears once decoded; until then the mesh draws with an empty map (no error, no warning).
+  const img = new Image(), tex = new THREE.Texture(img);
+  tex.flipY = false;   // glTF UVs
+  img.src = (lk.paint && ASSETS[key + '/' + key + '_painted.jpg']) || ASSETS[key + '/' + key + '.jpg'];   // (the look's: the drawing painted on it)
+  img.decode().then(() => { tex.needsUpdate = true; }, () => {});
+  const main = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true});
+  if (flat) {   // the look's flat light: per vertex, the share of the texture's own colour (the face's drawn shading)
+    main.onBeforeCompile = sh => {
+      sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
+      sh.fragmentShader = 'varying float vFlat;\n' + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, vFlat);');
+    };
+    main.customProgramCacheKey = () => 'flat';
+  }
+  // the face decal (look data face, ASSETS '<char>/<char>_face.png'): shown once decoded (an empty texture reads black)
+  const face = shape && look.face && !head && ASSETS[key + '/' + key + '_face.png'] ? {tex: new THREE.Texture(new Image()), on: {value: 0}, want: true, ready: false} : null;   // (not under the new head: the old face is hidden)
+  if (face) {
+    const fd = look.face, dp = fd.depth;   // the face's and the neck's surface seen from the front, as a small texture (mdFaceMat)
+    face.depth = new THREE.DataTexture(Uint8Array.from({length: dp.n[0] * dp.n[1] * 4}, (_, i) => i % 4 === 0 ? dp.map[i >> 2] : i % 4 === 3 ? 255 : 0), dp.n[0], dp.n[1], THREE.RGBAFormat);
+    face.depth.magFilter = face.depth.minFilter = THREE.LinearFilter; face.depth.generateMipmaps = false; face.depth.needsUpdate = true;
+    face.depthBox = new THREE.Vector4(dp.box[0], dp.box[1], 1 / (dp.box[2] - dp.box[0]), 1 / (dp.box[3] - dp.box[1]));
+    face.depthZ = new THREE.Vector4(dp.z[0], dp.z[1] - dp.z[0], fd.seen, 0); face.depthCell = new THREE.Vector2(.5 / dp.n[0], .5 / dp.n[1]);
+    // the decal's mapping: bind x, y -> the drawing's px (scale, cx, by) -> the decal's box; where it fades as it turns away
+    face.map = new THREE.Vector3(...fd.fit); face.decal = new THREE.Vector4(...fd.decal); face.front = new THREE.Vector2(...fd.front);
+    const jw = fd.jaw;   // the shadow under the jaw: per angle around the neck, the jaw's edge height (r) and the band's depth (g)
+    face.jaw = new THREE.DataTexture(Uint8Array.from({length: jw.th[2] * 4}, (_, i) => i % 4 < 2 ? jw.map[(i >> 2) * 2 + i % 4] : i % 4 === 3 ? 255 : 0), jw.th[2], 1, THREE.RGBAFormat);
+    face.jaw.magFilter = face.jaw.minFilter = THREE.LinearFilter; face.jaw.generateMipmaps = false; face.jaw.needsUpdate = true;
+    face.jawAxis = new THREE.Vector2(...jw.axis); face.jawTh = new THREE.Vector3(...jw.th); face.jawY = new THREE.Vector4(jw.y[0], jw.y[1] - jw.y[0], jw.deep, jw.up);
+    face.shade = new THREE.Vector3(...fd.shade);
+    face.tex.flipY = false; face.tex.image.src = ASSETS[key + '/' + key + '_face.png'];
+    face.tex.image.decode().then(() => { face.tex.needsUpdate = true; face.ready = true; mdFaceShow(face, face.want); }, () => {});
+    mdFaceMat(main, face);
+  }
+  const ol = lk.line || {w: MD_OUTLINE, back: 0}, line = mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per, back: ol.back});
+  // (with the new head's lining: the vest's lapels also drawn from behind in their paint, not their outline's black; and
+  // their folded corners, noline, left out of the outline: pushed out past the lining it drew a black Z over the shirt,
+  // and only pushed back, slid aside, as black dashes beside them)
+  const src = md.geo.index.array, ln = head && head.lining, nl = head && head.noline;
+  const mesh = new THREE.SkinnedMesh(ln ? mdTris(geo, src, head.hide, [], ln) : geo, main), outline = new THREE.SkinnedMesh(nl ? mdTris(geo, src, head.hide, nl) : geo, line);
+  mesh.frustumCulled = outline.frustumCulled = false;
+  body.add(mesh, outline);
+  root.updateMatrixWorld(true);
+  const skel = new THREE.Skeleton(bones.concat(fingers, ...sash));
+  mesh.bind(skel); outline.bind(skel);
+  if (head) {   // the new head: its own toon mesh and outline on the same skeleton (bound in the body, as the body's)
+    const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = head.jpg;
+    tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
+    // (both sides: the bust is cut above the shoulders, its coat open there; seen into it, the outline's inner shell
+    // showed as black patches on the shoulders: now the coat's own colour, as a lining)
+    const hm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
+    // flat light: the sheet's own shading is in its texture (the hit flash's emissive kept); per vertex where the head
+    // says so (aFlat: its collar's outside lit as the body, one teal with the vest)
+    const headFlat = perV => sh => {
+      if (perV) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
+      sh.fragmentShader = (perV ? 'varying float vFlat;\n' : '') + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + (perV ? 'vFlat * ' : '') + MD_HEAD_FLAT.toFixed(2) + ');');
+    };
+    const perV = !!head.geo.attributes.aFlat;
+    hm.onBeforeCompile = headFlat(perV); hm.customProgramCacheKey = () => perV ? 'headV' : 'head';
+    const hmesh = new THREE.SkinnedMesh(head.geo, hm), hline = new THREE.SkinnedMesh(head.geo, mdLineMat({skinning: true, w: (MD_HEAD_LINE[0] / s).toFixed(5), back: MD_HEAD_LINE[1], perBack: !!head.geo.attributes.aBack}));
+    hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
+    hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
+    head.mesh = hmesh; head.line = hline; head.mat = hm;
+    if (head.fringe) {   // (flat as the head; alpha-tested: the locks' edges are the sheet's lines; no outline: drawn in it)
+      const ft = new THREE.Texture(new Image()); ft.flipY = false; ft.image.src = head.fringe.png;
+      ft.image.decode().then(() => { ft.needsUpdate = true; }, () => {});
+      const fm = new THREE.MeshToonMaterial({map: ft, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide, alphaTest: .5});
+      fm.onBeforeCompile = headFlat(false); fm.customProgramCacheKey = () => 'headFringe';
+      const fmesh = new THREE.SkinnedMesh(head.fringe.geo, fm); fmesh.frustumCulled = false; body.add(fmesh); fmesh.bind(skel, mesh.matrixWorld);
+      head.fringeMesh = fmesh; head.fringeMat = fm;
+    }
+  }
+  const limbs = {};
+  for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
+  const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
+    joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
+  if (fingers.length) { it.fingers = fingers; it.fist = look.fingers.map(f => new THREE.Quaternion().fromArray(f.fist)); }
+  if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
+  if (face) it.face = face;
+  if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash
+    let at = bones.length + fingers.length;
+    const HB = skel.boneInverses[md.index.Hips].clone().invert(), hb = md.bones[md.index.Hips];   // the Hips at bind (world; in the body)
+    const HM = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(hb.t), new THREE.Quaternion().fromArray(hb.q), new THREE.Vector3(1, 1, 1));
+    it.sash = {frame: 0, F: null, ribbons: look.sash.ribbons.map((r, i) => {
+      const m = mdRibbon(md, r, at, skel, ol, s, body); at += sash[i].length; it.mats['sash' + i] = m.mesh.material;
+      return {bones: sash[i], w: r.w, wp: r.wp || r.j.map(() => r.w), s, fix: r.fix || 1, tuckRows: m.tuckRows, a: new THREE.Vector3().fromArray(r.a), j: r.j.map(p => new THREE.Vector3().fromArray(p)),
+        P: r.j.map(() => new THREE.Vector3()), Q: r.j.map(() => new THREE.Vector3()), T: r.j.map(() => new THREE.Vector3()), L: [],
+        sk: (r.sk || []).map((l, k) => ({b: l.map(e => e[0]), w: l.map(e => e[1]), p: new THREE.Vector3().fromArray(r.j[k]).applyMatrix4(HB)})),   // the top's skin (mdSash)
+        jb: r.j.map(p => new THREE.Vector3().fromArray(p).applyMatrix4(HM))};   // at bind, in the body
+    }), body: look.sash.body.map(x => {   // the body it stays out of (mdBodyOut)
+      const ax = new THREE.Vector3().fromArray(x.ax), u = new THREE.Vector3().fromArray(x.u);
+      return {bone: B(x.b), ax, u, v: new THREE.Vector3().crossVectors(ax, u), len: x.len, t0: x.t[0], t1: x.t[1], nb: x.r.length, ns: x.r[0].length,
+        r: Float32Array.from(x.r.flat()), rmax: Float32Array.from(x.r.map(row => Math.max(...row))), inv: new THREE.Matrix4(), pinv: new THREE.Matrix4(), world: null, c: new THREE.Vector3(),
+        ball: ((x.t[1] - x.t[0]) / 2 + .03) * x.len + Math.max(...x.r.flat()) + .05};   // package metres (with the gap)
+    }), blend: mdBlendData(look.sash.blend, geo, skel, mesh)};
+  }
+  if (!md.hitT) mdMeasure(md, it);
+  if (look && lk.spikes && !head) B('Head').add(mdSpikes(look.spikes, ol.back));
+  return it;
+}
+
+// Material m with the face decal over its map (face: {tex, on: a uniform, 1 shown}): per pixel, the decal (the drawn
+// face's features on the skin's colour) at the front projection of its bind position (face.map, face.decal) where that
+// point is on the front of the face or the neck (face.depth's r: their depth seen from the front; the fringe's locks in
+// front of the face and the sides behind the chin take none) and its colour is skin's (never on the collar or the hair
+// beside them), faded as its bind normal turns away from the front (face.front) and as the surface turns edge-on to the
+// camera (MD_FACE_SEE: the cosine of the angle between them where it is gone and where it is whole). And the shadow under
+// the jaw, in face.shade, with crisp smooth edges the same from every side: on the skin whose bind position, at its
+// angle around the neck (face.jawAxis; face.jawTh: the first angle, step and count of face.jaw), is from face.jawY.w m
+// above the jaw's edge (face.jaw's r, over face.jawY.x + face.jawY.y) down to the band's depth under it (g, times
+// face.jawY.z; none where there is no jaw). Chained after m's own shader changes.
+const MD_FACE_SEE = [.15, .4];
+function mdFaceMat(m, face) {
+  const prev = m.onBeforeCompile, key = m.customProgramCacheKey();
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
+    sh.uniforms.uFace = {value: face.tex}; sh.uniforms.uFaceOn = face.on;
+    Object.assign(sh.uniforms, {uDepth: {value: face.depth}, uDepthBox: {value: face.depthBox}, uDepthZ: {value: face.depthZ}, uDepthCell: {value: face.depthCell},
+      uMap: {value: face.map}, uDecal: {value: face.decal}, uFront: {value: face.front}, uShade: {value: face.shade}, uJaw: {value: face.jaw}, uJawAxis: {value: face.jawAxis}, uJawTh: {value: face.jawTh}, uJawY: {value: face.jawY}});
+    // seen edge-on (the far eye of a turned head, its surface turning away), the decal fades out: drawn there it smeared
+    const lit = sh.vertexShader.includes('vNormal = normalize( transformedNormal )');   // (the toon material; the basic one has no normals)
+    sh.vertexShader = 'varying float vFaceSee;\nvarying vec3 vBind;\nvarying vec3 vBindN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvBind = transformed; vBindN = normal;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n\tvFaceSee = ' + (lit ? 'smoothstep(' + MD_FACE_SEE[0].toFixed(2) + ', ' + MD_FACE_SEE[1].toFixed(2) + ', dot(normalize(transformedNormal), normalize(-mvPosition.xyz)))' : '1.0') + ';');
+    sh.fragmentShader = 'uniform sampler2D uFace;\nuniform float uFaceOn;\n' +
+      'uniform sampler2D uDepth;\nuniform vec4 uDepthBox;\nuniform vec4 uDepthZ;\nuniform vec2 uDepthCell;\nuniform vec3 uMap;\nuniform vec4 uDecal;\nuniform vec2 uFront;\nuniform vec3 uShade;\nuniform sampler2D uJaw;\nuniform vec2 uJawAxis;\nuniform vec3 uJawTh;\nuniform vec4 uJawY;\n' +
+      'varying float vFaceSee;\nvarying vec3 vBind;\nvarying vec3 vBindN;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+      '#include <map_fragment>' +
+      '\n\tvec2 dUv = (vBind.xy - uDepthBox.xy) * uDepthBox.zw;\n\tfloat dIn = step(0.0, dUv.x) * step(dUv.x, 1.0) * step(0.0, dUv.y) * step(dUv.y, 1.0);' +
+      '\n\tif (dIn * uFaceOn > 0.0) {' +   // (only the head and the neck: the rest of the body skips it)
+      '\n\tvec4 dTex = texture2D(uDepth, uDepthCell + clamp(dUv, 0.0, 1.0) * (1.0 - 2.0 * uDepthCell));' +
+      '\n\tfloat dz = uDepthZ.x + dTex.r * uDepthZ.y - vBind.z;' +   // (the face's surface minus this point's depth)
+      '\n\tfloat onFace = dIn * (1.0 - smoothstep(uDepthZ.z, 2.0 * uDepthZ.z, abs(dz)));\n\tvec3 nb = normalize(vBindN);' +
+      '\n\tfloat skinLike = smoothstep(0.12, 0.22, diffuseColor.r - diffuseColor.b) * smoothstep(0.45, 0.6, diffuseColor.r);' +   // (the texture there: skin, not the collar's teal nor the hair)
+      '\n\tvec4 jw = texture2D(uJaw, vec2(((degrees(atan(vBind.x - uJawAxis.x, vBind.z - uJawAxis.y)) - uJawTh.x) / uJawTh.y + 0.5) / uJawTh.z, 0.5));' +
+      '\n\tfloat yEdge = uJawY.x + jw.r * uJawY.y, yUp = yEdge + uJawY.w * clamp(jw.g * uJawY.z / 0.005, 0.0, 1.0);' +   // (the top: the edge, a little above it along the jaw)
+      '\n\tfloat under = smoothstep(yEdge - jw.g * uJawY.z, yEdge - jw.g * uJawY.z + 0.0005, vBind.y) * (1.0 - smoothstep(yUp - 0.0005, yUp, vBind.y)) * skinLike * uFaceOn;' +
+      '\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, uShade, under);' +
+      '\n\tvec4 faceTexel = texture2D(uFace, vec2((uMap.y + vBind.x * uMap.x - uDecal.x + 0.5) / (uDecal.z - uDecal.x), (uMap.z - vBind.y * uMap.x - uDecal.y + 0.5) / (uDecal.w - uDecal.y)));' +
+      '\n\tfloat faceShare = onFace * skinLike * smoothstep(uFront.x, uFront.y, nb.z) * vFaceSee * uFaceOn * (1.0 - under);' +
+      '\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, faceTexel.rgb, faceShare);\n\t}');
+  };
+  m.customProgramCacheKey = () => key + '|face';
+  return m;
+}
+// The face decal shown or not (once its texture is decoded).
+function mdFaceShow(face, show) { face.want = show; face.on.value = face.ready && show ? 1 : 0; }
+
+// An outline shell's material (the back faces drawn in the outline colour): o = {skinning, w (model units: the push
+// along the normals, '' for none), per (' * aLine': times the per-vertex width), back (m: pushed away from the camera,
+// so the shell shows around the silhouette and not through the body's folds)}.
+function mdLineMat(o) {   // (perBack: a per-vertex extra push back, m, in the attribute aBack)
+  const m = new THREE.MeshBasicMaterial({color: F3_OUTLINE.color, side: THREE.BackSide, skinning: !!o.skinning}), per = o.per || '', pb = o.perBack ? ' + aBack' : '';
+  m.onBeforeCompile = sh => {
+    let v = (per ? 'attribute float aLine;\n' : '') + (pb ? 'attribute float aBack;\n' : '') + sh.vertexShader;
+    if (o.w) v = v.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normal * ' + o.w + per + ';');
+    // (the per-vertex push goes along the line of sight: where it is drawn on the screen does not move, only its depth)
+    if (o.back) v = v.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.z -= ' + o.back.toFixed(4) + ';' + (pb ? '\n\tmvPosition.xyz *= 1.0 + aBack / length(mvPosition.xyz);' : '') + '\n\tgl_Position = projectionMatrix * mvPosition;');
+    sh.vertexShader = v;
+  };
+  m.customProgramCacheKey = () => [o.w, per, o.back, pb].join('|');
+  return m;
+}
+
+// A sash ribbon r of the look data ({j: its chain's points in the Hips' frame, top to tip; wp: its width at each (w
+// alone: the same all along); tuck: m of it under the band; cut: the share of its length its tip's slanted cut takes, on
+// its inner edge (out: the side of a, away from the middle, that runs to the tip); a: across; n: out of its face; c:
+// colour}) as a thin slab, skinned along the chain (bone indices from at) and put in body: in the sash's colour, its
+// light mostly flat as on the band's front (flat; its back, toward the body, shade as dark: the drawing's twisted tails),
+// with an outline as the body's (ol, scale s) that starts at nothing where it comes out from under the band and grows
+// over fade m (Denis, 7/11: "la fascia è staccata": a line across its top cut it off the band).
+const MD_RIB = {rows: 3, th: .012, back: .004, flat: .7, shade: .8, fade: .03};   // rows per bone, thickness (m), outline push back (less than the body's: it shows on it)
+function mdRibbon(md, r, at, skel, ol, s, body) {
+  const H = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(md.bones[md.index.Hips].t), new THREE.Quaternion().fromArray(md.bones[md.index.Hips].q), new THREE.Vector3(1, 1, 1));
+  const C = r.j.map(p => new THREE.Vector3().fromArray(p).applyMatrix4(H)), a = new THREE.Vector3().fromArray(r.a).transformDirection(H), n = new THREE.Vector3().fromArray(r.n).transformDirection(H);
+  const nb = C.length - 1, cum = [0], wp = r.wp || C.map(() => r.w), out = r.out || 1, tuck = r.tuck || 0;
+  for (let k = 1; k <= nb; k++) cum.push(cum[k - 1] + C[k].distanceTo(C[k - 1]));
+  const len = cum[nb], cut = r.cut !== undefined ? r.cut : Math.min(.35, 1.8 * r.w / len), pos = [], si = [], sw = [], col = [], lw = [], idx = [], rows = nb * MD_RIB.rows;
+  const along = d => { let k = 0; while (k < nb - 1 && d > cum[k + 1]) k++; const f = Math.min(1, Math.max(0, (d - cum[k]) / (cum[k + 1] - cum[k]))); return {k, f, p: C[k].clone().lerp(C[k + 1], f)}; };
+  for (let i = 0; i <= rows; i++) {
+    for (const side of [1, -1]) {   // the outer edge to the tip, the inner one cut short: a slanted end
+      const d = len * i / rows * (side === out ? 1 : 1 - cut), q = along(d), w = q.k < nb - 1 ? 1 - q.f : 1, b0 = at + q.k, b1 = at + Math.min(q.k + 1, nb - 1);
+      const half = (wp[q.k] + (wp[q.k + 1] - wp[q.k]) * q.f) / 2, l = Math.min(1, Math.max(0, (d - tuck) / MD_RIB.fade));
+      for (const face of [1, -1]) {
+        const v = q.p.clone().addScaledVector(a, side * half).addScaledVector(n, face * MD_RIB.th / 2), c = face > 0 ? 1 : MD_RIB.shade;
+        pos.push(v.x, v.y, v.z); si.push(b0, b1, 0, 0); sw.push(w, 1 - w, 0, 0); col.push(c, c, c); lw.push(l * l * (3 - 2 * l));
+      }
+    }
+  }
+  // four vertices a row: left front, left back, right front, right back (a = left, n = front, the rows go down)
+  const quad = (A, B2, C2, D) => idx.push(A, B2, C2, A, C2, D);
+  for (let i = 0; i < rows; i++) {
+    const o = i * 4, u = o + 4;   // front, back, left and right faces, each wound to face outward
+    quad(o, u, u + 2, o + 2); quad(o + 1, o + 3, u + 3, u + 1); quad(o, o + 1, u + 1, u); quad(o + 2, u + 2, u + 3, o + 3);
+  }
+  const e = rows * 4; quad(0, 2, 3, 1); quad(e, e + 1, e + 3, e + 2);   // the top and the tip
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('aLine', new THREE.Float32BufferAttribute(lw, 1));
+  g.computeVertexNormals();
+  const mat = new THREE.MeshToonMaterial({color: new THREE.Color(r.c[0] / 255, r.c[1] / 255, r.c[2] / 255), gradientMap: F3.grad, skinning: true, vertexColors: true});
+  mat.onBeforeCompile = sh => {   // mostly flat light (the hit flash's emissive kept)
+    sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+      '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_RIB.flat.toFixed(2) + ');');
+  };
+  mat.customProgramCacheKey = () => 'ribbon';
+  const mesh = new THREE.SkinnedMesh(g, mat);
+  const line = new THREE.SkinnedMesh(g, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per: ' * aLine', back: Math.min(ol.back || 0, MD_RIB.back)}));
+  mesh.frustumCulled = line.frustumCulled = false;
+  body.add(mesh, line); mesh.updateMatrixWorld(true); mesh.bind(skel, mesh.matrixWorld); line.bind(skel, mesh.matrixWorld);   // bound in the body
+  return {mesh, line, tuckRows: Math.ceil((r.tuck || 0) / len * rows)};   // the rows under the band
+}
+
+// The sash's own motion (graphics only), each sim frame since the last call: per ribbon a chain of points from under the
+// band to the tip. Its top (fix points: under the band and at its lower edge, where it comes out) moves with the body's
+// skin there (mdGlue); the rest with gravity, damping and a weak pull toward the shape it hangs in (the drawing's: its
+// first points on the skin too, lying on the vest's flaps that follow the thighs; from there on as the Hips carry it;
+// itself kept out of the body), kept at the chain's lengths (as drawn), unfolding (points two apart no closer than at
+// rest, by bend), above the floor and out of the body (mdBodyOut: the full volumes around the hips, the belly, the
+// thighs with the vest's flaps, the shins), its middle and both its edges; then each bone put at its point and turned
+// along its segment. A new fighter, or one moved farther than jump a sim frame (put back), starts hanging at rest.
+const MD_SASH = {g: 9.8, damp: .93, pull: .08, top: 2, bend: .5, iter: 4, steps: 4, jump: .3, gap: .012, floor: .012, reach: .06, foot: .035, was: .006};
+// g (m/s²), damp, pull: a light cloth (Denis, 7/11: "alleggerisci il peso della fascia così si muove meglio"); top: the
+// pull is 1 + top times as strong just under the band as at the tip (the cloth near the knot holds its shape);
+// bend: share of a fold undone each round; reach, foot, was: m (mdBlendOut)
+// jump: m the band moves in a frame beyond which the sash starts over at rest (the fighter put back); gap: m kept off
+// the body (half the ribbon's thickness and its straight runs over the curves); floor: m kept above the floor (y = 0)
+const MD_SV = [0, 1, 2, 3, 4, 5, 6, 7].map(() => new THREE.Vector3()), MD_SM = new THREE.Matrix4(), MD_GV = [new THREE.Vector3(), new THREE.Vector3()], MD_GM = new THREE.Matrix4();
+// Point k of ribbon r (look data sk: the skin of the body behind its first points) where the body's skin carries it
+// (world, in out): the band is skinned to the hips and the thighs, up to 10 cm from where the Hips alone would carry it
+// in the guard, and the vest's flaps under it follow the thighs.
+function mdGlue(it, r, k, out) {
+  const g = r.sk[k], skel = it.mesh.skeleton;
+  if (!g) return out.copy(r.j[k]).applyMatrix4(it.bones[mdData(it.key).index.Hips].matrixWorld);
+  out.set(0, 0, 0);
+  for (let i = 0; i < g.b.length; i++) out.addScaledVector(MD_GV[0].copy(g.p).applyMatrix4(MD_GM.multiplyMatrices(skel.bones[g.b[i]].matrixWorld, skel.boneInverses[g.b[i]])), g.w[i]);
+  return out;
+}
+function mdSash(it, S) {
+  const sa = it.sash, hips = it.bones[mdData(it.key).index.Hips];
+  it.root.updateMatrixWorld(true);
+  const r0 = sa.ribbons[0], band = mdGlue(it, r0, 0, MD_SV[0]), frames = Math.max(0, S.frame - sa.frame);
+  const fresh = sa.F !== it.F || band.distanceTo(r0.P[0]) > MD_SASH.jump * Math.max(1, frames), n = fresh ? 0 : Math.min(MD_SASH.steps, frames);
+  sa.F = it.F; sa.frame = S.frame;
+  for (const sh of sa.body) {
+    sh.pinv.copy(fresh ? MD_SM.copy(sh.bone.matrixWorld).invert() : sh.inv); sh.world = sh.bone.matrixWorld; sh.inv.copy(sh.world).invert();
+    sh.c.copy(sh.ax).multiplyScalar((sh.t0 + sh.t1) / 2 * sh.len).applyMatrix4(sh.world); sh.s2 = it.scale * it.scale;   // a ball around it, world (quick skip)
+  }
+  mdBlend(sa.blend, fresh);
+  const gdt = MD_SASH.g / 3600, gap = MD_SASH.gap / it.scale;   // in the bones' frames (package metres)
+  for (const r of sa.ribbons) {
+    r.T0 = r.T0 || r.T.map(() => new THREE.Vector3()); r.T.forEach((t, k) => r.T0[k].copy(t));   // last frame's
+    const lie = Math.max(r.fix, r.sk.length);   // (look data without sk: on the Hips)
+    for (let k = 0; k < lie; k++) mdGlue(it, r, k, r.T[k]);   // the top on the body's skin: fixed under the band and at its edge, then lying on the vest
+    const off = MD_GV[1].copy(r.j[lie - 1]).applyMatrix4(hips.matrixWorld).negate().add(r.T[lie - 1]);
+    for (let k = lie; k < r.j.length; k++) {   // the rest as the Hips carry it, on from there, out of the body
+      r.T[k].copy(r.j[k]).applyMatrix4(hips.matrixWorld).add(off);
+      mdBodyOut(r.T[k], sa.body, gap); mdBlendOut(r.T[k], fresh ? null : r.T0[k], sa.blend, gap * it.scale);
+    }
+    if (fresh) {
+      r.T.forEach((t, k) => { r.P[k].copy(t); r.Q[k].copy(t); r.T0[k].copy(t); });
+      const B = r.jb.map(p => p.clone().applyMatrix4(it.body.matrixWorld));   // its lengths as drawn (not of the targets: pushed out of a leg, they stretch)
+      r.L = B.slice(1).map((t, k) => t.distanceTo(B[k])); r.L2 = B.slice(2).map((t, k) => t.distanceTo(B[k]));
+    }
+    // across the ribbon at each point, in the world (from its bones as they were turned last)
+    r.A = r.P.map((p, k) => (r.A && r.A[k] || new THREE.Vector3()).copy(r.a).transformDirection(r.bones[Math.min(k, r.bones.length - 1)].matrixWorld));
+    for (let step = 0; step < n; step++) {   // frames missed in between: the targets go there a step at a time
+      const f = (step + 1) / n, T = k => MD_SV[0].copy(r.T0[k]).lerp(r.T[k], f), nf = r.P.length - r.fix;
+      for (let k = 0; k < r.fix; k++) { r.P[k].copy(T(k)); r.Q[k].copy(r.P[k]); }   // the top: fixed on the body
+      for (let k = r.fix; k < r.P.length; k++) {
+        const v = MD_SV[1].subVectors(r.P[k], r.Q[k]).multiplyScalar(MD_SASH.damp);
+        r.Q[k].copy(r.P[k]); r.P[k].add(v).addScaledVector(MD_SV[2].subVectors(T(k), r.P[k]), MD_SASH.pull * (1 + MD_SASH.top * (1 - (k - r.fix) / nf))); r.P[k].y -= gdt;
+      }
+      for (let it2 = 0; it2 < MD_SASH.iter; it2++) {
+        mdSashLengths(r);
+        for (let k = Math.max(0, r.fix - 2); k + 2 < r.P.length; k++) {   // no sharp folds
+          const d = MD_SV[1].subVectors(r.P[k + 2], r.P[k]), l = d.length() || 1e-9, e = (l - r.L2[k]) / l * MD_SASH.bend;
+          if (e >= 0) continue;
+          if (k < r.fix) r.P[k + 2].addScaledVector(d, -e); else { r.P[k].addScaledVector(d, e / 2); r.P[k + 2].addScaledVector(d, -e / 2); }
+        }
+        mdSashOut(r, sa, gap, it2 === MD_SASH.iter - 1);   // the edges in the last round
+      }
+      mdSashChain(r); mdSashOut(r, sa, gap, true); mdSashChain(r);   // as the bones will draw it: exact lengths from the band
+    }
+    let parent = hips;
+    r.bones.forEach((b, k) => {   // at its point (the top's: where the skin took it), turned so its segment points at the next
+      const inv = MD_SM.copy(parent.matrixWorld).invert(), want = MD_SV[3].subVectors(r.P[k + 1], r.P[k]).transformDirection(inv);
+      b.position.copy(r.P[k]).applyMatrix4(inv);
+      b.quaternion.setFromUnitVectors(MD_SV[4].subVectors(r.j[k + 1], r.j[k]).normalize(), want);
+      b.updateMatrixWorld(); parent = b;
+    });
+  }
+}
+// Ribbon r's chain back to its segments' lengths, both ends of each moving (the fixed top stays).
+function mdSashLengths(r) {
+  for (let k = r.fix - 1; k + 1 < r.P.length; k++) {
+    const d = MD_SV[1].subVectors(r.P[k + 1], r.P[k]), l = d.length() || 1e-9, e = (l - r.L[k]) / l;
+    if (k < r.fix) r.P[k + 1].addScaledVector(d, -e); else { r.P[k].addScaledVector(d, e / 2); r.P[k + 1].addScaledVector(d, -e / 2); }
+  }
+}
+// The same from the fixed top down, each point put at its exact length from the one above (the chain the bones draw).
+function mdSashChain(r) {
+  for (let k = r.fix - 1; k + 1 < r.P.length; k++) {
+    const d = MD_SV[1].subVectors(r.P[k + 1], r.P[k]), l = d.length() || 1e-9;
+    r.P[k + 1].copy(r.P[k]).addScaledVector(d, r.L[k] / l);
+  }
+}
+// Ribbon r's points (but the fixed top's) above the floor and out of the body: each point, and (edges) each edge beside it
+// (half the width across), moved by what takes it out.
+function mdSashOut(r, sa, gap, edges) {
+  const out = (p, q) => mdBodyOut(p, sa.body, gap, q) | mdBlendOut(p, q, sa.blend, gap * r.s);
+  for (let k = r.fix; k < r.P.length; k++) {
+    out(r.P[k], r.Q[k]);
+    if (edges) for (const side of [1, -1]) {
+      const e = MD_SV[5].copy(r.P[k]).addScaledVector(r.A[k], side * r.wp[k] / 2 * r.s), e0 = MD_SV[6].copy(e);
+      if (out(e, MD_SV[7].copy(r.Q[k]).addScaledVector(r.A[k], side * r.wp[k] / 2 * r.s))) r.P[k].add(e.sub(e0));
+    }
+  }
+}
+// Point p (world) above the floor and out of the body shapes (look data body_shape, each with its bone's world matrix and
+// inverse of this frame, and the inverse of the last frame's), gap (package metres) beyond their radius there; true when
+// it moved. q (optional): where p was a step ago. Pushed out on the side it was then, not on the side it is now: a limb
+// that swept past it in one frame (a kick) carries it along in front, instead of letting it through.
+function mdBodyOut(p, body, gap, q) {
+  let moved = false;
+  if (p.y < MD_SASH.floor) { p.y = MD_SASH.floor; moved = true; }
+  for (const sh of body) {
+    if (p.distanceToSquared(sh.c) > sh.ball * sh.ball * sh.s2) continue;
+    const L = MD_SV[2].copy(p).applyMatrix4(sh.inv), t = L.dot(sh.ax) / sh.len;
+    if (t < sh.t0 - .03 || t > sh.t1 + .03) continue;
+    const rad = MD_SV[3].copy(L).addScaledVector(sh.ax, -t * sh.len), d = rad.length(), bi = Math.max(0, Math.min(sh.nb - 1, Math.floor((t - sh.t0) / (sh.t1 - sh.t0) * sh.nb)));
+    if (d >= Math.max(sh.rmax[bi], sh.rmax[Math.min(sh.nb - 1, bi + 1)], sh.rmax[Math.max(0, bi - 1)]) + gap || d >= mdBodyR(sh, t, rad) + gap) continue;
+    if (q) {   // the side it came from
+      const Lq = MD_SV[4].copy(q).applyMatrix4(sh.pinv), rq = Lq.addScaledVector(sh.ax, -Lq.dot(sh.ax));
+      if (rq.lengthSq() > 1e-8) rad.copy(rq);
+    }
+    const rl = rad.length(); if (rl < 1e-9) continue;
+    L.copy(rad).multiplyScalar((mdBodyR(sh, t, rad) + gap) / rl).addScaledVector(sh.ax, t * sh.len); p.copy(L.applyMatrix4(sh.world)); moved = true;
+  }
+  return moved;
+}
+// Shape sh's radius at t (bone lengths) toward rad (its local frame, across the axis).
+function mdBodyR(sh, t, rad) {
+  const fb = Math.max(0, Math.min(sh.nb - 1.001, (t - sh.t0) / (sh.t1 - sh.t0) * sh.nb - .5)), fs = ((Math.atan2(rad.dot(sh.v), rad.dot(sh.u)) + Math.PI) / (2 * Math.PI) * sh.ns - .5 + sh.ns) % sh.ns;
+  const i = Math.floor(fb), j = Math.floor(fs), di = fb - i, dj = fs - j, j2 = (j + 1) % sh.ns, R = sh.r, ns = sh.ns;
+  return (R[i * ns + j] * (1 - dj) + R[i * ns + j2] * dj) * (1 - di) + (R[(i + 1) * ns + j] * (1 - dj) + R[(i + 1) * ns + j2] * dj) * di;
+}
+
+// The body's vertices shared between its parts (look data blend): their bind positions, normals and skin, where they
+// are drawn now and were drawn last frame (world), and a hash grid of them.
+const MD_GRID = 1024;
+function mdBlendData(idx, geo, skel, mesh) {
+  const n = idx.length, P = geo.attributes.position.array, N = (geo.userData.bindNormal || geo.attributes.normal).array, J = geo.attributes.skinIndex.array, W = geo.attributes.skinWeight.array;   // (the mesh's own normals: the sash keeps off its real surface, not the light's smoothed one)
+  const S = {n, B: new Float32Array(n * 3), N0: new Float32Array(n * 3), J: new Uint16Array(n * 4), W: new Float32Array(n * 4), X: new Float32Array(n * 3),
+    N: new Float32Array(n * 3), PX: new Float32Array(n * 3), PN: new Float32Array(n * 3), head: new Int32Array(MD_GRID), next: new Int32Array(n), used: [], slot: {},
+    lo: new THREE.Vector3(), hi: new THREE.Vector3()};
+  for (let i = 0; i < n; i++) {
+    const v = idx[i];
+    for (let k = 0; k < 3; k++) { S.B[i * 3 + k] = P[v * 3 + k]; S.N0[i * 3 + k] = N[v * 3 + k]; }
+    for (let k = 0; k < 4; k++) {
+      S.J[i * 4 + k] = J[v * 4 + k]; S.W[i * 4 + k] = W[v * 4 + k];
+      if (W[v * 4 + k] > 0 && S.slot[J[v * 4 + k]] === undefined) { S.slot[J[v * 4 + k]] = S.used.length; S.used.push(J[v * 4 + k]); }
+    }
+  }
+  // a vertex at bind is moved by bone.matrixWorld * boneInverse * bindMatrix (three's skinning, the mesh 'attached')
+  S.K = S.used.map(b => new THREE.Matrix4().multiplyMatrices(skel.boneInverses[b], mesh.bindMatrix)); S.M = S.used.map(() => new THREE.Matrix4());
+  S.bones = S.used.map(b => skel.bones[b]);
+  return S;
+}
+function mdBlend(S, fresh) {
+  S.PX.set(S.X); S.PN.set(S.N);
+  const e = S.M.map((m, i) => m.multiplyMatrices(S.bones[i].matrixWorld, S.K[i]).elements), B = S.B, N0 = S.N0, c = MD_SASH.reach;
+  S.head.fill(-1);
+  for (let i = 0; i < S.n; i++) {
+    const bx = B[i * 3], by = B[i * 3 + 1], bz = B[i * 3 + 2], ax = N0[i * 3], ay = N0[i * 3 + 1], az = N0[i * 3 + 2];
+    let x = 0, y = 0, z = 0, nx = 0, ny = 0, nz = 0;
+    for (let k = 0; k < 4; k++) {
+      const w = S.W[i * 4 + k]; if (!w) continue;
+      const m = e[S.slot[S.J[i * 4 + k]]];
+      x += w * (m[0] * bx + m[4] * by + m[8] * bz + m[12]); y += w * (m[1] * bx + m[5] * by + m[9] * bz + m[13]); z += w * (m[2] * bx + m[6] * by + m[10] * bz + m[14]);
+      nx += w * (m[0] * ax + m[4] * ay + m[8] * az); ny += w * (m[1] * ax + m[5] * ay + m[9] * az); nz += w * (m[2] * ax + m[6] * ay + m[10] * az);
+    }
+    const l = Math.hypot(nx, ny, nz) || 1;
+    S.X[i * 3] = x; S.X[i * 3 + 1] = y; S.X[i * 3 + 2] = z; S.N[i * 3] = nx / l; S.N[i * 3 + 1] = ny / l; S.N[i * 3 + 2] = nz / l;
+    const h = mdHash(Math.floor(x / c), Math.floor(y / c), Math.floor(z / c)); S.next[i] = S.head[h]; S.head[h] = i;
+    if (!i) S.lo.set(x, y, z), S.hi.set(x, y, z); else S.lo.min(MD_SV[0].set(x, y, z)), S.hi.max(MD_SV[0]);
+  }
+  S.lo.subScalar(c); S.hi.addScalar(c);   // their box, with the reach: points outside it skip the grid
+  if (fresh) { S.PX.set(S.X); S.PN.set(S.N); }
+}
+function mdHash(x, y, z) { return (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & (MD_GRID - 1); }
+// Point p (world, q: where it was a step ago) kept off the shared vertices: of those within reach whose small patch it is
+// over or under (foot across their plane), the one it went deepest behind while it had been in front of it last frame;
+// moved gap (world) in front of that plane. True when moved.
+function mdBlendOut(p, q, S, gap) {
+  if (!q || p.x < S.lo.x || p.y < S.lo.y || p.z < S.lo.z || p.x > S.hi.x || p.y > S.hi.y || p.z > S.hi.z) return false;
+  const c = MD_SASH.reach, ix = Math.floor(p.x / c), iy = Math.floor(p.y / c), iz = Math.floor(p.z / c), X = S.X, N = S.N, PX = S.PX, PN = S.PN;
+  const R2 = c * c, F2 = MD_SASH.foot * MD_SASH.foot;
+  let best = -1, bd = gap;
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+    for (let i = S.head[mdHash(ix + dx, iy + dy, iz + dz)]; i >= 0; i = S.next[i]) {
+      const ex = p.x - X[i * 3], ey = p.y - X[i * 3 + 1], ez = p.z - X[i * 3 + 2], d2 = ex * ex + ey * ey + ez * ez;
+      if (d2 > R2) continue;
+      const d = ex * N[i * 3] + ey * N[i * 3 + 1] + ez * N[i * 3 + 2];
+      if (d >= bd || d2 - d * d > F2) continue;
+      const dq = (q.x - PX[i * 3]) * PN[i * 3] + (q.y - PX[i * 3 + 1]) * PN[i * 3 + 1] + (q.z - PX[i * 3 + 2]) * PN[i * 3 + 2];
+      if (dq < -MD_SASH.was) continue;   // it was behind this face already: the other side of the cloth, or inside
+      bd = d; best = i;
+    }
+  }
+  if (best < 0) return false;
+  const i = best; p.x += (gap - bd) * N[i * 3]; p.y += (gap - bd) * N[i * 3 + 1]; p.z += (gap - bd) * N[i * 3 + 2];
+  return true;
+}
+
+// The hair spikes of the look data on the head: flat cones (thin along t, the head's outward direction, so each lies
+// on the hair like a lock) in the hair colour of Denis's drawing, with outlines (a scaled shell, pushed back by back m
+// as the body's).
+const MD_HAIR = 0x3b303a;
+function mdSpikes(list, back) {
+  const g = new THREE.Group(), mat = new THREE.MeshToonMaterial({color: MD_HAIR, gradientMap: F3.grad});
+  const line = mdLineMat({back}), k = back ? [1.12, 1.04, 1.18] : [1.22, 1.07, 1.35], M = new THREE.Matrix4();
+  for (const s of list) {
+    const geo = new THREE.ConeGeometry(s.r, s.len, 14, 3); geo.translate(0, s.len / 2, 0); geo.scale(1, 1, .45);
+    const m = new THREE.Mesh(geo, mat), o = new THREE.Mesh(geo, line), a = new THREE.Vector3().fromArray(s.d), t = new THREE.Vector3().fromArray(s.t);
+    o.scale.set(...k); m.add(o);
+    m.position.fromArray(s.p); m.quaternion.setFromRotationMatrix(M.makeBasis(new THREE.Vector3().crossVectors(a, t), a, t));
+    g.add(m);
+  }
+  return g;
+}
+
+// The look data of package key ('<key>/<key>_look.json' and '.bin', tools/ren_look.py), decoded once onto md, or null:
+// {fingers: the finger bones, skin: [skinIndex, skinWeight] with them, line: the outline widths, flat: the flat light's
+// share, spikes, sash: {ribbons, body: the shapes the sash stays out of, blend: the vertices between them}}.
+// the new head's light (its share left flat: its texture, from the sheet, has the shading) and outline: [width, pushed back
+// from the camera] m (thin as the sheet's lines; pushed back less than the body's, so the jaw's line shows over the neck
+// as on the sheet; less still, the hair's locks drew black shards over the eyes)
+const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
+// The new head (ASSETS '<key>/<key>_head.json|bin|jpg', tools/ren_head.py): its geometry, skinned to the package's bones
+// in the package's bind space, its texture, the package's triangles it replaces (hide), those lined (lining: drawn from
+// behind too, mdTris) and those left out of the outline (noline); null without it.
+function mdHeadData(md, key) {
+  const j = ASSETS[key + '/' + key + '_head.json'], b64 = ASSETS[key + '/' + key + '_head.bin'], jpg = ASSETS[key + '/' + key + '_head.jpg'];
+  if (!j || !b64 || !jpg) return null;
+  if (md.head && md.head.j === j) return {j, geo: md.head.geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
+  const s = atob(b64), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(f32(j.pos), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(f32(j.nor), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(f32(j.uv), 2));
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint8Array(buf, j.jnt[0], j.jnt[1]), 4));
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(j.wgt), 4));
+  geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
+  if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
+  if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
+  md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
+    noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null, fringe: mdFringeData(md, key)};
+  return {j, geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
+}
+
+// A geometry with the body's attributes (g's, shared) and the package's triangles (of its index src) but those of hide and
+// skip, in their order, then those of rev again, reversed: drawn from behind in the same material (the lining).
+function mdTris(g, src, hide, skip, rev) {
+  const l = new THREE.BufferGeometry(), drop = new Uint8Array(src.length / 3), out = [];
+  for (const k in g.attributes) l.setAttribute(k, g.attributes[k]);
+  l.userData = g.userData;
+  hide.forEach(t => { drop[t] = 1; }); skip.forEach(t => { drop[t] = 1; });
+  for (let t = 0; t < drop.length; t++) if (!drop[t]) out.push(src[3 * t], src[3 * t + 1], src[3 * t + 2]);
+  if (rev) rev.forEach(t => out.push(src[3 * t], src[3 * t + 2], src[3 * t + 1]));
+  l.setIndex(new THREE.BufferAttribute(src instanceof Uint32Array ? Uint32Array.from(out) : Uint16Array.from(out), 1));
+  return l;
+}
+
+// The face's locks drawn from the sheet (<key>_fringe.*, tools/ren_fringe.py): a thin pillow hanging from the crown's
+// front edge down to the brows, its texture the sheet's own front view (line art and sheen), its alpha the locks' shape;
+// all on the Head bone.
+function mdFringeData(md, key) {
+  const j = ASSETS[key + '/' + key + '_fringe.json'], b64 = ASSETS[key + '/' + key + '_fringe.bin'], png = ASSETS[key + '/' + key + '_fringe.png'];
+  if (!j || !b64 || !png) return null;
+  const s = atob(b64), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry(), n = j.verts;
+  geo.setAttribute('position', new THREE.BufferAttribute(f32(j.pos), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(f32(j.uv), 2));
+  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) { si[i * 4] = md.index.Head; sw[i * 4] = 1; }
+  geo.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+  geo.setIndex(new THREE.BufferAttribute(n > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
+  geo.computeVertexNormals();
+  return {geo, png};
+}
+
+function mdLookData(md, key) {
+  if (md.look !== undefined) return md.look;
+  const j = ASSETS[key + '/' + key + '_look.json'], b64 = ASSETS[key + '/' + key + '_look.bin'];
+  if (!j || !b64) return md.look = null;
+  const s = atob(b64), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  const f32 = a => new Float32Array(u8.buffer, a[0], a[1]);
+  return md.look = {fingers: j.fingers, spikes: j.spikes, sash: j.sash && {ribbons: j.sash.ribbons, body: j.sash.body, blend: new Uint16Array(u8.buffer, j.sash.blend[0], j.sash.blend[1])},
+    move: j.move && {idx: new Uint16Array(u8.buffer, j.move.idx[0], j.move.idx[1]), pos: f32(j.move.pos), nor: f32(j.move.nor)},
+    face: j.face && Object.assign({}, j.face, {depth: Object.assign({}, j.face.depth, {map: new Uint8Array(u8.buffer, j.face.depth.map[0], j.face.depth.map[1])}),
+      jaw: Object.assign({}, j.face.jaw, {map: new Uint8Array(u8.buffer, j.face.jaw.map[0], j.face.jaw.map[1])})}),
+    skin: [new THREE.Uint16BufferAttribute(new Uint8Array(u8.buffer, j.skin[0][0], j.skin[0][1]), 4), new THREE.BufferAttribute(f32(j.skin[1]), 4)],
+    line: new THREE.BufferAttribute(f32(j.line), 1), flat: new THREE.BufferAttribute(f32(j.flat), 1), nor: j.nor && new THREE.BufferAttribute(f32(j.nor), 3)};
+}
+
+// --- Poses: {q: local rotations, nb x 4, h: the Hips' local position} ---
+// The rest pose of md (the bind pose).
+function mdRest(md) {
+  const q = new Float32Array(md.nb * 4);
+  md.bones.forEach((b, i) => q.set(b.q, i * 4));
+  return {q, h: Float32Array.from(md.bones[0].t)};
+}
+
+// The pose of fighter F now (its character's package), or null when it has none: the act's entry of CFG.clips
+// evaluated at F's state. Pure: only F, S and the package (with the hit times and walk speeds found at its build).
+function mdPoseOf(F, S) {
+  const md = mdData(F.char);
+  if (!md) return null;
+  const lk = CFG.looks[F.char], C = lk && lk.clips ? mdLookClips(lk) : CFG.clips, c = {F, S, m: CFG.moves[F.act], id: F.act};
+  let e = C[F.act];
+  switch (F.act) {
+    case 'block': e = F.prev & BTN.D ? C.guardC : C.guard; break;   // a block with down held is crouched, as in the sim
+    case 'air': c.u = mdUp((CFG.jump.v - F.vy) / (2 * CFG.jump.v)); break;
+    case 'thr': if (F.hit) e = C.thrHit; break;
+    case 'thrown': e = C.hitStun; break;
+    case 'juggle': case 'knock': case 'ko':   // flying (tilting as it falls), then lying on the floor
+      if (F.air) { e = C.fly; c.u = mdUp((60 - F.vy) / 140); } else e = C.down;
+      break;
+    case 'rollF': case 'rollB': e = C.roll; break;
+  }
+  const p = mdEval(md, e || C.idle, c);
+  // the look's raised head, not when crouched (as the sim's hurtboxes: there it lifted the head above the crouching one)
+  if (lk && lk.headUp && !(CROUCHED[F.act] || (F.act === 'block' && (F.prev & BTN.D)))) mdBoneTurn(p, md.index.Head, MD_X, -lk.headUp);
+  return p;
+}
+function mdUp(u) { return Math.max(0, Math.min(1, u)); }
+// CFG.clips with a look's own entries (lk.clips) over them, made once per look (and again if either changes).
+const MD_LOOK_CLIPS = new WeakMap();
+function mdLookClips(lk) {
+  const m = MD_LOOK_CLIPS.get(lk);
+  if (m && m.base === CFG.clips && m.own === lk.clips) return m.C;
+  const C = Object.assign({}, CFG.clips, lk.clips); MD_LOOK_CLIPS.set(lk, {base: CFG.clips, own: lk.clips, C}); return C;
+}
+
+// Entry e of CFG.clips (see there) as a pose; c = {F, S, m: the move, id: the act, u (air acts), force (a clip time
+// used instead of the move's, by the hit-time search)}. The Hips stay over the root in x and z (the sim moves the
+// fighter); y is the clip's unless the entry fixes it ('cap': never above the rest pose's, for clips that leave the
+// floor while the sim stays on it). plant = the feet ('L', 'R' or 'LR') held by IK where the entry's t[0] pose has them,
+// so a grounded strike neither slides nor lifts its support foot. Poses are those of a fighter facing right: facing
+// left is drawn as the mirror image (mdSync).
+function mdEval(md, e, c) {
+  if (e.kick) return mdKick(md, e, c);
+  if (e.low) return mdLayer(md, mdEval(md, e.low, c), mdEval(md, e.up, c));
+  const F = c.F;
+  let t = 0, loop = false;
+  if (e.loop) { t = (c.S.frame + 23 * F.side) / 60; loop = true; }
+  else if (e.walk) { t = mdWalkT(md, e, F); loop = true; }
+  else if (e.at !== undefined) t = e.at;
+  else if (e.t) t = c.force !== undefined ? c.force : mdMoveT(e.t, c.m, F.af, md.hitT[c.id]);
+  else if (e.k) t = mdKey(e.k, c.u !== undefined ? c.u : F.af);
+  const p = mdRoot(md, e, mdSample(md, e.c, t, loop));
+  if (e.breathe) {   // a held pose breathes: the body bobs and the chest rises with S.frame
+    const b = Math.sin((c.S.frame + 23 * F.side) * .09);
+    p.h[1] += .009 * b; mdBoneTurn(p, md.index.Spine01, MD_X, -1.4 * b);
+  }
+  if (e.walk) mdHipsTurn(p, MD_Y, 90 - F3_YAW / F3_DEG, md.index.Spine02);
+  if (e.plant) {   // each planted foot held where the t[0] pose has it, turned as it is there
+    const p0 = mdRoot(md, e, mdSample(md, e.c, e.t ? e.t[0] : 0, false));
+    for (const leg of e.plant) {
+      const i = md.index[leg === 'L' ? 'LeftFoot' : 'RightFoot'], w = mdWorld(md, p0, i, MD_M[1]);
+      mdLegIK(md, p, leg, MD_V[3].setFromMatrixPosition(w).toArray(), new THREE.Quaternion().setFromRotationMatrix(w));
+    }
+  }
+  return p;
+}
+
+// The Hips of a sampled pose over the root (x, z), and its y as the entry asks ('cap': at most the Hips' height in the
+// entry's t[0] pose, the stance the move starts from).
+function mdRoot(md, e, p) {
+  p.h[0] = 0; p.h[2] = 0;
+  if (e.y === 'cap') p.h[1] = Math.min(p.h[1], md.clips[e.c].h[Math.round((e.t ? e.t[0] : 0) * md.clips[e.c].fps) * 3 + 1]);
+  else if (e.y !== undefined) p.h[1] = e.y;
+  if (e.pitch) mdHipsTurn(p, MD_X, e.pitch, false);
+  return p;
+}
+
+// A move's clip time at frame af: startup from t[0] to the hit frame, the active frames held on it, recovery to t[1]
+// (r = 'land': in 8 frames, then held until the landing). hit undefined (no package build yet): the middle.
+function mdMoveT(t, m, af, hit) {
+  const h = hit === undefined ? (t[0] + t[1]) / 2 : hit;
+  if (af <= m.s) return t[0] + (h - t[0]) * Math.max(0, af) / m.s;
+  if (af <= m.s + m.a) return h;
+  return h + (t[1] - h) * Math.min(1, (af - m.s - m.a) / (m.r === 'land' ? 8 : m.r));
+}
+
+// A walk's clip time from the distance walked (F.x along the facing, the clip's own direction): with walk = 1 through
+// the clip's planted-foot distance table (md.walkD: the foot on the floor moves exactly as far as the body), else at
+// the constant speed walk m/s.
+function mdWalkT(md, e, F) {
+  const key = e.c + ':' + e.walk, v = md.walkV[key], p = F.x * F.face / 1000 * (v < 0 ? 1 : -1), D = md.walkD[key];
+  if (!D) return p / Math.abs(v);
+  const tot = D[D.length - 1], u = ((p % tot) + tot) % tot;
+  let lo = 0, hi = D.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (D[mid] <= u) lo = mid; else hi = mid; }
+  return (lo + (u - D[lo]) / Math.max(1e-9, D[hi] - D[lo])) / md.clips[e.c].fps;
+}
+
+// Piecewise linear: k = [[x0, t0], [x1, t1], ...] at x (clamped to the ends).
+function mdKey(k, x) {
+  if (x <= k[0][0]) return k[0][1];
+  for (let i = 1; i < k.length; i++) if (x <= k[i][0]) return k[i - 1][1] + (k[i][1] - k[i - 1][1]) * (x - k[i - 1][0]) / (k[i][0] - k[i - 1][0]);
+  return k[k.length - 1][1];
+}
+
+// The lower body (Hips and legs) of low with the rest of up; the Hips' position from low.
+const MD_LOWER = ['Hips', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase'];
+function mdLayer(md, low, up) {
+  const q = up.q.slice();
+  for (const n of MD_LOWER) { const i = md.index[n] * 4; q.set(low.q.subarray(i, i + 4), i); }
+  return {q, h: low.h.slice()};
+}
+
+// Turns bone i of pose p by deg about axis in its own frame.
+function mdBoneTurn(p, i, axis, deg) {
+  MD_QA.fromArray(p.q, i * 4).multiply(MD_QR.setFromAxisAngle(axis, deg * F3_DEG)).toArray(p.q, i * 4);
+}
+
+// Turns the whole body about axis (model space) by deg at the Hips. keep = index of the Hips' child that keeps its
+// world orientation (the spine, when only the legs should turn), or false.
+const MD_X = new THREE.Vector3(1, 0, 0), MD_Y = new THREE.Vector3(0, 1, 0), MD_QR = new THREE.Quaternion(), MD_QH = new THREE.Quaternion();
+function mdHipsTurn(p, axis, deg, keep) {
+  MD_QR.setFromAxisAngle(axis, deg * F3_DEG);
+  MD_QH.fromArray(p.q, 0);
+  if (keep !== false) {   // child' = hips^-1 * turn^-1 * hips * child
+    MD_QA.copy(MD_QH).invert().multiply(MD_QB.copy(MD_QR).invert()).multiply(MD_QH).multiply(MD_QB.fromArray(p.q, keep * 4)).toArray(p.q, keep * 4);
+  }
+  MD_QA.copy(MD_QR).multiply(MD_QH).toArray(p.q, 0);
+}
+
+// --- Two-bone leg IK, in model space on a pose (pure math: the bones' rest offsets from md, rotations from p) ---
+// World (model-space) matrix of bone i in pose p.
+const MD_M = [new THREE.Matrix4(), new THREE.Matrix4()], MD_T = new THREE.Vector3(), MD_S1 = new THREE.Vector3(1, 1, 1);
+function mdWorld(md, p, i, out) {
+  const chain = [];
+  for (let j = i; j >= 0; j = md.bones[j].p) chain.push(j);
+  out.identity();
+  for (let k = chain.length - 1; k >= 0; k--) {
+    const j = chain[k], b = md.bones[j];
+    MD_T.fromArray(j ? b.t : p.h); MD_QA.fromArray(p.q, j * 4);
+    out.multiply(MD_M[0].compose(MD_T, MD_QA, MD_S1));
+  }
+  return out;
+}
+// The leg ('L' or 'R') of p bent so its ankle reaches target (model space, metres of the package), the knee staying
+// on the side it bends to now; footQ (optional) = the foot's world rotation to keep. Rotations only, p changed in place.
+const MD_V = [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector3()), MD_QW = [0, 1, 2].map(() => new THREE.Quaternion());
+function mdLegIK(md, p, leg, target, footQ) {
+  const iu = md.index[leg === 'L' ? 'LeftUpLeg' : 'RightUpLeg'], il = md.index[leg === 'L' ? 'LeftLeg' : 'RightLeg'];
+  const ia = md.index[leg === 'L' ? 'LeftFoot' : 'RightFoot'], V = MD_V, Q = MD_QW, m = MD_M[1];
+  const A = V[0].setFromMatrixPosition(mdWorld(md, p, iu, m)), qu = Q[0].setFromRotationMatrix(m);
+  const B = V[1].setFromMatrixPosition(mdWorld(md, p, il, m)), ql = Q[1].setFromRotationMatrix(m);
+  const C = V[2].setFromMatrixPosition(mdWorld(md, p, ia, m)), qp = Q[2].setFromRotationMatrix(mdWorld(md, p, md.bones[iu].p, m));
+  const a = A.distanceTo(B), b = B.distanceTo(C), T = V[3].fromArray(target), AT = V[4].subVectors(T, A);
+  const d = Math.max(Math.abs(a - b) + 1e-4, Math.min(a + b - 1e-4, AT.length()));
+  const dir = AT.normalize(), pole = V[5].subVectors(B, A), perp = pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));
+  if (perp.lengthSq() < 1e-10) perp.set(0, 0, 1).sub(dir.clone().multiplyScalar(dir.z));
+  perp.normalize();
+  const cos = (a * a + d * d - b * b) / (2 * a * d), sin = Math.sqrt(Math.max(0, 1 - cos * cos));
+  const B2 = A.clone().add(dir.clone().multiplyScalar(a * cos)).add(perp.multiplyScalar(a * sin));
+  const d1 = new THREE.Quaternion().setFromUnitVectors(B.clone().sub(A).normalize(), B2.clone().sub(A).normalize());
+  const C1 = C.clone().sub(A).applyQuaternion(d1).add(A), T2 = A.clone().add(dir.multiplyScalar(d));
+  const d2 = new THREE.Quaternion().setFromUnitVectors(C1.sub(B2).normalize(), T2.sub(B2).normalize());
+  const quW = d1.clone().multiply(qu), qlW = d2.multiply(d1).multiply(ql);
+  qp.invert().multiply(quW).toArray(p.q, iu * 4);   // up leg local = parent^-1 * its new world rotation
+  quW.invert().multiply(qlW).toArray(p.q, il * 4);  // lower leg local = up leg^-1 * its new world rotation
+  if (footQ) qlW.invert().multiply(footQ).toArray(p.q, ia * 4);   // foot local = lower leg^-1 * the kept world rotation
+}
+
+// A kick made on a base pose (CFG.clips {kick: base entry, leg, to}): the ankle goes from where the base pose has it
+// to the target 'to' (model space) during startup, holds it through the active frames and comes back in recovery.
+function mdKick(md, e, c) {
+  const p = mdEval(md, e.kick, c), m = c.m, af = c.F.af, i = md.index[e.leg === 'L' ? 'LeftFoot' : 'RightFoot'];
+  const w = af <= m.s ? Math.max(0, af) / m.s : af <= m.s + m.a ? 1 : Math.max(0, 1 - (af - m.s - m.a) / m.r);
+  const C = new THREE.Vector3().setFromMatrixPosition(mdWorld(md, p, i, MD_M[1]));
+  mdLegIK(md, p, e.leg, C.lerp(MD_V[3].fromArray(e.to), w * w * (3 - 2 * w)).toArray());
+  return p;
+}
+
+// Found once per package, on the bones of its first build: md.walkV['clip:walk'] = the planted-foot speed along the
+// model's forward axis (m/s of clip time; < 0 when the clip walks forward), md.walkD['clip:1'] = per clip frame the
+// distance the lower foot has moved along that axis since frame 0, md.hitT[move] = the hit frame's clip time.
+function mdMeasure(md, it) {
+  const C = CFG.clips, v = new THREE.Vector3(), at = (p, face) => {
+    mdApply(it, p); it.root.position.set(0, 0, 0); it.root.rotation.y = face * F3_YAW; it.body.scale.x = it.scale * (face < 0 ? -1 : 1);
+    it.root.updateMatrixWorld(true);
+  };
+  md.walkV = {}; md.walkD = {};
+  for (const k in C) {
+    const e = C[k];
+    if (!e.walk || md.walkV[e.c + ':' + e.walk] !== undefined) continue;
+    if (e.walk !== 1) { md.walkV[e.c + ':' + e.walk] = -e.walk; continue; }
+    const n = md.clips[e.c].n, feet = [[], []];
+    for (let f = 0; f < n; f++) {
+      const p = mdSample(md, e.c, f / 30, false); p.h[0] = 0; p.h[2] = 0; at(p, 0);
+      ['footL', 'footR'].forEach((l, j) => { it.limbs[l].getWorldPosition(v); feet[j].push([v.y, v.z]); });
+    }
+    let sum = 0, cnt = 0;
+    for (const ft of feet) {
+      const lo = Math.min(...ft.map(a => a[0]));
+      for (let f = 0; f + 1 < n; f++) if (ft[f][0] < lo + .02 && ft[f + 1][0] < lo + .02) { sum += (ft[f + 1][1] - ft[f][1]) * 30; cnt++; }
+    }
+    md.walkV[e.c + ':' + e.walk] = cnt ? sum / cnt : -1;
+    const D = new Float32Array(n);
+    for (let f = 0; f + 1 < n; f++) { const k = feet[0][f][0] <= feet[1][f][0] ? 0 : 1; D[f + 1] = D[f] + Math.abs(feet[k][f + 1][1] - feet[k][f][1]); }
+    md.walkD[e.c + ':' + e.walk] = D;
+  }
+  md.hitT = {};
+  for (const id in CFG.moves) {
+    const e = C[id], m = CFG.moves[id], te = e && (e.t ? e : e.up && e.up.t ? e.up : null);
+    if (!te) continue;
+    const limb = e.limb || m.limb, k = m.box, F = {face: 1, x: 0, af: 0, side: 0}, c = {F, S: {frame: 0}, m, id};
+    let best = null;
+    for (let t = te.t[0]; t <= te.t[1] + 1e-6; t += 1 / 30) {
+      let worst = 0, reach = 0;
+      for (const face of [1, -1]) {
+        F.face = face; c.force = t; at(mdEval(md, e, c), face); it.limbs[limb].getWorldPosition(v);
+        const x = v.x * face * 1000, y = v.y * 1000;
+        worst = Math.max(worst, Math.hypot(Math.max(k[0] - x, 0, x - k[1]), Math.max(k[2] - y, 0, y - k[3]))); reach += x;
+      }
+      if (!best || worst < best.w - 1e-6 || (Math.abs(worst - best.w) <= 1e-6 && reach > best.r)) best = {t, w: worst, r: reach};
+    }
+    md.hitT[id] = best.t;
+  }
+  at(mdRest(md), 0);
+}
+
+const MD_QA = new THREE.Quaternion(), MD_QB = new THREE.Quaternion(), MD_Q1 = new THREE.Quaternion(), MD_CURL = 5;
+// Clip id of md at t seconds: rotations slerped between the two nearest frames, the Hips' position lerped. Clamped to
+// the clip, or wrapped over its length when loop is set (the first and last frames of a cycle are the same pose).
+function mdSample(md, id, t, loop) {
+  const c = md.clips[id], nb = md.nb, last = c.n - 1, q = new Float32Array(nb * 4), h = new Float32Array(3);
+  let f = t * c.fps;
+  f = loop ? ((f % last) + last) % last : Math.max(0, Math.min(last, f));
+  const i = Math.min(last - 1, Math.floor(f)), k = f - i, a = i * nb * 4, b = a + nb * 4;
+  for (let j = 0; j < nb * 4; j += 4) MD_QA.fromArray(c.q, a + j).slerp(MD_QB.fromArray(c.q, b + j), k).toArray(q, j);
+  for (let j = 0; j < 3; j++) h[j] = c.h[i * 3 + j] + (c.h[i * 3 + 3 + j] - c.h[i * 3 + j]) * k;
+  return {q, h};
+}
+
+// a and b blended: k = 0 is a, 1 is b (slerp per bone, lerp of the Hips).
+function mdMix(a, b, k) {
+  const q = new Float32Array(a.q.length), h = new Float32Array(3);
+  for (let i = 0; i < q.length; i += 4) {
+    MD_QA.fromArray(a.q, i).slerp(MD_QB.fromArray(b.q, i), k).toArray(q, i);
+  }
+  for (let i = 0; i < 3; i++) h[i] = a.h[i] + (b.h[i] - a.h[i]) * k;
+  return {q, h};
+}
+
+function mdApply(it, p) {
+  const bs = it.bones;
+  for (let i = 0; i < bs.length; i++) bs[i].quaternion.fromArray(p.q, i * 4);
+  bs[0].position.fromArray(p.h);
+}
+
+// Every drawn frame, for side's Meshy fighter: as f3Sync does for the placeholders (visible, at F.x, F.y, turned
+// face * F3_YAW, and mirrored when facing left), a change to a free or movement act eased in over CFG.anim.model frames by F.af, a strike over its
+// first CFG.anim.strikeIn frames (never into its active frames: there the pose is the clip's). Hits and throws snap.
+function mdSync(it, side, S) {
+  it.root.visible = !!S;
+  if (!S) { it.F = null; return; }
+  const F = fighterOf(S, side), m = CFG.moves[F.act], n = m ? Math.min(CFG.anim.strikeIn, m.s - 1) : CFG.anim.model;
+  it.root.position.set(F.x / 1000, F.y / 1000, side ? -.05 : .05);
+  it.root.rotation.y = F.face * F3_YAW;
+  it.body.scale.x = it.scale * F.face;   // facing left: the mirror image (fx's squash scales the root, not the body)
+  if (it.fingers) {   // fists, opened where the act opens the hands: closing and opening in MD_CURL frames
+    const k = CFG.looks[it.key].openHands.includes(F.act) ? 0 : 1;
+    if (F !== it.F || F.act !== it.act) it.curl0 = F === it.F ? it.curl : k;
+    it.curl = it.curl0 + (k - it.curl0) * Math.min(1, Math.max(0, F.af) / MD_CURL);
+    for (let i = 0; i < it.fingers.length; i++) it.fingers[i].quaternion.copy(MD_Q1).slerp(it.fist[i], it.curl);
+  }
+  let p = mdPoseOf(F, S) || mdRest(mdData(it.key));
+  if (F !== it.F) it.from = null;
+  else if (F.act !== it.act) it.from = F3_EASE[F.act] || (m && n > 0) ? it.pose : null;
+  if (it.from && F.af < n) p = mdMix(it.from, p, Math.max(0, F.af) / n);
+  it.F = F; it.act = F.act; it.pose = p;
+  mdApply(it, p);
+  if (it.sash) mdSash(it, S);
+}
+
+// World y (m) of the top of side's head: the head's end bone of a model, the highest vertex of a placeholder's head.
+function headTop(side) {
+  const it = F3D[side];
+  if (it.kind === 'model') { it.root.updateMatrixWorld(true); return it.headEnd.getWorldPosition(new THREE.Vector3()).y; }
+  const h = it.joints.head.children.find(o => o.name === 'head.head'), a = h.geometry.attributes.position, v = new THREE.Vector3();
+  let y = -1e9;
+  h.updateWorldMatrix(true, false);
+  for (let k = 0; k < a.count; k++) y = Math.max(y, v.fromBufferAttribute(a, k).applyMatrix4(h.matrixWorld).y);
+  return y;
+}
+
+// Character viewer ("Anteprima 3D", 7/11/2026): one Meshy fighter alone on a stage, turned by drag, pinch and wheel,
+// playing the game's own animation: a stand-alone fighter state stepped 60 times a second and drawn by mdSync, so what
+// shows here is exactly what the game draws for that act and frame. A separate page (viewer.html, built by mk.sh).
+
+const VW = {it: null, F: null, S: null, renderer: null, scene: null, camera: null, shadow: null, plan: [], step: 0, left: 0,
+  name: '', speed: 1, acc: 0, last: null, yaw: .55, zoom: 1, fit: 5.4, spin: true, idleMs: 0, pointers: new Map(), pinch: 0, tex: {}, mats: {}};
+const VW_DT = 1000 / 60, VW_YAW = .55, VW_TALL = 2.15, VW_WIDE = 2.1;   // metres that fit above the controls, and across
+const VW_PACE = .85;   // the viewer plays 15% slower than the game (Denis, 7/11: "il pg è troppo veloce", only here)
+// What each button plays: a list of steps [act, frames, mode]; a move id alone takes its frame data from CFG.moves.
+// Modes: 'jump' (take-off at the jump speed, falls with gravity until the floor), 'jumpAtk' (the same, the air kick
+// starting 8 frames in), 'fly' (knocked up, flies until the floor), 'walkF'/'walkB'/'dash' (walks the fighter state).
+const VW_PLAYS = [
+  ['Guardia', [['idle', 150], ['guard', 60], ['crouch', 60], ['guardC', 60]]],
+  ['Cammina', [['walkF', 110, 'walkF'], ['walkB', 110, 'walkB'], ['dashF', CFG.dash.f.n, 'dash'], ['dashB', CFG.dash.b.n, 'dash']]],
+  ['Pugni', ['p1', 'p2', 'p3', 'hp']],
+  ['Calci', ['k1', 'k2', 'hk']],
+  ['In basso', ['cp', 'ck', 'chp', 'chk']],
+  ['Salto', [['jumpSquat', CFG.jump.squat], ['air', 0, 'jump'], ['landing', CFG.jump.land + 6], ['jumpSquat', CFG.jump.squat], ['jk', 0, 'jumpAtk'], ['landing', CFG.jump.landAtk + 6]]],
+  ['Speciale', ['spec']],
+  ['Presa', [['thr', CFG.thr.s + CFG.thr.a], ['thrHit', CFG.thr.anim]]],
+  ['Colpito', [['hitStun', 24], ['block', 16]]],
+  ['A terra', [['knock', 0, 'fly'], ['knock', CFG.knock.ground], ['getup', CFG.knock.getup]]],
+];
+const VW_NAMES = {idle: 'Guardia', guard: 'Parata', crouch: 'Accovacciato', guardC: 'Parata bassa', walkF: 'Cammina avanti',
+  walkB: 'Cammina indietro', dashF: 'Scatto avanti', dashB: 'Scatto indietro', p1: 'Pugno 1', p2: 'Pugno 2', p3: 'Pugno 3',
+  hp: 'Pugno forte', k1: 'Calcio 1', k2: 'Calcio 2', hk: 'Calcio forte', cp: 'Pugno basso', ck: 'Calcio basso',
+  chp: 'Montante', chk: 'Calcio lanciante', jumpSquat: 'Salto', air: 'In volo', landing: 'Atterraggio', jk: 'Calcio in volo',
+  spec: 'Colpo energetico', thr: 'Presa', thrHit: 'Lancio', hitStun: 'Colpito', block: 'Para il colpo', knock: 'A terra',
+  getup: 'Si rialza'};
+
+function vwBoot() {
+  // The proposal Denis is judging (7/11/2026): guard A (the boxing guard the punches start from, breathing), fists
+  // (open only in the special and the throw) and the head held a little higher.
+  const guard = {c: 'a191', at: 0, breathe: 1};
+  Object.assign(CFG.looks.ren, {fists: true, headUp: 12, spikes: true, faceLine: true, line: {w: .007, back: .02}, flatFace: true, sash: true, faceShape: true, head: true, smoothNormals: true,
+    clips: {idle: guard, intro: guard, crouch: {low: {c: 'a54', at: .67}, up: guard}}});   // (the paint: the viewer's own buttons, vwPaint)
+  const it = modelBuild('ren');
+  if (!it) { document.getElementById('now').textContent = 'Il modello di Ren non è nel pacchetto.'; return; }
+  const cv = document.getElementById('view');
+  VW.renderer = new THREE.WebGLRenderer({canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true});
+  VW.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  VW.scene = new THREE.Scene(); VW.camera = new THREE.PerspectiveCamera(30, 1, .1, 50);
+  VW.scene.add(...f3Lights(), it.root, vwShadow());
+  VW.it = it; VW.F = {side: 0, char: 'ren', x: 0, y: 0, vx: 0, vy: 0, face: 1, act: 'idle', af: 0, air: false, hit: 0, stun: 0, prev: 0, land: CFG.jump.land, hold: [0, 0]};
+  VW.S = {frame: 0, sides: [{team: [VW.F], cur: 0}]};
+  // the two paints: the drawing projected on the model (tools/paint_from_drawing.py) and Meshy's own
+  VW.tex.meshy = it.mats.main.map;
+  const img = new Image(), t = new THREE.Texture(img); t.flipY = false;
+  img.src = ASSETS['ren/ren_painted.jpg'] || ASSETS['ren/ren.jpg']; img.decode().then(() => { t.needsUpdate = true; }, () => {});
+  VW.tex.draw = t;
+  VW.mats.toon = it.mats.main; VW.mats.flat = new THREE.MeshBasicMaterial({map: t, skinning: true});
+  if (it.face) mdFaceMat(VW.mats.flat, it.face);   // the face decal on both lights
+  document.getElementById('stage').style.backgroundImage = 'url(' + ASSETS['arena/cascata.jpg'] + ')';
+  vwUi(); vwInput(); vwResize(); addEventListener('resize', vwResize);
+  vwPlay(0); vwPaint('draw'); vwLight('toon'); vwSpeed(1);
+  requestAnimationFrame(vwLoop);
+}
+
+// A soft round shadow under the feet.
+function vwShadow() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, 'rgba(0,0,0,.55)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.3, .8), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false}));
+  m.rotation.x = -Math.PI / 2; m.position.y = .004; VW.shadow = m;
+  return m;
+}
+
+function vwUi() {
+  const row = document.getElementById('moves');
+  VW_PLAYS.forEach(([label], i) => {
+    const b = document.createElement('button'); b.id = 'play' + i; b.innerHTML = '<span>' + label + '</span>';
+    b.addEventListener('click', () => vwPlay(i)); row.appendChild(b);
+  });
+  const on = (id, f) => document.getElementById(id).addEventListener('click', f);
+  on('pDraw', () => vwPaint('draw')); on('pMeshy', () => vwPaint('meshy'));
+  on('lToon', () => vwLight('toon')); on('lFlat', () => vwLight('flat'));
+  on('s1', () => vwSpeed(1)); on('s2', () => vwSpeed(.5)); on('s4', () => vwSpeed(.25));
+  on('spin', () => { VW.spin = !VW.spin; vwPress('spin', VW.spin); });
+  vwPress('spin', VW.spin);
+}
+function vwPress(id, on) { document.getElementById(id).setAttribute('aria-pressed', on ? 'true' : 'false'); }
+function vwPaint(k) {
+  VW.paint = k; VW.mats.toon.map = VW.tex[k]; VW.mats.flat.map = VW.tex[k]; VW.mats.toon.needsUpdate = VW.mats.flat.needsUpdate = true;
+  if (VW.it.face) mdFaceShow(VW.it.face, k === 'draw');   // the drawn face's decal with the drawing's paint only
+  vwPress('pDraw', k === 'draw'); vwPress('pMeshy', k === 'meshy');
+}
+function vwLight(k) { VW.it.mesh.material = VW.mats[k]; vwPress('lToon', k === 'toon'); vwPress('lFlat', k === 'flat'); }
+function vwSpeed(s) { VW.speed = s; vwPress('s1', s === 1); vwPress('s2', s === .5); vwPress('s4', s === .25); }
+
+// Starts button i's steps from the first (the fighter back on the floor, in place).
+function vwPlay(i) {
+  VW.playing = i; VW.plan = VW_PLAYS[i][1].map(s => typeof s === 'string' ? [s, 0] : s); VW.step = -1;
+  for (let k = 0; k < VW_PLAYS.length; k++) vwPress('play' + k, k === i);
+  Object.assign(VW.F, {x: 0, y: 0, vy: 0, air: false, hit: 0}); vwNext();
+}
+function vwNext() {
+  const F = VW.F;
+  if (++VW.step >= VW.plan.length) VW.step = 0;
+  const [act, n, mode] = VW.plan[VW.step], m = CFG.moves[act];
+  VW.mode = mode || null; VW.left = n || (m ? m.s + m.a + (m.r === 'land' ? 0 : m.r) : 30);
+  F.act = act === 'thrHit' ? 'thr' : act; F.af = act === 'thrHit' ? 1 : 0; F.hit = act === 'thrHit' ? 1 : 0;
+  F.stun = act === 'hitStun' || act === 'block' ? VW.left : 0;
+  if (mode === 'jump' || mode === 'jumpAtk') { F.air = true; F.y = 1; F.vy = CFG.jump.v; if (mode === 'jumpAtk') { F.act = 'air'; VW.atkIn = 8; } }
+  if (mode === 'fly') { F.air = true; F.y = 1; F.vy = 70; }
+  VW.name = VW_NAMES[act] || act;
+}
+// One frame of the fighter state.
+function vwStep() {
+  const F = VW.F, S = VW.S;
+  S.frame++; F.af++; F.stun = Math.max(0, F.stun - 1);
+  if (VW.mode === 'walkF') F.x += CFG.walk.f * F.face;
+  else if (VW.mode === 'walkB') F.x -= CFG.walk.b * F.face;
+  else if (VW.mode === 'dash') F.x += (F.act === 'dashF' ? 1 : -1) * 100 * F.face;
+  if (F.air) {
+    if (VW.mode === 'jumpAtk' && VW.atkIn > 0 && --VW.atkIn === 0) { F.act = 'jk'; F.af = 0; VW.name = VW_NAMES.jk; }
+    F.y += F.vy; F.vy -= CFG.jump.g;
+    if (F.y <= 0) { F.y = 0; F.vy = 0; F.air = false; vwNext(); }
+    return;
+  }
+  if (--VW.left <= 0) vwNext();
+}
+
+function vwLoop(now) {
+  requestAnimationFrame(vwLoop);
+  const dt = VW.last === null ? 0 : Math.min(100, now - VW.last); VW.last = now;
+  VW.acc += dt * VW.speed * VW_PACE;
+  while (VW.acc >= VW_DT) { vwStep(); VW.acc -= VW_DT; }
+  if (VW.spin && VW.pointers.size === 0 && now - VW.idleMs > 2500) VW.yaw += dt * .00035;
+  const it = VW.it, F = VW.F;
+  mdSync(it, 0, VW.S);
+  it.root.position.set(0, F.y / 1000, 0); it.root.rotation.y = VW.yaw; it.body.scale.x = it.scale;
+  VW.shadow.scale.setScalar(Math.max(.35, 1 - F.y / 2500));
+  const cy = .95 + F.y / 2000 + Math.max(0, 1 - VW.zoom) * .75, c = VW.camera, d = VW.fit * VW.zoom;   // zooming in looks up to the face
+  c.position.set(0, cy + .1, d); c.lookAt(0, cy, 0);
+  VW.renderer.render(VW.scene, c);
+  const m = CFG.moves[F.act], tot = m ? m.s + m.a + (m.r === 'land' ? 8 : m.r) : 0;
+  const now2 = document.getElementById('now'), txt = VW.name + (m ? '<small>fotogramma ' + F.af + ' di ' + tot + (F.af > m.s && F.af <= m.s + m.a ? ' · colpisce' : '') + '</small>' : '');
+  if (now2.innerHTML !== txt) now2.innerHTML = txt;
+}
+
+// The picture's centre sits in the middle of the space above the controls (a view offset), and the camera stands back
+// just enough for VW_TALL metres to fit in that space (VW.zoom scales it: pinch and wheel).
+function vwResize() {
+  const w = innerWidth, h = innerHeight, free = Math.max(120, document.getElementById('bottom').getBoundingClientRect().top), dy = h - free, c = VW.camera;
+  VW.renderer.setSize(w, h, false);
+  c.fov = 30; c.aspect = w / (h + dy); c.setViewOffset(w, h + dy, 0, dy, w, h); c.updateProjectionMatrix();
+  const t = Math.tan(c.fov * Math.PI / 360);
+  VW.fit = Math.max(VW_TALL * (h + dy) / free / (2 * t), VW_WIDE / (2 * t * c.aspect)) / .92;
+}
+
+// Drag turns, pinch or wheel zooms, double tap resets.
+function vwInput() {
+  const cv = document.getElementById('view'), P = VW.pointers;
+  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); P.set(e.pointerId, {x: e.clientX, y: e.clientY}); VW.pinch = 0; VW.idleMs = performance.now(); });
+  cv.addEventListener('pointermove', e => {
+    const p = P.get(e.pointerId); if (!p) return;
+    if (P.size === 1) VW.yaw += (e.clientX - p.x) * .012;
+    else {
+      const [a, b] = [...P.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+      p.x = e.clientX; p.y = e.clientY;
+      const d2 = Math.hypot([...P.values()][0].x - [...P.values()][1].x, [...P.values()][0].y - [...P.values()][1].y);
+      if (d > 0 && d2 > 0) VW.zoom = Math.max(.45, Math.min(1.8, VW.zoom * d / d2));
+    }
+    p.x = e.clientX; p.y = e.clientY; VW.idleMs = performance.now();
+  });
+  const up = e => { P.delete(e.pointerId); VW.idleMs = performance.now(); };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', e => { e.preventDefault(); VW.zoom = Math.max(.45, Math.min(1.8, VW.zoom * (1 + e.deltaY * .001))); }, {passive: false});
+  cv.addEventListener('dblclick', () => { VW.yaw = VW_YAW; VW.zoom = 1; });
+}
+
+VW.tick = n => { for (let k = 0; k < n; k++) { vwStep(); mdSync(VW.it, 0, VW.S); } };   // tests: n frames now, each drawn (the sash moves)
+VW.sash = MD_SASH;   // tests: the sash's numbers
+window.VW = VW;   // for tests/viewer_check.py
+vwBoot();
+
+})();
+</script>
+
+</body></html>
