@@ -33,7 +33,7 @@ T.test('no holes at the camera extremes', () => {
 
 T.test('depth: near moves more than far', () => {
   const V = __VF, d = AD(), pl = V.ARENA.layers.planes;
-  T.eq(pl.map(p => p.name).join(), 'LF,FL,FR,UL,UR,falls,haze,sky', 'planes nearest first');
+  T.eq(pl.map(p => p.name).join(), 'LF,FL,FR,UL,UR,falls,far,haze,sky', 'planes nearest first');
   for (const p of pl) T.eq(p.z, d.layers[p.name], p.name + ' depth');
   view(-1200, 1200, 0);
   const pts = [[d.props.column.x, 2, d.props.column.z], [0, 5, d.layers.LF], [0, 5, d.layers.UL], [0, 5, d.layers.falls], [0, 5, d.layers.haze], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);

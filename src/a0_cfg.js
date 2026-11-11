@@ -57,10 +57,12 @@ const CFG={
   //   ref screen at the start camera: each far layer shows the painting there, projected to its own depth;
   //  view = the widest view to cover (aspect, camera x reach and shake, metres);
   //  layers: z of each far painted plane (tools/make_layers.py cuts them: LF the dark forest low on the left, FL/FR
-  //   the near cliffs, UL/UR the high cliffs, falls, haze, sky). At the start camera they add up to the painting
+  //   the near cliffs, UL/UR the high cliffs, falls, far = one more mountain on the far left, haze, sky). At the start
+  //   camera they add up to the painting
   //   whatever their depths (each is scaled for its own); the depths only set how much they slide apart when the
   //   camera moves: closer than real mountains, as an anime multiplane, so the slide shows; mists = drifting mist banks
-  //   between them (z, painting rows of the band's top and bottom, opacity, drift u per s: nearer is faster);
+  //   between them (z, painting rows of the band's top and bottom, opacity, drift u per s: nearer is faster; none
+  //   since 11/11, Denis: "c'è troppa nebbia");
   //   sway = the far planes' slow breathing (metres, seconds), so their depth shows with the camera still too;
   //   mistLift = the mist's colour lift;
   //   contrast/lift = colour grade; skyDrift = the clouds'
@@ -83,8 +85,8 @@ const CFG={
   arenas:{cascata:{
     ref:{w:844, h:390, footRow:.83, cover:1.1, img:[1672, 941]},
     view:{aspect:2.45, xPad:.4},
-    layers:{LF:-10, FL:-15, FR:-15, UL:-23, UR:-23, falls:-36, haze:-70, sky:-300},
-    mists:[{z:-6.5, rows:[580, 830], opacity:.45, drift:.006}, {z:-30, rows:[540, 720], opacity:.42, drift:.0025}],
+    layers:{LF:-10, FL:-15, FR:-15, UL:-23, UR:-23, falls:-36, far:-40, haze:-70, sky:-300},
+    mists:[],
     sway:{amp:.25, period:24},
     mistLift:.12,
     contrast:.92, lift:.03, skyDrift:.012, skyPeriod:140,
