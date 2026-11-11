@@ -56,14 +56,13 @@ const CFG={
   //  ref = the flat backdrop it replaces, placed as before (footRow = painting row share under the feet, cover) on a
   //   ref screen at the start camera: each far layer shows the painting there, projected to its own depth;
   //  view = the widest view to cover (aspect, camera x reach and shake, metres);
-  //  layers: z of each far painted plane (tools/make_layers.py cuts them: LF the dark forest low on the left, FL/FR
-  //   the near cliffs, UL/UR the high cliffs, falls, far = one more mountain on the far left, haze, sky). At the start
-  //   camera they add up to the painting
-  //   whatever their depths (each is scaled for its own); the depths only set how much they slide apart when the
-  //   camera moves: closer than real mountains, as an anime multiplane, so the slide shows; mists = drifting mist banks
-  //   between them (z, painting rows of the band's top and bottom, opacity, drift u per s: nearer is faster; none
-  //   since 11/11, Denis: "c'è troppa nebbia");
-  //   sway = the far planes' slow breathing (metres, seconds), so their depth shows with the camera still too;
+  //  layers: z of each far painted plane (tools/make_layers.py cuts them): base = the painted mist at the mountains'
+  //   feet, one band in front of all of them; L and R = the two mountains, each one whole piece as painted (left and
+  //   right of the waterfall); falls; far = pale mountains in the haze past their outer slopes; haze; sky. At the
+  //   start camera they add up to the painting whatever their depths (each is scaled for its own); the depths only
+  //   set how much they slide apart when the camera moves; mists = drifting mist banks (none since 11/11, Denis:
+  //   "c'è troppa nebbia"); sway = the far planes' slow breathing (metres, seconds), so their depth shows with the
+  //   camera still too;
   //   mistLift = the mist's colour lift;
   //   contrast/lift = colour grade; skyDrift = the clouds'
   //   sway (share of the painting's width) over skyPeriod s; water = the painted water itself falling: v = its speed
@@ -85,7 +84,7 @@ const CFG={
   arenas:{cascata:{
     ref:{w:844, h:390, footRow:.83, cover:1.1, img:[1672, 941]},
     view:{aspect:2.45, xPad:.4},
-    layers:{LF:-10, FL:-15, FR:-15, UL:-23, UR:-23, falls:-36, far:-40, haze:-70, sky:-300},
+    layers:{base:-7, L:-15, R:-15, falls:-36, far:-60, haze:-80, sky:-300},
     mists:[],
     sway:{amp:.25, period:24},
     mistLift:.12,

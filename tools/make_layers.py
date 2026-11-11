@@ -4,21 +4,19 @@ multiplane camera (needs Pillow, numpy).
 
 usage: python3 tools/make_layers.py [--preview OUTDIR]
 
-  assets/arena/cascata_atlas.jpg    every plane's colours, packed side by side
+  assets/arena/cascata_atlas.jpg    every plane's colours, packed in strips
   assets/arena/cascata_atlas_m.png  the same layout: red = the plane's alpha, green = where the water flows
-  assets/arena/cascata_mist.png     a soft mist band (alpha in red), coloured in the shader
-  assets/arena/cascata_layers.json  the planes (near to far): name, box (painting px: x0, y0, x1, y1, y down; may
-                                    reach past the painting) and strips (f = the strip in the plane's uv, uv = in the
-                                    atlas: u0, v0, u1, v1, v up), mist colour
-The planes, nearest first (their depths are in CFG.arenas.cascata.layers): LF the dark forest low on the left, FL and
-FR the near cliffs (the orange wall on the left, the sunlit trees on the right), UL and UR the high cliffs behind
-them, falls (the waterfall with its crest, temple and wooded bank), haze (the far hazy hills and the mist; it fills
-everything below the sky line that no plane covers, and goes on below the painted floor and past both edges), sky.
-At the start camera they add up to the painting exactly: where a plane shows, it has the painting's colours. Where a
-nearer plane hides it, each plane goes on (its polygon reaches in behind the nearer one) and is filled from itself,
-mirrored across its edge (rock goes on as rock, water as water), so a camera move uncovers more of it, never a hole
-or a copy of the nearer plane. The column with its banner, the lantern, the front grass, the painted floor and the
-yellow leaves painted in the mist are 3D now (or gone): every plane fills them in. build.py embeds every file under
+  assets/arena/cascata_mist.png     a soft mist band (alpha in red; drifting mist banks, none at the moment)
+  assets/arena/cascata_layers.json  the planes: name, box (painting px: x0, y0, x1, y1, y down; may reach past the
+                                    painting), strips (f = the strip in the plane's uv, uv = in the atlas: u0, v0, u1,
+                                    v1, v up) with their opaque cores, mist colour
+The planes (their depths are in CFG.arenas.cascata.layers): base = the painted mist at the mountains' feet, one band in
+front of all of them; L and R = the two mountains, left and right of the waterfall, each one whole piece exactly as
+painted (nothing inside a mountain is ever uncovered, so nothing in them is invented); falls = the waterfall, which
+goes on behind them (copied from itself sideways: water, crest and bank); far = pale mountains in the haze past
+their outer slopes; haze = the far mist; sky. At the start camera they add up to the painting: where a plane shows,
+it has the painting's colours. The column with its banner, the lantern, the front grass, the painted floor and the
+yellow leaves painted in the mist are 3D now (or gone): the planes fill them in. build.py embeds every file under
 assets/ in the page as a data URI.
 """
 import argparse
@@ -57,76 +55,75 @@ WATER_HIDDEN = [[(540, 256), (690, 256), (690, 560), (705, 640), (540, 640)],
                 [(1225, 247), (1430, 247), (1430, 640), (1160, 640), (1165, 560), (1185, 470), (1225, 430)]]
 MIST_ROWS = (600, 700)
 
-# The planes, nearest first, traced by hand on the painting (painting px). poly = where the plane is: what shows of
-# it plus how far it goes on behind the nearer planes (never into what a farther plane shows). fade = soft edges
-# where the plane dissolves into the mist: ('below', line, px) fades out over px above the line, ('left', x, px)
-# fades in from x. scale = atlas pixels per painting pixel. pad = px it goes on past the painting's right edge
-# (mirrored, fading out).
+# The planes, traced by hand on the painting (painting px; x may go past the painting's edges).
 FL_CROWN = [(330, 347), (350, 340), (363, 330), (383, 317), (403, 303), (420, 300), (440, 300), (450, 287), (463, 270),
             (473, 263), (493, 250), (503, 243), (513, 232), (523, 220), (547, 213), (570, 210), (583, 200), (597, 192),
             (617, 190), (630, 200), (650, 213), (663, 232), (672, 254)]
-FR_CROWN = [(1236, 410), (1241, 403), (1248, 392), (1258, 382), (1272, 372), (1286, 361), (1293, 347), (1307, 330),
-            (1324, 326), (1345, 323), (1355, 311), (1369, 299), (1383, 295), (1397, 302), (1414, 316), (1428, 326),
-            (1446, 333), (1463, 333), (1473, 319), (1494, 314), (1515, 306), (1533, 307), (1546, 316), (1560, 333),
-            (1581, 344), (1600, 352)]
 FR_FALLS_EDGE = [(1232, 441), (1194, 465), (1180, 493), (1166, 530), (1147, 558), (1124, 582), (1096, 605), (1058, 634),
                  (1030, 652)]
-FR_MIST_EDGE = [(1030, 672), (1058, 668), (1100, 645), (1147, 626), (1194, 607), (1241, 584), (1312, 560), (1359, 551),
-                (1406, 523), (1452, 504), (1546, 490), (1642, 443)]
 LF_TOP = [(300, 470), (321, 452), (330, 427), (370, 432), (410, 432), (432, 430), (459, 434), (477, 445), (499, 463),
           (522, 472), (544, 490), (566, 494), (589, 512), (607, 530), (629, 538), (658, 552), (686, 567), (711, 586),
           (735, 620), (750, 660)]
-LF_BOTTOM = [(290, 565), (330, 578), (400, 590), (480, 594), (560, 602), (640, 627), (700, 657), (752, 664)]
 BOTTOM = 820   # px: every plane goes down solid to here, below the painted floor line: the terrace hides its base
-PAD_SEAM = 70  # px: past the right edge a plane goes on with its own painting from further in, crossfaded over this
-# Left of the left mountains, where the sun's glow was: the left mountains once more (as built here, hidden parts
-# included), flipped, FAR_SCALE times their size, their right edge at FAR_RIGHT and their base at BOTTOM, a little
-# paler (FAR_TINT of the horizon's blue): another mountain, further away, solid.
-FAR_SRC, FAR_TINT, FAR_PAD = (196, 40, 650), .14, 520
-FAR_SCALE, FAR_PEAK = .83, (120, 190)   # its size, and where its peak is (painting px)
-FAR_SLOPE = .9   # px down per px out: its sides
-FAR_HAZE = 640   # row of the haze's top on the far left
-# Every mountain is one solid piece: its painted outline where it shows, and wherever it is hidden (behind a nearer
-# plane, or below the painted floor) it goes on as itself (mirrored from its own painting), down to BOTTOM. No fades:
-# no fog cutting the mountains. Only where two planes meet inside the painted mist at their feet the seam is soft.
+EXT = 430      # px: how far the two mountains (and the sky line) go on past each side of the painting
+# The sky line past the painting: on the left, where the column and the sun's glow were, the left mountain's shoulder
+# goes down into the mist; on the right the right mountain goes on and down.
+SKY_LEFT = [(-EXT, 700), (-320, 640), (-220, 560), (-120, 470), (-30, 385), (40, 320), (100, 262), (150, 212),
+            (195, 170)]
+SKY_RIGHT = [(1730, 215), (1800, 265), (1880, 330), (1960, 410), (2040, 500), (W0 + EXT, 570)]
+SKY_EXT = SKY_LEFT + SKY[2:] + SKY_RIGHT
+# The mountains are two whole pieces, exactly as painted, each at one depth: L everything left of the waterfall (the
+# high cliff, the orange cliff, the dark forest at their foot, the shoulder on the far left), R everything right of
+# it. Nothing inside a mountain is ever uncovered, so nothing in them is invented: only where the painting had the
+# column (L's left part, mirrored from L) and past the painting's edges (each mountain mirrored at the edge). The
+# waterfall behind them goes on (as water) further than they ever slide. smooth = the props' holes in it (lantern,
+# grass, leaves: all in the mist) are filled smooth, not mirrored. scale = atlas pixels per painting pixel.
 PLANES = [
-    {'name': 'LF', 'scale': .9, 'clone': [(230, 0), (460, 0), (230, -60), (460, -60)], 'nofringe': True,
-     'poly': LF_TOP + [(752, 690), (748, BOTTOM), (20, BOTTOM), (40, 640), (95, 585), (150, 540), (205, 505),
-                       (255, 486), (288, 474)],
-     'bumps': [('top', 20, 292, 16)],
-     'fade': [('right', [(752, 640), (752, 690), (748, BOTTOM)], 30, 640, 20)]},
-    {'name': 'FL', 'scale': .9, 'clone': [(80, 0), (160, 0), (80, -60), (160, -120)], 'nofringe': True,
-     'poly': FL_CROWN + [(672, 288), (677, 336), (679, 384), (677, 432), (672, 480),
-                                                    (672, 520), (668, 560), (668, BOTTOM), (240, BOTTOM), (250, 560),
-                                                    (262, 505), (272, 462), (284, 420), (296, 360), (318, 344)],
-     'bumps': [('left', 360, BOTTOM, 14)]},
-    {'name': 'FR', 'scale': .9, 'pad': 340,
-     'poly': FR_CROWN + [(1625, 395), (1642, 443), (W0, 440), (W0, BOTTOM), (1000, BOTTOM), (1012, 720), (1030, 652)] +
-             FR_FALLS_EDGE[::-1][1:],
-     'fade': [('left', [(1030, 650), (1012, 720), (1000, BOTTOM)], 30, 650, 20)]},
-    {'name': 'UL', 'scale': .9, 'clone': [(0, -110), (0, -220), (-60, -110), (-60, -220), (0, -330)], 'nofringe': True,
-     # its hidden right side stays left of where the orange cliff's edge goes when the camera goes right: there the
-     # water shows, never a strip of this cliff
-     'poly': [(200, 30), (645, 30), (640, 143), (655, 200), (665, 232), (668, 250), (660, 280), (640, 310), (618, 340),
-              (612, 400), (606, BOTTOM), (318, BOTTOM), (328, 400), (345, 355), (330, 347), (345, 330), (335, 300), (320, 277), (313, 247),
-              (310, 217), (287, 207), (267, 197), (233, 187), (215, 157), (200, 150)]},
-    {'name': 'UR', 'scale': .9, 'pad': 300, 'clone': [(0, -110), (0, -220), (60, -110), (0, -330)],
-     'poly': [(1245, 30), (W0, 30), (W0, BOTTOM), (1245, BOTTOM), (1236, 410), (1235, 357), (1240, 300), (1244, 245),
-              (1247, 215)]},
-    {'name': 'falls', 'scale': 1., 'water': True,
-     # the water goes on behind the cliffs (further than they ever slide), solid, down to BOTTOM
-     'poly': [(500, 160), (640, 143), (640, 30), (1245, 30), (1245, 236), (1415, 242), (1400, 420), (1352, 441),
-              (1314, 465), (1300, 493), (1286, 530), (1267, 558), (1244, 582), (1216, 605), (1178, 634), (1150, 652),
-              (1120, BOTTOM), (550, BOTTOM), (552, 300), (545, 160)]},
+    # L ends on the left a little right of where the painted column stood (its light, the glow, stays out), its edge
+    # there a line of tree crowns (bumps: rows from, to, depth px); past it, far mountains and the sky
+    {'name': 'L', 'scale': .9, 'bumps': (150, 760, 20), 'polys': [
+        [(200, 0), (645, 0), (640, 143), (655, 200), (665, 232), (668, 250), (672, 254), (672, 288), (677, 336),
+         (679, 384), (677, 432), (672, 480), (672, 520), (668, 560), (668, BOTTOM), (372, BOTTOM), (370, 725),
+         (360, 560), (325, 470), (275, 330), (230, 205), (203, 160)],
+        LF_TOP + [(752, 690), (748, BOTTOM), (372, BOTTOM)]]},
+    {'name': 'R', 'scale': .9, 'smooth': True, 'polys': [
+        [(1247, 0), (W0 + EXT, 0), (W0 + EXT, BOTTOM), (1000, BOTTOM), (1012, 720)] + FR_FALLS_EDGE[::-1] +
+        [(1236, 410), (1235, 357), (1240, 300), (1244, 245), (1247, 215)]]},
+    # the waterfall behind the mountains: more of itself copied sideways from its middle (water, the crest's row),
+    # never a mirror (blocks) nor its temple again: (dx, from x, to x) for the hidden pixels in that range
+    # (its own top: the painted sky line over the crest, and behind the mountains its bank and crest going on, so
+    # what a mountain uncovers is bank, crest and water, never what was sky above them)
+    {'name': 'falls', 'scale': 1., 'water': True, 'smooth': True,
+     'top': [(450, 215), (520, 196), (590, 178), (640, 150)] + [p for p in SKY if 640 < p[0] < 1245] +
+            [(1245, 236), (1272, 249), (1430, 251)],
+     # (offsets, x from, x to, row from, row to): above its crest the bank is copied along its slope, below the crest
+     # the water straight across (the crest stays level)
+     'clone': [([(60, 0), (130, 0), (200, 0)], 0, 740, 0, 247), ([(270, 0), (200, 0), (340, 0)], 0, 740, 247, H0),
+               ([(-270, 0), (-200, 0), (-340, 0), (-130, 0)], 1180, W0, 0, H0)],
+     'fringe': 13, 'noclone': [(1150, 195), (1235, 195), (1235, 256), (1150, 256)],
+     'polys': [
+        [(500, 160), (640, 143), (640, 30), (1245, 30), (1245, 236), (1415, 242), (1400, 420), (1352, 441),
+         (1314, 465), (1300, 493), (1286, 530), (1267, 558), (1244, 582), (1216, 605), (1178, 634), (1150, 652),
+         (1120, BOTTOM), (550, BOTTOM), (552, 300), (545, 160)]]},
 ]
-# The haze plane's own top: its hills against the sky on the left, then low behind the nearer planes (it is only
-# seen where they do not cover it, and when they move it is what shows behind them, rather than the sky).
+# The mist at the mountains' feet, as painted, in one band in front of all of them (they sink into it together, so
+# their feet never slide apart): the painting's rows from BASE_ROWS[0] down, the waterfall's foam taken out (it is
+# the waterfall's own, behind), cloud tops at BASE_TOP (lower under the waterfall: its foam shows above), BASE_RAMP
+# px from clear to solid.
+BASE_ROWS, BASE_TOP, BASE_TOP_FALLS, BASE_RAMP, BASE_PAD = (540, 760), 612, 668, 50, 760
+FOAM_CUT = [(680, 560), (1215, 560), (1215, 760), (680, 760)]
+# Far mountains, pale in the haze, past the two mountains' outer slopes: (peak x, peak row) each, their sides slope
+# FAR_SLOPE px down per px out; FAR_HAZE = how much of the horizon's haze is in their colour (top, bottom).
+FAR_PEAKS = [(-470, 300), (-170, 250), (120, 300), (1700, 300), (1960, 235), (2230, 290)]
+FAR_SLOPE, FAR_HAZE_MIX, FAR_BOX = .75, (.5, .8), (-760, 140, 2470, BOTTOM)
+# The haze plane's own top: its hills against the sky on the left, then low behind the nearer planes.
 HAZE_TOP = [(0, 172), (215, 157), (260, 178), (300, 205), (345, 240), (420, 300), (500, 350), (580, 410), (660, 470),
             (760, 500), (900, 510), (1050, 500), (1150, 485), (1250, 470), (1350, 440), (1450, 400), (1530, 370),
-            (1580, 335), (1625, 300), (W0, 285)]   # (on the right, up behind the forest's misty foot)
+            (1580, 335), (1625, 300), (W0, 285)]
 HAZE_SCALE, SKY_SCALE = .42, .32
 GLOW_X = (250, 470)  # px: left of these the sun's glow in the sky and the haze turns to the cool sky and mist
 HAZE_SOFT = 70   # px: the haze's top fades into the sky over this
+FAR_HAZE = 640   # row of the haze's top on the far left
 
 
 def poly_alpha(polys, w, h, ox=0, oy=0):
@@ -292,182 +289,136 @@ def main(preview):
     rgb = np.asarray(Image.open(SRC).convert('RGB'), np.float64)
     assert rgb.shape[:2] == (H0, W0), rgb.shape
     ys, xs = np.mgrid[0:H0, 0:W0]
-    sky_y = line_y(SKY, np.arange(W0))
+    sky_y = line_y(SKY_EXT, np.arange(W0))
     S = np.clip(ys - sky_y[None, :] + .75, 0, 1.5) / 1.5                 # below the sky line, 1.5 px soft edge
+    Wp = W0 + 2 * EXT                                                    # the canvas past both edges
+    SP = np.clip(np.arange(H0)[:, None] - line_y(SKY_EXT, np.arange(Wp) - EXT)[None, :] + .75, 0, 1.5) / 1.5
     leaves = painted_leaves(rgb)
     unknown = poly_alpha(CUT, W0, H0) > .01
     unknown |= leaves | (ys >= FLOOR_Y)
 
-    # Each plane's alpha, and what shows of it (its weight in the painting at the start camera).
+    # Each plane's alpha (on the wide canvas: the two mountains go on past the edges), and what shows of it in the
+    # painting (its weight at the start camera).
     cover = np.zeros((H0, W0))
     for P in PLANES:
-        a = poly_alpha([P['poly']], W0, H0) * S
-        for kind, where, px, *rng in P.get('fade', ()):
-            if kind == 'below':          # fades out over px above the line (only right of rng[0], ramped over rng[1];
-                                         # a negative ramp: only left of rng[0])
-                f = np.clip((line_y(where, np.arange(W0))[None, :] - ys) / px, 0, 1)
-                if rng:
-                    k = np.clip((xs - rng[0]) / rng[1], 0, 1)
-                    f = 1 - k * (1 - f)
-                a *= f
-            else:                        # fades in from a vertical (x) or slanted ([(x, y), ...]) line on its left
-                xl = where if np.isscalar(where) else np.interp(ys, [p[1] for p in where], [p[0] for p in where])
-                f = np.clip(((xs - xl) if kind == 'left' else (xl - xs)) / px, 0, 1)   # 'right': out towards it
-                if rng:                  # only below row rng[0], ramped over rng[1]
-                    k = np.clip((ys - rng[0]) / rng[1], 0, 1)
-                    f = 1 - k * (1 - f)
-                a *= f
-        for kind, lo, hi, amp in P.get('bumps', ()):   # an invented edge: tree crowns, not a polygon line
-            if kind == 'top':                          # the top edge of columns lo..hi
-                cols = np.arange(lo, hi)
-                top = np.where((a[:, cols] > .5).any(0), (a[:, cols] > .5).argmax(0), H0)
-                b = amp * (np.abs(np.sin(cols / 13.)) * .7 + np.abs(np.sin(cols / 5.7 + 1.3)) * .3)
-                a[:, cols] *= np.clip(ys[:, cols] - (top + b)[None, :] + 1, 0, 1)
-            else:                                      # the left edge of rows lo..hi
-                rws = np.arange(lo, hi)
-                left = np.where((a[rws] > .5).any(1), (a[rws] > .5).argmax(1), W0)
-                b = amp * (np.abs(np.sin(rws / 12.)) * .7 + np.abs(np.sin(rws / 5.1 + .7)) * .3)
-                a[rws] *= np.clip(xs[rws] - (left + b)[:, None] + 1, 0, 1)
-        P['cov'] = cover.copy()
-        P['a'] = a
-        P['w'] = a * (1 - cover)
+        if P.get('top'):     # its own top line instead of the sky line
+            tl = line_y(P['top'], np.arange(Wp) - EXT)
+            P['aP'] = poly_alpha(P['polys'], Wp, H0, -EXT) * (np.clip(np.arange(H0)[:, None] - tl[None, :] + .75, 0, 1.5) / 1.5)
+        else:
+            P['aP'] = poly_alpha(P['polys'], Wp, H0, -EXT) * SP
+        if P.get('bumps'):   # its left edge between these rows: tree crowns, not a polygon line
+            lo, hi, amp = P['bumps']
+            rws = np.arange(lo, min(hi, H0))
+            aw = P['aP'][rws] > .5
+            left = np.where(aw.any(1), aw.argmax(1), Wp)
+            b = amp * (np.abs(np.sin(rws / 15.)) * .65 + np.abs(np.sin(rws / 6.3 + .7)) * .35)
+            P['aP'][rws] *= np.clip(np.arange(Wp)[None, :] - (left + b)[:, None] + 1, 0, 1)
+        a = P['aP'][:, EXT:EXT + W0]
+        P['cov'], P['a'], P['w'] = cover.copy(), a, a * (1 - cover)
         cover = cover + P['w']
-    # its top is soft (mist rising into the sky), so when the planes in front move it never shows a line; on the
-    # far left (the sun's glow, a beam of light) it is the right side's, mirrored
+    # the haze: its top soft (mist rising into the sky); on the far left low, the far mountains' feet in the mist
     wl = glow_weight(xs)
     top = line_y(HAZE_TOP, np.arange(W0))
-    top = top * (1 - wl[0]) + FAR_HAZE * wl[0]      # (on the far left low: the far mountain's foot in the mist)
+    top = top * (1 - wl[0]) + FAR_HAZE * wl[0]
     hz = np.clip((ys - top[None, :]) / HAZE_SOFT + .5, 0, 1) * S
-    rest = (S > .99) & (1 - cover > .01)       # shows, no plane above has it (not the sky line's soft edge: the sky's)
-    # the thin slivers of it (gaps of a few px between two planes' outlines) go to the plane beside them: in the
-    # haze they would float in the air as dark ticks when the planes move
-    big = np.asarray(Image.fromarray(np.uint8(rest) * 255).filter(ImageFilter.MinFilter(9)).filter(ImageFilter.MaxFilter(13)), bool)
-    sliver = rest & ~big
-    if sliver.any():
-        nearw = np.stack([blur(P['w'], 4) for P in PLANES])
-        best = nearw.argmax(0)
-        cov = np.zeros((H0, W0))
-        for i, P in enumerate(PLANES):
-            # (as opaque as the plane is around it: where its outline is soft the sliver is soft too, no lone dot)
-            P['a'] = np.where(sliver & (best == i) & (nearw[i] > .02), np.maximum(P['a'], np.minimum(1, blur(P['a'], 4) * 1.6)), P['a'])
-            P['cov'] = cov.copy()
-            P['w'] = P['a'] * (1 - cov)
-            cov = cov + P['w']
-        cover = cov
-        rest = (S > .99) & (1 - cover > .01)
-    # what is left of it that is only a thin fringe along the planes' soft outlines stays out of the haze too (the
-    # haze widens what it takes by a few px: a fringe would become a floating speck)
+    rest = (S > .99) & (1 - cover > .01)
     rest &= np.asarray(Image.fromarray(np.uint8(rest) * 255).filter(ImageFilter.MinFilter(9)).filter(ImageFilter.MaxFilter(13)), bool)
-    print('slivers given to the planes beside them: %d px' % sliver.sum())
-    rest &= wl < .5                            # (not the glow: there the sky and the far mountains instead)
-    rest &= ys >= top[None, :] - 10            # (nor above the haze's own top: a patch there would float in the air)
+    rest &= (wl < .5) & (ys >= top[None, :] - 10)
     hz = np.maximum(hz, blur(np.asarray(Image.fromarray(np.uint8(rest) * 255).filter(ImageFilter.MaxFilter(7)), np.float64) / 255, 1) * S)
     hz_w = hz * (1 - cover)
     print('painting covered by the planes and the haze: %.4f (sky %.4f)' % ((cover + hz_w).mean(), (1 - cover - hz_w).mean()))
 
     islands = []
-    # Near planes: the painting where they show, mirrored across their edges where they are hidden.
+    # The mountains and the waterfall: the painting where they show; where the painting had the props (the column
+    # on L, mirrored from L; the lantern, the grass and the leaves in the mist, smooth) and where a nearer one hides
+    # them (the waterfall behind the mountains: water, mirrored), filled from themselves; past the painting's edges,
+    # each mirrored at the edge.
     for P in PLANES:
-        nz = np.nonzero(P['a'] > .003)
+        nz = np.nonzero(P['aP'] > .003)
         y0, y1 = max(0, nz[0].min() - 3), min(H0, nz[0].max() + 4)
-        x0, x1 = max(0, nz[1].min() - 3), min(W0, nz[1].max() + 4)
-        # its colours come only from where it is fully itself (on its soft edges the painting mixes in what is
-        # behind: that fringe would travel with the plane as a light or dark thread); the edges take them from inside
-        # (and nothing nearer over it: under a nearer plane's soft edge the painting mixes that plane in, a ghost)
+        X0, X1 = max(0, nz[1].min() - 3), min(Wp, nz[1].max() + 4)          # on the wide canvas
+        x0, x1 = max(X0 - EXT, 0), min(X1 - EXT, W0)                         # inside the painting
         known = (P['w'][y0:y1, x0:x1] > .02) & (P['a'][y0:y1, x0:x1] > .97) & (P['cov'][y0:y1, x0:x1] < .1) & \
             ~unknown[y0:y1, x0:x1]
-        if P.get('nofringe'):   # not the halo next to the column (its light and the glow): taken from further in
-            known &= ~(np.asarray(Image.fromarray(np.uint8(poly_alpha([CUT[0]], x1 - x0, y1 - y0, x0, y0) > .3) * 255)
-                                  .filter(ImageFilter.MaxFilter(41)), np.float64) > 0)
         col = mirror_fill(rgb[y0:y1, x0:x1], known)
         cutr = unknown[y0:y1, x0:x1] & (np.arange(y0, y1)[:, None] < FLOOR_Y)
-        if P.get('clone'):   # its hidden parts: more of itself, copied (rock as rock, forest along its slope)
-            need = (P['a'][y0:y1, x0:x1] > .003) & ~known
-            cl, got = clone_fill(rgb[y0:y1, x0:x1], known, need, P['clone'])
-            col = np.where(got[..., None], cl, col)
-            cutr &= ~got
-        # where the painting had the props that are 3D now (lantern, grass) or the painted leaves, in the mist: the
-        # mist goes on, smooth
-        if cutr.any():
+        if P.get('smooth') and cutr.any():
             sm = push_pull(rgb[y0:y1, x0:x1], known)
             sm = np.asarray(Image.fromarray(np.uint8(np.clip(sm, 0, 255))).filter(ImageFilter.GaussianBlur(4)), np.float64)
             col = np.where(cutr[..., None], sm, col)
-        al = P['a'][y0:y1, x0:x1]
+        if P.get('clone'):   # copied from its own painting (its small holes, already filled, count as painted)
+            vis = (P['w'][y0:y1, x0:x1] > .02) & (P['cov'][y0:y1, x0:x1] < .1) & (P['a'][y0:y1, x0:x1] > .97)
+            if P.get('fringe'):   # not the painted shadow along the mountains' edges: copied water there too
+                k = 2 * P['fringe'] + 1
+                nearc = np.asarray(Image.fromarray(np.uint8(np.clip(P['cov'][y0:y1, x0:x1], 0, 1) * 255))
+                                   .filter(ImageFilter.MaxFilter(k)), np.float64) / 255
+                vis &= nearc < .1
+                known = known & (nearc < .1)
+            src = known | (vis & cutr)
+            if P.get('noclone'):
+                src &= ~(poly_alpha([P['noclone']], x1 - x0, y1 - y0, x0, y0) > .01)
+            colx, rowy = np.arange(x0, x1)[None, :], np.arange(y0, y1)[:, None]
+            # near the painted part the copy fades in over the mirrored edge (no step in shade where they meet)
+            vy, vx = nearest_known(vis)
+            dist = np.hypot((vy - rowy).astype(np.float64), (vx - colx + x0 - x0).astype(np.float64) - 0)
+            dist = np.hypot((vy - np.arange(y1 - y0)[:, None]).astype(np.float64), (vx - np.arange(x1 - x0)[None, :]).astype(np.float64))
+            wfade = np.clip(dist / 40., 0, 1)[..., None]
+            for offs, xa, xb, ya, yb in P['clone']:
+                need = ~vis & (P['aP'][y0:y1, EXT + x0:EXT + x1] > .003) & (colx >= xa) & (colx < xb) & \
+                    (rowy >= ya) & (rowy < yb)
+                srcr = src & (rowy >= ya) & (rowy < yb)        # (each band from its own rows: bank from bank, water from water)
+                cl, got = clone_fill(col, srcr, need, offs)
+                cl = np.asarray(Image.fromarray(np.uint8(np.clip(cl, 0, 255))).filter(ImageFilter.GaussianBlur(1.2)), np.float64)
+                col = np.where(got[..., None], col * (1 - wfade) + cl * wfade, col)
+        left, right = EXT + x0 - X0, X1 - (EXT + x1)
+        if left > 0:
+            col = np.concatenate([col[:, left:0:-1], col], 1)
+        if right > 0:
+            col = np.concatenate([col, col[:, -2:-right - 2:-1]], 1)
+        al = P['aP'][y0:y1, X0:X1]
         water = None
         if P.get('water'):
             foam = np.array([1 if y < FOAM_Y else max(FOAM_MIN, 1 - (y - FOAM_Y) / FOAM_H * .6) for y in range(y0, y1)])
-            water = blur(poly_alpha([WATER] + WATER_HIDDEN, x1 - x0, y1 - y0, x0, y0) * foam[:, None], 5)
-        if P.get('pad'):   # past the right edge: more of itself, solid: its own painting from further in (a mirror
-            pad = P['pad']  # only where it starts, crossfaded, so no mirrored shapes)
-            assert col.shape[1] >= pad + 2
-            w = np.clip(np.arange(pad) / PAD_SEAM, 0, 1)
-            b0 = max(0, col.shape[1] - 2 * pad)
-            def ext(a):
-                mir, blk = a[:, -2:-pad - 2:-1], a[:, b0:b0 + pad]
-                ww = w.reshape((1, pad) + (1,) * (a.ndim - 2))
-                return mir * (1 - ww) + blk * ww
-            col = np.concatenate([col, ext(col)], 1)
-            al = np.concatenate([al, ext(al)], 1)
-            x1 += pad
-        islands.append({'name': P['name'], 'box': [x0, y0, x1, y1], 'rgb': col, 'm': al, 'water': water, 'scale': P['scale']})
+            water = blur(poly_alpha([WATER] + WATER_HIDDEN, X1 - X0, y1 - y0, X0 - EXT, y0) * foam[:, None], 5)
+        islands.append({'name': P['name'], 'box': [X0 - EXT, y0, X1 - EXT, y1], 'rgb': col, 'm': al, 'water': water,
+                        'scale': P['scale']})
 
-    # The far mountain on the left: the left mountains as built (LF over FL over UL, hidden parts included), flipped.
-    fx0, fy0, fx1 = FAR_SRC
-    can, ca = np.zeros((BOTTOM - fy0, fx1 - fx0, 3)), np.zeros((BOTTOM - fy0, fx1 - fx0))
-    for name in ('UL', 'FL', 'LF'):
-        it = next(i for i in islands if i['name'] == name)
-        bx0, by0, bx1, by1 = it['box']
-        ox0, oy0, ox1, oy1 = max(bx0, fx0), max(by0, fy0), min(bx1, fx1), min(by1, BOTTOM)
-        if ox1 <= ox0 or oy1 <= oy0:
-            continue
-        m = it['m'][oy0 - by0:oy1 - by0, ox0 - bx0:ox1 - bx0]
-        sl = (slice(oy0 - fy0, oy1 - fy0), slice(ox0 - fx0, ox1 - fx0))
-        can[sl] = can[sl] * (1 - m[..., None]) + it['rgb'][oy0 - by0:oy1 - by0, ox0 - bx0:ox1 - bx0] * m[..., None]
-        ca[sl] = ca[sl] + (1 - ca[sl]) * m
-    first = np.where((ca > .5).any(0), (ca > .5).argmax(0), ca.shape[0])   # its outline: the first solid row per column
-    # widened on both sides with more of itself, then its sides slope down to its foot (a mountain, not a block)
-    known_c = ca > .97
-    hh, ww = ca.shape
-    can = np.concatenate([np.zeros((hh, FAR_PAD, 3)), can, np.zeros((hh, FAR_PAD, 3))], 1)
-    kn = np.concatenate([np.zeros((hh, FAR_PAD), bool), known_c, np.zeros((hh, FAR_PAD), bool)], 1)
-    side = np.zeros(kn.shape, bool); side[:, :FAR_PAD] = True; side[:, -FAR_PAD:] = True
-    for sgn, part in ((1, np.s_[:, :FAR_PAD]), (-1, np.s_[:, -FAR_PAD:])):
-        need = np.zeros(kn.shape, bool); need[part] = True
-        cl, got = clone_fill(can, kn, need, [(sgn * d, 0) for d in (FAR_PAD, FAR_PAD // 2, 3 * FAR_PAD // 2)])
-        can = np.where(got[..., None], cl, can)
-    first = np.concatenate([np.full(FAR_PAD, hh), first, np.full(FAR_PAD, hh)])
-    ca = np.concatenate([np.zeros((hh, FAR_PAD)), ca, np.zeros((hh, FAR_PAD))], 1)
-    # its outline without narrow notches (where its source had gaps between planes): the upper envelope
-    env = first.astype(np.float64)
-    for _ in range(2):
-        env = np.minimum(env, np.array([env[max(0, i - 40):i + 41].min() + 0 for i in range(len(env))]) + 30)
-    first = np.minimum(first, env).astype(int)
-    cx, peak = np.argmin(first), first.min()
-    xs_ = np.arange(ca.shape[1])
-    ridge = np.maximum(np.where(side[0], 0, first), peak + FAR_SLOPE * np.abs(xs_ - cx) - FAR_SLOPE * 60)
-    ridge = np.convolve(np.pad(ridge, 15, mode='edge'), np.ones(31) / 31, mode='same')[15:-15]
-    ridge = ridge + np.where(side[0] | (ridge > first + 2), 7 * np.sin(xs_ / 23.) + 4 * np.sin(xs_ / 9.7 + 1), 0)   # uneven
-    rows = np.arange(ca.shape[0])[:, None]
-    solid = rows >= ridge[None, :]
-    can = mirror_fill(can, ((ca > .97) | side) & solid & (can.sum(2) > 0))
-    ca = np.clip(rows - ridge[None, :] + 1, 0, 1)
-    can, ca = can[:, ::-1], ca[:, ::-1]
+    # The mist at the mountains' feet, in front of all of them: the painting's own, its waterfall foam taken out.
+    b0, b1 = BASE_ROWS
+    band = rgb[b0:b1].copy()
+    bk = ~(unknown[b0:b1] | (poly_alpha([FOAM_CUT], W0, b1 - b0, 0, b0) > .01))
+    band = push_pull(band, bk)
+    band = np.where(bk[..., None], band, np.asarray(Image.fromarray(np.uint8(np.clip(band, 0, 255))).filter(ImageFilter.GaussianBlur(6)), np.float64))
+    mrow = np.asarray(Image.fromarray(np.uint8(band[FLOOR_Y - b0 - 30:FLOOR_Y - b0].mean(0)[None])).filter(ImageFilter.BoxBlur(60)), np.float64)[0]
+    band[FLOOR_Y - b0:] = mrow[None]
+    k = np.linspace(0, 1, 40)[:, None, None]                                  # into the solid mist above the floor line
+    band[FLOOR_Y - b0 - 40:FLOOR_Y - b0] = band[FLOOR_Y - b0 - 40:FLOOR_Y - b0] * (1 - k) + mrow[None] * k
+    band = np.concatenate([band, np.repeat(band[-1:], BOTTOM + 40 - b1, 0)], 0)
+    band = np.pad(band, ((0, 0), (BASE_PAD, BASE_PAD), (0, 0)), mode='reflect')
+    bx = np.arange(band.shape[1]) - BASE_PAD
+    under = np.clip(1 - np.abs(bx - 945) / 330, 0, 1)                         # under the waterfall the tops sit lower
+    tops = BASE_TOP + (BASE_TOP_FALLS - BASE_TOP) * np.minimum(1, under * 1.6) + \
+        9 * np.sin(bx / 31.) + 6 * np.sin(bx / 13.7 + 1.1) + 4 * np.sin(bx / 6.1 + 2.3)
+    f = np.clip((np.arange(b0, BOTTOM + 40)[:, None] - tops[None, :]) / BASE_RAMP, 0, 1)
+    islands.append({'name': 'base', 'box': [-BASE_PAD, b0, W0 + BASE_PAD, BOTTOM + 40], 'rgb': band,
+                    'm': f * f * (3 - 2 * f), 'water': None, 'scale': .5})
+
+    # Far mountains past the two mountains' outer slopes: pale shapes in the haze, solid.
+    fx0, fy0, fx1, fy1 = FAR_BOX
+    fxs, fys = np.arange(fx0, fx1), np.arange(fy0, fy1)
+    ridge = np.min([py + FAR_SLOPE * np.abs(fxs - px) for px, py in FAR_PEAKS], 0)
+    ridge += 6 * np.sin(fxs / 17.) + 4 * np.sin(fxs / 7.3 + .8) + 3 * np.sin(fxs / 3.1 + 2)   # a ragged forest edge
+    fa = np.clip(fys[:, None] - ridge[None, :] + 1, 0, 1)
+    rock = rgb[300:520, 1280:1600].reshape(-1, 3).mean(0)                     # the mountains' own colour
     horizon = rgb[150:170, 900:1100].reshape(-1, 3).mean(0)
-    can = can * (1 - FAR_TINT) + horizon * FAR_TINT
-    k, (pkx, pky) = FAR_SCALE, FAR_PEAK
-    cpx = can.shape[1] - 1 - cx                          # the peak's column after the flip
-    w, h = round(can.shape[1] * k), round(can.shape[0] * k)
-    # placed so its peak is at FAR_PEAK; its base goes on down to BOTTOM or below
-    bx0 = round(pkx - cpx * k); by0 = round(pky - peak * k)
-    fc, fa = resized(can, w, h), resized(ca, w, h)
-    if by0 + h < BOTTOM:
-        ext = BOTTOM - by0 - h
-        fc = np.concatenate([fc, np.repeat(fc[-1:], ext, 0)], 0); fa = np.concatenate([fa, np.repeat(fa[-1:], ext, 0)], 0)
-        h += ext
-    # further from the peak, hazier (aerial perspective: its sides fade towards the horizon's blue)
-    d = np.clip(np.abs(np.arange(w) - cpx * k) / (w / 2), 0, 1)[None, :, None]
-    fc = fc * (1 - .35 * d) + horizon * .35 * d
-    islands.append({'name': 'far', 'box': [bx0, by0, bx0 + w, by0 + h], 'rgb': fc, 'm': fa, 'water': None, 'scale': .6})
+    mist = rgb[600:700, 560:680].reshape(-1, 3).mean(0)
+    depth = np.clip((fys[:, None] - ridge[None, :]) / 260, 0, 1)[..., None]  # from its ridge down into the mist
+    mix = FAR_HAZE_MIX[0] + (FAR_HAZE_MIX[1] - FAR_HAZE_MIX[0]) * depth
+    rnd = np.random.RandomState(3)
+    tex = np.asarray(Image.fromarray(np.uint8(rnd.rand(fy1 - fy0, fx1 - fx0) * 255)).filter(ImageFilter.GaussianBlur(5)), np.float64) / 255
+    shade = (.86 + .28 * tex)[..., None] * (1 - .12 * np.clip((fxs[None, :] % 160 - 80) / 80., -1, 1)[..., None] * 0)
+    fc = (rock * shade) * (1 - mix) + (horizon * (1 - depth) + mist * depth) * mix
+    islands.append({'name': 'far', 'box': [fx0, fy0, fx1, fy1], 'rgb': fc, 'm': fa, 'water': None, 'scale': .4})
 
     # Haze: the painting where it shows, smoothly filled elsewhere; below the painted floor the mist goes on down
     # (the mean of rows 690-720 per column, paler further down); past both edges it is mirrored.
