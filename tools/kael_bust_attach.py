@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""Kael's Meshy bust on his bones (11/11/2026, Denis: "ora adopera"; docs/meshy/KAEL.md, "Busto sulle ossa"): the bust and
+arms from Meshy, cleaned by tools/kael_bust.py with Ren's hands (busto_k6.glb and busto_k6_hands.npz beside it), as a part
+of Kael's package like his head (src/e_model.js mdPartData): his own torso, arms and hands hidden under it, his head on top,
+his legs below.
+
+- Where: SCALE m per bust unit, its sash's middle (SASH_B, bust units) on his (SASH_K m), centred as his (CENTRE). Measured:
+  at this scale its chest's depth, its shoulders' height and its sash lie on his; a fit of the whole torso's surface gave
+  no better place (its shape is the sheet's, his the first drawing's: its deltoids are 3 cm narrower each).
+- Its skirt's flat bottom left out (Meshy closed it: a black lid across the thighs; the skirt is drawn from both sides).
+  Its collar's top left out under the head's collar (COLLAR_CUT: its trim stuck out of it as the head tipped back).
+- Its joints: the elbows and the wrists from its bracers' purple bands (each band's middle; the joints as far from them as
+  his are from his, in proportion to the bracers' lengths); the shoulders from the deltoids (a sphere fit on each, his
+  measured the same way 1-2 cm from his joints): SHOULDER m from his (inward, up, forward). Its arms are a little
+  shorter than his (the sheet's): his arm bones are shortened to them (src/e_model.js: the part's bones), the arms keep
+  their shape.
+- Posed as his bind pose (the animations are made for it): each upper arm turned about its shoulder onto his upper arm's
+  direction, each forearm about its elbow onto his, each hand about its wrist so that it lies in his hand bone as Ren's
+  lay in Ren's (the animations' hands are Ren's; his fists' turns are Ren's as they are). Skinned for that (provisional): the share of torso, upper arm, forearm and hand of his nearest
+  point facing the same way (Ren's for his hands), smoothed.
+- Skinned: his nearest point's weights facing the same way, its arms first stretched to his arms' lengths (so the elbow's
+  and the wrist's bends fall where his do); Ren's own weights on Ren's hands, finger bones included; smoothed across the
+  wrists' seams (SEAM m round them).
+- The finger bones: Ren's, laid as his hands were (the fit of tools/kael_bust.py, the place, the pose: in the hand bone as
+  Ren's, scaled), the fists' turns Ren's (src/e_model.js: the part's fingers in place of the look's).
+- His own triangles hidden: those mostly on the upper body's bones (HIDE_W), his torso from under its sash up (his sash
+  and its knot were wider than its), and his trousers under its skirt. The skirt (the sheet's tunic, over the trousers):
+  where his baggy trousers stood out of it (1-2 cm at the sides), pushed out SKIRT_OUT over them, smoothed. His old sash's
+  tails stay (they hang from under its knot) until the ribbons.
+
+usage: python3 tools/kael_bust_attach.py BUST.glb   (writes wip_assets/kael/kael_bust.json, .bin, .png; Kael's look needs
+bust:true in CFG.looks.kael)"""
+import io, json, os, sys
+import numpy as np
+from PIL import Image
+from scipy.spatial import cKDTree
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mesh_prep'))
+import glbio
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+KAEL_PKG = os.path.join(ROOT, 'wip_assets', 'kael')
+REN = os.path.join(ROOT, 'assets', 'ren', 'ren.json'), os.path.join(ROOT, 'viewer_assets', 'ren', 'ren_look.json')
+SCALE, SASH_B, SASH_K, CENTRE = .42, -.21, 1.08, (-.005, 0.)
+SHOULDER = (.015, -.010, .022)   # m: the bust's shoulder joints from his: inward, up, forward
+SIDES = (('Left', 1), ('Right', -1))   # (his left: +x)
+GROUPS = ('Arm', 'ForeArm', 'Hand')    # (with the torso: the pose's four)
+FACE = .3                              # (nearest points: their normals within this of each other's)
+SMOOTH, SEAM, SEAM_SMOOTH = 4, .03, 6
+HIDE_W = .5
+COLLAR_CUT = (1.472, (.0085, -.005), .11)   # m: its collar over this height within [2] of the neck's axis [1] (the head's collar from 1.464 m)
+SASH = (-.32, -.10)                    # the bust's sash: its bottom, its top (bust units)
+SKIRT_OUT, SKIRT_WIN, SKIRT_SMOOTH, HEM_KEEP = .006, (.012, .03), 10, .025   # the skirt over his trousers: so far out, looking within [1][0] m of its normal up to [1][1] m out; the push smoothed; his trousers kept up to [3] m over its hem (under it they showed the sky)
+UPPER = ('Spine02', 'Spine01', 'Spine', 'neck', 'LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand', 'RightShoulder', 'RightArm', 'RightForeArm', 'RightHand')
+BUST_PURPLE, KAEL_PURPLE = (166, 92, 203), lambda c: (c[:, 2] > 95) & (c[:, 2] - c[:, 1] > 45)
+
+
+def qm(q):
+    x, y, z, w = q
+    return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)], [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+
+
+def mq(R):
+    """A rotation matrix's quaternion (x, y, z, w)."""
+    t = np.trace(R)
+    if t > 0:
+        s = np.sqrt(t + 1) * 2; return np.array([(R[2, 1] - R[1, 2]) / s, (R[0, 2] - R[2, 0]) / s, (R[1, 0] - R[0, 1]) / s, .25 * s])
+    i = int(np.argmax(np.diag(R))); j, k = (i + 1) % 3, (i + 2) % 3
+    s = np.sqrt(1 + R[i, i] - R[j, j] - R[k, k]) * 2; q = np.zeros(4)
+    q[i] = .25 * s; q[j] = (R[j, i] + R[i, j]) / s; q[k] = (R[k, i] + R[i, k]) / s; q[3] = (R[k, j] - R[j, k]) / s
+    return q
+
+
+def turn(a, b):
+    """The least rotation taking direction a onto direction b."""
+    a = a / np.linalg.norm(a); b = b / np.linalg.norm(b); v = np.cross(a, b); c = a @ b
+    if np.linalg.norm(v) < 1e-9: return np.eye(3)
+    K = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.eye(3) + K + K @ K / (1 + c)
+
+
+def package(js, pos_key='mesh'):
+    J = json.load(open(js)); B = open(js[:-4] + 'bin', 'rb').read(); me = J[pos_key]
+    f = lambda a, dt=np.float32: np.frombuffer(B, dt, a[1], a[0])
+    out = dict(J=J, P=f(me['pos']).reshape(-1, 3).astype(float), N=f(me['nor']).reshape(-1, 3).astype(float), UV=f(me['uv']).reshape(-1, 2).astype(float),
+               JN=f(me['jnt'], np.uint8).reshape(-1, 4).astype(np.int64), WG=f(me['wgt']).reshape(-1, 4).astype(float),
+               I=f(me['idx'], np.uint16 if me['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64), names=[b['n'] for b in J['bones']])
+    Wm = []
+    for b in J['bones']:
+        M = np.eye(4); M[:3, :3] = qm(b['q']); M[:3, 3] = b['t']; Wm.append(Wm[b['p']] @ M if b['p'] >= 0 else M)
+    out['Wm'] = np.array(Wm)
+    return out
+
+
+def look(js, n):
+    L = json.load(open(js)); B = open(js[:-4] + 'bin', 'rb').read()
+    si = np.frombuffer(B, np.uint8, L['skin'][0][1], L['skin'][0][0]).reshape(n, 4).astype(np.int64)
+    sw = np.frombuffer(B, np.float32, L['skin'][1][1], L['skin'][1][0]).reshape(n, 4).astype(float)
+    return L, si, sw
+
+
+def fingers_world(fingers, names, Wm):
+    """The finger bones' places (identity turns: the hand's) in the bind pose; and the hands' world turns."""
+    pos = {}
+    for f in fingers:
+        if f['p'] in pos: pos[f['n']] = pos[f['p']] + Wm[names.index(f['p'].split('Hand')[0] + 'Hand')][:3, :3] @ np.array(f['t'])
+        else: M = Wm[names.index(f['p'])]; pos[f['n']] = M[:3, 3] + M[:3, :3] @ np.array(f['t'])
+    return pos
+
+
+def weld_graph(P, I):
+    _, wv = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_inverse=True); wv = wv.ravel(); nw = wv.max() + 1; W = wv[I]
+    E = np.unique(np.sort(np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]]), 1), axis=0)
+    A = coo_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr()
+    return wv, A, np.maximum(np.asarray(A.sum(1)).ravel(), 1)
+
+
+def smooth(V, wv, A, deg, rounds, sel=None):
+    """Per vertex values averaged with their neighbours' (the welded copies as one), rounds times, on sel's vertices."""
+    Vw = np.zeros((wv.max() + 1,) + V.shape[1:]); np.add.at(Vw, wv, V); Vw /= np.bincount(wv)[:, None]
+    sw = None if sel is None else np.bincount(wv, weights=sel.astype(float)) > 0
+    for _ in range(rounds):
+        nxt = .5 * Vw + .5 * (A @ Vw) / deg[:, None]
+        Vw = nxt if sw is None else np.where(sw[:, None], nxt, Vw)
+    return Vw[wv]
+
+
+def nearest_facing(src_P, src_N, dst_P, dst_N, k=24, far=.08):
+    """For each dst point, the index of the nearest src point whose normal agrees (FACE), else the nearest."""
+    d, nn = cKDTree(src_P).query(dst_P, k=k)
+    agree = (src_N[nn] * dst_N[:, None, :]).sum(2) > FACE
+    agree &= d < far
+    first = np.where(agree.any(1), agree.argmax(1), 0)
+    return nn[np.arange(len(dst_P)), first]
+
+
+def forearm(X, pur, sel, E0, H0):
+    """The forearm's line (slices' middles, from E0 toward H0) and its bracer's two purple bands' middles: the top's, the cuff's."""
+    E, H = E0.copy(), H0.copy()
+    for _ in range(4):
+        ax = (H - E) / np.linalg.norm(H - E); L = np.linalg.norm(H - E); t = (X - E) @ ax; r = np.linalg.norm((X - E) - np.outer(t, ax), axis=1)
+        s = sel & (r < .07); c1 = X[s & (t > .02) & (t < .06)].mean(0); c2 = X[s & (t > L - .06) & (t < L - .02)].mean(0)
+        d = (c2 - c1) / np.linalg.norm(c2 - c1); E, H = c1 - d * .04, c2 + d * .04
+    ax = (H - E) / np.linalg.norm(H - E); L = np.linalg.norm(H - E); t = (X - E) @ ax; r = np.linalg.norm((X - E) - np.outer(t, ax), axis=1)
+    s = sel & (r < .09); ts = np.arange(-.05, L + .06, .01)
+    fr = np.array([pur[s & (t >= a) & (t < a + .02)].mean() if (s & (t >= a) & (t < a + .02)).sum() > 5 else 0 for a in ts])
+    half = L / 2; top = ts[np.argmax(np.where(ts < half, fr, -1))] + .01; cuff = ts[np.argmax(np.where(ts >= half, fr, -1))] + .01
+    band = lambda tc: X[s & pur & (np.abs(t - tc) < .015)].mean(0)
+    return band(top), band(cuff)
+
+
+def main(bust):
+    K = package(os.path.join(KAEL_PKG, 'kael.json')); names = K['names']; nb = len(names); Wm = K['Wm']
+    KL, _, _ = look(os.path.join(KAEL_PKG, 'kael_look.json'), len(K['P']))
+    KT = np.asarray(Image.open(os.path.join(KAEL_PKG, 'kael_painted.png')).convert('RGB')).astype(float); S = KT.shape[0]
+    kvc = KT[np.clip((K['UV'][:, 1] * S).astype(int), 0, S - 1), np.clip((K['UV'][:, 0] * S).astype(int), 0, S - 1)]
+    m = glbio.read(bust); Pb, Nb, UVb, Ib = m['pos'].astype(float), m['nor'].astype(float), m['uv'].astype(float), m['idx'].astype(np.int64)
+    side_f = np.load(bust[:-4] + '_hands.npz'); rid = side_f['rid']
+    assert np.abs(side_f['pos'] - Pb).max() < 1e-5, 'busto_*_hands.npz is not this GLB\'s'
+    BT = Image.open(io.BytesIO(m['img'])).convert('RGB'); bt = np.asarray(BT).astype(float); BS = bt.shape[0]
+    bvc = bt[np.clip((UVb[:, 1] * BS).astype(int), 0, BS - 1), np.clip((UVb[:, 0] * BS).astype(int), 0, BS - 1)]
+    off = np.array([CENTRE[0], SASH_K - SASH_B * SCALE, CENTRE[1]])
+    X = Pb * SCALE + off; NX = Nb / np.maximum(np.linalg.norm(Nb, axis=1, keepdims=True), 1e-9)
+    print('placed: %.3f m per unit; from y %.3f to %.3f m' % (SCALE, X[:, 1].min(), X[:, 1].max()))
+    # the skirt's lid (Meshy closed its bottom): the largest piece of triangles facing down under the waist
+    fn = np.cross(Pb[Ib[:, 1]] - Pb[Ib[:, 0]], Pb[Ib[:, 2]] - Pb[Ib[:, 0]]); fn /= np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12); c = Pb[Ib].mean(1)
+    cand = (fn[:, 1] < -.5) & (np.abs(c[:, 0]) < .35) & (c[:, 1] < -.45)
+    wv, A, deg = weld_graph(Pb, Ib); W = wv[Ib]
+    E = np.concatenate([np.c_[np.arange(len(Ib)), np.sort(W[:, [a, b]], 1)] for a, b in ((0, 1), (1, 2), (2, 0))])
+    key = E[:, 1] * (wv.max() + 1) + E[:, 2]; o = np.argsort(key, kind='stable'); ks = key[o]; same = ks[1:] == ks[:-1]
+    ta, tb = E[o[1:][same], 0], E[o[:-1][same], 0]; okp = cand[ta] & cand[tb]
+    _, lab = connected_components(coo_matrix((np.ones(okp.sum()), (ta[okp], tb[okp])), shape=(len(Ib), len(Ib))), directed=False)
+    lid = cand & (lab == np.bincount(lab[cand]).argmax())
+    Ib = Ib[~lid]
+    print('skirt: its lid left out, %d triangles' % int(lid.sum()))
+    # its collar's top under his head's collar (tools/kael_head.py: from its bottom up, as wide as his old one): left out (its
+    # purple trim stuck out of the head's as the head tipped back in the high kick)
+    cX = X[Ib].mean(1); top = (cX[:, 1] > COLLAR_CUT[0]) & (np.hypot(cX[:, 0] - COLLAR_CUT[1][0], cX[:, 2] - COLLAR_CUT[1][1]) < COLLAR_CUT[2])
+    Ib = Ib[~top]
+    print('collar: its top over %.3f m left out, %d triangles' % (COLLAR_CUT[0], int(top.sum())))
+    wv, A, deg = weld_graph(Pb, Ib)
+    # Ren's: his package, his hands' weights and finger bones
+    R = package(REN[0]); RL, rsi, rsw = look(REN[1], len(R['P'])); assert R['names'] == names and [f['n'] for f in RL['fingers']] == [f['n'] for f in KL['fingers']]
+    fnames = [f['n'] for f in KL['fingers']]; allnames = names + fnames
+    rf = fingers_world(RL['fingers'], names, R['Wm'])
+    sim = {sd: {k_: side_f['%s_%s' % (side, k_)] for k_ in ('sc', 'mu_s', 'R', 'mu_d')} for side, sd in SIDES}
+    to_bust = lambda Y, sd: (float(sim[sd]['sc']) * (Y - sim[sd]['mu_s']) @ sim[sd]['R'].T + sim[sd]['mu_d']) * SCALE + off
+    isR = rid >= 0
+    # the joints
+    pur_b = np.abs(bvc - BUST_PURPLE).max(1) < 12; pur_k = KAEL_PURPLE(kvc)
+    J = {}
+    for side, sd in SIDES:
+        Ak, Ek, Hk = (Wm[names.index(side + n)][:3, 3] for n in GROUPS)
+        top_k, cuff_k = forearm(K['P'], pur_k, np.sign(K['P'][:, 0]) == sd, Ek, Hk)
+        axk = (Hk - Ek) / np.linalg.norm(Hk - Ek); o_top = (top_k - Ek) @ axk; o_cuff = (Hk - cuff_k) @ axk; lk_ = (cuff_k - top_k) @ axk
+        ring = np.zeros(len(X), bool); ring[Ib[(isR[Ib].sum(1) > 0) & (isR[Ib].sum(1) < 3)].ravel()] = True; ring &= ~isR & (np.sign(X[:, 0]) == sd)
+        H0 = X[ring].mean(0); arm = ~isR & (sd * X[:, 0] > .17)
+        E0 = X[arm & (np.abs(X[:, 1] - (H0[1] + .21)) < .01)].mean(0)
+        top_b, cuff_b = forearm(X, pur_b, arm & (np.sign(X[:, 0]) == sd), E0, H0)
+        axb = (cuff_b - top_b) / np.linalg.norm(cuff_b - top_b); k_ = np.linalg.norm(cuff_b - top_b) / lk_
+        Eb = top_b - o_top * k_ * axb; Hb = cuff_b + o_cuff * k_ * axb
+        Ab = Ak + np.array([-sd * SHOULDER[0], SHOULDER[1], SHOULDER[2]])
+        J[sd] = dict(Ak=Ak, Ek=Ek, Hk=Hk, Ab=Ab, Eb=Eb, Hb=Hb)
+        print('%s: bracer %.3f m (his %.3f); upper arm %.3f m (his %.3f), forearm %.3f m (his %.3f); elbow off his by %s, wrist %s' % (
+            side, np.linalg.norm(cuff_b - top_b), lk_, np.linalg.norm(Eb - Ab), np.linalg.norm(Ek - Ak), np.linalg.norm(Hb - Eb), np.linalg.norm(Hk - Ek),
+            np.round(Eb - Ek, 3), np.round(Hb - Hk, 3)))
+    # the pose's turns
+    for side, sd in SIDES:
+        j = J[sd]; Ru = turn(j['Eb'] - j['Ab'], j['Ek'] - j['Ak']); Eb2 = j['Ab'] + Ru @ (j['Eb'] - j['Ab'])
+        Rf = turn(Ru @ (j['Hb'] - j['Eb']), j['Hk'] - j['Ek']) @ Ru; Hb2 = Eb2 + Rf @ (j['Hb'] - j['Eb'])
+        Rk = Wm[names.index(side + 'Hand')][:3, :3]; Rr = R['Wm'][names.index(side + 'Hand')][:3, :3]
+        Rh = Rk @ Rr.T @ sim[sd]['R'].T   # (the hand as Ren's lies in his hand bone: the animations' and the fists' own)
+        ang = lambda M: np.degrees(np.arccos(np.clip((np.trace(M) - 1) / 2, -1, 1)))
+        print('%s: upper arm turned %.1f deg, forearm %.1f more, hand %.1f more' % (side, ang(Ru), ang(Rf @ Ru.T), ang(Rh @ Rf.T)))
+        j.update(Ru=Ru, Rf=Rf, Rh=Rh, Eb2=Eb2, Hb2=Hb2)
+    # provisional skin (the pose's four shares per vertex): his nearest point facing the same way, Ren's on Ren's hands
+    gid = np.zeros(len(allnames), np.int64)
+    for g, n in enumerate(GROUPS):
+        for side, _ in SIDES: gid[allnames.index(side + n)] = g + 1
+    for fnm in fnames: gid[allnames.index(fnm)] = 3
+    near = nearest_facing(K['P'], K['N'], X, NX)
+    G = np.zeros((len(X), 4)); np.add.at(G, (np.repeat(np.arange(len(X)), 4), gid[K['JN'][near]].ravel()), K['WG'][near].ravel())
+    rr = rid[isR]; Gr = np.zeros((len(rr), 4)); np.add.at(Gr, (np.repeat(np.arange(len(rr)), 4), gid[rsi[rr]].ravel()), rsw[rr].ravel()); G[isR] = Gr
+    G = smooth(G, wv, A, deg, SMOOTH); G /= G.sum(1, keepdims=True)
+    # the pose
+    X2 = X * G[:, :1]; N2 = NX * G[:, :1]
+    for side, sd in SIDES:
+        j = J[sd]; s_ = (X[:, 0] >= 0) == (sd > 0)   # (each vertex on one side)
+        for g, (Rm, piv, piv2) in enumerate(((j['Ru'], j['Ab'], j['Ab']), (j['Rf'], j['Eb'], j['Eb2']), (j['Rh'], j['Hb'], j['Hb2'])), 1):
+            w = np.where(s_, G[:, g], 0.)[:, None]; X2 += w * ((X - piv) @ Rm.T + piv2); N2 += w * (NX @ Rm.T)
+    N2 /= np.maximum(np.linalg.norm(N2, axis=1, keepdims=True), 1e-9)
+    # the skin: his nearest point facing the same way, the arms stretched to his lengths first; Ren's on Ren's hands
+    V = X2 * G[:, :1]
+    for side, sd in SIDES:
+        j = J[sd]; s_ = (X[:, 0] >= 0) == (sd > 0)   # (each vertex on one side)
+        du = (j['Ek'] - j['Ak']) / np.linalg.norm(j['Ek'] - j['Ak']); dfa = (j['Hk'] - j['Ek']) / np.linalg.norm(j['Hk'] - j['Ek'])
+        ku = np.linalg.norm(j['Ek'] - j['Ak']) / np.linalg.norm(j['Eb2'] - j['Ab']); kfa = np.linalg.norm(j['Hk'] - j['Ek']) / np.linalg.norm(j['Hb2'] - j['Eb2'])
+        Su = np.eye(3) + (ku - 1) * np.outer(du, du); Sf = np.eye(3) + (kfa - 1) * np.outer(dfa, dfa)
+        for g, (St, piv_b, piv_k) in enumerate(((Su, j['Ab'], j['Ak']), (Sf, j['Eb2'], j['Ek']), (np.eye(3), j['Hb2'], j['Hk'])), 1):
+            V += np.where(s_, G[:, g], 0.)[:, None] * ((X2 - piv_b) @ St.T + piv_k)
+    near = nearest_facing(K['P'], K['N'], V, N2)
+    Wf = np.zeros((len(X), len(allnames))); np.add.at(Wf, (np.repeat(np.arange(len(X)), 4), K['JN'][near].ravel()), K['WG'][near].ravel())
+    Wr = np.zeros((len(rr), len(allnames))); np.add.at(Wr, (np.repeat(np.arange(len(rr)), 4), rsi[rr].ravel()), rsw[rr].ravel()); Wf[isR] = Wr
+    Wf = smooth(Wf, wv, A, deg, 2, ~isR)
+    seam_c = np.zeros(len(X), bool); seam_c[Ib[(isR[Ib].sum(1) > 0) & (isR[Ib].sum(1) < 3)].ravel()] = True
+    dseam = cKDTree(X2[seam_c]).query(X2)[0]
+    Wf = smooth(Wf, wv, A, deg, SEAM_SMOOTH, dseam < SEAM)
+    top = np.argsort(-Wf, 1)[:, :4]; tw = np.take_along_axis(Wf, top, 1); tw /= np.maximum(tw.sum(1, keepdims=True), 1e-12)
+    print('skin: %s' % {allnames[i]: int(c_) for i, c_ in enumerate(np.bincount(top[:, 0], minlength=len(allnames))) if c_})
+    # the bones: his arms' lengths as its, his shoulders' joints at its; the finger bones Ren's, laid on its hands
+    bones = {}
+    for side, sd in SIDES:
+        j = J[sd]; sh = Wm[names.index(side + 'Shoulder')]
+        bones[side + 'Arm'] = (sh[:3, :3].T @ (j['Ab'] - sh[:3, 3])).tolist()
+        for n, a, b_, a2, b2 in (('ForeArm', 'Ak', 'Ek', 'Ab', 'Eb2'), ('Hand', 'Ek', 'Hk', 'Eb2', 'Hb2')):
+            t0 = np.array(K['J']['bones'][names.index(side + n)]['t'])
+            bones[side + n] = (t0 * np.linalg.norm(j[b2] - j[a2]) / np.linalg.norm(j[b_] - j[a])).tolist()
+    fingers = []
+    for f in RL['fingers']:
+        side = 'Left' if f['n'].startswith('Left') else 'Right'; sd = dict(SIDES)[side]; j = J[sd]
+        Rk = Wm[names.index(side + 'Hand')][:3, :3]; Rr = R['Wm'][names.index(side + 'Hand')][:3, :3]
+        place = lambda Y: (to_bust(Y[None], sd)[0] - j['Hb']) @ j['Rh'].T + j['Hb2']
+        p_w = place(rf[f['n']]); par = j['Hb2'] if f['p'] == side + 'Hand' else place(rf[f['p']])
+        M = j['Rh'] @ sim[sd]['R']; C = Rk.T @ M @ Rr; qc = mq(C); qr = np.array(f['fist'])
+        def qmul(a, b):
+            x1, y1, z1, w1 = a; x2, y2, z2, w2 = b
+            return np.array([w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2, w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2, w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2, w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2])
+        fist = qmul(qmul(qc, qr), qc * [-1, -1, -1, 1])
+        fingers.append(dict(n=f['n'], p=f['p'], t=[round(float(v), 5) for v in Rk.T @ (p_w - par)], fist=[round(float(v), 5) for v in fist / np.linalg.norm(fist)]))
+    # his own triangles under it: those mostly on the upper body's bones, all of his torso from under its sash up (his sash
+    # and its knot stood out of it), and under its sash those inside its skirt (not under its hem)
+    up = np.isin(K['JN'], [names.index(n) for n in UPPER]); wu = (K['WG'] * up).sum(1)
+    hid = wu[K['I']].mean(1) > HIDE_W
+    ck = K['P'][K['I']].mean(1); sash_y = SASH_K + (SASH[0] - SASH_B) * SCALE
+    band = (ck[:, 1] > sash_y - .01) & (np.hypot(ck[:, 0] - CENTRE[0], ck[:, 2] - CENTRE[1]) < .3)
+    # (its skirt over his trousers: where they stand out of it, pushed out to SKIRT_OUT m over them along its normal, the push
+    # smoothed over the skirt; their parts under it then hidden)
+    skirt = (X2[:, 1] < sash_y) & (G[:, 0] > .5) & ~isR & (np.abs(X2[:, 0]) < .3)
+    kv = np.zeros(len(K['P']), bool); kv[K['I'][~(hid | band)].ravel()] = True; kp = np.nonzero(kv)[0]
+    nh = N2.copy(); nh[:, 1] = 0; nh /= np.maximum(np.linalg.norm(nh, axis=1, keepdims=True), 1e-9)
+    push = np.zeros(len(X2)); tree = cKDTree(K['P'][kp])
+    for v in np.nonzero(skirt)[0]:
+        cand = np.array(tree.query_ball_point(X2[v] + nh[v] * SKIRT_WIN[1] / 2, SKIRT_WIN[1] / 2 + SKIRT_WIN[0]), int)
+        if not len(cand): continue
+        Y = K['P'][kp[cand]] - X2[v]; t = Y @ nh[v]; lat = np.linalg.norm(Y - np.outer(t, nh[v]), axis=1)
+        ok_ = (lat < SKIRT_WIN[0]) & (t > -.01) & (t < SKIRT_WIN[1])
+        if ok_.any(): push[v] = max(0., t[ok_].max() + SKIRT_OUT)
+    push = smooth(push[:, None], wv, A, deg, SKIRT_SMOOTH, skirt)[:, 0] * skirt
+    X2 = X2 + nh * push[:, None]
+    print('skirt: pushed out over his trousers at %d vertices (%.1f mm at most, %.1f mm on average where pushed)' % (
+        int((push > 1e-4).sum()), 1000 * push.max(), 1000 * push[push > 1e-4].mean() if (push > 1e-4).any() else 0))
+    sk = np.nonzero(skirt)[0]; d_, nn_ = cKDTree(X2[sk]).query(ck); q = sk[nn_]
+    angle = lambda Y: np.degrees(np.arctan2(Y[:, 0] - CENTRE[0], Y[:, 2] - CENTRE[1]))
+    ab = np.round((angle(X2[sk]) + 180) / 3).astype(int) % 120; hem = np.full(120, 9.); np.minimum.at(hem, ab, X2[sk, 1])
+    for _ in range(2): hem = np.minimum(hem, np.minimum(np.roll(hem, 1), np.roll(hem, -1)))   # (its lowest within 6 degrees)
+    hem_c = hem[np.round((angle(ck) + 180) / 3).astype(int) % 120]
+    inside = (ck[:, 1] <= sash_y) & (((ck - X2[q]) * nh[q]).sum(1) < .003) & (d_ < .06) & (ck[:, 1] > hem_c + HEM_KEEP)
+    hide = np.nonzero(hid | band | inside)[0].astype(np.uint32)
+    print('his triangles hidden: %d (%d on the upper body, %d more of his torso, %d under the skirt)' % (
+        len(hide), int(hid.sum()), int((band & ~hid).sum()), int((inside & ~hid & ~band).sum())))
+    # the part
+    used = np.unique(Ib); mp = -np.ones(len(X), np.int64); mp[used] = np.arange(len(used)); It = mp[Ib]
+    pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
+    blob = b''; jo = {'v': 1, 'verts': int(len(used)), 'tris': int(len(It)), 'scale': SCALE}
+    def put(key, arr):
+        nonlocal blob
+        blob = pad(blob); jo[key] = [len(blob), int(arr.size)]; blob += np.ascontiguousarray(arr).tobytes()
+    put('pos', X2[used].astype(np.float32)); put('nor', N2[used].astype(np.float32)); put('uv', UVb[used].astype(np.float32))
+    put('jnt', top[used].astype(np.uint8)); put('wgt', tw[used].astype(np.float32))
+    put('idx', It.astype(np.uint16 if len(used) < 65536 else np.uint32)); put('hide', hide)
+    jo['bones'] = {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}; jo['fingers'] = fingers
+    open(os.path.join(KAEL_PKG, 'kael_bust.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_bust.json'), 'w'), separators=(',', ':'))
+    BT.save(os.path.join(KAEL_PKG, 'kael_bust.png'), optimize=True)
+    print('written: kael_bust (%d vertices, %d triangles)' % (len(used), len(It)))
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2: sys.exit(__doc__)
+    main(sys.argv[1])

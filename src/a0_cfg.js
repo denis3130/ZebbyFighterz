@@ -112,8 +112,9 @@ const CFG={
     // Kael (10/11/2026: Meshy's body from Denis's drawing of him without hair or clothes, docs/ref/personaggi/kael_base.png;
     // his package in wip_assets/kael, only in his viewer until his hair and clothes are made): his own finger bones and
     // the outline's widths (tools/char_look.py), the light's normals smoothed, Ren's clips on his skeleton and Ren's guard
-    // (his head held as high).
-    kael:{head:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
+    // (his head held as high); his head and his bust from Meshy (tools/kael_head.py, tools/kael_bust_attach.py: bust:
+    // its hands Ren's, with their finger bones).
+    kael:{head:true, bust:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
       clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,

@@ -46,7 +46,10 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
    testa, vedi sotto (circa 30 secondi). I passi 5-8 si possono rifare sempre da capo: danno sempre lo stesso risultato.
 9. `python3 tools/kael_body.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_arms.py`): il corpo nei colori dei fogli del
    corpo (vedi "Corpo dai fogli del corpo"); scrive `kael_painted.png`, che le pagine prendono al posto del JPEG.
-10. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
+10. Testa e busto da Meshy (pezzi a parte, sopra il corpo): `python3 tools/kael_head.py meshy/head/kael_k1_face.glb` (vedi
+    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k6.glb` (vedi
+    "Busto sulle ossa"; prima `tools/kael_bust.py`, che scrive anche `busto_k6_hands.npz`).
+11. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
 - **Ciocca sull'occhio destro**: Meshy l'aveva fatta scendere sull'occhio, il disegno li mostra tutti e due con una
@@ -560,8 +563,34 @@ il nodo in vita resta di Meshy (Denis: "no il nodo in vita no solo togli meglio 
   sulla superficie dalla punta), bordo lisciato; sotto i polsini, dove c'era la mano di Meshy, via il nero e le isolette
   viola. Provati e lasciati: bordo a distanza dal taglio (a zig-zag sui triangoli grandi di Ren), pollice dentro un
   cilindro (lasciava una linguetta di pelle nell'incavo), nero sul guanto dalla luce (macchie).
-- Prossimi passi: metterlo sulle ossa di Kael al posto del suo busto e delle braccia (come la testa,
-  `tools/kael_head.py`), la testa sopra, le gambe di adesso sotto; poi le code della fascia come nastri.
+- Prossimo passo: le code della fascia come nastri (vedi "Busto sulle ossa").
+
+## Busto sulle ossa (11/11 sera, `tools/kael_bust_attach.py`; da approvare)
+Denis: "ora adopera". Il busto `busto_k6.glb` è un pezzo del pacchetto come la testa (`wip_assets/kael/kael_bust.json`,
+`.bin`, `.png`; `CFG.looks.kael.bust`, `src/e_model.js` `mdPartData`): sotto di lui busto, braccia e mani di Kael sono
+nascosti, sopra c'è la testa, sotto le gambe di adesso. **Non pubblicato: le immagini vanno a Denis e si pubblica solo col
+suo ok.**
+- Posto: 0,42 m per unità del busto, la fascia sulla sua (1,08 m). A questa scala profondità del petto, altezza delle
+  spalle e fascia coincidono; le spalle del foglio del busto sono 3 cm più strette per lato di quelle del primo disegno.
+- Giunture misurate sul busto: gomiti e polsi dalle bande viola delle polsiere (alla stessa distanza dalle bande che hanno
+  in Kael, in proporzione alla polsiera), spalle dai deltoidi (sfere: 1,5 cm più dentro, 1 cm più giù, 2 cm più avanti
+  delle sue). Le braccia del busto sono il 7-10% più corte delle sue: si accorciano le ossa delle braccia
+  (`bones` nel pezzo), le braccia restano come sono.
+- Posa: messe nella posa di riposo di Kael (le animazioni sono fatte per quella): braccio 12-15° più aperto, avambraccio
+  32-38°, la mano girata come quella di Ren sta nell'osso della mano di Ren (le animazioni e i pugni sono di Ren).
+- Pelle: i pesi del punto di Kael più vicino rivolto dallo stesso lato, con le braccia prima allungate alle sue lunghezze
+  (così gomito e polso piegano dove piegano i suoi); sulle mani i pesi di Ren con le ossa delle dita (quelle di Ren messe
+  sulle mani nuove, i suoi pugni così come sono); lisciati attorno alla cucitura dei polsi.
+- Gonna della tunica (il pannello del foglio sotto la fascia): sopra i pantaloni larghi. Il tappo nero piatto con cui
+  Meshy l'aveva chiusa sotto è tolto (gonna aperta, disegnata dai due lati); dove i pantaloni sporgevano (1-2 cm ai lati) è
+  spinta fuori di 6 mm sopra di loro, lisciata; i pantaloni sotto la gonna sono nascosti, ma non negli ultimi 2,5 cm sopra
+  l'orlo (si vedeva il cielo).
+- Di Kael nascosti: i triangoli per lo più sulle ossa del busto e delle braccia, tutto il suo busto da sotto la fascia in su
+  (la sua fascia e il nodo sporgevano dalla nuova) e i pantaloni sotto la gonna. Le code della vecchia fascia restano
+  (pendono da sotto il nodo) finché non ci sono i nastri.
+- Luce piatta sul busto (la sua pittura ha le ombre del foglio, come nelle immagini viste da Denis), contorno del corpo.
+- Controllato nel visore: guardia, pugno forte, calcio forte, calcio lanciante, speciale (mani aperte), presa, a terra; pugni,
+  collo e spalle da vicino. Triangoli disegnati 84.000 → 111.000 (con i contorni).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

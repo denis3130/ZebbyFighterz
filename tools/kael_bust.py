@@ -169,13 +169,15 @@ def ren_hands(P, N, UV, I, cloth_v):
         Xs = (srcL - mu_s) * np.sqrt(wts)[:, None]; Xd = (dstL - mu_d) * np.sqrt(wts)[:, None]
         U, S_, Vt2 = np.linalg.svd(Xs.T @ Xd); D_ = np.eye(3); D_[2, 2] = np.sign(np.linalg.det(Vt2.T @ U.T)); R = Vt2.T @ D_ @ U.T
         sc = (S_ * np.diag(D_)).sum() / (Xs ** 2).sum(); tf = lambda X, sc=sc, mu_s=mu_s, R=R, mu_d=mu_d: sc * (X - mu_s) @ R.T + mu_d
-        hands.append(dict(sd=sd, side=side, c0=c0, ax=ax, triR=triR, ringR=ringR, tf=tf, thumb=tf(rPw[th])[None][0], tips=tf(rPw[[th] + fing]), err=np.linalg.norm(tf(srcL) - dstL, axis=1)))
+        sim = dict(sc=sc, mu_s=mu_s, R=R, mu_d=mu_d)
+        hands.append(dict(sd=sd, side=side, c0=c0, ax=ax, triR=triR, ringR=ringR, tf=tf, sim=sim, thumb=tf(rPw[th])[None][0], tips=tf(rPw[[th] + fing]), err=np.linalg.norm(tf(srcL) - dstL, axis=1)))
         print("hands: %s: Ren's scaled %.2f, landmarks off by %s (GLB units); Kael's hand out: %d vertices" % (side, sc, np.round(hands[-1]['err'], 3), int(hv.sum())))
     Ik = I[keep]; lpsK = _loops(Ik, kwv)
     rep = {}
     for t_ in Ik:
         for x in t_: rep.setdefault(kwv[x], x)
     Ps, Ns, UVs, Ts, Ss, Rs = [P], [N], [UV], [Ik], [np.zeros(len(Ik), np.int8)], [np.zeros(len(P), bool)]; off = len(P)
+    Ids = [np.full(len(P), -1)]
     for h in hands:
         c0, ax = h['c0'], h['ax']; lk = min(lpsK, key=lambda l: np.linalg.norm(kPw[l].mean(0) - c0)); h['ring'] = kPw[lk]
         u = np.cross(ax, [0, 0, 1.]); u /= np.linalg.norm(u); v = np.cross(ax, u); ang = lambda X: np.arctan2((X - c0) @ v, (X - c0) @ u)
@@ -187,6 +189,7 @@ def ren_hands(P, N, UV, I, cloth_v):
         Q = Q + per(ang(Q), aR[oR], dR[oR]) * w[:, None]
         for k_, wvid in enumerate(h['ringR']): Q[rwv[vs] == wvid] = rr0[k_] + dR[k_]
         Ps.append(Q); Ns.append(np.zeros_like(Q)); UVs.append(RUV[vs]); Ts.append(mpR[RI[h['triR']]] + off); Ss.append(np.ones(len(h['triR']), np.int8)); Rs.append(np.ones(len(Q), bool))
+        Ids.append(vs)
         kA = [rep[w_] for w_ in lk]; rA = [int(np.nonzero(rwv[vs] == wvid)[0][0]) + off for wvid in h['ringR']]
         def order(ids, a):
             i0 = int(np.argmin(a)); ids = ids[i0:] + ids[:i0]; a = np.r_[a[i0:], a[:i0]]; un = np.unwrap(a)
@@ -218,6 +221,7 @@ def ren_hands(P, N, UV, I, cloth_v):
     wv2 = _weld(P2); fn = np.cross(P2[I2[:, 1]] - P2[I2[:, 0]], P2[I2[:, 2]] - P2[I2[:, 0]]); Nw = np.zeros((wv2.max() + 1, 3)); np.add.at(Nw, wv2[I2].ravel(), np.repeat(fn, 3, 0))
     Nw /= np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12); N2 = np.concatenate(Ns); ch = isR.copy(); ch[I2[src == 2].ravel()] = True; N2[ch] = Nw[wv2[ch]]
     used = np.unique(I2); mp = -np.ones(len(P2), int); mp[used] = np.arange(len(used))
+    for h in hands: h['rid'] = np.concatenate(Ids)[used]   # (each vertex's in Ren's package, -1 Kael's: tools/kael_bust_attach.py)
     return P2[used], N2[used], mp[I2], np.concatenate(UVs)[used], isR[used], src, hands
 
 
@@ -518,7 +522,8 @@ def main(src, dst, png=None, fit=False):
     samp = lambda A, uv: A[np.clip((uv[:, 1] * A.shape[0]).astype(int), 0, A.shape[0] - 1), np.clip((uv[:, 0] * A.shape[1]).astype(int), 0, A.shape[1] - 1)]
     vc = samp(T, UV); vsk = (vc[:, 0] > 150) & (vc[:, 0] - vc[:, 2] > 35); vpu = (vc[:, 2] > 95) & (vc[:, 2] - vc[:, 1] > 55) & ~vsk
     P, N, I, SU, isR, src_t, hands = ren_hands(P, N, UV, I, (np.nonzero(~vsk & ~vpu)[0], np.nonzero(vpu)[0]))
-    vm, I, UV = unwrap(P, I); P, N, SU, isR = P[vm], N[vm], SU[vm], isR[vm]
+    rid = hands[0]['rid']
+    vm, I, UV = unwrap(P, I); P, N, SU, isR, rid = P[vm], N[vm], SU[vm], isR[vm], rid[vm]
     ys, xs, ks, bary, pos, nor = texel_table(P, N, UV, I, TS); nor = nor / np.maximum(np.linalg.norm(nor, axis=1, keepdims=True), 1e-9)
     # (each texel's source paint: Kael's by Meshy, Ren's on his hands, the seam the glove's)
     suv = (SU[I[ks]] * bary[:, :, None]).sum(1); s_ = src_t[ks]; newh = s_ >= 1
@@ -579,6 +584,10 @@ def main(src, dst, png=None, fit=False):
     im = Image.fromarray(out.round().astype(np.uint8)); bio = io.BytesIO(); im.save(bio, 'PNG', optimize=True)
     if png: im.save(png)
     glbio.write(dst, m, P, N, UV, I, img=bio.getvalue(), mime='image/png'); print('written', dst)
+    # (beside it, for tools/kael_bust_attach.py: each vertex's in Ren's package (-1 Kael's), its place, and per hand the fit laying Ren's on it)
+    side = dst[:-4] + '_hands.npz'
+    np.savez(side, rid=rid, pos=P, **{'%s_%s' % (h['side'], k): np.asarray(v) for h in hands for k, v in h['sim'].items()})
+    print('written', side)
 
 
 if __name__ == '__main__':

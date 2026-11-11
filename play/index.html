@@ -301,8 +301,9 @@ const CFG={
     // Kael (10/11/2026: Meshy's body from Denis's drawing of him without hair or clothes, docs/ref/personaggi/kael_base.png;
     // his package in wip_assets/kael, only in his viewer until his hair and clothes are made): his own finger bones and
     // the outline's widths (tools/char_look.py), the light's normals smoothed, Ren's clips on his skeleton and Ren's guard
-    // (his head held as high).
-    kael:{head:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
+    // (his head held as high); his head and his bust from Meshy (tools/kael_head.py, tools/kael_bust_attach.py: bust:
+    // its hands Ren's, with their finger bones).
+    kael:{head:true, bust:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
       clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
@@ -1851,26 +1852,30 @@ function modelBuild(key) {
   f3Shared();
   const root = new THREE.Group(), body = new THREE.Group(), s = CFG.body.h / 1000 / md.meta.height;
   body.scale.setScalar(s); root.add(body);
-  const bones = md.bones.map(b => { const o = new THREE.Bone(); o.name = b.n; o.position.fromArray(b.t); o.quaternion.fromArray(b.q); return o; });
+  const lk = CFG.looks[key] || {}, head = lk.head && mdHeadData(md, key);   // the new head (its old one, neck and collar's top hidden)
+  const bust = lk.bust && mdPartData(md, key, 'bust'), bplace = (bust && bust.j.bones) || {};   // Kael's bust (his torso, arms and hands hidden; his arm bones as long as its arms)
+  const bones = md.bones.map(b => { const o = new THREE.Bone(); o.name = b.n; o.position.fromArray(bplace[b.n] || b.t); o.quaternion.fromArray(b.q); return o; });
   md.bones.forEach((b, i) => (b.p < 0 ? body : bones[b.p]).add(bones[i]));
-  const B = n => bones[md.index[n]], lk = CFG.looks[key] || {}, look = (lk.fists || lk.spikes || lk.faceLine || lk.flatFace || lk.sash || lk.faceShape || lk.smoothNormals) && mdLookData(md, key);
-  const head = lk.head && mdHeadData(md, key);   // the new head (its old one, neck and collar's top hidden)
-  // fists: the fingers' bones under the hands (after the package's in the skeleton, as the look's skin counts them)
-  const fingers = look && lk.fists ? look.fingers.map(f => { const o = new THREE.Bone(); o.name = f.n; o.position.fromArray(f.t); return o; }) : [];
-  fingers.forEach((o, k) => (B(look.fingers[k].p) || fingers.find(g => g.name === look.fingers[k].p)).add(o));
+  const B = n => bones[md.index[n]], look = (lk.fists || lk.spikes || lk.faceLine || lk.flatFace || lk.sash || lk.faceShape || lk.smoothNormals) && mdLookData(md, key);
+  // fists: the fingers' bones under the hands (after the package's in the skeleton, as the look's skin counts them; the
+  // bust's own where it has them: its hands are Ren's, in the same order)
+  const fdef = look && lk.fists ? (bust && bust.j.fingers) || look.fingers : [];
+  const fingers = fdef.map(f => { const o = new THREE.Bone(); o.name = f.n; o.position.fromArray(f.t); return o; });
+  fingers.forEach((o, k) => (B(fdef[k].p) || fingers.find(g => g.name === fdef[k].p)).add(o));
+  const hidden = head || bust ? mdJoin(head && head.hide, bust && bust.hide) : null;   // (the package's triangles the parts replace)
   // sash: a chain of bones under the Hips for each ribbon (after the fingers in the skeleton)
   const sash = look && lk.sash && look.sash ? look.sash.ribbons.map(r => r.j.slice(0, -1).map((p, k) => {
     const o = new THREE.Bone(); o.name = 'Sash' + k; o.position.fromArray(k ? p.map((v, i) => v - r.j[k - 1][i]) : p); return o; })) : [];
   sash.forEach(ch => ch.forEach((o, k) => (k ? ch[k - 1] : B('Hips')).add(o)));
   const per = look && lk.faceLine ? ' * aLine' : '', flat = look && lk.flatFace, shape = look && lk.faceShape && !head && look.move;   // (with the new head: the old head is hidden and the old collar keeps its own shape, its pulled points stuck out beside the new collar)
   const smoothN = look && lk.smoothNormals && look.nor;   // (the light's normals smoothed: clean bands, not Meshy's lumps)
-  const geo = fingers.length || per || flat || shape || head || smoothN ? new THREE.BufferGeometry() : md.geo;
+  const geo = fingers.length || per || flat || shape || hidden || smoothN ? new THREE.BufferGeometry() : md.geo;
   if (geo !== md.geo) {   // the package's geometry, its attributes shared (not copied), with the look's skin and outline widths
     for (const a in md.geo.attributes) geo.setAttribute(a, md.geo.attributes[a]);
     geo.setIndex(md.geo.index);
-    if (head) {   // without the triangles the new head replaces
+    if (hidden) {   // without the triangles the parts replace
       const src = md.geo.index.array, drop = new Uint8Array(src.length / 3), keep = [];
-      head.hide.forEach(t => { drop[t] = 1; });
+      hidden.forEach(t => { drop[t] = 1; });
       for (let t = 0; t < drop.length; t++) if (!drop[t]) keep.push(src[3 * t], src[3 * t + 1], src[3 * t + 2]);
       geo.setIndex(new THREE.BufferAttribute(src instanceof Uint32Array ? Uint32Array.from(keep) : Uint16Array.from(keep), 1));
     }
@@ -1922,7 +1927,7 @@ function modelBuild(key) {
   // their folded corners, noline, left out of the outline: pushed out past the lining it drew a black Z over the shirt,
   // and only pushed back, slid aside, as black dashes beside them)
   const src = md.geo.index.array, ln = head && head.lining, nl = head && head.noline;
-  const mesh = new THREE.SkinnedMesh(ln ? mdTris(geo, src, head.hide, [], ln) : geo, main), outline = new THREE.SkinnedMesh(nl ? mdTris(geo, src, head.hide, nl) : geo, line);
+  const mesh = new THREE.SkinnedMesh(ln ? mdTris(geo, src, hidden, [], ln) : geo, main), outline = new THREE.SkinnedMesh(nl ? mdTris(geo, src, hidden, nl) : geo, line);
   mesh.frustumCulled = outline.frustumCulled = false;
   body.add(mesh, outline);
   root.updateMatrixWorld(true);
@@ -1966,11 +1971,27 @@ function modelBuild(key) {
       head.fringeMesh = fmesh; head.fringeMat = fm;
     }
   }
+  if (bust) {   // the bust: its own toon mesh and outline on the same skeleton; both sides (its skirt is open below); in flat light
+    // (its texture has the sheet's shadows, as the images of it); the body's outline
+    const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = bust.jpg; tex.anisotropy = 4;
+    tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
+    const bm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
+    bm.onBeforeCompile = sh => {
+      sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_BUST_FLAT.toFixed(2) + ');');
+    };
+    bm.customProgramCacheKey = () => 'bust';
+    const bmesh = new THREE.SkinnedMesh(bust.geo, bm), bline = new THREE.SkinnedMesh(bust.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: ol.back}));
+    bmesh.frustumCulled = bline.frustumCulled = false; body.add(bmesh, bline);
+    bmesh.bind(skel, mesh.matrixWorld); bline.bind(skel, mesh.matrixWorld);
+    bust.mesh = bmesh; bust.mat = bm;
+  }
   const limbs = {};
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
-  if (fingers.length) { it.fingers = fingers; it.fist = look.fingers.map(f => new THREE.Quaternion().fromArray(f.fist)); }
+  if (fingers.length) { it.fingers = fingers; it.fist = fdef.map(f => new THREE.Quaternion().fromArray(f.fist)); }
+  if (bust) { it.bust = bust.mesh; it.mats.bust = bust.mat; }
   if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
   if (face) it.face = face;
   if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash
@@ -2384,29 +2405,51 @@ function mdSpikes(list, back) {
 // from the camera] m (thin as the sheet's lines; pushed back less than the body's, so the jaw's line shows over the neck
 // as on the sheet; less still, the hair's locks drew black shards over the eyes)
 const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
-// The new head (ASSETS '<key>/<key>_head.json|bin|jpg', tools/ren_head.py): its geometry, skinned to the package's bones
-// in the package's bind space, its texture, the package's triangles it replaces (hide), those lined (lining: drawn from
-// behind too, mdTris) and those left out of the outline (noline); null without it.
+// Kael's bust's light: flat (its texture, the sheet's colours, has the skin's shadows)
+const MD_BUST_FLAT = 1;
+
+// The triangles of the parts' hide lists together (each a Uint32Array or null)
+function mdJoin(a, b) {
+  if (!a || !b) return a || b;
+  const o = new Uint32Array(a.length + b.length); o.set(a); o.set(b, a.length); return o;
+}
+// A part of package key (ASSETS '<key>/<key>_<name>.json|bin|png|jpg': the new head, tools/ren_head.py and
+// tools/kael_head.py; Kael's bust, tools/kael_bust_attach.py): its geometry, skinned to the package's bones (and the finger
+// bones) in the package's bind space, its texture, the package's triangles it replaces (hide), those lined (lining: drawn
+// from behind too, mdTris) and those left out of the outline (noline); its json (j: the bust's bones' places and finger
+// bones); null without it.
+function mdPartData(md, key, name) {
+  const f = key + '/' + key + '_' + name, j = ASSETS[f + '.json'], b64 = ASSETS[f + '.bin'], img = ASSETS[f + '.png'] || ASSETS[f + '.jpg'];   // (its texture: a PNG where its colours are flat)
+  if (!j || !b64 || !img) return null;
+  md.parts = md.parts || {};
+  if (!md.parts[name] || md.parts[name].j !== j) {
+    const s = atob(b64), u8 = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+    const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(f32(j.pos), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(f32(j.nor), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(f32(j.uv), 2));
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint8Array(buf, j.jnt[0], j.jnt[1]), 4));
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(j.wgt), 4));
+    geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
+    if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
+    if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
+    if (j.line) geo.setAttribute('aLine', new THREE.BufferAttribute(f32(j.line), 1));   // (its outline's width per vertex: Kael's earrings' thin)
+    if (j.hv) geo.setAttribute('aHide', new THREE.BufferAttribute(f32(j.hv), 2));   // (the locks hidden when seen from his right, from his left: mdHeadHide)
+    md.parts[name] = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
+      noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null};
+  }
+  return Object.assign({jpg: img}, md.parts[name]);
+}
+
+// The new head (mdPartData 'head') with its locks' sheet (fringe, mdFringeData); null without it.
 function mdHeadData(md, key) {
-  const j = ASSETS[key + '/' + key + '_head.json'], b64 = ASSETS[key + '/' + key + '_head.bin'], jpg = ASSETS[key + '/' + key + '_head.png'] || ASSETS[key + '/' + key + '_head.jpg'];   // (its texture: a PNG where its colours are flat, tools/kael_head.py)
-  if (!j || !b64 || !jpg) return null;
-  if (md.head && md.head.j === j) return {j, geo: md.head.geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
-  const s = atob(b64), u8 = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
-  const buf = u8.buffer, f32 = a => new Float32Array(buf, a[0], a[1]), geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(f32(j.pos), 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(f32(j.nor), 3));
-  geo.setAttribute('uv', new THREE.BufferAttribute(f32(j.uv), 2));
-  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint8Array(buf, j.jnt[0], j.jnt[1]), 4));
-  geo.setAttribute('skinWeight', new THREE.BufferAttribute(f32(j.wgt), 4));
-  geo.setIndex(new THREE.BufferAttribute(j.verts > 65535 ? new Uint32Array(buf, j.idx[0], j.idx[1]) : new Uint16Array(buf, j.idx[0], j.idx[1]), 1));
-  if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
-  if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
-  if (j.line) geo.setAttribute('aLine', new THREE.BufferAttribute(f32(j.line), 1));   // (its outline's width per vertex: Kael's earrings' thin)
-  if (j.hv) geo.setAttribute('aHide', new THREE.BufferAttribute(f32(j.hv), 2));   // (the locks hidden when seen from his right, from his left: mdHeadHide)
-  md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
-    noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null, fringe: mdFringeData(md, key)};
-  return {j, geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
+  const h = mdPartData(md, key, 'head');
+  if (!h) return null;
+  const c = md.parts.head;
+  if (c.fringe === undefined) c.fringe = mdFringeData(md, key);
+  h.fringe = c.fringe;
+  return h;
 }
 
 // A geometry with the body's attributes (g's, shared) and the package's triangles (of its index src) but those of hide and
