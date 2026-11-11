@@ -363,6 +363,24 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     colore);
   - pubblicata nell'anteprima di Kael l'11/11 (versione 10 della pagina) su richiesta di Denis ("anteprima?"), con
     tutti i 22 test verdi; i controllori indipendenti erano ancora al lavoro;
+  - **dopo i controllori indipendenti** (quattro, ognuno con uno scettico che ha rifatto le prove; tutti: la parte
+    cerchiata è sistemata, occhi e sopracciglia uguali) sono stati tolti i resti della cura (versione 11):
+    - la ciocca dipinta era tagliata su una riga dritta accanto all'angolo dell'occhio destro, dove finisce la zona
+      tenuta di occhi e sopracciglia: il pezzo di riempimento che arriva a quella zona senza contorno torna com'era
+      (`CUT` in `side_paint`, pezzi fino a 120 mm², qui uno di 29 mm²) e la ciocca finisce sul suo contorno;
+    - righe grigie tra i due contorni della ciocca nuova, una macchia grigia e trattini sul suo bordo basso, macchie
+      nere morbide dentro la ciocca a sinistra: l'inchiostro è tutto o niente sulla pittura nuova delle tempie e sui
+      texel grossi della pelle (oltre 0,6 mm, `COARSE` in `tools/kael_flat.py`);
+    - tempia sinistra: un cuneo marrone, due capi di contorno tagliati e un trattino staccato restavano alla punta della
+      ciocca, perché due pezzetti staccati (contorni di ciocca e un ritaglio di capelli, presi per "lineamenti" dal loro
+      colore) facevano parte della maschera di occhi e sopracciglia. Ora la maschera lascia fuori i suoi pezzi tutti
+      oltre 42 mm dal centro e ad almeno 6 mm dal resto (`EYE_PIECE`); la coda del sopracciglio sinistro, un gruppo a
+      sé visto di tre quarti ma a 2-4 mm dal resto, resta;
+    - i texel della pittura nuova che starebbero nella maschera di occhi e sopracciglia calcolata senza di essa tornano
+      com'erano (in `tools/kael_head.py`, prima dei colori piatti). Rispetto alla versione pubblicata prima, dentro la
+      maschera cambiano solo i 372 texel dei pezzetti staccati a sinistra (tra 5 e 20 mm sotto la riga degli occhi,
+      oltre 45 mm dal centro: né occhio né sopracciglio) e 5 texel dell'ombra scura sopra la coda del sopracciglio
+      destro, di pochi livelli;
 - **Come cercare un difetto** (strumenti di lavoro, non nel repository): registrare quale passaggio di
   `tools/kael_head.py` ha scritto per ultimo ogni texel (avvolgendo `paint`, `side_paint`, `skin_fill` e confrontando
   la texture prima e dopo), poi disegnare la testa in software da qualunque angolo colorando ogni pixel per passaggio o

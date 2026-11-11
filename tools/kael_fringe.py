@@ -89,6 +89,7 @@ HIDE_WHOLE = 1 / 3                # see side_hide(): a lock hanging before the f
 HIDE_IN = (.2, 80., 4)            # see side_hide(): the inner walls behind the hidden locks
 EYE_KEEP = .004                   # see face(): the eyes and the brows as painted before the side images, and this far around them (m): never the side images'
 HIDE_FOOT = (3, 70.)              # see side_hide(): the hidden locks' feet: this many rings of triangles next to them, not further round the head than [1] degrees
+CUT = (.001, .0009, 120.)          # see side_paint(): the lock's fill reaching the eyes' kept zone (within [0] m) with no outline, its texels joined within [1] m, pieces up to [2] mm2
 LOCK_FILL = 110                   # see face(): the hair's fill colours (not its lines) are lighter than this
 
 
@@ -617,7 +618,7 @@ def hide_shares(Q, I, keep, hid):
     return (hs / np.maximum(tot, 1e-12))[wld]
 
 
-def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=None, jm=None, skin_tri=None, is_hair=None, hair_tri=None, free=None, is_purple=None, keep_zone=None, front_done=None):
+def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=None, jm=None, skin_tri=None, is_hair=None, hair_tri=None, free=None, is_purple=None, keep_zone=None, front_done=None, skin2_tri=None):
     """The head's sides as their images draw them, seen from that side (Meshy's locks there hidden, side_hide): each
     texel on the side (SIDE_PAINT: from [0] degrees around the head, fading in over [1], to [3] behind the ear, fading
     out over [4]: further round it painted the profiles' neck on the hair behind the ears and their edge-on streaks on
@@ -640,6 +641,7 @@ def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_
     loose = np.zeros(len(ks), bool)
     if front_done is not None and keep_zone is not None:
         loose = ~front_done & ~keep_zone & (zone > 0) & (np.abs(pos[:, 0] - mid) > FEAT[0]); zone = np.where(loose, 0., zone)
+    li = np.nonzero(loose)[0]; prev_c = out[ys[li], xs[li]].copy(); prev_d = done[li].copy() if done is not None else None
     base = yw * (1 - zone) * ~ear_v[I[ks]].any(1) * ~collar_v[I[ks]].any(1) * keep[ks]   # (the ears too: as the side images draw them, the hair over them)
     if free is not None: base = base * ~free[ks]   # (not the locks hanging free before the face: no image draws them where they are)
     total = 0; got_loose = np.zeros(len(ks), bool)
@@ -688,8 +690,30 @@ def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_
         out[ys[k], xs[k]] = out[ys[k], xs[k]] * (1 - a) + got * a
         if done is not None: done[k] = True
         total += int(ok.sum()); got_loose[k] = loose[k]
-    print('face: %d texels of the temples and the cheeks painted from the side images (as seen from the side; %d by the eyes\' corners no image had painted)' % (total, int(got_loose.sum())))
-    return total, got_loose
+    cut = 0
+    if len(li) and keep_zone is not None and skin2_tri is not None and is_hair is not None:   # (the lock's fill reaching the kept zone with no outline
+        # between: the drawn lock goes on over the eye's corner, where the kept zone stops it, cut on a straight line. Its piece of fill on the
+        # skin's triangles that touches the zone goes back to what it was; the lock ends on its own outline)
+        from scipy.spatial import cKDTree
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+        gi = np.nonzero(got_loose)[0]; cg = out[ys[gi], xs[gi]]
+        cand = gi[skin2_tri[ks[gi]] & is_hair(cg) & ~is_skin(cg) & (cg.mean(1) > LOCK_FILL)]
+        if len(cand):
+            kz = np.nonzero(keep_zone)[0]; dd, _ = cKDTree(pos[kz]).query(pos[cand], distance_upper_bound=CUT[0]); seed = np.isfinite(dd)
+            pr = cKDTree(pos[cand]).query_pairs(CUT[1], output_type='ndarray')
+            _, lab = connected_components(coo_matrix((np.ones(len(pr), np.int8), (pr[:, 0], pr[:, 1])), shape=(len(cand), len(cand))).tocsr(), directed=False)
+            tri_a = .5 * np.linalg.norm(np.cross(Q[I[:, 1]] - Q[I[:, 0]], Q[I[:, 2]] - Q[I[:, 0]]), axis=1) * 1e6; cnt = np.bincount(ks, minlength=len(I))
+            ta = tri_a[ks[cand]] / np.maximum(cnt[ks[cand]], 1); area = np.bincount(lab, weights=ta); hit = np.zeros(lab.max() + 1, bool); np.logical_or.at(hit, lab, seed)
+            back = hit[lab] & (area[lab] <= CUT[2]); pos_in = np.searchsorted(li, cand[back])
+            out[ys[cand[back]], xs[cand[back]]] = prev_c[pos_in]
+            if done is not None: done[cand[back]] = prev_d[pos_in]
+            got_loose[cand[back]] = False; cut = int(back.sum())
+            print('face: the drawn locks\' fill cut on the eyes\' kept zone: %d pieces put back (%d texels, %s mm2), %d left (over %.0f mm2)' % (
+                int((hit & (area <= CUT[2])).sum()), cut, ', '.join('%.0f' % a_ for a_ in area[hit & (area <= CUT[2])]), int((hit & (area > CUT[2])).sum()), CUT[2]))
+    gl = np.nonzero(got_loose)[0]
+    print('face: %d texels of the temples and the cheeks painted from the side images (as seen from the side; %d by the eyes\' corners no image had painted)' % (total, len(gl)))
+    return total, (got_loose, prev_c[np.searchsorted(li, gl)] if len(gl) else np.zeros((0, 3)))
 
 
 def skin_fill(out, I, ys, xs, ks, pos, hair_v, ear_v, collar_v, done, keep, mid, chin_m, top, is_skin, force=None, standing=None, skin_v=None):
@@ -882,7 +906,7 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
         kk = np.nonzero(keep[ks])[0]; eyes_x = np.zeros(len(ks), bool)
         eyes_x[kk] = kael_flat.eyes_mask(pos[kk].astype(np.float64), nor[kk].astype(np.float32), out[ys[kk], xs[kk]].astype(np.float32), (is_skin(vc)[I].sum(1) >= 2)[ks[kk]], mid, eye_m, halo=EYE_KEEP)
         _, temple = side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=done, jm=JM, skin_tri=skin_t, is_hair=is_hair,
-                               hair_tri=hair_v[I].sum(1) >= 2, free=free, is_purple=is_purple, keep_zone=eyes_x, front_done=fdone)
+                               hair_tri=hair_v[I].sum(1) >= 2, free=free, is_purple=is_purple, keep_zone=eyes_x, front_done=fdone, skin2_tri=is_skin(vc)[I].sum(1) >= 2)
         skin_fill(out, I, ys, xs, ks, pos, hair_v, ear_v, collar_v, done, keep, mid, chin_m, top, is_skin, force, locks[HIDE_ORDER[0]], is_skin(vc))
     if lock_t is not None:   # (the skin's colour left on the standing locks, Meshy's own and the side images': as the nearest hair's, not its lines')
         from scipy.spatial import cKDTree

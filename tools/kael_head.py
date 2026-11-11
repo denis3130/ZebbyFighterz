@@ -502,6 +502,16 @@ def main(bust):
         out[ys[jt[pur]], xs[jt[pur]]] = tones[tone[pur]]
         out[ys[jt[sil]], xs[jt[sil]]] = np.where((lt[sil] > 0)[:, None], np.array(EAR_SILVER[0], float), np.array(EAR_SILVER[1], float))
         print('earrings: %d crystal texels in the drawing\'s four purples, %d of the bead and the hook silver' % (int(pur.sum()), int(sil.sum())))
+    if temple_x is not None:   # (the texels side_paint painted by the eyes' corners (kael_fringe.face's temple): those that would be in the eyes' and
+        # brows' mask without that paint go back to what they were, and stay out of the new paint's set; nothing of that mask changes)
+        import kael_flat
+        tl, tprev = temple_x; tl = tl.copy(); gi = np.nonzero(tl)[0]
+        if len(gi):
+            cc = out[ys, xs].astype(np.float32); cc[gi] = tprev; kk = np.nonzero(keep_t[ks])[0]; m_ = np.zeros(len(ks), bool)
+            m_[kk] = kael_flat.eyes_mask(pos[kk].astype(np.float64), nor[kk].astype(np.float32), cc[kk], (is_skin(vc)[It].sum(1) >= 2)[ks[kk]], FACE_MID, eye_m)
+            back = gi[m_[gi]]; out[ys[back], xs[back]] = cc[back]; tl[back] = False
+            print('face: %d texels of the temples\' new paint inside the eyes\' and brows\' mask as it was without it: put back' % len(back))
+        temple_x = tl
     if os.environ.get('KAEL_FLAT_DUMP'):   # (the state before the flat colours' pass, to work on that pass alone: tools/kael_flat.py's own main)
         np.savez(os.environ['KAEL_FLAT_DUMP'], out=out.astype(np.float32), It=It, ys=ys, xs=xs, ks=ks, pos=pos.astype(np.float32), nor=nor.astype(np.float32), hair_v=hair_v, skin_v=is_skin(vc),
                  ear_v=ear_v, collar_v=collar_v, keep_t=keep_t, mid=FACE_MID, eye_m=eye_m, chin_m=chin_m, free_t=free_t if free_t is not None else np.zeros(len(It), bool), Q=Q,

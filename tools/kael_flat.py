@@ -56,7 +56,9 @@ LONE = (2., .0012)                 # an ink stroke under [0] mm2 off the hair wi
 ISLE = (40., .7)                   # an area under [0] mm2 of the skin's colours over [1] of whose border is the hair's (or the other way round) takes that
 JAW = (.028, 60., .5, 2, 100.)           # under the chin plus [0] m, off the hair: ink strokes under [1] mm2 left out; a texel over [2] of whose surroundings are
 # ink is ink ([3] rounds): the jaw's black wedge whole, no black shards on the neck; behind the ears' plane strokes under [4] mm2 left out (blots under the ears)
+COARSE = .0006                     # m: the skin's texels coarser than this get their ink all or none (see flatten)
 HALO = (.0025, 22., .35)           # the eyes and the brows: what is not skin (further than [1] from the skin's tones with under [2] of ink) and [0] m around it
+EYE_PIECE = (.0012, .042, .006)    # see eyes_mask(): its pieces (texels within [0] m) wholly beyond [1] m from the middle and [2] m or more from the rest
 EYE = (.064, .030, .008, .045, .05, .004, 9, .0012)   # the eyes and the brows, never touched (Denis, 11/11: "occhi e sopracciglia non si toccano"): see eyes_zone():
 # |x - middle| under [0], |y - eyes - [2]| under [1], z over [3] (m), facing the front over [4], within [5] m of the skin's surface there ([6]: mm);
 # and whatever lies within [7] m of those
@@ -139,6 +141,20 @@ def eyes_mask(p, n, c, skin2, mid, eye_m, halo=None, skip=None):
         e = np.nonzero(eye)[0]; feat = ~_skinish(c[e], cols, names)
         if feat.any():
             dd, _ = cKDTree(p[e[feat]]).query(p[e], distance_upper_bound=HALO[0] if halo is None else halo); eye[e[~np.isfinite(dd)]] = False
+    if eye.any():   # (not the pieces of it lying wholly beyond EYE_PIECE[1] from the middle, EYE_PIECE[2] or more from the rest: a drawn lock's
+        # outline ends and a hair-coloured scrap on his left temple, counted as features by their colour, held a brown wedge there unpainted and
+        # soft. The eyes and the brows start inside EYE_PIECE[1]; the left brow's tail end, a group of its own seen from the 3/4, lies 2-4 mm
+        # from the rest of the brow and stays)
+        e = np.nonzero(eye)[0]; pr = cKDTree(p[e]).query_pairs(EYE_PIECE[0], output_type='ndarray')
+        _, lab_ = connected_components(coo_matrix((np.ones(len(pr), np.int8), (pr[:, 0], pr[:, 1])), shape=(len(e), len(e))).tocsr(), directed=False)
+        far = np.ones(lab_.max() + 1, bool); np.logical_and.at(far, lab_, np.abs(p[e, 0] - mid) > EYE_PIECE[1])
+        near_ = ~far[lab_]
+        if far.any() and near_.any():
+            tr = cKDTree(p[e[near_]]); gone = 0
+            for q in np.nonzero(far)[0]:
+                inn = lab_ == q; dd, _ = tr.query(p[e[inn]])
+                if dd.min() >= EYE_PIECE[2]: eye[e[inn]] = False; gone += int(inn.sum())
+            if gone: print('eyes: %d texels of the mask\'s far pieces, detached from the eyes and the brows, left out of it' % gone)
     return eye
 
 
@@ -270,6 +286,11 @@ def flatten(out, It, ys, xs, ks, pos, nor, hair_v, skin_v, ear_v, collar_v, keep
         gone = sm & ~lc[comp]; ink[gone] = 0; nd += int(gone.sum())
     a_ = np.where((a_ >= .5) & (ink == 0), 0., a_)
     touch = (np.where(ok, ink[j], 0).max(1) > 0) | (ink == 1); haze = (a_ > 0) & ~touch; a_[haze] = 0.
+    # (all or none: the locks painted on the temples by the eyes' corners (not_eye) and the skin's coarse texels (over COARSE m). There a share of
+    # ink was a grey band between two outlines, a grey smear on a 1 mm texel, soft black blobs inside a lock)
+    crisp = ~fixed & (skin_v[T].all(1) & (area > (COARSE * 1e3) ** 2))
+    if not_eye is not None: crisp |= ~fixed & not_eye[use]
+    a_ = np.where(crisp, (a_ >= .5).astype(a_.dtype), a_)
     log('flat: %d texels of islands of one thing in another (under %.0f mm2) took its colour' % (ni, ISLE[0]))
     log('flat: %d texels of specks took the colour around them (areas under %.0f mm2 on the hair, %.0f elsewhere); ink: %d texels of lines, %d of dashes (under %.1f mm2 on the hair, %.1f elsewhere) and %d of haze left out' % (
         ns, SMALL[0], SMALL[1], int(ink.sum()), nd, DASH[0], DASH[1], int(haze.sum())))
