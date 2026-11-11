@@ -29,24 +29,27 @@ const RB = {
   // Per move, what the style adds to the clip. hip/chest = twist at the impact (degrees; the sign follows the hitting
   // side), coil = share wound the other way first, lean = pitch at the impact (degrees, < 0 back) and leanCoil in the
   // coil, dip = pelvis drop in the coil and rise at the impact (shares of the height), back/fwd = metres the pelvis
-  // moves back in the coil and forward at the hit, smear = stretch of the hitting limb just before the hit ("Allungo").
+  // moves back in the coil and forward at the hit, smear = stretch of the hitting limb just before the hit ("Allungo"),
+  // pivot = share of the hips' turn the foot on the punching side turns with (on its ball, heel out: the knee follows the
+  // hips instead of folding outward), arms = how far the arms go toward the guard [kicking side, other] (the actor's
+  // raised arms read as flailing).
   moves: {
-    p1: {hip: 4, chest: 6, coil: .5, lean: 3, dip: .008, rise: 0, back: .01, fwd: .03, smear: .22},
-    p2: {hip: 6, chest: 9, coil: .7, lean: 5, dip: .012, rise: 0, back: .02, fwd: .04, smear: .28},
-    p3: {hip: 7, chest: 10, coil: .8, lean: 2, dip: .015, rise: 0, back: .015, fwd: .02, smear: .3},
-    hp: {hip: 9, chest: 13, coil: 1, lean: 7, leanCoil: -3, dip: .025, rise: 0, back: .03, fwd: .06, smear: .5},
-    k1: {hip: 3, chest: -4, coil: .5, lean: -3, dip: .008, rise: 0, back: 0, fwd: .01, smear: .22},
-    k2: {hip: 5, chest: -6, coil: .7, lean: -5, dip: .012, rise: 0, back: 0, fwd: .01, smear: .3},
-    hk: {hip: 8, chest: -9, coil: 1, lean: -7, leanCoil: 3, dip: .02, rise: 0, back: 0, fwd: .015, smear: .5},
-    cp: {hip: 5, chest: 8, coil: .6, lean: 5, dip: .006, rise: 0, back: .02, fwd: .06, smear: .22},
+    p1: {pivot: .3, hip: 4, chest: 6, coil: .5, lean: 3, dip: .008, rise: 0, back: .01, fwd: .03, smear: .22},
+    p2: {pivot: .85, hip: 6, chest: 9, coil: .7, lean: 5, dip: .012, rise: 0, back: .02, fwd: .04, smear: .28},
+    p3: {pivot: .7, hip: 7, chest: 10, coil: .8, lean: 2, dip: .015, rise: 0, back: .015, fwd: .02, smear: .3},
+    hp: {pivot: .85, hip: 9, chest: 13, coil: 1, lean: 7, leanCoil: -3, dip: .025, rise: 0, back: .03, fwd: .06, smear: .5},
+    k1: {arms: [.35, .2], hip: 3, chest: -4, coil: .5, lean: -3, dip: .008, rise: 0, back: 0, fwd: .01, smear: .22},
+    k2: {arms: [.75, .35], hip: 5, chest: -6, coil: .7, lean: -5, dip: .012, rise: 0, back: 0, fwd: .01, smear: .3},
+    hk: {arms: [.75, .35], hip: 8, chest: -9, coil: 1, lean: -7, leanCoil: 3, dip: .02, rise: 0, back: 0, fwd: .015, smear: .5},
+    cp: {pivot: .5, hip: 5, chest: 8, coil: .6, lean: 5, dip: .006, rise: 0, back: .02, fwd: .06, smear: .22},
     ck: {hip: 3, chest: -3, coil: .5, lean: -2, dip: .005, rise: 0, back: 0, fwd: .01, smear: .2},
-    chp: {hip: 7, chest: 10, coil: 1, lean: -5, leanCoil: 7, dip: .03, rise: .02, back: .01, fwd: .03, smear: .45},
+    chp: {pivot: .6, hip: 7, chest: 10, coil: 1, lean: -5, leanCoil: 7, dip: .03, rise: .02, back: .01, fwd: .03, smear: .45},
     chk: {hip: 5, chest: -6, coil: .8, lean: -6, leanCoil: 4, dip: .025, rise: .01, back: 0, fwd: .015, smear: .45},
     jp: {hip: 5, chest: 8, coil: .7, lean: 4, dip: 0, rise: 0, back: 0, fwd: 0, smear: .22},
     jk: {hip: 5, chest: -6, coil: .7, lean: 4, dip: 0, rise: 0, back: 0, fwd: 0, smear: .25},
     jhp: {hip: 7, chest: 10, coil: 1, lean: 6, dip: 0, rise: 0, back: 0, fwd: 0, smear: .45},
     jhk: {hip: 7, chest: -8, coil: 1, lean: 6, dip: 0, rise: 0, back: 0, fwd: 0, smear: .45},
-    spec: {hip: 7, chest: 8, coil: 1, lean: 6, leanCoil: -3, dip: .025, rise: 0, back: .03, fwd: .05, smear: 0, fd: {s: 14, a: 4, r: 26}, limb: 'handR'},
+    spec: {pivot: .5, hip: 7, chest: 8, coil: 1, lean: 6, leanCoil: -3, dip: .025, rise: 0, back: .03, fwd: .05, smear: 0, fd: {s: 14, a: 4, r: 26}, limb: 'handR'},
   },
   pin: {idle: 1, intro: 1, guard: 1, crouch: 1, guardC: 1, block: 1, hitStun: 1, thrown: 1, jumpSquat: 1, landing: 1, spec: 1},
   keep: {walkF: 1, walkB: 1, dashF: 1, dashB: 1, thr: 1, win: 1},
@@ -101,7 +104,7 @@ function rbInit(md) {
   const mk = () => ({w: 0, G: new T.Vector3(), Q: new T.Quaternion(), T: new T.Vector3(), yaw: 0, heel: 0, auto: false, flat: null, loc: null});
   RB.con = {L: mk(), R: mk()}; RB.sav = {L: mk(), R: mk()};
   RB.sty = {h: {L: 0, R: 0}};
-  RB.t = {dir: new T.Vector3(), lift: 0, raw: {L: null, R: null}, rawOf: {L: {dir: new T.Vector3(), lift: 0}, R: {dir: new T.Vector3(), lift: 0}}, q: [0, 1, 2, 3, 4, 5].map(() => new T.Quaternion()), v: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => new T.Vector3()), m: new T.Matrix4(), qHead: new T.Quaternion(),
+  RB.t = {dir: new T.Vector3(), hipF: new T.Vector3(0, 0, 1), lift: 0, raw: {L: null, R: null}, rawOf: {L: {dir: new T.Vector3(), lift: 0}, R: {dir: new T.Vector3(), lift: 0}}, q: [0, 1, 2, 3, 4, 5].map(() => new T.Quaternion()), v: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => new T.Vector3()), m: new T.Matrix4(), qHead: new T.Quaternion(),
     cb: {L: new T.Vector3(), R: new T.Vector3()}, ca: {L: new T.Vector3(), R: new T.Vector3()}, cq: {L: new T.Quaternion(), R: new T.Quaternion()}};
 }
 
@@ -150,7 +153,7 @@ RN.moveT = function (t, m, af, hit) {
 // --- Style: what the act asks of the body at this frame (RB.sty, reused) ---
 function rbStyle(F, S, st) {
   const y = RB.sty, act = F.act, H = RB.H, t = S.frame + 23 * F.side, af = F.af;
-  y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = 0; y.stab = .6; y.free = null; y.freeW = 1; y.back = 0; y.backTo = null; y.box = 0; y.move = null; y.foot = 1; y.lift = 1; y.freeB = 1; y.after = false;
+  y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = 0; y.stab = .6; y.free = null; y.freeW = 1; y.back = 0; y.backTo = null; y.box = 0; y.move = null; y.foot = 1; y.lift = 1; y.freeB = 1; y.after = false; y.knee = 0;
   y.h.L = y.h.R = 0;
   const mv = RB.moves[act], m = mv && (CFG.moves[act] || mv.fd);
   if (mv && m) {
@@ -164,10 +167,11 @@ function rbStyle(F, S, st) {
     if (kick) { y.free = side > 0 ? 'R' : 'L'; y.freeW = e.kick ? 1 - rnSm(af / Math.max(2.5, Math.min(5, .45 * s))) : -1;   // (-1: by how high the clip lifts the foot)
       y.freeB = 1 - rnSm(af / (.5 * s)); }   // the weight leaves the kicking foot over the first half of the startup
     y.move = {id: act, m, limb, mv, s, a}; y.after = af > s + a;
+    if (mv.pivot && !kick) y.knee = rnSm(af / Math.max(2, .5 * s));   // a punch's knees go with the hips (eased in)
     if (!F.air) {
       const v = (af - s - a) / r;
       if (v > .5) {   // back into the stance: the pose, the feet's turn and (kicks) the kicking foot on its spot
-        y.back = rnSm((v - .5) / .5); y.backTo = CROUCHED[act] ? 'crouch' : 'idle'; y.foot = 1 - y.back; y.lift *= 1 - y.back;
+        y.back = rnSm((v - .5) / .5); y.backTo = CROUCHED[act] ? 'crouch' : 'idle'; y.foot = 1 - y.back; y.lift *= 1 - y.back; y.knee *= 1 - y.back;
         if (y.backTo === 'idle') rbIdle(y, t, y.back, st);
       }
     }
@@ -206,6 +210,7 @@ RN.pure = function (md, F, S) {
     fix = CFG.moves[act] && RB.moves[act] ? (RB.inFix ? RB.fix.of[act] : rbBoxFix(md, F, S)) : null, y = rbStyle(F, S, st);
   let p = mdPoseOf(F, S) || mdRest(md);
   if (y.back > 0) p = mdMix(p, y.backTo === 'crouch' ? st.crouch : rbIdlePose(F, S), y.back);
+  if (y.move && y.move.mv.arms && !F.air) rbArms(md, p, st.pose, y, F.af);
   const pol = F.air ? 'air' : RB.keep[act] ? 'keep' : RB.pin[act] || CFG.moves[act] ? 'pin' : 'none';
   RB.pol = pol; RB.floor = F.air ? -F.y / 1000 : 0;   // the floor in the model's frame (under a fighter in the air)
   rbBody(md, p, y);
@@ -220,6 +225,19 @@ RN.pure = function (md, F, S) {
   if (pol !== 'none') rbLegs(md, p);
   return p;
 };
+// The arms of a kick toward the guard pose g (their local rotations: the guard's fists in front of the face, carried by
+// the chest as it turns): by mv.arms[0] the arm on the kicking side, [1] the other, eased in over the first 3 frames
+// (the stance's own way back takes over at the end).
+const RB_ARM = {R: ['RightShoulder', 'RightArm', 'RightForeArm', 'RightHand'], L: ['LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand']};
+function rbArms(md, p, g, y, af) {
+  const kick = /R$/.test(y.move.limb) ? 'R' : 'L', e = rnSm(af / 3), q = RB.t.q;
+  for (const s of ['L', 'R']) {
+    const w = (s === kick ? y.move.mv.arms[0] : y.move.mv.arms[1]) * e;
+    if (w <= 0) continue;
+    for (const n of RB_ARM[s]) { const i = md.index[n] * 4; q[0].fromArray(p.q, i).slerp(q[1].fromArray(g.q, i), w).toArray(p.q, i); }
+  }
+}
+
 // The shift that puts move F.act's hitting limb inside its box (15 mm in from its edges) on its first active frame,
 // found once per move on that frame's pose: RN.pure brings it in and out smoothly around the active frames. A kick on
 // the ground shifts its kicking foot (the leg bends or reaches a little more: the body stays balanced over the
@@ -314,9 +332,15 @@ function rbContacts(md, p, y, st, pol, t0) {
       // for a kick's support foot (it pivots as the actor's), 20 in a punch (he stepped), 60 otherwise; a kicking foot
       // takes the clip's direction over the first half of the startup, so it does not spin as it leaves the floor
       const kicker = y.free === s, ref = t0 && !kicker ? t0[s] : st[s].fwd, lim = (kicker ? 170 : y.free ? 160 : y.move ? 20 : 60) * RB_R;
-      const raw = Math.atan2(ref.z * t.dir.x - ref.x * t.dir.z, ref.x * t.dir.x + ref.z * t.dir.z), ar = Math.abs(raw);
-      const turn = Math.sign(raw) * (ar <= .7 * lim ? ar : .7 * lim + .3 * lim * Math.tanh((ar - .7 * lim) / (.3 * lim))) * (kicker ? 1 - Math.max(y.freeB, y.back) : y.foot);
-      const lift = Math.min(RB.heelMax, t.lift * (kicker ? 1 - Math.max(y.freeB, y.back) : y.lift) + y.h[s]);
+      const soft = (x, l) => { const a = Math.abs(x); return Math.sign(x) * (a <= .7 * l ? a : .7 * l + .3 * l * Math.tanh((a - .7 * l) / (.3 * l))); };
+      let turn = soft(Math.atan2(ref.z * t.dir.x - ref.x * t.dir.z, ref.x * t.dir.x + ref.z * t.dir.z), lim) * (kicker ? 1 - Math.max(y.freeB, y.back) : y.foot);
+      let lift = Math.min(RB.heelMax, t.lift * (kicker ? 1 - Math.max(y.freeB, y.back) : y.lift) + y.h[s]);
+      const mv = y.move && y.move.mv;
+      if (mv && mv.pivot && !y.free && t0 && s === (/R$/.test(y.move.limb) ? 'R' : 'L')) {   // the foot under the punch turns with the hips
+        let dh = rbYaw(q[2].fromArray(p.q, 0)) - t0.hy; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+        turn = soft(mv.pivot * dh, 75 * RB_R) * y.foot;
+        lift = Math.min(RB.heelMax, lift + .4 * Math.abs(turn) / RB_R);
+      }
       c.Q.copy(st[s].Q);
       if (lift > 0) c.Q.premultiply(q[1].setFromAxisAngle(st[s].axis, lift * RB_R));
       if (turn) { c.Q.premultiply(q[1].setFromAxisAngle(RB_UP, turn)); c.G.sub(st[s].B).applyAxisAngle(RB_UP, turn).add(st[s].B); }   // on the ball of the foot
@@ -393,7 +417,7 @@ function rbT0(md, F, S) {
   const id = F.act, key = RB.stance.key;
   if (!RB.t0 || RB.t0.key !== key) RB.t0 = {key, of: {}};
   if (RB.t0.of[id]) return RB.t0.of[id];
-  const W = rbFK(md, mdPoseOf(Object.assign({}, F, {af: 0}), S), RB.W), o = {ball: {}};
+  const W = rbFK(md, mdPoseOf(Object.assign({}, F, {af: 0}), S), RB.W), o = {ball: {}, hy: rbYaw(W.q[0])};
   for (const s of ['L', 'R']) { rbFootOf(W.q[RB.leg[s].ia], RB.leg[s]); o[s] = RB.t.dir.clone(); o.ball[s] = W.p[RB.leg[s].it].clone(); }
   return RB.t0.of[id] = o;
 }
@@ -403,6 +427,7 @@ function rbT0(md, F, S) {
 function rbLegs(md, p) {
   const t = RB.t, v = t.v, q = t.q, con = RB.con;
   const qH = q[0].fromArray(p.q, 0), h = v[0].fromArray(p.h);
+  t.hipF.set(0, 0, 1).applyQuaternion(qH);
   const hip = (s, out) => out.copy(RB.leg[s].tu).applyQuaternion(qH).add(h);
   const ankle = (s, out) => out.copy(con[s].loc).applyQuaternion(con[s].Q).negate().add(con[s].G);
   // a short leg first lifts its heel (smoothly with what is missing: 4 cm = 10 degrees), on standing feet only
@@ -485,8 +510,14 @@ function rbIK(md, p, L, qH, A, tgt, Qf, qU, qL, knee, ank, rigid, w) {
     const Pf = L.sd.clone().applyQuaternion(Qf).setY(0); Pf.addScaledVector(dir, -Pf.dot(dir));
     if (Pf.lengthSq() > .04) {
       Pf.normalize();
-      const ang = Math.acos(Math.max(-1, Math.min(1, P.dot(Pf)))), sgn = new T.Vector3().crossVectors(Pf, P).dot(dir) < 0 ? -1 : 1;
-      const want = sgn * Math.min(ang, 40 * RB_R) * (1 - rnSm((ang - 2.5) / .6)), turn = (want - sgn * ang) * w;
+      // angles about the leg's line, from the toes: the knee's (aP) and the hips' forward (aH). In a punch (weight k)
+      // the knee goes toward the hips' way (60% of it from the toes, a rear knee driving in with the punch) within 15
+      // degrees; else within 40 degrees of the toes.
+      const sa = (a, b) => Math.atan2(new T.Vector3().crossVectors(a, b).dot(dir), a.dot(b));
+      const Hf = RB.t.hipF.clone(); Hf.addScaledVector(dir, -Hf.dot(dir));
+      const aP = sa(Pf, P), aH = Hf.lengthSq() > .04 ? sa(Pf, Hf.normalize()) : 0, k = RB.sty.knee;
+      const c = k * Math.max(-.8, Math.min(.8, .6 * aH)) * (1 - rnSm((Math.abs(aH) - 2.4) / .6)), tol = (40 - 25 * k) * RB_R;
+      const g = rnSm((Math.abs(aP) - 2.5) / .5), want = Math.max(c - tol, Math.min(c + tol, aP)) * (1 - g) + c * g, turn = (want - aP) * w;
       if (Math.abs(turn) > 1e-5) { const tw = new T.Quaternion().setFromAxisAngle(dir, turn); P.applyQuaternion(tw); R.premultiply(tw); }
     }
   }
