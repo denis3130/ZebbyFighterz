@@ -78,13 +78,15 @@ function rsArm(md, p, W, s, tgt, eh, fd, pn, w) {
   P.normalize();
   const cos = (a * a + d * d - b * b) / (2 * a * d), sin = Math.sqrt(Math.max(0, 1 - cos * cos));
   const B = A.clone().addScaledVector(dir, a * cos).addScaledVector(P, a * sin), end = A.clone().addScaledVector(dir, d);
-  // an elbow (or the forearm's middle) inside the chest: the elbow turns about the shoulder-wrist line until it is out
-  for (let k = 0; k < 12; k++) {
-    const mid = B.clone().lerp(end, .5), inB = rsOut(md, W, B.clone()), inM = rsOut(md, W, mid);
-    if (!inB && !inM) break;
+  // an elbow (or the forearm's middle) inside the chest: the elbow turns about the shoulder-wrist line, away from the
+  // chest, by the least angle that takes both out (found by halving: continuous as the arm moves, no step)
+  const inside = P2 => { const B2 = A.clone().addScaledVector(dir, a * cos).addScaledVector(P2, a * sin); return rsOut(md, W, B2.clone()) || rsOut(md, W, B2.lerp(end, .5)); };
+  if (inside(P)) {
     const C = W.p[md.index.Spine01], away = B.clone().sub(C); away.addScaledVector(dir, -away.dot(dir));
-    const sgn = new T.Vector3().crossVectors(P, away).dot(dir) >= 0 ? 1 : -1;
-    P.applyAxisAngle(dir, sgn * 12 * Math.PI / 180);
+    const sgn = new T.Vector3().crossVectors(P, away).dot(dir) >= 0 ? 1 : -1, turn = th => P.clone().applyAxisAngle(dir, sgn * th);
+    let lo = 0, hi = 144 * Math.PI / 180;
+    if (!inside(turn(hi))) for (let k = 0; k < 14; k++) { const m = (lo + hi) / 2; if (inside(turn(m))) lo = m; else hi = m; }
+    P.copy(turn(hi));
     B.copy(A).addScaledVector(dir, a * cos).addScaledVector(P, a * sin);
   }
   const d1 = new T.Quaternion().setFromUnitVectors(E.clone().sub(A).normalize(), B.clone().sub(A).normalize());

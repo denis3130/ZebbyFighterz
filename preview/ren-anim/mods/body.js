@@ -28,6 +28,7 @@ const RB = {
   md: null, W: null, sty: null, con: null, pol: 'none', rawOk: {},
   post: [],           // functions (md, p, F, S, y) applied to the finished pose (other modules: arms, hands, head)
   styleFor: {},       // act -> function (y, F, S, st) setting the style of an act another module owns
+  feetFor: {},        // act -> function (s, c, st, L, F) placing foot s's contact c itself (steps; kit.js)
   // Per move, what the style adds to the clip. hip/chest = twist at the impact (degrees; the sign follows the hitting
   // side), coil = share wound the other way first, lean = pitch at the impact (degrees, < 0 back) and leanCoil in the
   // coil, dip = pelvis drop in the coil and rise at the impact (shares of the height), back/fwd = metres the pelvis
@@ -59,6 +60,8 @@ const RB = {
 const RB_UP = new THREE.Vector3(0, 1, 0), RB_X = new THREE.Vector3(1, 0, 0), RB_R = Math.PI / 180;
 // the fight line in model space: the sim's forward (+x of a fighter facing right) as the model, drawn turned F3_YAW, has it
 const RB_LINE = new THREE.Vector3(Math.cos(F3_YAW), 0, Math.sin(F3_YAW));
+// across the fight line, toward the fighter's own left (a lean about it tips the body toward the opponent)
+const RB_SIDE = new THREE.Vector3().crossVectors(RB_UP, RB_LINE).normalize();
 
 // --- Forward kinematics: every bone's model-space rotation and position, parents first, in one pass ---
 function rbFK(md, p, W) {
@@ -155,7 +158,7 @@ RN.moveT = function (t, m, af, hit) {
 // --- Style: what the act asks of the body at this frame (RB.sty, reused) ---
 function rbStyle(F, S, st) {
   const y = RB.sty, act = F.act, H = RB.H, t = S.frame + 23 * F.side, af = F.af;
-  y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = 0; y.stab = .6; y.free = null; y.freeW = 1; y.back = 0; y.backTo = null; y.box = 0; y.move = null; y.foot = 1; y.lift = 1; y.freeB = 1; y.after = false; y.knee = 0;
+  y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = y.lx = y.leanL = 0; y.stab = .6; y.free = null; y.freeW = 1; y.back = 0; y.backTo = null; y.box = 0; y.move = null; y.foot = 1; y.lift = 1; y.freeB = 1; y.after = false; y.knee = 0;
   y.h.L = y.h.R = 0;
   if (RB.styleFor[act]) { RB.styleFor[act](y, F, S, st); return y; }   // an act another module styles (swag.js)
   const mv = RB.moves[act], m = mv && (CFG.moves[act] || mv.fd);
@@ -218,6 +221,7 @@ RN.pure = function (md, F, S) {
   RB.pol = pol; RB.floor = F.air ? -F.y / 1000 : 0;   // the floor in the model's frame (under a fighter in the air)
   rbBody(md, p, y);
   rbRawFeet(md, F, y);
+  RB.curAct = act; RB.curF = F;
   if (pol !== 'none') rbContacts(md, p, y, st, pol, t0);
   if (pol === 'pin' && y.free) rbBalance(md, p, y);
   RB.lf = null;
@@ -276,8 +280,10 @@ function rbBody(md, p, y) {
   const qH = q[0].copy(W.q[0]);
   if (y.yaw) qH.premultiply(q[1].setFromAxisAngle(RB_UP, y.yaw * RB_R));
   if (y.lean) qH.premultiply(q[1].setFromAxisAngle(RB_X, y.lean * RB_R));
+  if (y.leanL) qH.premultiply(q[1].setFromAxisAngle(RB_SIDE, y.leanL * RB_R));   // toward the opponent, along the fight line
   qH.toArray(p.q, 0);
   p.h[1] -= y.dip; p.h[2] += y.sz;
+  if (y.lx) { p.h[0] += RB_LINE.x * y.lx; p.h[2] += RB_LINE.z * y.lx; }   // the weight along the fight line
   // spine: the chest's twist spread over its three bones, each about the vertical
   const PW = q[2].copy(qH), chain = [ix.Spine02, ix.Spine01, ix.Spine], share = [.3, .35, .35];
   for (let k = 0; k < 3; k++) {
@@ -348,6 +354,8 @@ function rbContacts(md, p, y, st, pol, t0) {
       c.Q.copy(st[s].Q);
       if (lift > 0) c.Q.premultiply(q[1].setFromAxisAngle(st[s].axis, lift * RB_R));
       if (turn) { c.Q.premultiply(q[1].setFromAxisAngle(RB_UP, turn)); c.G.sub(st[s].B).applyAxisAngle(RB_UP, turn).add(st[s].B); }   // on the ball of the foot
+      const kf = RB.feetFor[RB.curAct];
+      if (kf) { kf(s, c, st, L, RB.curF); continue; }   // an act that places its feet itself (kit.js): no say in the pelvis
       const wb = y.free === s ? (y.after ? c.w : y.freeB) : 1;   // this foot's say in where the pelvis goes
       if (wb > 0) { const tip = t.v[4].copy(L.tp).applyQuaternion(c.Q).add(t.ca[s]); ox += (c.G.x - tip.x) * wb; oz += (c.G.z - tip.z) * wb; n += wb; }
     } else {
@@ -356,7 +364,7 @@ function rbContacts(md, p, y, st, pol, t0) {
       c.Q.copy(t.cq[s]); c.loc = L.tb;
     }
   }
-  if (n) {
+  if (n && !RB.feetFor[RB.curAct]) {
     ox /= n; oz /= n;
     const d = Math.hypot(ox, oz), lim = RB.travel[1] + (RB.travel[0] - RB.travel[1]) * Math.max(0, Math.min(1, n - 1)), k = d > 1e-6 ? lim * Math.tanh(d / lim) / d : 1;   // (a soft limit)
     p.h[0] += ox * k; p.h[2] += oz * k;

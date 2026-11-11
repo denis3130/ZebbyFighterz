@@ -46,6 +46,8 @@ PATCHES = [
     ("  const it = VW.it, F = VW.F;\n  mdSync(it, 0, VW.S);\n",
      "  const it = VW.it, S = rnDrawState(), F = fighterOf(S, 0);\n  rnSync(it, 0, S);\n"),
     ("c = VW.camera, d = VW.fit * VW.zoom;", "c = VW.camera, d = VW.fit * VW.zoom * VW.wide;"),
+    # (a page may play at the game's own speed: VW.pace = 1)
+    ("VW.acc += dt * VW.speed * VW_PACE;", "VW.acc += dt * VW.speed * (VW.pace || VW_PACE);"),
     ("  c.position.set(0, cy + .1, d); c.lookAt(0, cy, 0);\n  VW.renderer.render(VW.scene, c);\n  const m = CFG.moves[F.act],",
      "  c.position.set(VW.aimX, cy + .1, d); c.lookAt(VW.aimX, cy, 0);\n  for (const f of RN.hooks.draw) if (RN.on) f(VW, dt, c);\n"
      "  VW.renderer.render(VW.scene, c);\n  rnFps(now);\n  { const F = VW.F;\n  const m = CFG.moves[F.act],"),
@@ -66,9 +68,13 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--mods", default="", help="comma separated module files (relative to mods/ or absolute), in order")
     ap.add_argument("--base", default=os.path.join(HERE, "base", "viewer_code.html"))
+    ap.add_argument("--title", default="Ren animazioni nuove", help="the page's <title>")
+    ap.add_argument("--subtitle", default="Animazioni nuove · confronta con le vecchie", help="the line under REN")
     a = ap.parse_args()
     code = open(a.base, encoding="utf-8").read()
-    for old, new in PATCHES:
+    patches = [(o, n.replace("<title>Ren animazioni nuove</title>", "<title>%s</title>" % a.title)
+                .replace("REN<small>Animazioni nuove · confronta con le vecchie</small>", "REN<small>%s</small>" % a.subtitle)) for o, n in PATCHES]
+    for old, new in patches:
         n = code.count(old)
         if n != 1:
             sys.exit("build.py: patch matches %d times (must be 1): %r" % (n, old[:70]))
