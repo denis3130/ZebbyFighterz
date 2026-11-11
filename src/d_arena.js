@@ -45,24 +45,22 @@ void main(){ vec2 u = vec2(1. - abs(1. - mod(vU.x + uSkyOff + 2., 2.)), vU.y);
 void main(){ float a = texture2D(uMist, vec2(vU.x * uRep + mod(uTime * uDrift, 1.), vU.y)).r * uOpacity;
   gl_FragColor = vec4(uColor, a); }`,
   // The waterfall: the painted water slides down (two copies half a cycle apart, each counting only where it samples
-  // water too, starting softly under the crest), its streaks scroll and the spray boils at its foot. uBox = the
-  // plane's painting box (x0, y0, x1, y1, px, y down), uAt = its atlas rect, uPaint = the painting's size in px.
-  water: `uniform vec4 uBox, uAt, uFoam; uniform vec3 uWater; uniform vec2 uSpray, uCrest, uPaint; uniform float uFlow, uStreak, uWobble;
+  // water too, starting softly under the crest) and the spray boils at its foot (the first stage's shimmer and noise
+  // streaks are gone: Denis, 11/11). uBox = the plane's painting box (x0, y0, x1, y1, px, y down), uAt = its atlas rect.
+  water: `uniform vec4 uBox, uAt, uFoam; uniform vec3 uWater; uniform vec2 uSpray, uCrest;
 void main(){
   vec2 am = texture2D(uM, vUv).rg; float a = am.r, m = am.g;
   if (a < .003) { gl_FragColor = vec4(0.); return; }
-  vec2 u = vU, px = vec2(uBox.x + u.x * (uBox.z - uBox.x), uBox.w - u.y * (uBox.w - uBox.y)), p = vec2(px.x / uPaint.x, 1. - px.y / uPaint.y);
+  vec2 u = vU, px = vec2(uBox.x + u.x * (uBox.z - uBox.x), uBox.w - u.y * (uBox.w - uBox.y));
   float hy = uBox.w - uBox.y;
-  vec2 sh = u + vec2(0., sin(p.x * 90. + mod(uTime * 3., 6.2831853)) * uWobble * m * uPaint.y / hy);
-  vec3 c = texture2D(uC, uAt.xy + clamp(sh, 0., 1.) * uAt.zw).rgb;
+  vec3 c = texture2D(uC, vUv).rgb;
   if (m > .004) {
     float ph = fract(uTime * uWater.x), wa = 1. - abs(2. * ph - 1.);
-    vec2 sa = uAt.xy + clamp(sh + vec2(0., ph * uWater.y / hy), 0., 1.) * uAt.zw;
-    vec2 sb = uAt.xy + clamp(sh + vec2(0., fract(ph + .5) * uWater.y / hy), 0., 1.) * uAt.zw;
+    vec2 sa = uAt.xy + clamp(u + vec2(0., ph * uWater.y / hy), 0., 1.) * uAt.zw;
+    vec2 sb = uAt.xy + clamp(u + vec2(0., fract(ph + .5) * uWater.y / hy), 0., 1.) * uAt.zw;
     float ka = wa * texture2D(uM, sa).g, kb = (1. - wa) * texture2D(uM, sb).g;
     vec3 fl = texture2D(uC, sa).rgb * ka + texture2D(uC, sb).rgb * kb + c * (1. - ka - kb);
     c = mix(c, fl, m * uWater.z * smoothstep(uCrest.x, uCrest.y, px.y));
-    c += m * (arNoise(vec2(p.x * 140., p.y * 6. + mod(uTime * uFlow * 6., 64.))) - .5) * uStreak / uContrast;
   }
   vec2 f = vec2((px.x - uFoam.x) / (uFoam.y - uFoam.x), (uFoam.w - px.y) / (uFoam.w - uFoam.z));
   if (f.x > 0. && f.x < 1. && f.y > 0. && f.y < 1.) {
@@ -192,7 +190,7 @@ function arLayers(def, col, msk, mist) {
     const W = def.water, uni = name === 'falls' ? () => ({uBox: U(new THREE.Vector4(...pls[0].box)), uAt: U(at(pls[0].strips[0])),
       uFoam: U(new THREE.Vector4(...W.foam)), uWater: U(new THREE.Vector3(W.rate, W.len, W.mix)),
       uSpray: U(new THREE.Vector2(W.spray, W.sprayRate)), uCrest: U(new THREE.Vector2(...W.crest)),
-      uPaint: U(new THREE.Vector2(iw, ih)), uFlow: U(def.flow), uStreak: U(def.streak), uWobble: U(def.wobble)}) : () => ({});
+      }) : () => ({});
     const kind = name === 'falls' ? 'water' : 'plane';
     arFarMesh(name + '.core', arQuads(pls, true), z, arFarMat(kind, uni(), true), rank);
     const edge = arFarMesh(name, arQuads(pls, false), z, arFarMat(kind, uni()), Math.round(z));

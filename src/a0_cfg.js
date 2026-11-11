@@ -63,7 +63,7 @@ const CFG={
   //   between them (z, painting rows of the band's top and bottom, opacity, drift u per s: nearer is faster);
   //   sway = the far planes' slow breathing (metres, seconds), so their depth shows with the camera still too;
   //   mistLift = the mist's colour lift;
-  //   contrast/lift = colour grade; flow/streak/wobble = the waterfall's streaks and shimmer; skyDrift = the clouds'
+  //   contrast/lift = colour grade; skyDrift = the clouds'
   //   sway (share of the painting's width) over skyPeriod s; water = the painted water itself sliding down (rate =
   //   cycles per s, len = slide per cycle in painting px, mix = how much; crest = painting rows over which it starts
   //   below the crest), foam = painting rect [x0, x1, row0, row1] of the boiling spray at the foot of the fall, spray =
@@ -83,7 +83,7 @@ const CFG={
     mists:[{z:-6.5, rows:[580, 830], opacity:.45, drift:.006}, {z:-30, rows:[540, 720], opacity:.42, drift:.0025}],
     sway:{amp:.25, period:24},
     mistLift:.12,
-    contrast:.92, lift:.03, flow:.55, streak:.3, wobble:.003, skyDrift:.012, skyPeriod:140,
+    contrast:.92, lift:.03, skyDrift:.012, skyPeriod:140,
     water:{rate:.85, len:60, mix:.9, crest:[262, 340], foam:[680, 1200, 540, 735], spray:.85, sprayRate:1.6},
     terrace:{half:14, front:4.2, back:-3.5, row:[1.05, .45], len:[1.3, 1.1], gap:.03, depth:.25, lip:[.4, .09], grout:-.05,
       line:.01, warm:[0xe0b88e, 0xc99a74], cool:[0xb0a39a, 0x948c8e], grass:46, keep:.7},
