@@ -38,12 +38,14 @@ function navScope() {
   return d ? d.root : null;
 }
 function navItems() { const s = navScope(); return s ? [...s.querySelectorAll('[data-focus]')].filter(navVisible) : []; }
+const navIsField = el => !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
 function navFocus(el) {
   if (NAV.focus === el) return;
-  if (NAV.focus) NAV.focus.classList.remove('f');
+  if (NAV.focus) { NAV.focus.classList.remove('f'); if (navIsField(NAV.focus) && document.activeElement === NAV.focus) NAV.focus.blur(); }   // leaving a text field closes its keyboard
   NAV.focus = el || null;
   if (!el) return;
   el.classList.add('f');
+  if (navIsField(el) && NAV.dev === 'kb' && document.activeElement !== el) { try { el.focus({preventScroll: true}); } catch (_) {} }   // typing goes to it
   const d = navDef();
   if (d && d.onFocus) d.onFocus(el);
 }
@@ -141,6 +143,7 @@ function navTab(d) {
 function navPointerAct(el, dev, target) {
   if (MN.rot || !navItems().includes(el)) return;
   navSetDev(dev);
+  if (navIsField(el)) { navFocus(el); return; }   // a tap on a text field is for typing in it, not a confirm
   if (performance.now() < NAV.busyUntil || navGuarded()) return;
   navFocus(el); navAct(el, target);
 }
@@ -181,7 +184,7 @@ function navPointers(box) {
     const d = NAV.down;
     if (!d || d.id !== e.pointerId) {   // a tap outside any button: the screen's any(), if it has one
       const def = navDef();
-      if (def && def.any && !MN.rot && def.root.contains(e.target) && !(e.target.closest && e.target.closest('[data-focus]'))) def.any(e.pointerType === 'mouse' ? 'kb' : 'touch');
+      if (def && def.any && !MN.rot && def.root.contains(e.target) && !(e.target.closest && e.target.closest('[data-focus]'))) { const dv = e.pointerType === 'mouse' ? 'kb' : 'touch'; navSetDev(dv); def.any(dv); }
       return;
     }
     NAV.down = null;
@@ -205,7 +208,7 @@ function navPointers(box) {
 // Keyboard: arrows and WASD move, Enter / Space / J confirm, Esc (and Backspace outside a text field) go back, Q / E and
 // PageUp / PageDown switch tabs. In a text field the letters, Space and left / right belong to the field.
 function navKey(e) {
-  const c = e.code, typing = !!(e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName));
+  const c = e.code, typing = navIsField(document.activeElement);
   if (c === 'Escape' || (c === 'Backspace' && !typing)) { if (!e.repeat) menuBack(); e.preventDefault(); return; }
   if (G.state === 'fight' || !NAV.cur || MN.rot) return;
   NAV.dev = 'kb';
@@ -231,7 +234,7 @@ function navPadPoll(now) {
     const a = edge(0), b = edge(1), lb = edge(4), rb = edge(5), start = edge(9), xy = edge(2) | edge(3) | edge(8), ax = g.axes[0] || 0, ay = g.axes[1] || 0;
     const dir = down(12) || ay < -.5 ? 'up' : down(13) || ay > .5 ? 'down' : down(14) || ax < -.5 ? 'left' : down(15) || ax > .5 ? 'right' : null;
     const def = (G.state === 'title' || G.state === 'end') && !MN.rot ? navDef() : null;
-    if (def && def.any && (a || b || lb || rb || start || xy) && def.any('pad')) { NAV.dev = 'pad'; NAV.padIx = i; p.dir = dir; continue; }
+    if (def && def.any && (a || b || lb || rb || start || xy)) { NAV.dev = 'pad'; NAV.padIx = i; if (def.any('pad')) { p.dir = dir; continue; } }
     if (start) { if (G.state === 'fight') menu.pause(); else if (G.state === 'pause') menu.resume(); p.dir = dir; continue; }
     if (G.state === 'fight' || !NAV.cur || MN.rot) { p.dir = dir; continue; }
     if (a || b || lb || rb || (dir && dir !== p.dir)) { NAV.dev = 'pad'; NAV.padIx = i; }
@@ -241,6 +244,7 @@ function navPadPoll(now) {
   }
 }
 function navInit() {
+  NAV.dev = mnTouchDevice() ? 'touch' : 'kb';   // the title's prompt before any input
   navPointers(document.getElementById('uiScreens'));
   navPointers(document.getElementById('uiOver'));
   window.addEventListener('keydown', navKey);

@@ -213,3 +213,5 @@ function mount(list) {
     box.style.cssText = 'display:flex;flex-direction:column;gap:18px;align-items:flex-start'; p.list.forEach(e => box.appendChild(e)); this.root.appendChild(box); }});
   __VF.navReset('uiMount', {list});
 }
+// type(el, text) = set a text field's value as a person typing would leave it, then tell the page (input event).
+function type(el, text) { el.value = text; el.dispatchEvent(new Event('input', {bubbles: true})); }

@@ -84,7 +84,74 @@ function introScreens() {
     frame(now) { const dt = INTRO.last ? Math.min(100, now - INTRO.last) : 0; INTRO.last = now; introAt(INTRO.t + dt); },
     any() { if (!SV || !SV.introSeen) return false; introSkip(); return true; },
     back() { return false; }});
-  // the title until Task 7: the logo and «Tocca per iniziare»; anything goes on to the menu
-  navRegister({id: 'title', scene: 'menu', build(r) { r.appendChild(cLogo('l')); r.appendChild(uiEl('div', 'uprompt', 'Tocca per iniziare')); },
-    any(dev) { if (dev === 'touch') mnFullscreen(); navReset('menu'); return true; }, back() { return false; }});
+  titleScreens();
+}
+
+// --- The title: the big logo between Ren and Kael, the ruins at dusk, a prompt that follows the device. Any key, button
+// or tap goes on: to the name on the first launch, else to the menu. A tap also asks for full screen and landscape.
+const TITLE_PROMPT = {touch: 'Tocca per iniziare', kb: 'Premi un tasto', pad: 'Premi A'};
+const NAME_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
+function uiNameError(v) {
+  const N = CFG.ui.name;
+  if (v.length < N.min) return 'Usa almeno ' + N.min + ' caratteri';
+  if (v.length > N.max) return 'Al massimo ' + N.max + ' caratteri';
+  if (!new RegExp(N.re).test(v)) return 'Solo lettere, numeri, spazi, - e _';
+  return '';
+}
+function uiNameProposal() { const p = CFG.ui.name.pool; return p[(Math.random() * p.length) | 0] + (10 + ((Math.random() * 90) | 0)); }
+function titleScreens() {
+  navRegister({id: 'title', scene: 'title', layers: () => ({hero: 'ren', rival: 'kael', pose: 'title'}),
+    build(r) {
+      r.appendChild(cLogo('l'));
+      r.appendChild(uiEl('div', 'uprompt', '<i></i><span id="uPrompt"></span><i></i>'));
+    },
+    enter() { document.getElementById('uPrompt').textContent = TITLE_PROMPT[NAV.dev] || TITLE_PROMPT.kb; },
+    frame(now) { document.getElementById('uPrompt').style.opacity = (.8 + .2 * Math.cos(now / 520)).toFixed(3); },   // the prompt breathes (from JS, no CSS animation)
+    any(dev) { if (dev === 'touch') mnFullscreen(); if (SV && SV.name) navReset('menu'); else navGo('name'); return true; },
+    back() { return false; }});
+  // --- The name (first launch; later from the profile): a proposed name already written, an error under the field as it
+  // is typed, «Conferma» only for a valid name. With a controller, a grid of letters.
+  navRegister({id: 'name', scene: 'menu', layers: () => ({hero: 'ren'}),
+    build(r) {
+      r.appendChild(cHead('Come ti chiami?', 'Il nome compare nel profilo e nei risultati.'));
+      const box = uiEl('div', 'uname', '<label class="unameL" for="uName">Nome</label><input id="uName" class="unameF" type="text" autocomplete="off" autocapitalize="words" spellcheck="false" maxlength="24" enterkeyhint="done"><div class="unameE" id="uNameErr" aria-live="polite"></div>');
+      r.appendChild(box);
+      const f = box.querySelector('input');
+      f.setAttribute('data-focus', '');
+      f.uiAct = () => nameConfirm();
+      f.addEventListener('input', nameCheck);
+      const keys = uiEl('div', 'ukeys');
+      keys.id = 'uKeys';
+      const put = ch => { f.value = (f.value + ch).slice(0, CFG.ui.name.max); nameCheck(); };
+      for (const ch of NAME_KEYS) keys.appendChild(cBtn({label: ch, kind: 'small', act: () => put(ch)}));
+      keys.appendChild(cBtn({label: 'Spazio', kind: 'small', act: () => put(' ')}));
+      keys.appendChild(cBtn({label: '⌫', kind: 'small', act: () => { f.value = f.value.slice(0, -1); nameCheck(); }}));
+      keys.appendChild(cBtn({label: 'Fatto', kind: 'small', act: () => nameConfirm()}));
+      r.appendChild(keys);
+      const ok = cBtn({label: 'Conferma', kind: 'main', act: () => nameConfirm()});
+      ok.classList.add('unameOk');
+      r.appendChild(ok);
+    },
+    enter(p, back) {
+      const f = document.getElementById('uName');
+      if (!back) f.value = (SV && SV.name) || uiNameProposal();
+      nameCheck(); nameGrid();
+    },
+    frame() { nameGrid(); }});
+}
+// The grid of letters is there while the controller is the device in use.
+function nameGrid() { const r = NAV.screens.name.root; if (r.classList.contains('pad') !== (NAV.dev === 'pad')) r.classList.toggle('pad', NAV.dev === 'pad'); }
+function nameCheck() {
+  const v = document.getElementById('uName').value.trim(), e = uiNameError(v);
+  document.getElementById('uNameErr').textContent = e;
+  NAV.screens.name.root.querySelector('.unameOk .ub').classList.toggle('off', !!e);
+  return e;
+}
+function nameConfirm() {
+  const f = document.getElementById('uName');
+  if (nameCheck()) { f.classList.remove('bad'); void f.offsetWidth; f.classList.add('bad'); return; }
+  SV.name = f.value.trim();
+  saveWrite();
+  f.blur();
+  navReset('menu');
 }

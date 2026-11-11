@@ -170,18 +170,19 @@
 #lyRuins{inset:-4% -8%;background-position:center 40%;background-size:cover}
 #lyFog2{left:0;bottom:16%;width:200%;height:30%;background-repeat:repeat-x;background-size:50% 100%;opacity:.55}
 #lyFog1{left:0;bottom:-2%;width:200%;height:34%;background-repeat:repeat-x;background-size:50% 100%;opacity:.7}
-#lyHero,#lyRival{background-position:center bottom;background-size:contain;transform-origin:50% 100%}
-#lyHero{right:-2%;bottom:-58%;width:62%;height:150%;filter:drop-shadow(0 0 1px rgba(255,160,90,.9)) drop-shadow(0 0 14px rgba(240,138,50,.35))}
-#lyHero[data-c="kael"]{filter:drop-shadow(0 0 1px rgba(200,160,255,.9)) drop-shadow(0 0 14px rgba(143,106,216,.45))}
-#lyRival{right:26%;bottom:-30%;width:44%;height:118%;opacity:.42;filter:brightness(.45) saturate(.7) blur(1.2px)}
+#lyHero,#lyRival{background-position:right bottom;background-size:contain;transform-origin:50% 100%}
+#lyHero{right:-3%;bottom:0;width:64%;height:100%}
+#lyRival{right:0;top:9%;bottom:auto;width:21%;height:58%;opacity:.6;filter:brightness(.62) saturate(.85)}
 #lyGlow{right:2%;bottom:0;width:60%;height:100%;background:radial-gradient(ellipse at 55% 55%,rgba(240,138,50,.22),rgba(240,138,50,0) 62%)}
 #uiParts{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #lyShade{inset:0;background:radial-gradient(ellipse at 62% 42%,rgba(10,8,14,0) 35%,rgba(10,8,14,.55) 100%),linear-gradient(180deg,rgba(10,8,14,.25),rgba(10,8,14,0) 30%,rgba(10,8,14,0) 70%,rgba(10,8,14,.45))}
 /* per scene: only the menu shows the characters behind the interface; other screens draw their own */
-#uiLayers:not([data-scene="menu"]) #lyHero,#uiLayers:not([data-scene="menu"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
+#uiLayers:not([data-scene="menu"]):not([data-scene="title"]) #lyHero,#uiLayers:not([data-scene="menu"]):not([data-scene="title"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
+/* the title: Ren's and Kael's profiles high at the sides, the logo between them, as in the reference */
+#uiLayers[data-scene="title"] #lyHero{left:-2%;right:auto;top:0;bottom:auto;width:38%;height:86%;background-position:left top;opacity:.96;filter:none}
+#uiLayers[data-scene="title"] #lyRival{left:auto;right:-2%;top:0;bottom:auto;width:38%;height:90%;background-position:right top;opacity:.96;filter:none}
 #uiLayers[data-scene="off"] .ly,#uiLayers[data-scene="off"] #uiParts{opacity:0}
 /* quality: 'bassa' keeps the scene still (no drift, no breathing, no embers) and drops the glows; 'media' has fewer embers */
-#uiLayers.q-bassa #lyHero,#uiLayers.q-bassa #lyRival{filter:none}
 /* --- the intro (u4_intro.js): every value set per frame from JS; only the layout lives here --- */
 #uiLayers[data-scene="intro"] .ly{opacity:0}
 #uiLayers[data-scene="intro"] #lySky{opacity:.32}#uiLayers[data-scene="intro"] #lyFog1{opacity:.55}#uiLayers[data-scene="intro"] #lyShade{opacity:1}
@@ -191,9 +192,8 @@
 .inLines{left:-10%;right:-10%;top:30%;height:42%;opacity:0;
   background:repeating-linear-gradient(180deg,rgba(255,232,200,0) 0 9px,rgba(255,232,200,.55) 9px 10px,rgba(255,232,200,0) 10px 23px,rgba(240,160,90,.4) 23px 24px,rgba(255,232,200,0) 24px 37px);
   -webkit-mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent)}
-.inRen,.inKael{left:50%;bottom:-96%;width:110vh;height:196%;margin-left:-55vh;opacity:0;background:center bottom/contain no-repeat;
-  filter:drop-shadow(0 0 2px rgba(255,170,100,.9)) drop-shadow(0 0 18px rgba(240,138,50,.4))}
-.inKael{filter:drop-shadow(0 0 2px rgba(200,160,255,.9)) drop-shadow(0 0 18px rgba(143,106,216,.5))}
+.inRen,.inKael{left:50%;bottom:0;width:120vh;height:100%;margin-left:-60vh;opacity:0;background:center bottom/contain no-repeat;
+  -webkit-mask-image:radial-gradient(ellipse 46% 62% at 50% 52%,#000 58%,transparent 100%);mask-image:radial-gradient(ellipse 46% 62% at 50% 52%,#000 58%,transparent 100%)}
 .inClash{inset:0;opacity:0;background:center/cover no-repeat}
 .inRing{left:50%;top:48%;width:46vh;height:46vh;opacity:0;border-radius:50%;
   background:radial-gradient(circle,rgba(255,255,255,0) 52%,rgba(255,236,200,.9) 60%,rgba(255,170,90,.5) 66%,rgba(255,170,90,0) 72%)}
@@ -210,3 +210,29 @@
 /* the title until Task 7 */
 #sc-title{align-items:center}
 .uprompt{margin-top:calc(var(--u)*6);font-style:italic;font-size:max(18px,calc(var(--u)*5));color:var(--u-ink);text-shadow:0 2px 8px #000}
+/* --- the title (u4_intro.js) --- */
+#sc-title{align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 44%,rgba(10,8,14,.45),rgba(10,8,14,0) 55%),linear-gradient(180deg,rgba(10,8,14,0) 52%,rgba(10,8,14,.78))}
+#sc-title .ulogo{align-self:center;margin-top:calc(var(--u)*-6)}
+.uprompt{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--u)*10);transform:translateX(-50%);display:flex;align-items:center;gap:calc(var(--u)*3);white-space:nowrap;
+  font-style:italic;font-weight:600;font-size:max(18px,calc(var(--u)*5.2));color:#f6efe3;text-shadow:0 2px 10px #000}
+.uprompt i{width:calc(var(--u)*16);height:1px;background:linear-gradient(90deg,rgba(216,166,87,0),rgba(216,166,87,.7))}
+.uprompt i:last-child{background:linear-gradient(90deg,rgba(216,166,87,.7),rgba(216,166,87,0))}
+.uprompt::after{content:'';position:absolute;left:30%;right:30%;bottom:-10px;height:7px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange) 50%,rgba(240,138,50,0));clip-path:var(--u-brush)}
+/* --- the name (u4_intro.js) --- */
+#sc-name{justify-content:center;gap:calc(var(--u)*3);background:linear-gradient(90deg,rgba(14,12,22,.92) 0%,rgba(14,12,22,.7) 50%,rgba(14,12,22,.2) 100%)}
+.uname{display:flex;flex-direction:column;gap:calc(var(--u)*1);width:min(calc(var(--u)*70),70vw)}
+.unameL{font-family:var(--u-display);font-size:max(12px,calc(var(--u)*2.8));letter-spacing:.14em;color:var(--u-gold2)}
+.unameF{height:max(44px,calc(var(--u)*11));padding:0 calc(var(--u)*3);font-family:var(--u-serif);font-weight:600;font-size:max(18px,calc(var(--u)*5.4));color:#fff7ea;
+  background:rgba(20,17,28,.86);border:1px solid rgba(216,190,150,.42);border-radius:0;outline:none;caret-color:var(--u-orange);transition:border-color .15s,box-shadow .2s}
+.unameF.f,.unameF:focus{border-color:var(--u-gold2);box-shadow:0 0 0 1px rgba(243,214,160,.25),0 0 18px rgba(240,138,50,.3)}
+.unameF.bad{animation:uShake .3s}
+@keyframes uShake{20%{translate:-6px 0}40%{translate:6px 0}60%{translate:-4px 0}80%{translate:3px 0}}
+.unameE{min-height:1.3em;font-style:italic;font-weight:500;font-size:max(14px,calc(var(--u)*3.4));color:#ff9a7a}
+#sc-name .umw{width:min(calc(var(--u)*90),86vw)}
+.ub.off{filter:saturate(.3) brightness(.75);cursor:default}
+.ukeys{display:none;grid-template-columns:repeat(10,max(44px,calc(var(--u)*8.5)));gap:calc(var(--u)*1)}
+.ukeys .ub.small{min-width:0;width:100%;padding:0;font-size:max(15px,calc(var(--u)*3.6))}
+.ukeys .ub.small:nth-last-child(-n+3){grid-column:span 2}
+#sc-name.pad .ukeys{display:grid}
+#sc-name.pad .unameOk{display:none}
+#sc-name.pad .uhead .uheadS{display:none}

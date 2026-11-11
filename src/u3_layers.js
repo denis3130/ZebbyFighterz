@@ -22,19 +22,21 @@ function layersInit() {
   layersQuality(q);
   layersSet('menu', {hero: (SV && SV.lastChar) || 'ren'});
 }
-function lyChar(id, c) {
-  const el = document.getElementById(id);
-  if (el.dataset.c === (c || '')) return;
-  el.dataset.c = c || '';
-  el.style.backgroundImage = c && ASSETS['ui/' + c + '_full.webp'] ? 'url(' + ASSETS['ui/' + c + '_full.webp'] + ')' : 'none';
+// A character layer: c = 'ren' | 'kael' | null; pose = which picture ('full' in the menus, 'title' for the title's profiles).
+function lyChar(id, c, pose) {
+  const el = document.getElementById(id), key = c ? 'ui/' + (pose === 'title' ? 'title_' + c : c + '_full') + '.webp' : '';
+  if (el.dataset.k === key) return;
+  el.dataset.k = key; el.dataset.c = c || '';
+  el.style.backgroundImage = key && ASSETS[key] ? 'url(' + ASSETS[key] + ')' : 'none';
 }
-// scene: 'menu' | 'title' | 'select' | 'vs' | 'results' | 'off' (CSS places the layers per scene); o = {hero, rival, arena}.
+// scene: 'menu' | 'title' | 'intro' | 'select' | 'vs' | 'results' | 'off' (CSS places the layers per scene); o = {hero, rival,
+// pose, arena}. The characters' pictures come only from Denis's interface references (docs/ref/ui/), never the A-pose sheets.
 function layersSet(scene, o) {
   o = o || {};
   LY.scene = scene;
   LY.el.dataset.scene = scene;
   const hero = o.hero || null, rival = o.rival !== undefined ? o.rival : hero ? (hero === 'ren' ? 'kael' : 'ren') : null;
-  lyChar('lyHero', hero); lyChar('lyRival', rival);
+  lyChar('lyHero', hero, o.pose); lyChar('lyRival', rival, o.pose);
   const a = document.getElementById('lyArena'), src = o.arena ? ASSETS['ui/arena_' + o.arena + '.webp'] : null;
   if (src) a.style.backgroundImage = 'url(' + src + ')';
   a.classList.toggle('on', !!src);

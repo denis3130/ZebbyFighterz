@@ -11,14 +11,15 @@ final images go in without code changes. Written to assets/ui/ (WebP); build.py 
   ruins.webp          1600x900  the near layer, transparent: the arches at the sides and the stone floor, same dusk grade
   clouds.webp         1600x300  drifting cloud bands (drawn), transparent
   fog1.webp, fog2.webp 1600x300 fog bands (drawn), transparent
-  ren_full.webp, kael_full.webp  height 900: the character sheets (docs/ref/personaggi/) without their grey background
-  face_ren/kael/astra/raigon.webp 256x256  portraits; silhouette.webp 256x256 (a coming fighter)
+  ren_full.webp, kael_full.webp  Ren of the main menu and Kael of the settings in docs/ref/ui/ (Denis: only the characters
+                      of those references, never the A-pose sheets), their painted background faded out at the edges
+  ren_vs.webp, kael_vs.webp      the two faces of the VS reference; title_ren.webp, title_kael.webp the title's profiles
+  face_ren/kael/astra/raigon.webp 256x256  portraits (VS and pass references); silhouette.webp 256x256 (drawn: a coming fighter)
   arena_cascata.webp, arena_rovine.webp 640x360; arena_montagne/tetti/foresta/deserto.webp 320x140
   intro_clash.webp    1280x720  the clash of the opening (docs/ref/ui/00-*.png, first panel)
 Prints each file's size; fails if they add up to more than BUDGET_KB (the page keeps the interface under 3 MB as base64).
 """
 import os, sys
-from collections import deque
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
@@ -34,9 +35,19 @@ NEAR = [[(0, 40), (300, 40), (300, 380), (250, 720), (0, 720)],
         [(1330, 20), (1672, 20), (1672, 720), (1380, 720), (1330, 400)],
         [(0, 700), (1672, 700), (1672, 941), (0, 941)]]
 NEAR_FEATHER = 6
-FACES = {'ren': ('personaggi/ren.png', (392, 40, 632, 280)), 'kael': ('personaggi/kael.png', (392, 70, 632, 310)),
-         'astra': ('ui/04-pass-missioni-archivio-sblocco.png', (420, 22, 556, 158)),
-         'raigon': ('ui/04-pass-missioni-archivio-sblocco.png', (676, 62, 796, 182))}
+U0, U1, U3, U4 = 'ui/00-intro-titolo-menu-personaggi.png', 'ui/01-arena-vs-arcade-versus.png', 'ui/03-profilo-impostazioni-pausa-vittoria.png', 'ui/04-pass-missioni-archivio-sblocco.png'
+FACES = {'ren': (U1, (980, 92, 1172, 284)), 'kael': (U1, (1392, 66, 1592, 266)),
+         'astra': (U4, (420, 22, 556, 158)), 'raigon': (U4, (676, 62, 796, 182))}
+# Characters cut from the references (sheet, box, polygon in box coordinates kept opaque, feather px, output height). The
+# polygon follows the figure loosely; outside it the painted background fades away.
+CROPS = {
+    'ren_full': (U0, (290, 470, 836, 941), [(70, 16), (360, 16), (378, 100), (322, 168), (420, 250), (546, 300), (546, 471), (44, 471), (64, 330), (84, 120)], 26, 900),
+    'kael_full': (U3, (850, 52, 1132, 470), [(44, 14), (236, 14), (256, 120), (256, 418), (26, 418), (26, 140)], 22, 900),
+    'ren_vs': (U1, (836, 54, 1196, 338), [(0, 0), (330, 0), (360, 150), (360, 284), (0, 284)], 22, 600),
+    'kael_vs': (U1, (1306, 0, 1672, 338), [(30, 0), (366, 0), (366, 338), (0, 338), (0, 160)], 22, 600),
+    'title_ren': (U0, (900, 0, 1092, 300), [(0, 0), (168, 0), (168, 270), (0, 270)], 24, 600),
+    'title_kael': (U0, (1416, 0, 1600, 320), [(22, 0), (184, 0), (184, 290), (22, 290)], 24, 600),
+}
 THUMBS = {'montagne': (42, 272, 218, 348), 'tetti': (238, 272, 410, 348), 'foresta': (432, 272, 605, 348), 'deserto': (626, 272, 800, 348)}
 
 
@@ -105,28 +116,32 @@ def noise_band(size, scale, alpha, tint, seed):
     return Image.fromarray(rgba, 'RGBA')
 
 
-def cutout(path):
-    """A character sheet without its flat grey background: flood fill from the border over pixels near the corner colour."""
-    im = Image.open(path).convert('RGB')
-    a = np.asarray(im).astype(np.int32)
-    h, w, _ = a.shape
-    bg = np.array([a[5, 5], a[5, w - 6], a[h - 6, 5], a[h - 6, w - 6]]).mean(0)
-    near = np.sqrt(((a - bg) ** 2).sum(2)) < 26
-    seen = np.zeros((h, w), bool)
-    q = deque((y, x) for x in range(w) for y in (0, h - 1) if near[y, x])
-    q.extend((y, x) for y in range(h) for x in (0, w - 1) if near[y, x])
-    for y, x in q:
-        seen[y, x] = True
-    while q:
-        y, x = q.popleft()
-        for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
-            if 0 <= yy < h and 0 <= xx < w and near[yy, xx] and not seen[yy, xx]:
-                seen[yy, xx] = True
-                q.append((yy, xx))
-    alpha = Image.fromarray(np.where(seen, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.1))
+def crop_masked(sheet, box, poly, feather, height):
+    """A figure cut from a reference panel: inside the polygon opaque, the edges and the rest fading to transparent."""
+    im = Image.open(os.path.join(REF, sheet)).convert('RGB').crop(box)
+    m = Image.new('L', im.size, 0)
+    ImageDraw.Draw(m).polygon(poly, fill=255)
+    m = m.filter(ImageFilter.GaussianBlur(feather))
+    # the panel's own edge where the figure is cut by it (the bottom, a side) stays opaque: only the inner sides fade
     out = im.convert('RGBA')
-    out.putalpha(alpha)
-    return out.crop(alpha.getbbox())
+    out.putalpha(m)
+    return out.resize((round(out.width * height / out.height), height), Image.LANCZOS)
+
+
+def silhouette(size=256):
+    """A coming fighter: a dark head-and-shoulders shape with a faint violet rim."""
+    s = size * 4
+    m = Image.new('L', (s, s), 0)
+    d = ImageDraw.Draw(m)
+    d.ellipse((s * .34, s * .16, s * .66, s * .52), fill=255)                      # head
+    d.polygon([(s * .44, s * .48), (s * .56, s * .48), (s * .6, s * .62), (s * .4, s * .62)], fill=255)   # neck
+    d.ellipse((s * .08, s * .58, s * .92, s * 1.4), fill=255)                      # shoulders
+    m = m.resize((size, size), Image.LANCZOS)
+    rim = Image.new('RGBA', (size, size), (70, 58, 92, 255)); rim.putalpha(m.filter(ImageFilter.MaxFilter(5)))
+    body = Image.new('RGBA', (size, size), (26, 22, 36, 255)); body.putalpha(m)
+    bg = Image.new('RGBA', (size, size), (20, 17, 28, 255))
+    bg.alpha_composite(rim); bg.alpha_composite(body)
+    return bg.convert('RGB')
 
 
 def main():
@@ -138,20 +153,9 @@ def main():
     sizes['clouds.webp'] = save(noise_band((1600, 300), (96, 48, 24), .7, (196, 150, 170), 3), 'clouds.webp')
     sizes['fog1.webp'] = save(noise_band((1600, 300), (120, 60, 30), .55, (176, 160, 196), 5), 'fog1.webp')
     sizes['fog2.webp'] = save(noise_band((1600, 300), (160, 80, 40), .45, (150, 134, 176), 9), 'fog2.webp')
-    for c in ('ren', 'kael'):
-        im = cutout(os.path.join(REF, 'personaggi', c + '.png'))
-        im = im.resize((round(im.width * 900 / im.height), 900), Image.LANCZOS)
-        sizes[c + '_full.webp'] = save(im, c + '_full.webp')
-        if c == 'ren':
-            sil = Image.new('RGBA', im.size, (28, 24, 38, 255))
-            a = im.getchannel('A')
-            sil.putalpha(a)
-            edge = a.filter(ImageFilter.MaxFilter(7))
-            rim = Image.new('RGBA', im.size, (58, 50, 72, 255))
-            rim.putalpha(edge)
-            rim.alpha_composite(sil)
-            head = rim.crop((im.width // 2 - 170, 0, im.width // 2 + 170, 340)).resize((256, 256), Image.LANCZOS)
-            sizes['silhouette.webp'] = save(head, 'silhouette.webp')
+    for name, (sheet, box, poly, feather, height) in CROPS.items():
+        sizes[name + '.webp'] = save(crop_masked(sheet, box, poly, feather, height), name + '.webp')
+    sizes['silhouette.webp'] = save(silhouette(), 'silhouette.webp')
     for c, (f, box) in FACES.items():
         sizes['face_%s.webp' % c] = save(Image.open(os.path.join(REF, f)).convert('RGB').crop(box).resize((256, 256), Image.LANCZOS), 'face_%s.webp' % c)
     sizes['arena_cascata.webp'] = save(Image.open(os.path.join(REF, 'sfondo-cascata.png')).convert('RGB').resize((640, 360), Image.LANCZOS), 'arena_cascata.webp')
