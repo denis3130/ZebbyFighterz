@@ -519,7 +519,14 @@ il nodo in vita resta di Meshy (Denis: "no il nodo in vita no solo togli meglio 
   texture 4096; non nel repository).
 - Com'è: davanti, di lato e i tatuaggi come il foglio; dietro Meshy ha inventato la gonna del gilet anche sulla schiena
   (il foglio della schiena non ce l'ha: lì ci sono i pantaloni sotto la fascia).
-- Prossimi passi: alleggerirlo, metterlo sulle ossa di Kael al posto del suo busto e delle braccia (come la testa,
+- **Pulito prima delle ossa** (Denis: "prima di mettere il busto sulle ossa di kael miglioriamolo al meglio"):
+  alleggerito a 30.000 triangoli (`tools/mesh_prep/decimate_glb.py busto_k1.glb busto_k1_30k.glb 30000`), poi
+  `tools/kael_bust.py busto_k1_30k.glb busto_k2.glb`: la pittura di Meshy nei colori piatti delle 3 viste, pezzo per
+  pezzo (pelle, stoffa, viola dal colore di Meshy; il nero della stoffa nella quota del disegno), i tatuaggi viola col
+  bordo scuro, e le ombre della pelle (scelta di Denis, "Ombre sulla pelle") come una luce dall'alto più gli incavi,
+  quanto ne ombreggia il disegno (14%). Proiettare le 3 viste sul modello è stato provato e lasciato: coincidono
+  all'85-92% e le ombre venivano a pezzi, i bordi sfilacciati. La gonna dietro resta (Denis non l'ha scelta).
+- Prossimi passi: metterlo sulle ossa di Kael al posto del suo busto e delle braccia (come la testa,
   `tools/kael_head.py`), la testa sopra, le gambe di adesso sotto; poi le code della fascia come nastri.
 
 
