@@ -612,6 +612,14 @@ Denis ("manda anteprima").
   - grandezza: le proporzioni della mano sono quelle del foglio, ma accanto alle polsiere grosse il pugno sembra piccolo
     (quello di Ren è più grande del suo polso). Pronta la prova a +15% (`KAEL_HAND_SCALE=1.15`, `HAND_SCALE`): è un
     cambio di forma, aspetta l'ok di Denis.
+- **Pugni "come si deve"** (Denis: "sono deformi. rendili dei pugni come si deve"). Misurati vertice per vertice contro i
+  pugni di Ren nella stessa posa (stesse dita, stesso pugno): le dita coincidevano (1-4 mm), il palmo no (in media 8-11 mm,
+  fino a 3 cm). Causa: l'allargamento del polso (`WRIST`) arrivava dentro il palmo. Tolto: oltre 3 cm dal polso il pugno
+  ora è quello di Ren (1-3 mm). E il bordo del guanto cadeva proprio sulla piega delle nocche: nel pugno quella striscia si
+  storceva in una corona di punte sopra il guanto. Ora sul dorso il bordo è 1,5 cm più verso il polso (`DORSAL`): le nocche
+  sono pelle, il bordo è dritto sul dorso; sul palmo resta all'attaccatura delle dita come nel foglio. Sulle dita via le
+  macchie marroni della pittura di Ren, restano solo le pieghe più scure (tra le dita); l'ombra del guanto prugna scuro, non
+  nera (i blocchi neri sembravano buchi).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

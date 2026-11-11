@@ -346,6 +346,7 @@ def main(bust):
     print('glove: its edge drawn by the game on %d vertices (%d in the glove), the texture by the edge skin (%d texels)' % (len(vh), int(in_g.sum()), int(near_edge.sum())))
     # the part
     used = np.unique(Ib); mp = -np.ones(len(X), np.int64); mp[used] = np.arange(len(used)); It = mp[Ib]
+    if os.environ.get('KAEL_ATTACH_DUMP'): np.savez(os.environ['KAEL_ATTACH_DUMP'], rid=rid[used], side=(X2[used, 0] >= 0), dseam=dseam[used])   # (each part vertex's in Ren's package: tests of the fists' shape)
     pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
     blob = b''; jo = {'v': 1, 'verts': int(len(used)), 'tris': int(len(It)), 'scale': SCALE}
     def put(key, arr):
