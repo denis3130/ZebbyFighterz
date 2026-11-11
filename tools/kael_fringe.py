@@ -403,6 +403,20 @@ def covers_gap(Q, I, tris, Zb, proj):
     return (np.isfinite(zb) & (zb < d - HIDE[6])).reshape(len(tris), -1).any(1)
 
 
+def corner_pieces(Q, I, sel):
+    """Of the triangles sel: those not in the largest piece joined edge to edge (what hangs from the rest by a corner
+    alone, or by nothing)."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    _, w = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_inverse=True); w = w.ravel(); t = np.nonzero(sel)[0]; out = np.zeros(len(I), bool)
+    if not len(t): return out
+    T = w[I[t]]; e = np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]); e.sort(1); key = e[:, 0] * (int(w.max()) + 1) + e[:, 1]; tri = np.tile(np.arange(len(t)), 3)
+    o = np.argsort(key, kind='stable'); key, tri = key[o], tri[o]; same = key[1:] == key[:-1]
+    _, comp = connected_components(coo_matrix((np.ones(int(same.sum()), np.int8), (tri[:-1][same], tri[1:][same])), shape=(len(t), len(t))), directed=False)
+    out[t[comp != np.bincount(comp).argmax()]] = True
+    return out
+
+
 def under_ears(p, mid):
     """Per point: under and behind an ear (UNDER_EAR)."""
     return (np.abs(p[:, 0] - mid) > UNDER_EAR[0]) & (p[:, 1] > UNDER_EAR[1][0]) & (p[:, 1] < UNDER_EAR[1][1]) & (p[:, 2] < UNDER_EAR[2])
@@ -571,6 +585,8 @@ def side_hide(Q, I, keep, vc, hair_v, cams, mid, eye_m, chin_m, is_skin, ear_v=N
             for view in HIDE_VIEWS[side]: no_holes(both, *seen[view], only=inner)
             inner &= both
         print('face: %d triangles of inner walls seen through the hidden locks on his %s: hidden with them' % (int(inner.sum()), 'right' if side == 'dx' else 'left'))
+        loose = corner_pieces(Q, I, keep & ~both) & hair_t & not_ear & ~force   # (and what the hidden set leaves hanging by a corner alone: a flag of 5 cm2 beside his right temple)
+        both |= loose; print('face: %d triangles hanging by a corner once the locks on his %s are hidden: hidden with them' % (int(loose.sum()), 'right' if side == 'dx' else 'left'))
         for view in HIDE_VIEWS[side]: res[view] = both
         stand |= both
         print('face: from his %s side, %d of Meshy\'s triangles over the temple and the cheek hidden (%d where its images draw the face; whole locks and small pieces with them)' % (
@@ -750,6 +766,10 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
         A = csr_matrix((np.ones(3 * len(rest)), (np.repeat(np.arange(len(rest)), 3), wv[I[rest]].ravel())), shape=(len(rest), wv.max() + 1))
         _, lab = connected_components(A @ A.T, directed=False); sz = np.bincount(lab); over[rest[sz[lab] < VOTE[2]]] = True
     if free is not None: over &= ~free; part &= ~free   # (the locks hanging free before the face: whole, free_locks())
+    if paint_bangs:   # (and what this leaves hanging by a corner: the stubs of the locks left out, a shard of 4 cm2 standing before the forehead's
+        # top on his right, seen from every side; Denis, 11/11: "rimuovi se vedi le cose di troppo". Not what lies on the face, part of it)
+        loose = corner_pieces(Q, I, ~over) & (hair_v[I].sum(1) >= 2) & ~part
+        over |= loose; print('face: %d triangles of the hair hanging from the rest by a corner alone left out' % int(loose.sum()))
     keep = ~over
     print('face: %d of Meshy\'s triangles over the face left out (under %.3f m)' % (int(over.sum()), top))
     hide, locks, force = side_hide(Q, I, keep, vc, hair_v, cams, mid, eye_m, chin_m, is_skin, ear_v, free, piece) if sides else (None, None, None)

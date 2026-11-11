@@ -43,7 +43,7 @@ def main(scan_dir):
     f = lambda a, dt=np.float32: np.frombuffer(B, dt, a[1], a[0])
     Q = f(j['pos']).reshape(-1, 3).astype(np.float64); N = f(j['nor']).reshape(-1, 3).astype(np.float64)
     UV = f(j['uv']).reshape(-1, 2).astype(np.float64); I = f(j['idx'], np.uint16 if j['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
-    T = np.asarray(Image.open(os.path.join(d, 'kael_head.jpg')).convert('RGB')).astype(np.float64); TS = T.shape[0]
+    tp = os.path.join(d, 'kael_head.png'); T = np.asarray(Image.open(tp if os.path.exists(tp) else tp[:-3] + 'jpg').convert('RGB')).astype(np.float64); TS = T.shape[0]
     ys, xs, ks, _, pos_all, nor_all = texel_table(Q, N, UV, I, TS)
     c = T[ys, xs]; kind_all = np.where(is_skin(c), 1, np.where(is_hair(c) & (c.mean(1) > LINE_T), 2, 0))
     casters = pos_all[kind_all == 2][::CAST_STEP]; tree = cKDTree(casters)

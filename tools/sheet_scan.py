@@ -71,7 +71,7 @@ def model(pkg):
         HP = hf(hj['pos']).reshape(-1, 3).astype(np.float64); HUV = hf(hj['uv']).reshape(-1, 2).astype(np.float64)
         HI = hf(hj['idx'], np.uint16 if hj['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
         keep = np.ones(len(I), bool); keep[hf(hj['hide'], np.uint32).astype(np.int64)] = False
-        HT = np.asarray(Image.open(os.path.join(pkg, name + '_head.jpg')).convert('RGB')).astype(np.float64); hs = HT.shape[0]
+        hp_ = os.path.join(pkg, name + '_head.png'); HT = np.asarray(Image.open(hp_ if os.path.exists(hp_) else hp_[:-3] + 'jpg').convert('RGB')).astype(np.float64); hs = HT.shape[0]
         huv = HUV[HI].mean(1); hmat = classes(HT[np.clip((huv[:, 1] * hs).astype(int), 0, hs - 1), np.clip((huv[:, 0] * hs).astype(int), 0, hs - 1)])
         I, mat = np.vstack([I[keep], HI + len(P)]), np.r_[mat[keep], hmat]; P = np.vstack([P, HP])
     return P, I, mat

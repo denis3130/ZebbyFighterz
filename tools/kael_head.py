@@ -23,7 +23,7 @@ his own head and his collar's top hidden, coloured as his head images.
   collar's as his collar's there; the hair's and the earrings' outline thinner, pushed back behind the face where the
   locks hang over it.
 
-usage: python3 tools/kael_head.py BUST.glb   (writes wip_assets/kael/kael_head.json, .bin, .jpg and removes the
+usage: python3 tools/kael_head.py BUST.glb   (writes wip_assets/kael/kael_head.json, .bin, .png and removes the
 kael_fringe.* of the earlier proposal, tools/kael_ren_head.py: this head draws its own locks; Kael's look needs head:true
 in CFG.looks.kael)"""
 import io, json, os, sys
@@ -97,8 +97,10 @@ EAR_RINGS, EAR_LIGHT, EAR_STEPS = 4, (-.35, .6, .7), (-.1, .35, .8)
 EAR_HANG = (.1, .02)   # (see main: the earrings' pieces; bust units, .1 = 16 mm)
 EAR_AXIS = (.037, .08, .12)   # (see main: the hook's own pieces within [0] of the earring's axis, taken over its top [1], from [2] under its top; bust units)
 EAR_APEX = (.015, .009, .003, .004)   # (see main: the crystal's point: within [0] m over the earring's widest, the last height narrower than [2] before it is [3] wide again, the bead; [1] not used)
+SHELF_TOP = .0015            # (m: the shelf's dark up to this over the collar's rim)
 COLLAR_SHELF = (25, 20, 36)  # (see main: the triangles between the neck and the collar's rim, in the collar's dark lining)
 GREY = (16, 80, .03)         # (see main: Meshy's greys on the hair's triangles: channels within [0] of each other, lighter than [1]; as the painted hair within [2] m)
+FLAT = True                  # (the texture in the drawings' flat colours at the end, the lines kept over them: tools/kael_flat.py)
 HAIR_FILL = (.008, 30)       # (see main: the hair no image paints takes the nearest painted hair's fill, within [0] m; fill: lighter than the ink plus [1])
 EAR_TONES = ((232, 164, 245), (156, 75, 198), (107, 50, 143), (76, 36, 109))
 EAR_SILVER = ((204, 182, 218), (146, 124, 162))   # (the drawn link and bead: lit, shade; medians over the crystals in the profile images)
@@ -463,7 +465,10 @@ def main(bust):
     # collar's out): they kept Meshy's blend of skin and cloth, skin's shards through the collar's black line from behind, a streaked
     # shelf with lavender spikes as the head tips (Denis, 11/11, circling the nape: the lavender bit by the collar). Now the collar's
     # dark lining, and their corners not the collar's without outline (it drew black teeth through them)
-    sh_t = collar_v[It].any(1) & ~collar_v[It].all(1); k = np.nonzero(sh_t[ks])[0]; out[ys[k], xs[k]] = np.array(COLLAR_SHELF, float)
+    # (up to the collar's rim only (its own corners' top plus SHELF_TOP): where a shelf triangle's skin corner stands higher up the nape, the part
+    # over the rim is the neck's skin; all of it dark, it was a black triangle standing on the nape over the rim's centre)
+    sh_t = collar_v[It].any(1) & ~collar_v[It].all(1); rim_y = np.where(collar_v[It], Q[It][:, :, 1], -1e9).max(1)
+    k = np.nonzero(sh_t[ks] & (pos[:, 1] < rim_y[ks] + SHELF_TOP))[0]; out[ys[k], xs[k]] = np.array(COLLAR_SHELF, float)
     shelf_v = np.zeros(len(Q), bool); shelf_v[It[sh_t].ravel()] = True; shelf_v &= ~collar_v
     print('collar: %d triangles between the neck and its rim in its lining\'s colour (%d texels), %d of their corners without outline' % (int(sh_t.sum()), len(k), int(shelf_v.sum())))
     jt = np.nonzero(ear_v[It[ks]].all(1))[0]
@@ -496,9 +501,18 @@ def main(bust):
         out[ys[jt[pur]], xs[jt[pur]]] = tones[tone[pur]]
         out[ys[jt[sil]], xs[jt[sil]]] = np.where((lt[sil] > 0)[:, None], np.array(EAR_SILVER[0], float), np.array(EAR_SILVER[1], float))
         print('earrings: %d crystal texels in the drawing\'s four purples, %d of the bead and the hook silver' % (int(pur.sum()), int(sil.sum())))
+    if os.environ.get('KAEL_FLAT_DUMP'):   # (the state before the flat colours' pass, to work on that pass alone: tools/kael_flat.py's own main)
+        np.savez(os.environ['KAEL_FLAT_DUMP'], out=out.astype(np.float32), It=It, ys=ys, xs=xs, ks=ks, pos=pos.astype(np.float32), nor=nor.astype(np.float32), hair_v=hair_v, skin_v=is_skin(vc),
+                 ear_v=ear_v, collar_v=collar_v, keep_t=keep_t, mid=FACE_MID, eye_m=eye_m, chin_m=chin_m, free_t=free_t if free_t is not None else np.zeros(len(It), bool), Q=Q,
+                 face_t=face_t if face_t is not None else np.zeros(len(It), bool))
+    if FLAT:   # (the drawings' flat colours, the eyes and the brows left as painted: tools/kael_flat.py)
+        import kael_flat
+        kael_flat.prepare(Q, It); kael_flat.flatten(out, It, ys, xs, ks, pos, nor, hair_v, is_skin(vc), ear_v, collar_v, keep_t, FACE_MID, eye_m, chin_m, face_t=face_t)
     cov = np.zeros((TS, TS), bool); cov[ys, xs] = True
     _, (iy, ix) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], ix[~cov]]
-    Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(os.path.join(KAEL_PKG, 'kael_head.jpg'), quality=90, optimize=True)
+    # (lossless: a JPEG smears every border between two flat colours, and halves the colours' resolution)
+    Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(os.path.join(KAEL_PKG, 'kael_head.png'), optimize=True)
+    if os.path.exists(os.path.join(KAEL_PKG, 'kael_head.jpg')): os.remove(os.path.join(KAEL_PKG, 'kael_head.jpg'))   # (the earlier builds': the pages would carry both)
     # the package (as tools/ren_head.py's)
     It = It[keep_t]   # (without Meshy's locks over the face, FACE)
     src = np.arange(len(Q)); hmask = None

@@ -1930,6 +1930,7 @@ function modelBuild(key) {
   mesh.bind(skel); outline.bind(skel);
   if (head) {   // the new head: its own toon mesh and outline on the same skeleton (bound in the body, as the body's)
     const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = head.jpg;
+    tex.anisotropy = 4;   // (its flat colours and thin lines stay sharp on the surfaces seen at a slant: the mane's sides)
     tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
     // (both sides: the bust is cut above the shoulders, its coat open there; seen into it, the outline's inner shell
     // showed as black patches on the shoulders: now the coat's own colour, as a lining)
@@ -1941,7 +1942,13 @@ function modelBuild(key) {
       if (perV) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
       sh.fragmentShader = (perV ? 'varying float vFlat;\n' : '') + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
         '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + (perV ? 'vFlat * ' : '') + MD_HEAD_FLAT.toFixed(2) + ');');
-      if (hu) mdHideShader(sh, hu);
+      if (hu) {   // (Kael's head)
+        mdHideShader(sh, hu);
+        // (a lock is one sheet: seen from behind, where a lock before it is hidden or across the forehead from the other side, it showed its
+        // outer side's light paint, pale flakes with no outline. Its inner side: the hair's shadow tone, as the drawings' under-hair)
+        sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n\tif (!gl_FrontFacing && distance(diffuseColor.rgb, vec3(' + MD_HAIR_IN[0].map(v => (v / 255).toFixed(4)).join(', ')
+          + ')) < .1) diffuseColor.rgb = vec3(' + MD_HAIR_IN[1].map(v => (v / 255).toFixed(4)).join(', ') + ');');
+      }
     };
     const perV = !!head.geo.attributes.aFlat;
     hm.onBeforeCompile = headFlat(perV, hideU); hm.customProgramCacheKey = () => (perV ? 'headV' : 'head') + (hideU ? 'H' : '');
@@ -2077,6 +2084,7 @@ function mdHideShader(sh, hu) {
 // the head (the game draws two a frame) and with window.__HIDE_SNAP (the tools' stills). Per camera (its own state: a
 // second view of the fighter does not pull the first's). hmesh: the head (its bind matrices), skel, hb the Head bone.
 const MD_HIDE = [4, .3, 12, 100, 8];
+const MD_HAIR_IN = [[226, 214, 227], [140, 121, 154]];   // Kael's hair: its light tone, seen from a lock's inner side, drawn as its shadow tone (tools/kael_flat.py PAL)
 const MD_HV = [new THREE.Matrix4(), new THREE.Matrix4(), new THREE.Vector3()];
 function mdHeadHide(hmesh, skel, hb, az, hu) {
   const hi = skel.bones.indexOf(hb), per = new WeakMap();
@@ -2380,7 +2388,7 @@ const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
 // in the package's bind space, its texture, the package's triangles it replaces (hide), those lined (lining: drawn from
 // behind too, mdTris) and those left out of the outline (noline); null without it.
 function mdHeadData(md, key) {
-  const j = ASSETS[key + '/' + key + '_head.json'], b64 = ASSETS[key + '/' + key + '_head.bin'], jpg = ASSETS[key + '/' + key + '_head.jpg'];
+  const j = ASSETS[key + '/' + key + '_head.json'], b64 = ASSETS[key + '/' + key + '_head.bin'], jpg = ASSETS[key + '/' + key + '_head.png'] || ASSETS[key + '/' + key + '_head.jpg'];   // (its texture: a PNG where its colours are flat, tools/kael_head.py)
   if (!j || !b64 || !jpg) return null;
   if (md.head && md.head.j === j) return {j, geo: md.head.geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
   const s = atob(b64), u8 = new Uint8Array(s.length);

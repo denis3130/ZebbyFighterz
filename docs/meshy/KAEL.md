@@ -267,6 +267,75 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     dell'orecchino si può rifare in codice come nel disegno (anellino nel lobo e perlina tonda): anche questo è un
     cambio di forma; sotto la mascella il cuneo nero ha ancora i bordi a dentini (lo dipingono sia `face` sia
     `side_paint`); un piccolo triangolo scuro al centro del bordo del colletto sulla nuca.
+- **Colori piatti, niente sfumature né sovrapposizioni** (11/11, Denis rimandando le sei immagini: "rendere la testa del
+  modello 3d senza sfumature o sovrapposizioni tra le cose", poi "occhi e sopracciglia non si toccano, perfeziona ciò
+  che vedi fuori posto e rimuovi se vedi le cose di troppo"). `tools/kael_flat.py`, chiamato alla fine di
+  `tools/kael_head.py` (`FLAT = True`):
+  - la pittura veniva da sei disegni proiettati su una forma che non è la loro: dove due si incontrano erano
+    sfumati tra loro, ognuno portava i suoi bordi morbidi e, visto di striscio, veniva stirato. I disegni invece sono
+    cel: pochi colori piatti con righe nere sopra, ogni bordo netto. Misurato: nei disegni i pixel "morbidi" sono il
+    10-11% della figura (i bordi delle righe), nel modello erano il 12,5-14%; ora circa il 9,5%;
+  - **due strati, sulla superficie** (non nell'atlante: le isole di Meshy sono piccole e sparse): sotto, per ogni
+    texel uno dei colori piatti dei disegni (`PAL`: capelli chiaro e ombra, pelle e la sua ombra, il colletto i
+    suoi); sopra, le righe nere disegnate, rimaste dov'erano e rese nette (`INK`). Un texel in un'area piatta è
+    sicuro; gli altri (bordi, sfumature, toni di mezzo, righe) prendono, tra i colori dei texel sicuri vicini, quello
+    che li spiega meglio come "quel colore con un po' di inchiostro sopra": una sfumatura diventa un gradino e il
+    bordo morbido di una riga non diventa il tono scuro. Poi i bordi tra i colori sono arrotondati (`SMOOTH`) e
+    spariscono le macchie troppo piccole per essere una cosa (`SMALL`: sotto 40 mm² sui capelli, 12 altrove), i
+    trattini (`DASH`, `SHORT`: sui capelli le righe più corte di 5 mm; `LONE`: i puntini soli accanto a una riga)
+    e la foschia grigia; i bordi a dentini delle campiture nere sono chiusi (`INK_FILL`);
+  - **niente sovrapposizioni tra le cose**: un'isola dei colori della pelle quasi tutta circondata da capelli (o il
+    contrario) prende il colore di ciò che la circonda (`ISLE`: un tratto d'ombra della pelle dentro una ciocca,
+    un blocco color capelli sulla guancia); un triangolo tutto capelli prende solo i due colori dei capelli (le
+    immagini di lato avevano dipinto pelle su alcuni); il lato interno delle ciocche (`INNER`, che si vede dove una
+    ciocca è nascosta) è tutto nel tono d'ombra, senza righe;
+  - **sotto la mascella e sul collo** (`JAW`): la riga spessa della mascella dei disegni, proiettata da sei immagini
+    su una mascella che non è la loro, era una fascia a tratteggio con schegge nere attorno e un pezzetto nero
+    staccato sul mento. Ora il cuneo nero è intero e lì spariscono i tratti sotto 60 mm² (sotto 100 dietro le
+    orecchie: le macchie nere sotto i lobi);
+  - **i capelli visti dall'alto** (`TOP`): nessun disegno li mostra; avevano i toni dei disegni di lato presi di
+    striscio e quelli di Meshy, macchie a mimetica che non seguono nessuna ciocca (si vedevano da accovacciato).
+    Ora lì il tono viene dalla forma: ombra negli avvallamenti tra le ciocche, chiaro altrove;
+  - **occhi e sopracciglia non si toccano** (`EYE`, `HALO`, `eyes_zone`): nella fascia degli occhi, sulla superficie
+    del viso (non le ciocche davanti, non le tempie), tutto ciò che non è pelle (bianco, iridi, ciglia, sopracciglia
+    e le loro righe) e 2,5 mm attorno resta com'era, al pixel (verificato di fronte e di tre quarti: nessuna
+    differenza); la pelle nel resto della fascia è pulita come le guance (lì erano rimaste strisce e aloni morbidi).
+    Anche gli orecchini restano com'erano (i loro triangoli; la pelle del lobo e i capelli attorno al gancio ora
+    sono puliti come il resto);
+  - **dove l'atlante dà pochi texel a un triangolo** (il 10% dei capelli ha texel più larghi di 0,7 mm) i vicini si
+    cercano più lontano (`PITCH`), così anche lì spariscono macchioline e bordi a blocchi;
+  - **la pittura è un PNG** (`kael_head.png`, senza perdite; prima JPEG, che sporca ogni bordo tra due colori piatti e
+    dimezza la risoluzione dei colori). Il gioco legge il PNG se c'è (`mdHeadData`); la texture della testa ha
+    `anisotropy = 4` (colori e righe restano netti sulle superfici viste di striscio);
+  - **l'interno delle ciocche nel gioco** (`MD_HAIR_IN` in `src/e_model.js`, solo la testa di Kael): una ciocca è un
+    foglio solo; vista da dietro (dove una ciocca davanti è nascosta, o attraverso la fronte dall'altro lato) mostrava
+    la pittura chiara del lato esterno, scaglie pallide senza contorno. Ora il lato interno è nel tono d'ombra dei
+    capelli;
+  - **triangolo nero sulla nuca**: i triangoli che uniscono il collo al colletto erano tutti scuri; uno saliva sulla
+    nuca sopra il bordo. Ora sono scuri solo fino al bordo del colletto (`SHELF_TOP` in `tools/kael_head.py`, `RIM` in
+    `tools/kael_flat.py`), sopra è pelle del collo;
+  - **cose di troppo**: i pezzi dei capelli appesi al resto per un solo vertice (`corner_pieces` in
+    `tools/kael_fringe.py`): i monconi delle ciocche tolte davanti alla fronte (una scheggia di 4 cm² in alto a
+    destra, visibile da ogni lato) e un lembo di 5 cm² accanto alla tempia destra quando le ciocche sono nascoste;
+  - misure: pixel "morbidi" nelle viste dei disegni ora 0,5-1,6% della figura (erano 12,5-14%); niente pezzi staccati
+    nel modello in nessuno dei quattro stati delle ciocche nascoste;
+  - **resta** (trovato dai controlli, non fatto): la fascia viola del colletto ha il bordo inferiore a dentini e, al
+    centro dietro, una tacca nera che la taglia (il colletto ha 4 volte meno texel del viso: andrebbe dipinto con una
+    regola per altezza); dall'alto (accovacciato, salto) tra le ciocche della frangia si vede la fronte (è la forma:
+    servirebbe una fodera sotto la frangia o limitare l'inclinazione della testa, da mostrare a Denis); i bordi dei
+    cristalli degli orecchini a dentini da vicino; **nel gioco** (non nell'anteprima) il contorno dei capelli a
+    grandezza vera si spezza in puntini perché il gioco disegna senza antialiasing (`src/d_render.js`,
+    `antialias:false`; con antialiasing i punti sbagliati a 130 px passano dal 10,4% al 3,8%): da decidere misurando
+    gli FPS quando Kael di Meshy entrerà nel gioco. Il filtro della texture (mipmap + anisotropia 4) è già il
+    migliore dei cinque provati;
+  - misure del controllo indipendente sui capelli (da tenere presenti): le ombre dei capelli non seguono le ciocche
+    del modello (i bordi tra i due toni cadono su una piega del modello solo per caso) perché vengono dai disegni,
+    che hanno ciocche diverse; le righe nere sono un terzo di quelle dei disegni. La cura vera sarebbe ridipingere
+    i capelli dalla forma del modello (ombra dove la superficie guarda in basso o è coperta, righe lungo le pieghe):
+    cambia l'aspetto di tutta la chioma, **solo con l'ok di Denis**;
+  - provato e lasciato: ridisporre le isole dell'atlante con spazio tra loro (per quando la testa è piccola e la
+    scheda grafica legge le copie ridotte della pittura): a 130 pixel i punti lontani dall'ideale passavano solo dal
+    14,3% al 13,8%, con un'immagine grande il doppio. Non è quella la causa di ciò che resta a quella grandezza.
 - **Come cercare un difetto** (strumenti di lavoro, non nel repository): registrare quale passaggio di
   `tools/kael_head.py` ha scritto per ultimo ogni texel (avvolgendo `paint`, `side_paint`, `skin_fill` e confrontando
   la texture prima e dopo), poi disegnare la testa in software da qualunque angolo colorando ogni pixel per passaggio o
