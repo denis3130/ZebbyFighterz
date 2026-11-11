@@ -41,12 +41,14 @@ const RK = {
 
 // --- Keys ---
 // rkKey: [frame, value, ease] (value a number or an array), each segment eased on its own: 'snap' (from rest, faster
-// and faster, 1.5 times the mean speed at its end: a strike), 'lin', default smoothstep (from rest to rest).
+// and faster, 1.5 times the mean speed at its end: a strike), 'whip' (the same, .75 times at its end), 'lin', default
+// smoothstep (from rest to rest).
 // rkMono: [frame, value] through a monotone cubic (the speed carries through a key, no overshoot; at rest at both
 // ends): the body's tracks, so a step or a drive never stops on a key.
 function rkEase(u, e) {
   u = Math.max(0, Math.min(1, u));
   if (e === 'snap') return u * u * (3 - u) / 2;
+  if (e === 'whip') return .5 * u * u * (3 - u) / 2 + .5 * u * u * (3 - 2 * u);   // (a strike that arrives a little slower: a kick)
   if (e === 'lin') return u;
   return u * u * (3 - 2 * u);
 }
@@ -190,7 +192,13 @@ RB.post.push((md, p, F, S, y) => {
   const G = {lp: l(RS.lead.dir).normalize().multiplyScalar(RS.lead.reach * armL).add(sL).addScaledVector(RB_UP, .012 * br), lf: l(RS.lead.fing).normalize(), lpn: l(RS.lead.palm).normalize(), le: l(RS.lead.elbow).normalize(),
     rp: c(RS.rear.pos).add(C1).addScaledVector(RB_UP, .009 * br), rf: c(RS.rear.fing).normalize(), rpn: c(RS.rear.palm).normalize(), re: c(RS.rear.elbow).normalize()};
   let T = G;
-  if (act === 'pr') {
+  const mv = RK_MOVES[act];
+  if (mv) {
+    const sR = W.p[ix.RightArm], armR = sR.distanceTo(W.p[ix.RightForeArm]) + W.p[ix.RightForeArm].distanceTo(W.p[ix.RightHand]);
+    const A = {W, ix, O, C1, c, l, sL, sR, armL, armR, G: {L: {p: G.lp, f: G.lf, n: G.lpn, e: G.le}, R: {p: G.rp, f: G.rf, n: G.rpn, e: G.re}}};
+    const R = rkMoveArms(mv, A, rkF(F, act));
+    T = {lp: R.L.p, lf: R.L.f, lpn: R.L.n, le: R.L.e, rp: R.R.p, rf: R.R.f, rpn: R.R.n, re: R.R.e};
+  } else if (act === 'pr') {
     const r = rkKey(RK_PR.lead, rkF(F, 'pr'));
     T = Object.assign({}, G, {lp: G.lp.clone().addScaledVector(RB_UP, -.015 * r)});   // (the arm already straight: the fist dips a little with the push)
   } else if (act === 'palm') {
@@ -235,79 +243,301 @@ const RK_HAND = {
 RK.hand = RK_HAND;   // (tests)
 const RK_FINGER = {Index: 0, Middle: 1, Ring: 2, Pinky: 3};
 const rkBump = (u) => u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u) ** 2;
-// How closed lead-hand finger bone n ('LeftHandIndex2') is at frame f of the palm: 1 fist .. 0 straight (< 0 past it);
-// for the thumb, 1 fist .. 0 lying along the index.
-function rkFingerK(n, f) {
+// How closed finger bone n ('LeftHandIndex2') of a hand that snaps open and closes again is at frame f: 1 fist .. 0
+// straight (< 0 past it); for the thumb, 1 fist .. 0 lying along the index. o: when (frames) the fingers start to open,
+// press (the impact, or null), start to close, the thumb opens and closes, and where the closing takes over (split:
+// every finger open and the press over by then; thumbSplit the same for the thumb). The shape: RK_HAND.
+const RK_SNAP = {palm: {open: 2.2, press: 9.5, close: 12.6, thumbOpen: 1.2, thumbClose: 16.5, split: 12.5, thumbSplit: 12}};
+function rkSnapK(n, f, o) {
   const m = /(Thumb|Index|Middle|Ring|Pinky)(\d)/.exec(n), h = RK_HAND, joint = +m[2] - 1;
   if (m[1] === 'Thumb') {
     const t = h.thumb;
-    return f < 12 ? 1 - rkEase((f - t.open[0]) / t.open[1]) : rkEase((f - t.close[0]) / t.close[1]);
+    return f < o.thumbSplit ? 1 - rkEase((f - o.thumbOpen) / t.open[1]) : rkEase((f - o.thumbClose) / t.close[1]);
   }
   const j = RK_FINGER[m[1]];
-  if (f < 12.5) {   // (the press is over and every finger open: the closing starts from there)
-    const o = h.open, u = (f - o.at - o.finger * j - o.joint * joint) / o.len;
+  if (f < o.split) {
+    const op = h.open, u = (f - o.open - op.finger * j - op.joint * joint) / op.len;
     let k = 1 - rkEase(u);
-    if (!joint) k -= o.snap * rkBump((u - .55) / .9) + h.press.k * rkBump((f - h.press.at) / h.press.len);
+    if (!joint) k -= op.snap * rkBump((u - .55) / .9) + (o.press === null ? 0 : h.press.k * rkBump((f - o.press) / h.press.len));
     return k;
   }
   const c = h.close;
-  return rkEase((f - c.at - c.finger * (3 - j) - c.joint * (2 - joint)) / c.len);
+  return rkEase((f - o.close - c.finger * (3 - j) - c.joint * (2 - joint)) / c.len);
 }
-// The open lead thumb: its first bone turned (from the rest pose, where it points half out of the palm) to lie along
-// the side of the index finger, in the palm's plane. Found once per model from the hand's own bones.
-function rkThumbLie(it) {
-  if (it.rkThumb) return it.rkThumb;
-  const T = THREE, b = n => it.fingers.find(x => x.name === n), i1 = b('LeftHandIndex1'), p1 = b('LeftHandPinky1'), m1 = b('LeftHandMiddle1'), t2 = b('LeftHandThumb2');
+const rkFingerK = (n, f) => rkSnapK(n, f, RK_SNAP.palm);   // (the palm's lead hand)
+// An open thumb: its first bone turned (from the rest pose, where it points half out of the palm) to lie along the
+// side of the index finger, in the palm's plane. Per hand ('Left' / 'Right'), once per model, from the hand's bones.
+function rkThumbLie(it, h) {
+  const key = 'rkThumb' + h;
+  if (it[key]) return it[key];
+  const T = THREE, b = n => it.fingers.find(x => x.name === h + 'Hand' + n), i1 = b('Index1'), p1 = b('Pinky1'), m1 = b('Middle1'), t2 = b('Thumb2');
   const along = m1.position.clone().normalize(), side = i1.position.clone().sub(p1.position); side.addScaledVector(along, -side.dot(along)).normalize();
   const want = along.multiplyScalar(RK_HAND.thumb.lie[0]).addScaledVector(side, RK_HAND.thumb.lie[1]).normalize();
-  return it.rkThumb = new T.Quaternion().setFromUnitVectors(t2.position.clone().normalize(), want);
+  return it[key] = new T.Quaternion().setFromUnitVectors(t2.position.clone().normalize(), want);
 }
-// The open lead fingers together (a palm strike, not a spread hand): each finger's first bone turned toward the
-// middle finger's direction by RK_HAND.together of the angle between them (in the hand's frame; their rest pose spreads
-// them). Once per model.
+// Open fingers together (a palm strike, not a spread hand): each finger's first bone turned toward the middle finger's
+// direction by RK_HAND.together of the angle between them (in the hand's frame; their rest pose spreads them). Once per
+// model; null for the bones it does not turn.
 function rkFingerTogether(it, n) {
   if (!it.rkTogether) {
-    const b = x => it.fingers.find(y => y.name === x), mid = b('LeftHandMiddle2').position.clone().normalize();
+    const b = x => it.fingers.find(y => y.name === x);
     it.rkTogether = {};
-    for (const f of ['Index', 'Ring', 'Pinky']) {
-      const d = b('LeftHand' + f + '2').position.clone().normalize(), to = d.clone().lerp(mid, RK_HAND.together).normalize();
-      it.rkTogether['LeftHand' + f + '1'] = new THREE.Quaternion().setFromUnitVectors(d, to);
+    for (const h of ['Left', 'Right']) {
+      const mid = b(h + 'HandMiddle2').position.clone().normalize();
+      for (const f of ['Index', 'Ring', 'Pinky']) {
+        const d = b(h + 'Hand' + f + '2').position.clone().normalize(), to = d.clone().lerp(mid, RK_HAND.together).normalize();
+        it.rkTogether[h + 'Hand' + f + '1'] = new THREE.Quaternion().setFromUnitVectors(d, to);
+      }
     }
   }
-  return it.rkTogether[n];
+  return it.rkTogether[n] || null;
+}
+// Finger bone i of it at closedness k: its open end the snapping hand's (fingers together, thumb along the index) when
+// that hand opens in this act, else the rest pose's.
+function rkSetFinger(it, i, k, snap) {
+  const b = it.fingers[i], n = b.name, h = /^Left/.test(n) ? 'Left' : 'Right', tog = snap && rkFingerTogether(it, n);
+  if (tog) b.quaternion.copy(tog).slerp(it.fist[i], k);
+  else if (snap && /Thumb1/.test(n)) b.quaternion.copy(rkThumbLie(it, h)).slerp(it.fist[i], k);
+  else if (snap && /Thumb/.test(n)) b.quaternion.copy(MD_Q1).slerp(it.fist[i], RK_HAND.thumb.tip + (1 - RK_HAND.thumb.tip) * k);
+  else b.quaternion.copy(MD_Q1).slerp(it.fist[i], k);
 }
 RN.hooks.applied.push((it, F) => {
   if (!it.fingers || !RN.on || !RK_OWN[F.act]) return;
-  const palm = F.act === 'palm', f = palm ? rkF(F, 'palm') : 0;
+  const mv = RK_MOVES[F.act], palm = F.act === 'palm', f = RK.len[F.act] ? rkF(F, F.act) : 0;
   for (let i = 0; i < it.fingers.length; i++) {
-    const b = it.fingers[i], n = b.name, left = /^Left/.test(n);
-    const k = !left ? RK_HAND.rear : palm ? rkFingerK(n, f) : RK_HAND.fist;
-    const tog = left && palm && rkFingerTogether(it, n);
-    if (tog) b.quaternion.copy(tog).slerp(it.fist[i], k);   // (the open end: fingers together)
-    else if (left && palm && /Thumb1/.test(n)) b.quaternion.copy(rkThumbLie(it)).slerp(it.fist[i], k);   // (the open end: along the index)
-    else if (left && palm && /Thumb/.test(n)) b.quaternion.copy(MD_Q1).slerp(it.fist[i], RK_HAND.thumb.tip + (1 - RK_HAND.thumb.tip) * k);
-    else b.quaternion.copy(MD_Q1).slerp(it.fist[i], k);
+    const n = it.fingers[i].name, left = /^Left/.test(n), h = left ? 'L' : 'R';
+    let k = left ? RK_HAND.fist : RK_HAND.rear, snap = false;
+    if (palm && left) { k = rkFingerK(n, f); snap = true; }
+    else if (mv && mv.hands && mv.hands[h]) { const r = mv.hands[h](n, f); if (typeof r === 'number') k = r; else { k = r.k; snap = true; } }
+    rkSetFinger(it, i, k, snap);
   }
 });
 
-// --- The viewer: three plays, the game's speed, a floor grid, the fighter carried along the step ---
+
+// ===== Stage 2 (12/11/2026): more of the sheets' moves, each a table read by the same few functions below. =====
+// A move: len (frames); name; phase [[from, name]]; cfg (CFG.moves entry when it hits: s/a/r, box, limb or bone);
+// root (f -> m the fighter travels along the line, optional); body: tracks of the style on top of the base guard (yaw,
+// chest, leanL, lx, dip, head); feet.L / feet.R: x (m along the line, in the world), up (m) and bumps ([[from, to,
+// height]]: a step's lift), heel and yaw (deg, the shoe turning on its tip), toe (deg, about the ankle, < 0 toes
+// down), free (a foot in the air: no automatic heel); arms.L / arms.R: keys [[frame, pose, ease]] between poses (the
+// guard's, 'guard', or the move's poses: (A, f) -> {p: wrist, f: fingers' way, n: palm's way, e: elbow hint}; a key's
+// fourth entry: a pose the wrist curves toward on the way, a Bezier control point); hands.L
+// / hands.R: (bone name, f) -> closedness, or {k} for a hand that snaps open (fingers together, thumb along the index).
+// A track is a number, keys ([[frame, value, ease]]: rkKey) or a function of the frame (rkMono).
+const RK_MOVES = {};
+const rkTrack = (t, f) => t === undefined ? 0 : typeof t === 'function' ? t(f) : Array.isArray(t) ? rkKey(t, f) : t;
+function rkAddMove(id, m) {
+  RK_MOVES[id] = m; RK_OWN[id] = 1; RK.len[id] = m.len; RB.pin[id] = 1; VW_NAMES[id] = m.name;
+  if (m.cfg) CFG.moves[id] = m.cfg;
+  RB.styleFor[id] = (y, F) => {
+    const f = rkF(F, id), b = m.body || {};
+    y.yaw = rkTrack(b.yaw, f); y.chest = rkTrack(b.chest, f); y.leanL = rkTrack(b.leanL, f); y.lx = rkTrack(b.lx, f);
+    y.dip = rkTrack(b.dip, f); y.head = rkTrack(b.head, f);
+    rkBase(y);
+  };
+  RB.feetFor[id] = (s, c, st, L, F) => {
+    const f = rkF(F, id), k = (m.feet && m.feet[s]) || {}, root = m.root ? m.root(f) : 0;
+    let up = rkTrack(k.up, f);
+    if (k.bumps) for (const [a, b, h] of k.bumps) up += h * rkArc(f, a, b);
+    rkFoot(s, c, st, L, rkTrack(k.heel, f), rkTrack(k.yaw, f), rkTrack(k.x, f) - root, up, rkTrack(k.toe, f));
+    if (k.free) c.auto = false;
+  };
+}
+// The arm targets of move m at frame f: each arm between the poses of its keys.
+function rkMoveArms(m, A, f) {
+  const T = {};
+  for (const s of ['L', 'R']) {
+    const keys = (m.arms && m.arms[s]) || [[0, 'guard']], pose = (name) => name === 'guard' ? A.G[s] : ((m.poses && m.poses[name]) || RK_POSE[name])(A, f, s);
+    let i = 0; while (i + 1 < keys.length && f > keys[i + 1][0]) i++;
+    const a = pose(keys[i][1]);
+    let r = a;
+    if (i + 1 < keys.length && f > keys[i][0]) {
+      const b = pose(keys[i + 1][1]), u = rkEase((f - keys[i][0]) / (keys[i + 1][0] - keys[i][0]), keys[i + 1][2]), via = keys[i + 1][3];
+      const p = via ? a.p.clone().multiplyScalar((1 - u) * (1 - u)).addScaledVector(pose(via).p, 2 * u * (1 - u)).addScaledVector(b.p, u * u) : a.p.clone().lerp(b.p, u);
+      r = {p, f: a.f.clone().lerp(b.f, u).normalize(), n: a.n.clone().lerp(b.n, u).normalize(), e: a.e.clone().lerp(b.e, u).normalize()};
+    }
+    T[s] = r;
+  }
+  return T;
+}
+const rkSnap = (o) => (n, f) => ({k: rkSnapK(n, f, o)});   // a hand that snaps open at o's times
+// Poses several moves share (a move's own poses come first).
+const RK_POSE = {
+  rChin: A => ({p: A.c([-.04, .26, .2]).add(A.C1), f: A.c([1, .4, .2]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.4, -1, -.2]).normalize()}),
+  rChest: A => ({p: A.c([.02, .02, .22]).add(A.C1), f: A.c([1, .3, 0]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.5, -1, -.3]).normalize()}),
+  rHead: A => ({p: A.c([-.17, .2, .12]).add(A.C1), f: RB_UP.clone().addScaledVector(RB_LINE, .1).normalize(), n: RB_LINE.clone(), e: A.c([-.3, -1, -.1]).normalize()}),
+  rFront: A => ({p: A.c([-.06, .12, .32]).add(A.C1)}),   // (in front of the chest: a rear hand's way up and down)
+};
+
+// --- Gomito spezzaguardia: the lead elbow, as the sheet has it ---
+// Entry: the rear foot slides in 18 cm, the lead fist comes up by the face (the elbow low), the rear fist to the chest.
+// Drive: the hips square up a little, then turn the lead side forward and push 13 cm; the lead elbow sweeps up and
+// forward at shoulder height, the forearm flat across the chest, the fist by the right collarbone; the rear hand opens
+// up by the head. Recovery: the rear foot back out, the arm back to the guard's straight fist.
+rkAddMove('elbow', {
+  len: 34, name: 'Gomito spezzaguardia',
+  phase: [[0, 'Entrata'], [9, 'Spinta'], [14, 'Impatto'], [17, 'Recupero']],
+  cfg: {s: 13, a: 3, r: 18, h: 'mid', box: [150, 700, 1050, 1450], limb: 'elbowL', bone: 'LeftForeArm'},   // PROPOSAL
+  body: {
+    yaw: rkMono([[0, 0], [9, 8], [14, -18], [17, -18], [23, -6], [34, 0]]),
+    chest: rkMono([[0, 0], [9, 12], [15, -24], [17, -24], [24, -8], [34, 0]]),
+    leanL: rkMono([[0, 0], [9, 3], [14, 9], [17, 9], [24, 3], [34, 0]]),
+    lx: rkMono([[0, 0], [9, .06], [14, .13], [17, .13], [26, .05], [34, 0]]),
+    dip: rkMono([[0, .004], [9, .03], [14, .04], [17, .04], [25, .012], [34, .004]]),
+    head: rkMono([[0, 0], [9, 3], [14, -2], [34, 0]]),
+  },
+  feet: {R: {x: [[0, 0], [3.6, 0], [8.6, .18], [23.2, .18], [27.8, 0]], bumps: [[2.4, 9.8, .02], [22, 29.4, .02]], heel: [[0, 0], [3, 0], [6, 6], [9.2, 0], [14, 8], [17, 8], [22, 0]]}},
+  arms: {L: [[0, 'guard'], [9, 'eUp'], [14, 'eHit', 'snap'], [17, 'eHit'], [25, 'eBack'], [34, 'guard']],
+    R: [[0, 'guard'], [8, 'rChest'], [13, 'rHead', undefined, 'rFront'], [18, 'rHead'], [30, 'guard', undefined, 'rFront']]},
+  poses: {
+    rFront: A => ({p: A.c([-.06, .12, .32]).add(A.C1)}),   // (in front of the chest: the rear hand's way up and down)
+    eUp: A => ({p: A.l([.1, .18, .03]).add(A.sL), f: A.l([.15, 1, 0]).normalize(), n: A.l([-.3, 0, -1]).normalize(), e: A.l([.2, -1, .3]).normalize()}),
+    eHit: A => ({p: A.l([.05, .05, -.24]).add(A.sL), f: A.l([-.2, 0, -1]).normalize(), n: A.l([0, -1, 0]), e: A.l([1, .3, 0]).normalize()}),
+    eBack: A => ({p: A.l([.3, -.05, -.02]).add(A.sL), f: A.l([1, 0, 0]), n: A.l([0, 0, -1]), e: A.l([0, -1, .3]).normalize()}),
+    rChest: A => ({p: A.c([.02, .02, .22]).add(A.C1), f: A.c([1, .3, 0]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.5, -1, -.3]).normalize()}),
+    rHead: A => ({p: A.c([-.17, .2, .12]).add(A.C1), f: RB_UP.clone().addScaledVector(RB_LINE, .1).normalize(), n: RB_LINE.clone(), e: A.c([-.3, -1, -.1]).normalize()}),
+  },
+  hands: {R: (n, f) => rkKey([[0, RK_HAND.rear], [6, 1], [10, 1], [13, .15], [18, .15], [28, RK_HAND.rear]], f)},
+});
+
+// --- Deviazione circolare: absorb, a circle of the lead forearm that turns the attack aside, a palm in answer ---
+// Absorb: the weight back and down, the lead hand up in front of the forehead (open), the rear fist to the chin.
+// Deflect: the lead hand circles down, forward and up (the forearm sweeps the attack out of the line). Answer: the
+// rear foot slides in, the hips push and the lead palm goes out straight; then the front foot steps on and the guard.
+rkAddMove('dev', {
+  len: 42, name: 'Deviazione circolare',
+  phase: [[0, 'Assorbimento'], [7, 'Deviazione'], [15, 'Risposta'], [25, 'Recupero']],
+  cfg: {s: 21, a: 3, r: 18, h: 'mid', box: [250, 900, 1050, 1400], limb: 'handL'},   // PROPOSAL (it turns attacks aside on frames 7-14)
+  root: rkMono([[0, 0], [15, 0], [24, .15], [42, .15]]),
+  body: {
+    yaw: rkMono([[0, 0], [6, 4], [11, -6], [15, -2], [21, -16], [25, -16], [32, -5], [42, 0]]),
+    chest: rkMono([[0, 0], [6, 6], [11, -10], [15, -4], [22, -20], [25, -20], [32, -6], [42, 0]]),
+    leanL: rkMono([[0, 0], [6, -5], [11, -2], [15, 0], [21, 7], [25, 7], [32, 2], [42, 0]]),
+    lx: rkMono([[0, 0], [6, -.07], [11, -.05], [15, -.03], [21, .08], [25, .08], [33, .02], [42, 0]]),
+    dip: rkMono([[0, .004], [6, .045], [11, .035], [15, .03], [25, .03], [33, .012], [42, .004]]),
+    head: rkMono([[0, 0], [6, 4], [11, 1], [21, -1], [42, 0]]),
+  },
+  feet: {R: {x: [[0, 0], [15, 0], [21, .15]], bumps: [[14.4, 21.6, .025]], heel: [[0, 0], [15, 0], [18, 8], [21, 0]]},
+    L: {x: [[0, 0], [25, 0], [31, .15]], bumps: [[24.4, 31.6, .03]]}},
+  arms: {L: [[0, 'guard'], [6, 'dCover'], [7, 'dCover'], [15, 'dCircle', 'lin'], [21, 'dPush', 'snap'], [25, 'dPush'], [34, 'guard']],
+    R: [[0, 'guard'], [6, 'rChin'], [26, 'rChin'], [36, 'guard']]},
+  poses: {
+    dCover: A => ({p: A.l([.1, .2, -.06]).add(A.sL), f: RB_UP.clone(), n: RB_LINE.clone(), e: A.l([.15, -1, .25]).normalize()}),
+    // (the circle: the wrist from the cover around a centre in front of the face, down, forward and up)
+    dCircle: (A, f) => {
+      const u = Math.max(0, Math.min(1, (f - 7) / 8)), th = (125 + 265 * rkEase(u)) * RB_R, R = .14;
+      const C = A.l([.24, .06, -.02]).add(A.sL), dir = A.l([Math.cos(th), Math.sin(th), 0]);
+      return {p: C.addScaledVector(dir, R * (1 + .15 * u)), f: RB_UP.clone().addScaledVector(RB_LINE, .4 * u).normalize(), n: dir.clone().addScaledVector(RB_LINE, .5).normalize(), e: A.l([.1, -1, .3]).normalize()};
+    },
+    dPush: A => ({p: A.sL.clone().addScaledVector(RB_LINE, RK.reach * A.armL), f: RB_UP.clone().addScaledVector(RB_LINE, .2).normalize(), n: RB_LINE.clone().addScaledVector(RB_UP, -.12).normalize(), e: A.l([0, -1, .3]).normalize()}),
+    rChin: A => ({p: A.c([-.04, .26, .2]).add(A.C1), f: A.c([1, .4, .2]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.4, -1, -.2]).normalize()}),
+  },
+  hands: {L: rkSnap({open: 1, press: 21, close: 26.5, thumbOpen: .4, thumbClose: 30.5, split: 24.5, thumbSplit: 24}),
+    R: (n, f) => rkKey([[0, RK_HAND.rear], [6, .9], [26, .9], [34, RK_HAND.rear]], f)},
+});
+
+// --- Calcio a frusta: the lead leg, the standing foot turning with the hips ---
+// Load: the rear foot steps in under the body (30 cm), the weight goes onto it, the lead knee comes up (the foot under
+// it, toes down). Pivot and whip: the standing foot turns on its tip as the hips turn over (never a body turning on a
+// planted foot), the body leans away and the shin snaps out at hip height. Back: the knee folds back in, the foot lands
+// where it was, the rear foot steps back out, the guard.
+rkAddMove('kick', {
+  len: 34, name: 'Calcio a frusta',
+  phase: [[0, 'Caricamento'], [9, 'Pivot'], [14, 'Impatto'], [17, 'Rientro'], [26, 'Guardia']],
+  cfg: {s: 13, a: 3, r: 18, h: 'mid', box: [300, 1000, 650, 1150], limb: 'footL'},   // PROPOSAL
+  body: {
+    yaw: rkMono([[0, 0], [6, -6], [10, -14], [14, -40], [17, -40], [22, -18], [28, 0]]),
+    chest: rkMono([[0, 0], [6, -4], [14, -12], [17, -12], [24, -2], [30, 0]]),
+    leanL: rkMono([[0, 0], [6, -3], [10, -6], [14, -18], [17, -18], [22, -7], [30, 0]]),
+    lx: rkMono([[0, 0], [5, -.14], [14, -.1], [17, -.1], [22, -.12], [27, .02], [33, 0]]),
+    dip: rkMono([[0, .004], [5, -.025], [14, -.04], [17, -.04], [22, -.03], [26, .03], [30, .012], [34, .004]]),
+    head: rkMono([[0, 0], [14, -4], [17, -4], [28, 0]]),
+  },
+  feet: {
+    R: {x: [[0, 0], [.6, 0], [4, .3], [27.8, .3], [32, 0]], bumps: [[0, 5, .025], [27, 33, .02]],
+      heel: [[0, 0], [6, 0], [9, 10], [17, 12], [22, 6], [25, 0]], yaw: [[0, 0], [7, 0], [12, -65], [18, -65], [22.5, -6], [23.5, 0]]},   // (turned back while still on its tip)
+    L: {free: true, heel: [[0, 0], [3.5, 0], [5, 16], [25, 16], [27, 0]],   // (it lands on its toes, then the heel comes down)
+      x: [[0, 0], [5, 0], [9.5, -.2], [14, .36, 'whip'], [16, .36], [21, -.2], [24.8, 0]],
+      up: [[0, 0], [5, 0], [9.5, .42], [14, .77, 'whip'], [16, .77], [21, .42], [25, 0]],
+      toe: [[0, 0], [5, 0], [9.5, -30], [14, -60], [16, -60], [21, -30], [24.5, 0]]},
+  },
+  arms: {L: [[0, 'guard'], [6, 'kLow'], [18, 'kLow'], [28, 'guard']], R: [[0, 'guard'], [6, 'rChin'], [22, 'rChin'], [30, 'guard']]},
+  poses: {
+    kLow: A => ({p: A.l([.36, -.14, .04]).add(A.sL), f: A.l([1, -.3, 0]).normalize(), n: A.l([0, 0, -1]), e: A.l([0, -1, .2]).normalize()}),
+    rChin: A => ({p: A.c([-.04, .26, .2]).add(A.C1), f: A.c([1, .4, .2]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.4, -1, -.2]).normalize()}),
+  },
+  hands: {R: (n, f) => rkKey([[0, RK_HAND.rear], [6, .95], [22, .95], [30, RK_HAND.rear]], f)},
+});
+
+// --- Passo spezzato (the signature): half a step back to draw the attack, down under the opponent's line, a low burst
+// forward, in with the shoulder, a double palm ---
+// The rear foot steps back, the body leans away (the feint); the front foot comes back to it and he coils low on the
+// balls of his feet, hands up by the face (the compression); the rear leg drives him forward low, the front foot
+// lands far ahead (the burst), the rear foot follows; the lead shoulder goes in first, fists tight at the chest (the
+// entry); the hips square and both palms go out (the double palm); then he settles and comes back to the guard, 0.30 m
+// further on than he started.
+rkAddMove('ps', {
+  len: 74, name: 'Passo spezzato',
+  phase: [[0, 'Finta indietro'], [10, 'Compressione'], [20, 'Scatto basso'], [30, 'Entrata di spalla'], [38, 'Doppio palmo'], [48, 'Assestamento'], [60, 'Ritorno in guardia']],
+  cfg: {s: 43, a: 3, r: 28, h: 'mid', box: [250, 950, 950, 1400], limb: 'handL'},   // PROPOSAL
+  root: rkMono([[0, 0], [8, -.1], [20, -.22], [26, .06], [33, .3], [74, .3]]),
+  body: {
+    yaw: rkMono([[0, 0], [10, 6], [20, 4], [26, -6], [33, -24], [38, -24], [43, 4], [47, 4], [58, 0], [74, 0]]),
+    chest: rkMono([[0, 0], [10, 8], [20, 6], [26, -4], [33, -18], [38, -18], [43, 6], [47, 6], [60, 0], [74, 0]]),
+    leanL: rkMono([[0, 0], [10, -6], [20, 14], [26, 24], [33, 10], [38, 8], [47, 8], [60, 2], [74, 0]]),
+    lx: rkMono([[0, 0], [10, -.04], [20, 0], [26, .04], [33, .02], [38, .04], [43, .1], [47, .1], [60, .02], [74, 0]]),
+    dip: rkMono([[0, .004], [10, .025], [20, .16], [26, .15], [33, .07], [38, .05], [43, .045], [49, .045], [60, .012], [74, .004]]),
+    head: rkMono([[0, 0], [10, 3], [20, -6], [26, -10], [33, -2], [43, -2], [60, 0], [74, 0]]),
+  },
+  feet: {
+    R: {x: [[0, 0], [1.2, 0], [7.4, -.15], [26.8, -.15], [32.2, .3]], bumps: [[0, 8.4, .03], [26, 33, .035]],
+      heel: [[0, 0], [12, 0], [18, 15], [24, 25], [26.8, 25], [32, 0]]},
+    L: {x: [[0, 0], [10.8, 0], [16.2, -.45], [20.8, -.45], [25.4, .3]], bumps: [[10, 17, .03], [20, 26.2, .05]],
+      toe: [[0, 0], [20.5, 0], [23, 15], [25.4, 0]]},
+  },
+  arms: {
+    L: [[0, 'guard'], [9, 'pFeint'], [16, 'pCoverL'], [20, 'pCoverL'], [26, 'pReachL'], [31, 'pTuckL'], [36, 'pTuckL'], [43, 'pPalmL', 'snap'], [46, 'pPalmL'], [56, 'pBackL'], [72, 'guard']],
+    R: [[0, 'guard'], [14, 'rChin', undefined, 'rFront'], [26, 'rChest'], [31, 'rChin'], [36, 'rChin'], [43, 'pPalmR', 'snap'], [46, 'pPalmR'], [56, 'pBackR'], [72, 'guard']],
+  },
+  poses: {
+    pFeint: A => ({p: A.l([.25, .02, .03]).add(A.sL), f: A.l([1, 0, 0]), n: A.l([0, 0, -1]), e: A.l([0, -1, .25]).normalize()}),
+    pCoverL: A => ({p: A.l([.18, .2, -.04]).add(A.sL), f: RB_UP.clone(), n: RB_LINE.clone(), e: A.l([.15, -1, .25]).normalize()}),
+    pReachL: A => ({p: A.l([.36, -.1, .02]).add(A.sL), f: A.l([1, .3, 0]).normalize(), n: A.l([.5, -1, 0]).normalize(), e: A.l([0, -1, .3]).normalize()}),
+    pTuckL: A => ({p: A.l([.12, .08, -.14]).add(A.sL), f: RB_UP.clone(), n: A.l([0, 0, -1]), e: A.l([.3, -1, .1]).normalize()}),
+    pPalmL: A => ({p: A.sL.clone().addScaledVector(RB_LINE, RK.reach * A.armL).addScaledVector(RB_UP, .02), f: RB_UP.clone().addScaledVector(RB_LINE, .2).normalize(), n: RB_LINE.clone().addScaledVector(RB_UP, -.12).normalize(), e: A.l([0, -1, .3]).normalize()}),
+    pPalmR: A => ({p: A.sR.clone().addScaledVector(RB_LINE, RK.reach * A.armR).addScaledVector(RB_UP, -.08), f: RB_UP.clone().addScaledVector(RB_LINE, .2).normalize(), n: RB_LINE.clone().addScaledVector(RB_UP, -.12).normalize(), e: A.c([-.2, -1, -.1]).normalize()}),
+    pBackL: A => ({p: A.l([.25, 0, .02]).add(A.sL), f: A.l([1, .3, 0]).normalize(), n: A.l([0, 0, -1]), e: A.l([0, -1, .25]).normalize()}),
+    pBackR: A => ({p: A.c([.02, .02, .25]).add(A.C1), f: A.c([1, .3, 0]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.5, -1, -.3]).normalize()}),
+  },
+  hands: {
+    L: rkSnap({open: 10, press: 44, close: 50, thumbOpen: 9.4, thumbClose: 54, split: 47.5, thumbSplit: 47}),
+    R: (n, f) => f < 36 ? rkKey([[0, RK_HAND.rear], [12, 1]], f) : f < 60 ? {k: rkSnapK(n, f, {open: 37, press: 44, close: 50, thumbOpen: 36.4, thumbClose: 54, split: 47.5, thumbSplit: 47})} : rkKey([[60, 1], [68, RK_HAND.rear]], f),
+  },
+});
+
+// --- The viewer: the plays, the game's speed, a floor grid, the fighter carried along his steps ---
 VW_PLAYS.length = 0;
 VW_PLAYS.push(['Guardia elastica', [['idle', 2 * RK.loop]]],
   ['Passo radente', [['idle', 40], ['pr', RK.len.pr], ['idle', 50]]],
-  ['Palmo a scatto', [['idle', 40], ['palm', RK.len.palm], ['idle', 50]]]);
+  ['Palmo a scatto', [['idle', 40], ['palm', RK.len.palm], ['idle', 50]]],
+  ['Gomito spezzaguardia', [['idle', 40], ['elbow', RK.len.elbow], ['idle', 50]]],
+  ['Deviazione circolare', [['idle', 40], ['dev', RK.len.dev], ['idle', 50]]],
+  ['Calcio a frusta', [['idle', 40], ['kick', RK.len.kick], ['idle', 50]]],
+  ['Passo spezzato', [['idle', 40], ['ps', RK.len.ps], ['idle', 50]]]);
 Object.assign(VW_NAMES, {idle: 'Guardia elastica', pr: 'Passo radente', palm: 'Palmo a scatto'});
 
 // the fighter's travel along the step (mm), at a (fractional) frame of the act
-function rkX(F, af) { return F.act === 'pr' ? RK.base + 1000 * F.face * RK_PR.root(Math.max(0, Math.min(RK.len.pr, af))) : F.x; }
+const rkRoot = act => act === 'pr' ? RK_PR.root : RK_MOVES[act] && RK_MOVES[act].root;
+function rkX(F, af) { const r = rkRoot(F.act); return r ? RK.base + 1000 * F.face * r(Math.max(0, Math.min(RK.len[F.act], af))) : F.x; }
 RN.hooks.reset.push(VW => { RK.base = 0; VW.F.x = 0; VW.prevAct = null; });
 RN.hooks.step.push(VW => {
   const F = VW.F;
   if (VW.step === 0 && F.af <= 1) { RK.base = 0; F.x = 0; }   // a play starts again from its first step: back to the start
-  if (F.act === 'pr') F.x = rkX(F, F.af); else if (VW.prevAct === 'pr') RK.base = F.x;
+  if (rkRoot(F.act)) F.x = rkX(F, F.af); else if (rkRoot(VW.prevAct)) RK.base = F.x;
   VW.prevAct = F.act;
-  // the phase's name (and, for the step, the frame: the viewer counts a move's frames itself)
-  const ph = F.act === 'pr' ? RK_PR.phase : F.act === 'palm' ? RK_PA.phase : null;
-  if (ph) { let n = ph[0][1]; for (const [f0, nm] of ph) if (F.af >= f0) n = nm; VW.name = VW_NAMES[F.act] + ' · ' + n + (F.act === 'pr' ? '<small>fotogramma ' + F.af + ' di ' + RK.len.pr + '</small>' : ''); }
+  // the phase's name (and, for a move that does not hit, the frame: the viewer counts an attack's frames itself)
+  const mv = RK_MOVES[F.act], ph = F.act === 'pr' ? RK_PR.phase : F.act === 'palm' ? RK_PA.phase : mv ? mv.phase : null;
+  if (ph) { let n = ph[0][1]; for (const [f0, nm] of ph) if (F.af >= f0) n = nm; VW.name = VW_NAMES[F.act] + ' · ' + n + (CFG.moves[F.act] ? '' : '<small>fotogramma ' + F.af + ' di ' + RK.len[F.act] + '</small>'); }
   else VW.name = VW_NAMES[F.act] || F.act;
 });
 RN.hooks.boot.push(VW => {
@@ -317,11 +547,11 @@ RN.hooks.boot.push(VW => {
   document.getElementById('view').addEventListener('dblclick', () => { VW.yaw = F3_YAW; });   // (after the viewer's own reset)
   // the three acts on the same held guard pose (the viewer's own breathing off: the guard breathes here, on its loop)
   const K = {c: 'a191', at: 0};
-  CFG.looks.ren.clips = Object.assign({}, CFG.looks.ren.clips, {idle: K, pr: K, palm: K});
+  CFG.looks.ren.clips = Object.assign({}, CFG.looks.ren.clips, ...Object.keys(RK_OWN).map(a => ({[a]: K})));
   vwAnim = () => {};   // (no old animation of these acts to compare with: N and the controller's A do nothing)
   const hint = document.getElementById('hint');
   if (hint) hint.innerHTML = 'Trascina per girare, pizzica o usa la rotella per avvicinarti, doppio tocco per tornare alla vista laterale.'
-    + '<span class=kb> Tastiera: 1-3 mosse, frecce per cambiare, spazio velocità. Controller: dorsali = mossa, B velocità.</span>';
+    + '<span class=kb> Tastiera: 1-' + VW_PLAYS.length + ' mosse, frecce per cambiare, spazio velocità. Controller: dorsali = mossa, B velocità.</span>';
   for (const id of ['aNew', 'aOld', 'opt_smear']) { const b = document.getElementById(id); if (b) (id === 'opt_smear' ? b : b.parentNode).style.display = 'none'; }
   // a plain floor with a 25 cm grid (a foot that slides or sinks shows at once), or the arena: one button
   const T = THREE, grid = RK.grid = new T.GridHelper(6, 24, 0x2a2f38, 0x5d6573); grid.position.y = .001; VW.scene.add(grid);
@@ -334,12 +564,13 @@ RN.hooks.boot.push(VW => {
   };
   b.addEventListener('click', () => set(RK.show === 'neutro' ? 'cascata' : 'neutro')); row.appendChild(b); set('neutro');
 });
-RN.hooks.applied.push((it, F) => { if (F.act === 'pr') it.root.position.x = rkX(F, F.af) / 1000; });   // (the sash's simulation: where the body is)
+RN.hooks.applied.push((it, F) => { if (rkRoot(F.act)) it.root.position.x = rkX(F, F.af) / 1000; });   // (the sash's simulation: where the body is)
 RN.hooks.draw.push((VW, dt) => {
   const it = VW.it, D = RN_D.F || VW.F, th = VW.yaw - F3_YAW, x = rkX(D, D.af) / 1000;
   const dir = new THREE.Vector3(Math.cos(th), 0, -Math.sin(th));
   it.root.position.copy(dir).multiplyScalar(x).setY(D.y / 1000);
   VW.shadow.position.set(it.root.position.x, .004, it.root.position.z);
-  const aim = VW.playing === 1 ? RK.d / 2 : 0, e = Math.min(1, dt * .006);   // the step's play frames both ends of the step
+  const act = (VW.plan.find(s => rkRoot(s[0])) || [])[0], r = act && rkRoot(act), e = Math.min(1, dt * .006);
+  const aim = r ? r(RK.len[act]) / 2 : 0;   // a play that travels frames both ends of its travel
   VW.aimX += (aim * dir.x - VW.aimX) * e;
 });

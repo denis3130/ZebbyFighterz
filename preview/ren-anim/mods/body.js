@@ -572,7 +572,7 @@ RN.pose = function (it, F, S) {
         const w0 = same ? (it.fromW ? it.fromW[s] : 1) : 0;
         c.w = w0 + (sav[s].w - w0) * k; c.flat = null; c.auto = false;   // (c.loc: the new pose's pinned point)
         c.Q.copy(W.q[L.ia]); c.G.copy(sav[s].G);
-        if (same && it.fromG) c.G.lerpVectors(it.fromG[s], sav[s].G, k);   // (a foot turned on its ball turns back over the ease)
+        if (same && it.fromG && !RB.feetFor[F.act]) c.G.lerpVectors(it.fromG[s], sav[s].G, k);   // (a foot turned on its ball turns back over the ease; an act that places its feet itself steps from where they are)
       }
       rbLegs(md, p);
     }

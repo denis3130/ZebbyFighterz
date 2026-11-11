@@ -15,10 +15,12 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
   colpi in volo, combo, vittoria.
 - `mods/swag.js`: entrata (si scioglie, poi scatta in guardia con un anello d'acqua a terra) e provocazione
   ("no-no" col dito), fatte a mano posa per posa.
-- `mods/kit.js`: le tecniche di Ren dalle quattro tavole di Denis (12/11/2026), prima tappa: guardia elastica,
-  passo radente, palmo a scatto. Tutte partono e tornano alla stessa guardia (quella della tavola: tre quarti,
-  gambe larghe e basse, mano avanti aperta, mano dietro sullo stomaco). Piedi messi a mano (quello in appoggio non si
-  muove), tempi e numeri tutti proposte (il progetto non li definisce ancora). Pagina a parte, senza effetti.
+- `mods/kit.js`: le tecniche di Ren dalle quattro tavole di Denis (12/11/2026): guardia elastica, passo radente,
+  palmo a scatto, gomito spezzaguardia, deviazione circolare, calcio a frusta, passo spezzato. Tutte partono e tornano
+  alla stessa guardia (tre quarti, gambe larghe e basse, braccio avanti dritto a pugno chiuso, mano dietro socchiusa
+  sullo stomaco). Ogni mossa è una tabella (tempi, corpo, piedi, braccia, mani) letta dalle stesse poche funzioni.
+  Piedi messi a mano (quello in appoggio non si muove), tempi e numeri tutti proposte (il progetto non li definisce
+  ancora). Pagina a parte, senza effetti.
 - `mods/body_v1.js`: il primo tentativo, tenuto solo come confronto.
 
 ## Costruire
@@ -30,7 +32,7 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
 La pagina delle tecniche (vista laterale del gioco, velocità vera, pavimento a quadretti di 25 cm):
 
     python3 build.py --assets ASSETS.js --out tecniche.html --mods body.js,style.js,hair.js,kit.js \
-      --title "Tecniche di Ren" --subtitle "Guardia, passo radente, palmo · vista laterale, senza effetti"
+      --title "Tecniche di Ren" --subtitle "Le sette tecniche delle tavole · vista laterale, senza effetti"
 
 ## Prove
 

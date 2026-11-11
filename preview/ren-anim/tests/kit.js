@@ -5,8 +5,8 @@
 //    along x): each foot's contact point (its toe tip when the heel is up, else its ball) and how far it moves between
 //    two drawn frames while it is on the floor (slide, mm), how high a foot goes while it steps, the legs' extension
 //    (hip to ankle over the leg's length), the arms' deepest point inside the chest, the largest jolt (a change of
-//    speed between two quarter frames, mm) of the hips, hands, feet and head, and, on the palm's active frames, where
-//    its striking point is from the fighter (mm along the line, height).
+//    speed between two quarter frames, mm) of the hips, hands, feet and head, and, around an attack's active frames,
+//    where its striking point (its limb, or its bone: the elbow) is from the fighter (mm along the line, height).
 // Prints one JSON object; exits 1 on a page error.
 const {open} = require('./lib');
 (async () => {
@@ -30,7 +30,7 @@ const {open} = require('./lib');
       rest[s] = {ball: ball.y, tip: new T.Vector3(ball.x + f.x * far, 0, ball.z + f.z * far).sub(ank).applyQuaternion(q),
         len: P(s + 'UpLeg').distanceTo(P(s + 'Leg')) + P(s + 'Leg').distanceTo(P(s + 'Foot'))};
     }
-    const limb = md.meta.limbs[X.CFG.moves.palm.limb], out = {};
+    const out = {};
     const JOLT = ['Hips', 'Head', 'LeftHand', 'RightHand', 'LeftFoot', 'RightFoot', 'LeftLeg', 'RightLeg', 'LeftForeArm', 'RightForeArm'];
     for (let i = 0; i < X.VW_PLAYS.length; i++) {
       document.getElementById('play' + i).click();
@@ -73,8 +73,9 @@ const {open} = require('./lib');
             const a = trail[0].p[j], b = trail[1].p[j], c = trail[2].p[j], jl = c.clone().sub(b).sub(b.clone().sub(a)).length() * 1000, d = o.jolt[n] || (o.jolt[n] = {max: 0, at: ''});
             if (jl > d.max) { d.max = +jl.toFixed(1); d.at = trail[1].tag; }
           });
-          if (F.act === 'palm' && k === 0 && F.af >= 9 && F.af <= 13) {
-            const pt = new T.Vector3().fromArray(limb.p).applyMatrix4(B(limb.b).matrixWorld);
+          const mv = X.CFG.moves[F.act];   // an attack: where its striking point is around its active frames (mm from the fighter, height)
+          if (mv && k === 0 && F.af >= mv.s && F.af <= mv.s + mv.a + 1) {
+            const lm = md.meta.limbs[mv.limb], pt = lm ? new T.Vector3().fromArray(lm.p).applyMatrix4(B(lm.b).matrixWorld) : P(mv.bone);
             o.strike.push({f: F.af, x: Math.round(pt.x * 1000 - F.x), y: Math.round(pt.y * 1000)});
           }
           prev = cur;
