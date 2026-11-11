@@ -232,3 +232,14 @@ function toArena(mode) {
 // vsThrough(fn) = let the VS screen finish its loading (a microtask), run one frame (it starts the match: minMs 0 in the
 // tests), then fn. Returns the Promise for the test to return.
 function vsThrough(fn) { return Promise.resolve().then(() => { __VF.uiFrame(performance.now()); if (fn) fn(); }); }
+// noOverflow(root) = no element under root clips its content (scrollWidth over clientWidth on an element that hides overflow);
+// noOverflow.last = the first one that does, for the message.
+function noOverflow(root) {
+  noOverflow.last = '';
+  for (const el of root.querySelectorAll('*')) {
+    if (!el.getClientRects().length || !el.textContent.trim()) continue;   // (a picture cropped by its frame is not clipped text)
+    const o = getComputedStyle(el).overflowX;
+    if ((o === 'hidden' || o === 'clip') && el.scrollWidth > el.clientWidth + 1) { noOverflow.last = (el.className || el.tagName) + ' "' + el.textContent.trim().slice(0, 30) + '"'; return false; }
+  }
+  return true;
+}
