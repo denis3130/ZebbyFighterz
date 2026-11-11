@@ -565,11 +565,11 @@ il nodo in vita resta di Meshy (Denis: "no il nodo in vita no solo togli meglio 
   cilindro (lasciava una linguetta di pelle nell'incavo), nero sul guanto dalla luce (macchie).
 - Prossimo passo: le code della fascia come nastri (vedi "Busto sulle ossa").
 
-## Busto sulle ossa (11/11 sera, `tools/kael_bust_attach.py`; da approvare)
+## Busto sulle ossa (11/11 sera, `tools/kael_bust_attach.py`; pubblicato, versione 18)
 Denis: "ora adopera". Il busto `busto_k6.glb` è un pezzo del pacchetto come la testa (`wip_assets/kael/kael_bust.json`,
 `.bin`, `.png`; `CFG.looks.kael.bust`, `src/e_model.js` `mdPartData`): sotto di lui busto, braccia e mani di Kael sono
-nascosti, sopra c'è la testa, sotto le gambe di adesso. **Non pubblicato: le immagini vanno a Denis e si pubblica solo col
-suo ok.**
+nascosti, sopra c'è la testa, sotto le gambe di adesso. Pubblicato nell'anteprima di Kael (versione 18) dopo le immagini a
+Denis ("manda anteprima").
 - Posto: 0,42 m per unità del busto, la fascia sulla sua (1,08 m). A questa scala profondità del petto, altezza delle
   spalle e fascia coincidono; le spalle del foglio del busto sono 3 cm più strette per lato di quelle del primo disegno.
 - Giunture misurate sul busto: gomiti e polsi dalle bande viola delle polsiere (alla stessa distanza dalle bande che hanno
