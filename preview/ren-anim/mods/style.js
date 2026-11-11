@@ -35,7 +35,7 @@ const RS = {
   // the chest as an ellipse in the Spine01 frame (m): half-width, front, back, from Spine02 - lo to neck; arm radius
   torso: {w: .16, front: .13, back: .15, lo: .05, arm: .045},
   flow: {period: 150, lead: .035, rear: .028},   // the hands' slow circles: frames per turn, radius (m)
-  fidget: {first: 120, every: 220, len: [66, 54]},   // frames: when the first comes, how often, how long (bandage, neck)
+  fidget: {first: 120, every: 220, len: [84, 54]},   // frames: when the first comes, how often, how long (bandage, neck)
   // palm normals in each hand's own frame (from the fist curl's direction: the fingers fold toward the palm)
   palmL: new THREE.Vector3(.78, 0, .62).normalize(), palmR: new THREE.Vector3(-.79, 0, .61).normalize(),
   open: ['idle', 'intro', 'walkF', 'walkB', 'guard', 'guardC', 'block'],
@@ -143,17 +143,35 @@ RB.post.push((md, p, F, S, y) => {
   const lf = rsVec(L.fing, v[2]).applyAxisAngle(RB_LINE, .12 * Math.sin(ph)).normalize(), lpn = rsVec(L.palm, v[3]).normalize();
   const rf = rsChest(md, W, Rr.fing, v[4]).normalize(), rpn = rsChest(md, W, Rr.palm, v[5]).normalize();
   let le = rsVec(L.elbow, new THREE.Vector3()).normalize(), re = rsChest(md, W, Rr.elbow, new THREE.Vector3()).normalize();
-  if (fid && fid.kind === 0) {   // the bandage: the lead forearm comes across in front of the chest, palm down; the rear
-    // hand grips it from above and pulls twice toward the wrist (all in the chest frame, well in front of it)
-    const e = Math.sin(Math.PI * Math.min(1, fid.u * 1.15)) ** .6, c = a => rsChest(md, W, a, new THREE.Vector3());   // in, hold, out
-    const pull = Math.max(0, Math.sin(4 * Math.PI * Math.min(1, Math.max(0, (fid.u - .25) / .55))));   // two pulls
-    const M = c([-.02, .02, .42]).add(C1);
-    lp.lerp(M.clone().add(c([-.14, .01, .03])), e); lf.lerp(c([-1, .12, .2]).normalize(), e).normalize(); lpn.lerp(c([0, -1, .1]).normalize(), e).normalize();
-    le.lerp(c([.4, -1, 0]).normalize(), e).normalize();
-    rp.lerp(M.clone().add(c([.05 - .1 * pull, .05, -.01])), e); rf.lerp(c([.2, -.15, .95]).normalize(), e).normalize(); rpn.lerp(c([0, -1, 0]), e).normalize();
+  // the bandage: the lead forearm comes forward at chest height toward the opponent, fist closed, palm down; the rear
+  // hand goes over the top (an arc: it never passes through the other arm), lands on the lead wrist with its fingers
+  // wrapped across, and pulls twice back along the forearm; then it goes back over the top. Both forearms point the
+  // same way (a V that meets at the lead wrist): from the game's camera they read side by side, never crossed.
+  const band = fid && fid.kind === 0, c = a => rsChest(md, W, a, new THREE.Vector3());
+  let e = 0, slide = 0, arc = 0;
+  if (band) {
+    const u = fid.u;
+    e = rnSm(u / .22) * (1 - rnSm((u - .8) / .2));   // the lead arm: in, hold, out
+    const er = rnSm((u - .06) / .22) * (1 - rnSm((u - .74) / .2));   // the rear hand: a little after it, back a little before
+    arc = Math.sin(Math.PI * er) * (er < 1 ? 1 : 0);
+    if (u > .3 && u < .74) { const f = ((u - .3) / .44 * 2) % 1; slide = f < .65 ? rnSm(f / .65) : 1 - rnSm((f - .65) / .35); }   // two pulls
+    lp.lerp(rsVec([.42, .05, -.02], new THREE.Vector3()).add(O), e); lf.lerp(rsVec([1, .05, .15], new THREE.Vector3()).normalize(), e).normalize();
+    lpn.lerp(rsVec([0, -1, 0], new THREE.Vector3()), e).normalize(); le.lerp(rsVec([-.1, -1, .5], new THREE.Vector3()).normalize(), e).normalize();
+    e = er;
   }
   rsArm(md, p, W, 'L', lp, le, lf, lpn, w);
-  rsArm(md, p, rbFK(md, p, RB.W), 'R', rp, re, rf, rpn, w);
+  const W2 = rbFK(md, p, RB.W);
+  if (band) {
+    const El = W2.p[ix.LeftForeArm], Wr = W2.p[ix.LeftHand], ax = Wr.clone().sub(El).normalize();
+    const G = Wr.clone().lerp(El, .08 + .28 * slide);   // the grip on the forearm's line: at the wrist, pulled back twice
+    const fd = new THREE.Vector3().crossVectors(RS_UP, ax).normalize(); if (fd.dot(RS_SIDE) < 0) fd.negate();   // across the forearm, toward his left
+    const fing = fd.clone().multiplyScalar(.8).addScaledVector(RS_UP, -.45).addScaledVector(ax, .25).normalize();
+    // the wrist so that the palm (8 cm along the fingers) lies on top of the forearm (4 cm radius, 2 cm palm)
+    const wrist = G.clone().addScaledVector(RS_UP, .065).addScaledVector(fing, -.075);
+    rp.lerp(wrist, e).addScaledVector(RS_UP, .09 * arc); rf.lerp(fing, e).normalize(); rpn.lerp(new THREE.Vector3(0, -1, 0).addScaledVector(fd, .3).normalize(), e).normalize();
+    re.lerp(c([-.6, -1, -.2]).normalize(), e).normalize();
+  }
+  rsArm(md, p, W2, 'R', rp, re, rf, rpn, w);
   if (fid && fid.kind === 1) {   // the neck: a slow roll, down to one side, around, up on the other, the eyes back on the opponent
     const e = Math.sin(Math.PI * fid.u), a = 2 * Math.PI * fid.u;
     mdBoneTurn(p, ix.Head, MD_X, 14 * e * Math.max(0, Math.sin(a)));     // (down)
@@ -170,4 +188,16 @@ RN.curlFor = (it, F) => RS.open.includes(F.act) ? RS.curl : CFG.looks[it.key].op
 RN.hooks.boot.push(VW => {
   VW_PLAYS[0][1][0][1] = 480;   // the viewer's guard lasts long enough to show both fidgets
   VW.rsPreset = rsPreset;   // (tests and the variant sheets)
+});
+
+// The hands during the bandage: the lead one closes to a fist, the rear one grips the forearm (finger bones, after the
+// pose; RN.curlFor gives both hands the same curl).
+RN.hooks.applied.push((it, F) => {
+  const fid = rsFidget(F);
+  if (!it.fingers || !fid || fid.kind !== 0) return;
+  const u = fid.u, e = rnSm(u / .22) * (1 - rnSm((u - .8) / .2));
+  for (let i = 0; i < it.fingers.length; i++) {
+    const f = it.fingers[i], want = /^Left/.test(f.name) ? 1 : .72, k = it.curl + (want - it.curl) * e;
+    f.quaternion.copy(MD_Q1).slerp(it.fist[i], k);
+  }
 });
