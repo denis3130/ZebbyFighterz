@@ -5,7 +5,8 @@
 // <section class="usc" id="sc-<id>"> is made the first time it is shown. Focusable = any visible [data-focus] element of
 // the screen (or of the dialog open in #uiOver). Confirming an element calls el.uiAct(device) or goes to data-go.
 // back() returning false keeps the screen (it handled Esc / B itself); guardMs = confirm and back ignored that long after
-// the screen appears (the end of a match, so a mashing player does not skip it).
+// the screen appears (the end of a match, so a mashing player does not skip it). any(device) = a screen that reacts to
+// any key, any controller button or a tap anywhere outside its buttons (the intro, the title): true = handled.
 const NAV = {cur: null, stack: [], screens: {}, focus: null, dev: 'kb', padIx: null, pad: [], down: null, tapEnd: 0, busyUntil: 0, shownAt: 0};
 const NAV_TAP = {slop: 12, ms: 700};   // a tap may end this many px off its element; the click a tap may still produce is dropped this long
 const NAV_KEYS = {ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right'};
@@ -178,7 +179,11 @@ function navPointers(box) {
   box.addEventListener('pointercancel', e => { if (NAV.down && NAV.down.id === e.pointerId) NAV.down = null; });
   box.addEventListener('pointerup', e => {
     const d = NAV.down;
-    if (!d || d.id !== e.pointerId) return;
+    if (!d || d.id !== e.pointerId) {   // a tap outside any button: the screen's any(), if it has one
+      const def = navDef();
+      if (def && def.any && !MN.rot && def.root.contains(e.target) && !(e.target.closest && e.target.closest('[data-focus]'))) def.any(e.pointerType === 'mouse' ? 'kb' : 'touch');
+      return;
+    }
     NAV.down = null;
     if (!navNear(d.el, e)) return;
     NAV.tapEnd = performance.now() + NAV_TAP.ms;
@@ -204,6 +209,8 @@ function navKey(e) {
   if (c === 'Escape' || (c === 'Backspace' && !typing)) { if (!e.repeat) menuBack(); e.preventDefault(); return; }
   if (G.state === 'fight' || !NAV.cur || MN.rot) return;
   NAV.dev = 'kb';
+  const def = navDef();
+  if (def.any && !typing && !e.repeat && def.any('kb')) { e.preventDefault(); return; }
   if (typing && c !== 'ArrowUp' && c !== 'ArrowDown' && c !== 'Enter') return;
   const mv = NAV_KEYS[c];
   if (mv) { navMove(mv); e.preventDefault(); }
@@ -221,8 +228,10 @@ function navPadPoll(now) {
     const p = NAV.pad[i] || (NAV.pad[i] = {b: {}, dir: null, at: 0});
     const down = n => !!(g.buttons[n] && (g.buttons[n].pressed || g.buttons[n].value > .5));
     const edge = n => { const d = down(n), e = d && !p.b[n]; p.b[n] = d; return e; };
-    const a = edge(0), b = edge(1), lb = edge(4), rb = edge(5), start = edge(9), ax = g.axes[0] || 0, ay = g.axes[1] || 0;
+    const a = edge(0), b = edge(1), lb = edge(4), rb = edge(5), start = edge(9), xy = edge(2) | edge(3) | edge(8), ax = g.axes[0] || 0, ay = g.axes[1] || 0;
     const dir = down(12) || ay < -.5 ? 'up' : down(13) || ay > .5 ? 'down' : down(14) || ax < -.5 ? 'left' : down(15) || ax > .5 ? 'right' : null;
+    const def = (G.state === 'title' || G.state === 'end') && !MN.rot ? navDef() : null;
+    if (def && def.any && (a || b || lb || rb || start || xy) && def.any('pad')) { NAV.dev = 'pad'; NAV.padIx = i; p.dir = dir; continue; }
     if (start) { if (G.state === 'fight') menu.pause(); else if (G.state === 'pause') menu.resume(); p.dir = dir; continue; }
     if (G.state === 'fight' || !NAV.cur || MN.rot) { p.dir = dir; continue; }
     if (a || b || lb || rb || (dir && dir !== p.dir)) { NAV.dev = 'pad'; NAV.padIx = i; }

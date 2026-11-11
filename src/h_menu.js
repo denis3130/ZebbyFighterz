@@ -113,6 +113,7 @@ function menuInit() {
   navInit();
   layersInit();
   menuScreens();
+  introScreens();
   uiTap(mnEl('tPause'), menu.pause);
   window.addEventListener('resize', menuOrient);
   window.addEventListener('orientationchange', menuOrient);

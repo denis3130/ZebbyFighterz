@@ -182,3 +182,31 @@
 #uiLayers[data-scene="off"] .ly,#uiLayers[data-scene="off"] #uiParts{opacity:0}
 /* quality: 'bassa' keeps the scene still (no drift, no breathing, no embers) and drops the glows; 'media' has fewer embers */
 #uiLayers.q-bassa #lyHero,#uiLayers.q-bassa #lyRival{filter:none}
+/* --- the intro (u4_intro.js): every value set per frame from JS; only the layout lives here --- */
+#uiLayers[data-scene="intro"] .ly{opacity:0}
+#uiLayers[data-scene="intro"] #lySky{opacity:.32}#uiLayers[data-scene="intro"] #lyFog1{opacity:.55}#uiLayers[data-scene="intro"] #lyShade{opacity:1}
+#sc-intro{padding:0;align-items:stretch;justify-content:stretch;overflow:hidden;background:none}
+#sc-intro .inStage{position:absolute;inset:0;transform-origin:50% 55%}
+#sc-intro .inStage>i,#sc-intro .inRocks{position:absolute;display:block;pointer-events:none}
+.inLines{left:-10%;right:-10%;top:30%;height:42%;opacity:0;
+  background:repeating-linear-gradient(180deg,rgba(255,232,200,0) 0 9px,rgba(255,232,200,.55) 9px 10px,rgba(255,232,200,0) 10px 23px,rgba(240,160,90,.4) 23px 24px,rgba(255,232,200,0) 24px 37px);
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent)}
+.inRen,.inKael{left:50%;bottom:-96%;width:110vh;height:196%;margin-left:-55vh;opacity:0;background:center bottom/contain no-repeat;
+  filter:drop-shadow(0 0 2px rgba(255,170,100,.9)) drop-shadow(0 0 18px rgba(240,138,50,.4))}
+.inKael{filter:drop-shadow(0 0 2px rgba(200,160,255,.9)) drop-shadow(0 0 18px rgba(143,106,216,.5))}
+.inClash{inset:0;opacity:0;background:center/cover no-repeat}
+.inRing{left:50%;top:48%;width:46vh;height:46vh;opacity:0;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,0) 52%,rgba(255,236,200,.9) 60%,rgba(255,170,90,.5) 66%,rgba(255,170,90,0) 72%)}
+.inRocks{left:50%;top:48%;width:0;height:0}
+.inRocks i{position:absolute;left:-6px;top:-5px;width:12px;height:10px;opacity:0;background:#3a3040;border:1px solid #6b5a64;clip-path:polygon(10% 0,90% 20%,100% 70%,60% 100%,0 80%)}
+.inRocks i:nth-child(3n){width:18px;height:14px}.inRocks i:nth-child(4n){width:8px;height:7px;background:#5a4a50}
+#sc-intro .inFlash{position:absolute;inset:0;opacity:0;background:#fff7ec;pointer-events:none}
+.inLogo{position:absolute;left:50%;top:50%;transform:translate(-50%,-55%);opacity:0;pointer-events:none;font-size:calc(var(--u)*13)}
+.inWord{position:relative;display:block;font-family:var(--u-display);font-weight:500;letter-spacing:.2em;color:#f6efe3;text-shadow:0 0 22px rgba(0,0,0,.5);white-space:nowrap}
+.inWord b{display:inline-block;font-weight:500;opacity:0}
+.inArc{position:absolute;left:52%;top:-.42em;width:1.9em;height:1.9em;fill:none;stroke:var(--u-gold);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;filter:drop-shadow(0 0 5px rgba(216,166,87,.6))}
+.inCut{position:absolute;left:56%;bottom:-.08em;width:24%;height:2px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange));transform-origin:0 50%;box-shadow:0 0 8px rgba(240,138,50,.8)}
+#sc-intro .inSkip{position:absolute;right:calc(env(safe-area-inset-right) + var(--u)*5);bottom:calc(env(safe-area-inset-bottom) + var(--u)*5);min-width:calc(var(--u)*22)}
+/* the title until Task 7 */
+#sc-title{align-items:center}
+.uprompt{margin-top:calc(var(--u)*6);font-style:italic;font-size:max(18px,calc(var(--u)*5));color:var(--u-ink);text-shadow:0 2px 8px #000}

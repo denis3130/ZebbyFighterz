@@ -6,3 +6,7 @@ T.test('tick ms in the menus (alta, bassa) and in a fight', () => {
   T.info('tick ms: menus alta ' + hi.toFixed(2) + ', menus bassa ' + lo.toFixed(2) + ', fight ' + fight.toFixed(2));
   T.ok(hi > 0 && lo > 0 && fight > 0);
 });
+T.test('intro frame ms around the impact (JS side)', () => {
+  const V = __VF; V.navReset('intro'); V.UI.INTRO.t = 3500; let t = performance.now() + 4e5; V.uiFrame(t); const t0 = performance.now();
+  for (let i = 0; i < 120; i++) { t += 1000 / 60; V.uiFrame(t); }
+  const ms = (performance.now() - t0) / 120; T.info('intro ms/frame (impact) ' + ms.toFixed(3)); T.ok(ms > 0 && V.UI.NAV.cur === 'intro'); V.navReset('menu'); });

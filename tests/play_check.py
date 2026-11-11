@@ -45,18 +45,29 @@ async def main():
         async def route(r):   # like a phone with no CDN: only the page's own server answers
             await (r.continue_() if r.request.url.startswith(base) else r.abort())
         await ctx.route('**/*', route)
-        title = "document.getElementById('sc-menu') && document.getElementById('sc-menu').classList.contains('on')"
+        on = lambda sc: "document.getElementById('sc-%s') && document.getElementById('sc-%s').classList.contains('on')" % (sc, sc)
+        title = "['intro','title','name','menu'].some(s => { const e = document.getElementById('sc-' + s); return e && e.classList.contains('on'); })"
+
+        async def to_menu():   # through the opening screens like a player: «Salta», a tap on the title, «Conferma» on the name
+            for _ in range(8):
+                await pg.wait_for_timeout(500)   # (a tap in the first moments of a screen is taken for a double tap and ignored)
+                if await pg.evaluate(on('menu')): return
+                if await pg.evaluate(on('intro')): await pg.tap('#sc-intro .inSkip')
+                elif await pg.evaluate(on('title')): await pg.tap('#sc-title')
+                elif await pg.evaluate(on('name')): await pg.evaluate("document.querySelector('#sc-name .umw .ub').click()")
+            raise RuntimeError('menu not reached')
         await pg.goto(base, wait_until='domcontentloaded')
         await pg.wait_for_function(title, timeout=60000)
-        check(True, 'online: title shown')
+        check(True, 'online: opening shown')
         ok = await pg.evaluate("navigator.serviceWorker.ready.then(r => !!r.active).catch(() => false)")
         check(ok, 'service worker active')
         await pg.wait_for_timeout(500)
         await ctx.set_offline(True)
         await pg.reload(wait_until='domcontentloaded')
         await pg.wait_for_function(title, timeout=60000)
-        check(True, 'offline reload: title shown')
-        await pg.wait_for_timeout(500)   # (a tap in the first moments of a screen is taken for a double tap and ignored)
+        check(True, 'offline reload: opening shown')
+        await to_menu()
+        await pg.wait_for_timeout(500)
         await pg.tap('#sc-menu [data-act="train"]')
         await pg.wait_for_timeout(2000)
         st = await pg.evaluate("({hud: getComputedStyle(document.getElementById('hud')).visibility, touch: document.getElementById('touch').classList.contains('on'), timer: document.getElementById('timer').textContent})")
