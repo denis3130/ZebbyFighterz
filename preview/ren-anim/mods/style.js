@@ -4,14 +4,20 @@
 // bounce of the stance. The guard holds while he walks. Standing still, now and then he does something of his own:
 // tightens the bandage of his lead forearm, or rolls his neck. On the way back from a move the arms flow into it.
 // Arms by a two-bone IK from the clip's arm (its twist kept), the forearm rolling toward the palm's way, the hand set
-// to its fingers' and palm's directions. Targets in the fight-line frame: origin the chest, forward = toward the
-// opponent (RB_LINE), up, side = his left.
+// to its fingers' and palm's directions. The lead hand's targets are in the fight-line frame (origin the chest,
+// forward = toward the opponent, RB_LINE, up, side = his left); the rear hand's in the chest's own frame (Spine01:
+// across = his left, up, forward = the way the chest faces): Ren stands three-quarters on, and the fight line from his
+// chest runs through his own side. No arm point goes into the chest: wrist and elbow are pushed out of it (RS.torso).
 
 const RS = {
   // hand targets (metres from the chest: [forward, up, side]), fingers' and palm's ways ([forward, up, side]), elbow
   // hint ([forward, up, side]): lead = left, rear = right
   lead: {pos: [.46, .05, .03], fing: [.55, .8, -.1], palm: [0, 0, -1], elbow: [0, -1, .45]},
-  rear: {pos: [.2, -.04, .02], fing: [.45, .25, .85], palm: [.3, -.9, 0], elbow: [-.1, -1, -.35]},
+  // rear: in the chest frame [across, up, forward]: in front of the right of the chin, fingers up and in, palm toward
+  // the lead hand, elbow down and out
+  rear: {pos: [-.05, .17, .32], fing: [.35, .9, .15], palm: [.75, 0, .65], elbow: [-.55, -1, .1]},
+  // the chest as an ellipse in the Spine01 frame (m): half-width, front, back, from Spine02 - lo to neck; arm radius
+  torso: {w: .16, front: .13, back: .15, lo: .05, arm: .045},
   flow: {period: 150, lead: .035, rear: .028},   // the hands' slow circles: frames per turn, radius (m)
   fidget: {first: 120, every: 220, len: [66, 54]},   // frames: when the first comes, how often, how long (bandage, neck)
   // palm normals in each hand's own frame (from the fist curl's direction: the fingers fold toward the palm)
@@ -22,6 +28,20 @@ const RS = {
 const RS_UP = new THREE.Vector3(0, 1, 0), RS_SIDE = new THREE.Vector3().crossVectors(RS_UP, RB_LINE).normalize();
 // [forward, up, side] in the fight-line frame -> a model-space vector (out)
 function rsVec(a, out) { return out.copy(RB_LINE).multiplyScalar(a[0]).addScaledVector(RS_UP, a[1]).addScaledVector(RS_SIDE, a[2]); }
+// [across, up, forward] in the chest frame (W: the pose's forward kinematics) -> a model-space vector (out)
+function rsChest(md, W, a, out) { return out.set(a[0], a[1], a[2]).applyQuaternion(W.q[md.index.Spine01]); }
+// Point pt (model space) out of the chest's ellipse inflated by the arm's radius (and extra m): moved outward across
+// the chest's up axis; true when it moved.
+function rsOut(md, W, pt, extra) {
+  const ix = md.index, C = W.p[ix.Spine01], q = RS.t.q[4].copy(W.q[ix.Spine01]).invert(), l = RS.t.v[7].copy(pt).sub(C).applyQuaternion(q), o = RS.torso;
+  const lo = RS.t.v[6].copy(W.p[ix.Spine02]).sub(C).applyQuaternion(q).y - o.lo, hi = RS.t.v[6].copy(W.p[ix.neck]).sub(C).applyQuaternion(q).y;
+  if (l.y < lo || l.y > hi) return false;
+  const m = o.arm + (extra || 0), rx = o.w + m, rz = (l.z > 0 ? o.front : o.back) + m, k = Math.hypot(l.x / rx, l.z / rz);
+  if (k >= 1) return false;
+  if (k < 1e-4) l.z = rz; else { l.x /= k; l.z /= k; }
+  pt.copy(l.applyQuaternion(q.invert())).add(C);
+  return true;
+}
 
 // Arm s ('L' | 'R') of pose p (W its forward kinematics) toward wrist target tgt, elbow hint eh, fingers' way fd and
 // palm's way pn (model space, unit), by weight w (0 = the clip's arm).
@@ -30,6 +50,7 @@ function rsArm(md, p, W, s, tgt, eh, fd, pn, w) {
   const n = s === 'L' ? 'Left' : 'Right', ix = md.index, iS = ix[n + 'Shoulder'], iA = ix[n + 'Arm'], iF = ix[n + 'ForeArm'], iH = ix[n + 'Hand'];
   const T = THREE, A = W.p[iA].clone(), E = W.p[iF].clone(), H = W.p[iH].clone(), qU = W.q[iA].clone(), qL = W.q[iF].clone(), qHl = new T.Quaternion().fromArray(p.q, iH * 4);
   const a = A.distanceTo(E), b = E.distanceTo(H), goal = H.clone().lerp(tgt, w);
+  rsOut(md, W, goal, .02);   // (the hand's own thickness)
   const dir = goal.clone().sub(A), full = dir.length(), d = Math.max(Math.abs(a - b) + 1e-3, Math.min((a + b) * .995, full));
   dir.multiplyScalar(1 / (full || 1e-9));
   const cd = H.clone().sub(A).normalize(), R = new T.Quaternion().setFromUnitVectors(cd, dir);
@@ -41,6 +62,15 @@ function rsArm(md, p, W, s, tgt, eh, fd, pn, w) {
   P.normalize();
   const cos = (a * a + d * d - b * b) / (2 * a * d), sin = Math.sqrt(Math.max(0, 1 - cos * cos));
   const B = A.clone().addScaledVector(dir, a * cos).addScaledVector(P, a * sin), end = A.clone().addScaledVector(dir, d);
+  // an elbow (or the forearm's middle) inside the chest: the elbow turns about the shoulder-wrist line until it is out
+  for (let k = 0; k < 12; k++) {
+    const mid = B.clone().lerp(end, .5), inB = rsOut(md, W, B.clone()), inM = rsOut(md, W, mid);
+    if (!inB && !inM) break;
+    const C = W.p[md.index.Spine01], away = B.clone().sub(C); away.addScaledVector(dir, -away.dot(dir));
+    const sgn = new T.Vector3().crossVectors(P, away).dot(dir) >= 0 ? 1 : -1;
+    P.applyAxisAngle(dir, sgn * 12 * Math.PI / 180);
+    B.copy(A).addScaledVector(dir, a * cos).addScaledVector(P, a * sin);
+  }
   const d1 = new T.Quaternion().setFromUnitVectors(E.clone().sub(A).normalize(), B.clone().sub(A).normalize());
   const d2 = new T.Quaternion().setFromUnitVectors(H.clone().sub(E).applyQuaternion(d1).normalize(), end.clone().sub(B).normalize());
   const nU = d1.clone().multiply(qU), nL = d2.multiply(d1).multiply(qL);
@@ -92,19 +122,19 @@ RB.post.push((md, p, F, S, y) => {
   // the guard's targets with the flow's circles (lead clockwise in the side-up plane, rear the other way)
   const L = RS.lead, Rr = RS.rear;
   const lp = rsVec(L.pos, v[0]).add(O).addScaledVector(RS_SIDE, RS.flow.lead * Math.cos(ph)).addScaledVector(RS_UP, RS.flow.lead * Math.sin(ph));
-  const rp = rsVec(Rr.pos, v[1]).add(O).addScaledVector(RS_SIDE, -RS.flow.rear * Math.cos(ph + .8)).addScaledVector(RS_UP, RS.flow.rear * Math.sin(ph + .8));
+  const C1 = W.p[ix.Spine01];
+  const rp = rsChest(md, W, Rr.pos, v[1]).add(C1).addScaledVector(RS_SIDE, -RS.flow.rear * Math.cos(ph + .8)).addScaledVector(RS_UP, RS.flow.rear * Math.sin(ph + .8));
   const lf = rsVec(L.fing, v[2]).applyAxisAngle(RB_LINE, .12 * Math.sin(ph)).normalize(), lpn = rsVec(L.palm, v[3]).normalize();
-  const rf = rsVec(Rr.fing, v[4]).normalize(), rpn = rsVec(Rr.palm, v[5]).normalize();
-  let le = rsVec(L.elbow, new THREE.Vector3()).normalize(), re = rsVec(Rr.elbow, new THREE.Vector3()).normalize();
-  if (fid && fid.kind === 0) {   // the bandage: the lead forearm comes in across the chest, the rear hand grips it and pulls twice toward the wrist
-    const e = Math.sin(Math.PI * Math.min(1, fid.u * 1.15)) ** .6;   // in, hold, out
-    lp.lerp(rsVec([.3, -.06, -.04], new THREE.Vector3()).add(O), e);
-    lf.lerp(rsVec([.25, .35, -.9], new THREE.Vector3()).normalize(), e).normalize();
-    lpn.lerp(rsVec([.1, -.95, 0], new THREE.Vector3()).normalize(), e).normalize();
+  const rf = rsChest(md, W, Rr.fing, v[4]).normalize(), rpn = rsChest(md, W, Rr.palm, v[5]).normalize();
+  let le = rsVec(L.elbow, new THREE.Vector3()).normalize(), re = rsChest(md, W, Rr.elbow, new THREE.Vector3()).normalize();
+  if (fid && fid.kind === 0) {   // the bandage: the lead forearm comes across in front of the chest, palm down; the rear
+    // hand grips it from above and pulls twice toward the wrist (all in the chest frame, well in front of it)
+    const e = Math.sin(Math.PI * Math.min(1, fid.u * 1.15)) ** .6, c = a => rsChest(md, W, a, new THREE.Vector3());   // in, hold, out
     const pull = Math.max(0, Math.sin(4 * Math.PI * Math.min(1, Math.max(0, (fid.u - .25) / .55))));   // two pulls
-    rp.lerp(lp.clone().add(rsVec([-.03, .02, .16 - .1 * pull], new THREE.Vector3())), e);
-    rf.lerp(rsVec([.2, -.2, .95], new THREE.Vector3()).normalize(), e).normalize();
-    rpn.lerp(rsVec([-.2, -.95, .1], new THREE.Vector3()).normalize(), e).normalize();
+    const M = c([-.02, .02, .42]).add(C1);
+    lp.lerp(M.clone().add(c([-.14, .01, .03])), e); lf.lerp(c([-1, .12, .2]).normalize(), e).normalize(); lpn.lerp(c([0, -1, .1]).normalize(), e).normalize();
+    le.lerp(c([.4, -1, 0]).normalize(), e).normalize();
+    rp.lerp(M.clone().add(c([.05 - .1 * pull, .05, -.01])), e); rf.lerp(c([.2, -.15, .95]).normalize(), e).normalize(); rpn.lerp(c([0, -1, 0]), e).normalize();
   }
   rsArm(md, p, W, 'L', lp, le, lf, lpn, w);
   rsArm(md, p, rbFK(md, p, RB.W), 'R', rp, re, rf, rpn, w);
