@@ -3,7 +3,7 @@
 // hitting limb, along the path it really travels. The path is sampled once per move from the pose itself at quarter
 // frames (RN.pure is a pure function of the frame), so the arc has no corners however fast the limb is. It is drawn
 // pushed away from the camera, so the body always covers it: it shows around the limb, never on top of it.
-const RT = {step: .25, before: 5.5, span: 4.5, n: 26, w: .055, back: 1.2, paths: {}, mesh: null, v: [0, 1, 2, 3].map(() => new THREE.Vector3())};
+const RT = {step: .25, before: 4.5, span: 4, n: 26, w: .055, back: 1.2, paths: {}, mesh: null, v: [0, 1, 2, 3].map(() => new THREE.Vector3())};
 
 // The limb's path (model space) of heavy move id: frames s - before .. s + 1 (the first active frame), every RT.step.
 function rtPath(md, key, id) {
@@ -54,7 +54,7 @@ RN.hooks.draw.push((VW, dt, cam) => {
     side.normalize().multiplyScalar(w);
     pos[i * 6] = c.x + side.x; pos[i * 6 + 1] = c.y + side.y; pos[i * 6 + 2] = c.z + side.z;
     pos[i * 6 + 3] = c.x - side.x; pos[i * 6 + 4] = c.y - side.y; pos[i * 6 + 5] = c.z - side.z;
-    aA[i * 2] = aA[i * 2 + 1] = Math.pow(u, 1.4) * fade * (head - tail > 1 ? 1 : 0);
+    aA[i * 2] = aA[i * 2 + 1] = Math.pow(u, 1.4) * fade * (head - tail > 1 ? 1 : 0) * rnSm((c.y - .12) / .3);   // (none along the floor: a foot that has not left it yet)
   }
   mesh.geometry.attributes.position.needsUpdate = mesh.geometry.attributes.aA.needsUpdate = true;
 });

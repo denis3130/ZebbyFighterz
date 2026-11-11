@@ -9,11 +9,13 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
 - `mods/trail.js`: la scia, solo sui colpi forti, curva e sempre dietro al corpo.
 - `mods/fx.js`: il manichino, il fermo-immagine, lampo, scintilla, tremolio, il colpo energetico.
 - `mods/hair.js`: i capelli che seguono la testa con un piccolo ritardo.
+- `mods/extra.js`: altre animazioni: calcio rotante e spazzata (clip di Meshy non ancora usate), caduta da KO,
+  colpi in volo, combo, vittoria.
 - `mods/body_v1.js`: il primo tentativo, tenuto solo come confronto.
 
 ## Costruire
 
-    python3 build.py --assets ASSETS.js --out pagina.html --mods body.js,trail.js,fx.js,hair.js
+    python3 build.py --assets ASSETS.js --out pagina.html --mods body.js,trail.js,fx.js,hair.js,extra.js
 
 `ASSETS.js` è la riga `const ASSETS={...};` della pagina pubblicata (circa 9,7 MB, non sta nel repository).
 

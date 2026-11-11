@@ -27,7 +27,8 @@ PATCHES = [
      "<span class=kb> Tastiera: 1-0 mosse, N nuove/vecchie, M manichino, L allungo, spazio velocità. "
      "Controller: dorsali = mossa, A nuove/vecchie, B velocità, X manichino, Y allungo.</span>"),
     ("@media (prefers-reduced-motion:reduce){button{transition:none}}",
-     "@media (prefers-reduced-motion:reduce){button{transition:none}}\n@media (pointer:coarse){#hint .kb{display:none}}"),
+     "@media (prefers-reduced-motion:reduce){button{transition:none}}\n@media (pointer:coarse){#hint .kb{display:none}"
+     "#moves{flex-wrap:nowrap;overflow-x:auto;touch-action:pan-x;scrollbar-width:none;padding:2px 0}#moves::-webkit-scrollbar{display:none}#moves button{flex:0 0 auto}}"),
     # --- a move's clip time: the layer's own, when it has one ---
     ("function mdMoveT(t, m, af, hit) {\n",
      "function mdMoveT(t, m, af, hit) {\n  if (RN.on && RN.moveT) return RN.moveT(t, m, af, hit);\n"),
@@ -37,6 +38,9 @@ PATCHES = [
     ("  Object.assign(VW.F, {x: 0, y: 0, vy: 0, air: false, hit: 0}); vwNext();\n",
      "  Object.assign(VW.F, {x: 0, y: 0, vy: 0, air: false, hit: 0}); vwNext(); rnReset();\n"),
     ("function vwStep() {\n", "function vwStep0() {\n"),
+    # (the jump's attack: the plan's own move, not always the air kick)
+    ("if (mode === 'jumpAtk') { F.act = 'air'; VW.atkIn = 8; }", "if (mode === 'jumpAtk') { VW.atk = act; F.act = 'air'; VW.atkIn = 8; }"),
+    ("{ F.act = 'jk'; F.af = 0; VW.name = VW_NAMES.jk; }", "{ F.act = VW.atk || 'jk'; F.af = 0; VW.name = VW_NAMES[F.act] || F.act; }"),
     # (the energy shot for its whole length: startup and recovery, as in the sim)
     ("  ['Speciale', ['spec']],", "  ['Speciale', [['spec', CFG.spec.spawn + CFG.spec.rec]]],"),
     ("  const it = VW.it, F = VW.F;\n  mdSync(it, 0, VW.S);\n",

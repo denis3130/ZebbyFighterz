@@ -97,7 +97,8 @@ RN.hooks.hold.push(VW => {
     if (rxReady()) { F.act = RX.wait.act; F.af = 0; VW.name = RX.wait.name; RX.wait = null; }
     return 'wait';
   }
-  if (strike && F.af === 0 && !F.air && !rxReady()) { RX.wait = {act: F.act, name: VW.name}; F.act = 'idle'; F.af = 0; VW.name = VW_NAMES.idle; return 'wait'; }
+  // (a stunned dummy can be hit again: a combo)
+  if (strike && F.af === 0 && !F.air && !rxReady() && RX.D.act !== 'hitStun') { RX.wait = {act: F.act, name: VW.name}; F.act = 'idle'; F.af = 0; VW.name = VW_NAMES.idle; return 'wait'; }
   return false;
 });
 // After a sim step: the dummy's frame, then contacts (a move's first active frame, the throw's hit, the projectile).
