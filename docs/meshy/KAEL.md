@@ -361,6 +361,8 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     byte); nella pittura, dentro la maschera di occhi e sopracciglia cambiano 13 texel su 52.721, e non sono né occhio
     né sopracciglio (un'ombra scura vecchia oltre la coda del sopracciglio destro, presa dalla maschera per il
     colore);
+  - pubblicata nell'anteprima di Kael l'11/11 (versione 10 della pagina) su richiesta di Denis ("anteprima?"), con
+    tutti i 22 test verdi; i controllori indipendenti erano ancora al lavoro;
 - **Come cercare un difetto** (strumenti di lavoro, non nel repository): registrare quale passaggio di
   `tools/kael_head.py` ha scritto per ultimo ogni texel (avvolgendo `paint`, `side_paint`, `skin_fill` e confrontando
   la texture prima e dopo), poi disegnare la testa in software da qualunque angolo colorando ogni pixel per passaggio o
