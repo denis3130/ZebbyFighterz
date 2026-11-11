@@ -26,6 +26,11 @@ Rispondi sempre a Denis **in italiano**, con messaggi brevi e chiari (spesso usa
 - Il ramo `tappa1-basi` si unisce a `main` solo dopo la prova di Denis.
 - Versione "app" per il telefono: `play/` (creata da `mk.sh` con `tools/make_play.py`: pagina intera con three.js dentro, manifest, icona di Ren, service worker per giocare offline). La serve GitHub Pages: https://denis3130.github.io/ZebbyFighterz/play/ (GitHub Pages pubblica il ramo `gh-pages`: per aggiornare l'app, dopo `bash mk.sh` e il commit, `git push origin <ramo>:gh-pages`). Si installa da Safari/Chrome con "Aggiungi alla schermata Home". Prova: `python3 tests/play_check.py`.
 
+## Interfaccia (UI/UX)
+- Leggi `docs/HANDOFF-UI.md`: stato, comandi, scelte, immagini segnaposto, prossimo passo. Design: `docs/superpowers/specs/2026-11-11-voidrise-interfaccia-design.md`.
+- Pagina dell'interfaccia (pagina Claude «Voidrise Interfaccia», a parte dal gioco): https://claude.ai/artifact/PSAtwRuNWi6XUCg5uj2zR6 — si pubblica `index.html` con il titolo «Voidrise Interfaccia».
+- Immagini dell'interfaccia: **solo** dai riferimenti `docs/ref/ui/` (Denis), mai le schede in A-pose; niente animazioni CSS infinite (rallentano la lotta): il movimento dei menu è in JavaScript.
+
 ## Regole di lavoro di Denis
 - Giochi completi e curati: niente emoji al posto della grafica, niente combattimenti fatti solo di numeri.
 - Tappe piccole e verificabili: dopo ogni tappa una versione giocabile.

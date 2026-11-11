@@ -11,7 +11,7 @@ Il percorso completo funziona su touch, mouse, tastiera e controller:
 - Salvataggio sul dispositivo (`voidrise.save`): nome, XP e livello, statistiche del G1, ultimo personaggio, impostazioni (la scelta degli FPS di `voidrise.prefs` viene portata qui).
 
 ## Come provarlo
-- Pagina: vedi `CLAUDE.md` («Interfaccia»). Sul telefono in orizzontale; `?fps=1` nell'indirizzo mostra gli FPS.
+- Pagina: https://claude.ai/artifact/PSAtwRuNWi6XUCg5uj2zR6 (pagina Claude «Voidrise Interfaccia», privata finché Denis non la condivide). Sul telefono in orizzontale; per gli FPS: pausa → «FPS: Sì».
 - Build: `bash mk.sh` (deve stampare `SYNTAX_OK`). Immagini segnaposto: `python3 tools/make_ui_assets.py`.
 - Test dell'interfaccia (oltre a quelli del gioco in `docs/HANDOFF.md`, adattati ai nuovi percorsi con le stesse intenzioni: `menu`, `touch`, `orient`, `hud`, `round`, `play_check`):
 ```
@@ -30,7 +30,8 @@ python3 tests/run.py tests/ui_perf.test.js --viewport 844x390
 
 ## Misure (Chromium headless con SwiftShader, 844x390: solo di riferimento, non è un telefono)
 - Prima dell'interfaccia: un `tick` nei menu 0,20 ms; in lotta 2,36 ms; serie del gioco 21 comandi verdi.
-- Dopo: un `tick` nei menu **0,05-0,09 ms** in qualità alta, 0,00-0,01 in bassa; un fotogramma dell'intro all'impatto 0,07-0,10 ms di JavaScript; in lotta 2,1-2,5 ms.
+- Dopo: un `tick` nei menu **0,05-0,09 ms** in qualità alta, 0,00-0,01 in bassa; un fotogramma dell'intro all'impatto 0,07-0,10 ms di JavaScript; in lotta 2,1-2,7 ms.
+- Serie completa finale (gioco + interfaccia): **38 comandi, 453 prove, 0 errori**, più `play_check`; il KO arriva negli stessi fotogrammi di prima (1040 con hitstop contro 988 senza).
 - Lotta, FPS nel ciclo reale: primi 5 s **20,4** con la preparazione del VS (20,6 prima dell'interfaccia, 19,2 senza preparazione); a regime 24,5 contro 25,3 (dentro il rumore).
 - Immagini dell'interfaccia: 604 KB (WebP), circa 0,8 MB dentro la pagina.
 - **FPS veri sul telefono: da misurare** (`?fps=1` o pausa → «FPS: Sì»), sia nei menu sia in lotta.
