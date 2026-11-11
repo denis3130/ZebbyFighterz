@@ -38,3 +38,8 @@ T.test('time up: a heavy still in startup at TEMPO! does not land', () => { cons
 T.test('KO: a P held through the KO does not come out after the freeze', () => { const S=fight(); near(S); F(S,1).hp=20; T.feed(S,1,B.P,0); T.feed(S,1,0,0);
   let n=0; while(S.phase==='fight'&&n<20){ T.feed(S,1,B.P,0); n++; } T.eq(S.phase,'ko'); const acts=[];
   for(let i=0;i<120;i++){ T.feed(S,1,0,0); if(acts[acts.length-1]!==F(S,0).act) acts.push(F(S,0).act); } T.eq(acts.join(),'p1,idle','acts after the KO'); });
+// Interface U1, Task 8: the match options chosen in the menus (rounds to play, time per round), kept in the state.
+T.test('rounds option: 1 round wins the match', () => { const S = N({rounds: 1}); T.eq(S.need, 1); F(S, 1).hp = 1; near(S); T.feed(S, 1, B.P, 0); T.feed(S, 400, 0, 0); T.eq(S.phase, 'end'); T.eq(S.winner, 0); });
+T.test('rounds option: 5 rounds need 3 wins', () => { T.eq(N({rounds: 5}).need, 3); T.eq(N({rounds: 3}).need, 2); T.eq(N({}).need, __VF.CFG.round.wins); });
+T.test('time option: 0 = no timer, 60 = 3600 frames, every round', () => { T.eq(N({timeS: 0}).timer, -1); T.eq(N({timeS: 60}).timer, 3600); T.eq(N({}).timer, __VF.CFG.round.timerS * 60);
+  const S = N({timeS: 60, rounds: 3}); F(S, 1).hp = 1; near(S); T.feed(S, 1, B.P, 0); T.feed(S, 400, 0, 0); T.eq(S.round, 2); T.ok(S.timer > 3400 && S.timer <= 3600, 'next round timer ' + S.timer); });

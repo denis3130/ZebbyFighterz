@@ -1,5 +1,5 @@
 // Entry point: game state, the fixed step and boot. Later tasks add the full real-time loop (tick) and the menus.
-const G={state:'boot',mode:null,S:null,acc:0,last:null};
+const G={state:'boot',mode:null,S:null,opts:null,acc:0,last:null};
 // Input first, then the renderer: the title comes only once the arena's textures are decoded.
 function boot(){saveLoad();inputInit();hudInit();menuInit();renderInit().then(()=>{G.state='title';navReset('intro');menuOrient();requestAnimationFrame(loop);});}
 // The animation-frame callback: the next frame is scheduled first, and an exception in one frame is reported, not fatal.
@@ -42,9 +42,11 @@ function frame(n){
   if(typeof renderFrame==='function') renderFrame(G.S,now);
   if(typeof hudUpdate==='function') hudUpdate(G.S);
 }
+// o = {seed, dummy, chars, rounds, timeS}: G.opts keeps them, so a restart plays the same match again with a new seed.
 function startMatch(mode,o){
   o=o||{};
-  G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
+  G.opts={chars:o.chars||['ren','kael'],rounds:o.rounds,timeS:o.timeS};
+  G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:G.opts.chars,dummy:o.dummy,rounds:o.rounds,timeS:o.timeS});
   G.mode=mode; G.state='fight'; G.acc=0; G.last=null; menuSync();
 }
 window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,navRegister,navGo,navBack,navReset,navReplace,navClear,navMove,navPress,navTab,navFocus,navPadPoll,uiTap,cLogo,cHead,cBtn,cItem,cCard,cTabs,cStepper,cStatBar,cProgress,cChip,cBack,uiToast,uiConfirm,layersSet,layersShift,layersDepth,layersQuality,layersFrame,uiFrame,introAt,introSkip,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,modelBuild,mdData,mdPoseOf,mdMix,mdSample,mdApply,headTop,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD,UI:{get SV(){return SV;},NAV,LY,INTRO},saveDefaults,saveLoad,saveWrite,progLevel,progMatchXp,progAddXp,progRecord};

@@ -152,7 +152,6 @@
 @keyframes uBlade{0%{opacity:0;transform:translateX(-30vw) skewX(-18deg)}20%{opacity:1}100%{opacity:0;transform:translateX(120vw) skewX(-18deg)}}
 @keyframes uBladeBack{0%{opacity:0;transform:translateX(120vw) skewX(-18deg)}20%{opacity:1}100%{opacity:0;transform:translateX(-30vw) skewX(-18deg)}}
 /* --- the screens of the fight cycle (h_menu.js) --- */
-#sc-menu{background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.72) 46%,rgba(14,12,22,.08) 100%)}
 #sc-pause{justify-content:flex-start;background:linear-gradient(90deg,rgba(14,12,22,.9) 0%,rgba(14,12,22,.62) 42%,rgba(14,12,22,.2) 100%)}
 #sc-pause .ucol{width:calc(var(--u)*46);gap:calc(var(--u)*2)}
 #sc-results{align-items:center;background:rgba(14,12,22,.66)}
@@ -178,7 +177,7 @@
 #uiParts{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #lyShade{inset:0;background:radial-gradient(ellipse at 62% 42%,rgba(10,8,14,0) 35%,rgba(10,8,14,.55) 100%),linear-gradient(180deg,rgba(10,8,14,.25),rgba(10,8,14,0) 30%,rgba(10,8,14,0) 70%,rgba(10,8,14,.45))}
 /* per scene: only the menu shows the characters behind the interface; other screens draw their own */
-#uiLayers:not([data-scene="menu"]):not([data-scene="title"]) #lyHero,#uiLayers:not([data-scene="menu"]):not([data-scene="title"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
+#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]) #lyHero,#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
 /* the title: Ren's and Kael's profiles high at the sides, the logo between them, as in the reference */
 #uiLayers[data-scene="title"] #lyHero{left:-3%;right:auto;top:0;bottom:auto;width:44%;height:94%;background-position:left top;background-size:auto 100%;opacity:.97;filter:none;
   -webkit-mask-image:linear-gradient(90deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);-webkit-mask-composite:source-in;
@@ -241,3 +240,33 @@
 #sc-name.pad .ukeys{display:grid}
 #sc-name.pad .unameOk{display:none}
 #sc-name.pad .uhead .uheadS{display:none}
+/* --- main menu (u5_play.js), as the reference: entries top left, the «Gioca» block under them, chip top right --- */
+#sc-menu{justify-content:flex-start;background:linear-gradient(90deg,rgba(14,12,22,.9) 0%,rgba(14,12,22,.62) 34%,rgba(14,12,22,0) 58%)}
+#sc-menu .ulogo{margin-bottom:calc(var(--u)*3)}
+.mmList{display:flex;flex-direction:column;align-items:flex-start}
+.mmPlay{margin-top:auto;display:flex;flex-direction:column;align-items:flex-start;gap:calc(var(--u)*1.2)}
+.mmCards{display:flex;gap:calc(var(--u)*2.4)}
+.mmCards .ucard{width:calc(var(--u)*26);height:calc(var(--u)*19)}
+.uitem.mmVs{font-size:max(16px,calc(var(--u)*4));padding-left:calc(var(--u)*1)}
+.uitem.mmVs.f{font-size:max(19px,calc(var(--u)*5.2))}
+.mmVs::before{left:calc(var(--u)*-1.6)}
+.mmChip{position:absolute;top:calc(env(safe-area-inset-top) + var(--u)*4);right:calc(env(safe-area-inset-right) + var(--u)*6)}
+/* short screens: the «Gioca» block beside the entries instead of under them */
+@media (max-height:430px){
+#sc-menu{display:none;flex-direction:row;flex-wrap:wrap;align-content:flex-start;column-gap:calc(var(--u)*7)}
+#sc-menu.on{display:flex}
+#sc-menu .ulogo{flex-basis:100%;margin-bottom:calc(var(--u)*2)}
+.mmPlay{margin-top:0;align-self:flex-end}
+}
+/* --- local versus options --- */
+#sc-vsopts{align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(14,12,22,.45),rgba(14,12,22,.1) 40%,rgba(14,12,22,.55))}
+#sc-vsopts .uback{position:absolute;left:calc(env(safe-area-inset-left) + var(--u)*5);top:calc(env(safe-area-inset-top) + var(--u)*3)}
+#sc-vsopts .uhead{align-self:center;text-align:left}
+.voMid{display:flex;flex-direction:column;gap:calc(var(--u)*2.4);align-items:center}
+.voTags{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + var(--u)*20);display:flex;justify-content:space-between;padding:0 calc(var(--u)*10);pointer-events:none}
+.voTag{padding:calc(var(--u)*1) calc(var(--u)*4);font-style:italic;font-size:max(15px,calc(var(--u)*4.2));color:#f6efe3;background:linear-gradient(180deg,rgba(40,34,50,.9),rgba(18,15,24,.92));
+  border:1px solid rgba(216,190,150,.5);transform:skewX(-16deg)}
+#sc-vsopts .umw{width:min(calc(var(--u)*110),92vw)}
+#uiLayers[data-scene="versus"] #lyHero{left:-6%;right:auto;width:50%;background-position:left bottom;background-size:auto 100%;
+  -webkit-mask-image:linear-gradient(90deg,#000 58%,transparent 96%);mask-image:linear-gradient(90deg,#000 58%,transparent 96%)}
+#uiLayers[data-scene="versus"] #lyRival{left:auto;right:-4%;top:auto;bottom:0;width:42%;height:100%;opacity:1;filter:none;background-position:right bottom;-webkit-mask-image:none;mask-image:none}

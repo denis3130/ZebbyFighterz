@@ -215,3 +215,5 @@ function mount(list) {
 }
 // type(el, text) = set a text field's value as a person typing would leave it, then tell the page (input event).
 function type(el, text) { el.value = text; el.dispatchEvent(new Event('input', {bubbles: true})); }
+// navFocusText(t) = give the focus to the focusable element whose text contains t.
+function navFocusText(t) { __VF.navFocus(byText(t)); }

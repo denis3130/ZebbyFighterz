@@ -41,7 +41,7 @@ function cBtn(o) {
   const row = uiEl('div', 'umw'); row.appendChild(b); return row;
 }
 // Menu entry: big serif text; with the focus it grows, turns light gold, gets the orange bar and a brush stroke behind.
-function cItem(o) { return uiFocusable(uiEl('div', 'uitem', (o.locked ? UI_ICON.lock : '') + '<span>' + uiEsc(o.label) + '</span>'), o.act, o.locked, o.note); }
+function cItem(o) { const e = uiFocusable(uiEl('div', 'uitem', (o.locked ? UI_ICON.lock : '') + '<span>' + uiEsc(o.label) + '</span>'), o.act, o.locked, o.note); if (o.act0) e.dataset.act = o.act0; return e; }
 // Card with a picture: italic label at the bottom; with the focus an orange frame, a glow and the picture zooms a little.
 function cCard(o) {
   const c = uiEl('div', 'ucard', '<i class="ucardImg"' + (o.img ? ' style="background-image:url(' + o.img + ')"' : '') + '></i>' +

@@ -1,8 +1,7 @@
 // The game cycle around the fight, on the interface navigation (u1_nav.js): pause, end of a match, "gira il telefono",
 // full screen, auto-pause and the FPS counter (pause menu "FPS: Sì / No", or ?fps=1). Reads the sim, never changes it
 // (except the training dummy's mode, chosen in the pause menu).
-// Until the real main menu and results screens (Interface U1 Tasks 8 and 11), 'menu' is the old title's two choices and
-// 'results' the old end screen, ported to the new navigation.
+// Until the real results screen (Interface U1 Task 11), 'results' is the old end screen ported to the new navigation.
 const MN = {rot: false, fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
 
 function mnEl(id) { return document.getElementById(id); }
@@ -27,7 +26,7 @@ function menuSync() {
 const menu = {
   pause() { if (G.state !== 'fight') return; G.state = 'pause'; navReset('pause'); menuSync(); },
   resume() { if (G.state !== 'pause' || MN.rot) return; inputMaskHeld(); G.state = 'fight'; G.last = null; menuSync(); },
-  restart() { if (!G.S) return; inputMaskHeld(); startMatch(G.mode, {seed: mnSeed(), dummy: G.S.dummy}); },
+  restart() { if (!G.S) return; inputMaskHeld(); startMatch(G.mode, Object.assign({}, G.opts, {seed: mnSeed(), dummy: G.S.dummy})); },
   toTitle() { G.state = 'title'; G.S = null; navReset('menu'); menuSync(); },
 };
 // The match is over (the sim reached phase 'end'): the end screen with the winner.
@@ -41,10 +40,11 @@ function mnFullscreen() {
   const lock = () => { try { const p = screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'); if (p && p.catch) p.catch(() => {}); } catch (_) {} };
   try { const el = document.documentElement, r = el.requestFullscreen && el.requestFullscreen(); if (r && r.then) r.then(lock, lock); else lock(); } catch (_) { lock(); }
 }
-function mnStart(mode, dev) {
-  inputAssign(mode, dev);   // whoever confirms is G1
+// A match from the menus: whoever confirms is G1 (dev); opts = {rounds, timeS, chars} from the versus options.
+function mnStart(mode, dev, opts) {
+  inputAssign(mode, dev);
   inputMaskHeld();
-  startMatch(mode, {seed: mnSeed(), dummy: 'fermo'});
+  startMatch(mode, Object.assign({seed: mnSeed(), dummy: 'fermo'}, opts));
 }
 // Kept names (the real loop and the tests call them): confirm, move, back, controller polling.
 function menuPress(dev) { navPress(dev || 'kb'); }
@@ -89,10 +89,6 @@ function mnColumn(r, head, btns, fn) {
   r.appendChild(col);
 }
 function menuScreens() {
-  navRegister({id: 'menu', scene: 'menu', layers: () => ({hero: SV.lastChar || 'ren'}), build(r) {
-    mnColumn(r, cLogo('l'), [{label: '1 Giocatore · Allenamento', act0: 'train'}, {label: '2 Giocatori', act0: 'vs'}],
-      (a, dev) => { if (dev === 'touch') mnFullscreen(); mnStart(a === 'train' ? 'training' : 'versus', dev); });
-  }});
   navRegister({id: 'pause', build(r) {
     mnColumn(r, cHead('Pausa'), [{label: 'Riprendi', act0: 'resume'}, {label: 'Ricomincia', act0: 'restart'},
       {label: 'Avversario: Fermo', act0: 'opp', id: 'bOpp', txId: 'oppTx'}, {label: 'FPS: No', act0: 'fps', id: 'bFps', txId: 'fpsTx'}, {label: 'Abbandona', act0: 'quit'}], a => {
@@ -107,13 +103,14 @@ function menuScreens() {
     const h = cHead(''); h.querySelector('.uheadT').id = 'endTitle';
     mnColumn(r, h, [{label: 'Rivincita', act0: 'rematch'}, {label: 'Menu', act0: 'menu'}], a => { if (a === 'rematch') menu.restart(); else menu.toTitle(); });
   }, enter(p) { mnEl('endTitle').textContent = p.title || ''; }, back() { menu.toTitle(); return false; }});
-  for (const id of ['menu', 'pause', 'results']) navRootOf(NAV.screens[id]);   // built now: the FPS label and the opponent button exist from the start
+  for (const id of ['pause', 'results']) navRootOf(NAV.screens[id]);   // built now: the FPS label and the opponent button exist from the start
 }
 function menuInit() {
   navInit();
   layersInit();
   menuScreens();
   introScreens();
+  playScreens();
   uiTap(mnEl('tPause'), menu.pause);
   window.addEventListener('resize', menuOrient);
   window.addEventListener('orientationchange', menuOrient);

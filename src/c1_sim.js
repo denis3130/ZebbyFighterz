@@ -17,13 +17,16 @@ function newFighter(side, char) {
     hit: 0, inv: 0, hold: [0, 0], prev: 0, tap: {dir: 0, f: 0}, buf: {cmd: null, left: 0}, sj: false, land: 0, mute: 0};
 }
 
-// opts = {seed, mode: 'versus'|'training', chars: [c0, c1], dummy: 'fermo'|'casuale'}.
-// Starts in the round-1 'intro'. timer = frames left in the round (-1 = none, in training); pf = frames in the
+// opts = {seed, mode: 'versus'|'training', chars: [c0, c1], dummy: 'fermo'|'casuale', rounds, timeS}.
+// Starts in the round-1 'intro'. timer = frames left in the round (-1 = none: training, or timeS 0); pf = frames in the
 // phase; dum = the training dummy's state (c3_dummy.js); rf = frames each fighter has been out of a combo (training refill).
+// The match options chosen in the menus live in the state (integers, so the sim stays deterministic): need = rounds to
+// win (rounds 1 / 3 / 5 -> 1 / 2 / 3, default CFG.round.wins), timeS = seconds per round (0 = no timer, default CFG.round.timerS).
 function simCreate(o) {
   const chars = o.chars || ['ren', 'kael'], training = o.mode === 'training';
-  return {frame: 0, rng: o.seed | 0, mode: o.mode || 'versus', phase: 'intro', pf: 0, round: 1,
-    timer: training ? -1 : CFG.round.timerS * 60, rf: [0, 0],
+  const need = o.rounds ? (o.rounds + 1) >> 1 : CFG.round.wins, timeS = o.timeS === undefined ? CFG.round.timerS : o.timeS | 0;
+  return {frame: 0, rng: o.seed | 0, mode: o.mode || 'versus', phase: 'intro', pf: 0, round: 1, need, timeS,
+    timer: training || !timeS ? -1 : timeS * 60, rf: [0, 0],
     wins: [0, 0], winner: -1, stop: 0, sides: [0, 1].map(i => ({team: [newFighter(i, chars[i])], cur: 0})),
     proj: [], ev: [], dummy: o.dummy || 'fermo', dum: [{act: null, left: 0}, {act: null, left: 0}]};
 }
@@ -352,12 +355,12 @@ function scoreRound(S, fs) {
   const d = fs[0].hp - fs[1].hp;
   if (d) { const w = d > 0 ? 0 : 1; S.wins[w]++; simEmit(S, 'win', fs[w]); }
   else { S.wins[0]++; S.wins[1]++; simEmit(S, 'draw', fs[0]); }
-  const w0 = S.wins[0] >= CFG.round.wins, w1 = S.wins[1] >= CFG.round.wins;
+  const w0 = S.wins[0] >= S.need, w1 = S.wins[1] >= S.need;
   S.pf = 0;
   if (w0 || w1) { S.phase = 'end'; S.winner = w0 && w1 ? 2 : w0 ? 0 : 1; return; }
   for (const side of S.sides) { const old = side.team[side.cur]; side.team[side.cur] = Object.assign(newFighter(old.side, old.char), {meter: old.meter}); }
   S.round++; S.phase = 'intro'; S.stop = 0;
-  S.timer = S.mode === 'training' ? -1 : CFG.round.timerS * 60;
+  S.timer = S.mode === 'training' || !S.timeS ? -1 : S.timeS * 60;
 }
 
 // One frame. Input first: clean buttons and hold counters, then the 'charge' event. In hitstop (S.stop > 0) nothing
