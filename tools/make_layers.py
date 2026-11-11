@@ -24,6 +24,7 @@ SRC = os.path.join(ROOT, 'docs', 'ref', 'sfondo-cascata.png')
 OUT = os.path.join(ROOT, 'assets', 'arena')
 W0, H0 = 1672, 941
 PAD_X, PAD_TOP, PAD_BOTTOM = .25, .3, .45
+SEAM = 140   # px of crossfade where the painting's far edge wraps round
 CLIFFS_W, SKY_W, QUALITY, MAX_KB = 2048, 1024, 82, 700
 FLOOR_Y = 725   # the painted floor starts here (the terrace is 3D now)
 # Foreground taken out (painting px): the column with its banner (filled mirrored), the lantern and the front grass
@@ -111,9 +112,16 @@ def mirror_fill(rgb, poly):
 
 
 def widen(a, top, bottom):
-    """a (H, W, C) mirrored PAD_X of its width out on both sides, plus `top` and `bottom` empty rows."""
+    """a (H, W, C) widened by PAD_X of its width on both sides with the far edge of the painting (the right cliff goes
+    on left of the left one, and back), crossfaded over SEAM px so no edge or mirror shows; plus `top` and `bottom`
+    empty rows."""
     px = round(W0 * PAD_X)
-    a = np.concatenate([a[:, px - 1::-1], a, a[:, :-px - 1:-1]], 1)
+    left, right = a[:, -px - SEAM:].copy(), a[:, :px + SEAM].copy()
+    w = np.linspace(0, 1, SEAM)[None, :, None]
+    mid = a.copy()
+    mid[:, :SEAM] = left[:, -SEAM:] * (1 - w) + a[:, :SEAM] * w            # wrapped right edge fades into the left edge
+    mid[:, -SEAM:] = a[:, -SEAM:] * (1 - w) + right[:, :SEAM] * w           # ... and the left edge into the right one
+    a = np.concatenate([left[:, :px], mid, right[:, SEAM:SEAM + px]], 1)
     return np.concatenate([np.zeros((top,) + a.shape[1:]), a, np.zeros((bottom,) + a.shape[1:])], 0)
 
 

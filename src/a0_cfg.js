@@ -52,12 +52,35 @@ const CFG={
   // fit with marginX each side and the highest head with marginTop above it; the ground always sits at footScreen of
   // the screen height; smooth = share of the gap closed per drawn frame; xMax = limit of the camera's x.
   cam:{fov:30, dist0:6.5, distMax:9.6, footScreen:.86, marginX:1.0, marginTop:.35, smooth:.15, xMax:3.0},
-  // Painted backdrop: footRow = image row (share of its height) where the feet stand; cover = times the smallest scale
-  // that fills the screen; parX = image widths of shift per metre of camera x; zoomPar = exponent of the zoom with
-  // the camera distance; contrast/lift = colour grade; flow/streak/wobble = the waterfall's flow speed, streak
-  // strength and shimmer; leaves = number of drifting leaves. footRow and cover keep the waterfall's crest and the
-  // temple on top (image rows 213-255) in view, with some sky, on 20:9 phones; footRow stays on the painted floor.
-  arena:{footRow:.83, cover:1.1, parX:.012, zoomPar:.3, contrast:.9, lift:.03, flow:.35, streak:.22, wobble:.002, leaves:10},
+  // 3D arena (graphics only, metres, d_arena.js). arenaOn = the arena drawn; arenas.<name>:
+  //  ref = the flat backdrop it replaces, placed as before (footRow = painting row share under the feet, cover) on a
+  //   ref screen at the start camera: each far layer shows the painting there, projected to its own depth;
+  //  view = the widest view to cover (aspect, camera x reach and shake, metres);
+  //  layers: z of sky, cliffs and mist; contrast/lift = colour grade; flow/streak/wobble = the waterfall; skyDrift =
+  //   the clouds' sway (share of the painting's width) over skyPeriod s; mist = [painting row of its top, of its
+  //   bottom], opacity, drift (u per s), colour lift;
+  //  terrace = the stone slabs: x half width, z front/back, row depth, slab length range [min, spread], gap, slab
+  //   thickness, lip (back step: depth, height above the slabs), grout = the dark bed under the gaps, line = outline
+  //   width, warm/cool = slab colours (left in the sun, right in the shade), grass = tufts, keep = no grass nearer
+  //   than this to z 0 (the fighters' lane);
+  //  column, banner, lantern, rocks, bushes = the props (x, z, sizes); banner wind = [steady, gust] m/s^2 along +x,
+  //   flutter = its sideways (z) ripple m/s^2;
+  //  leaves = number of drifting leaves.
+  arenaOn:'cascata',
+  arenas:{cascata:{
+    ref:{w:844, h:390, footRow:.83, cover:1.1, img:[1672, 941]},
+    view:{aspect:2.45, xPad:.4},
+    layers:{sky:-70, cliffs:-30, mist:-12},
+    contrast:.92, lift:.03, flow:.35, streak:.22, wobble:.002, skyDrift:.012, skyPeriod:140,
+    mist:{rows:[560, 860], opacity:.55, drift:.004, lift:.12},
+    terrace:{half:14, front:4.2, back:-3.5, row:[1.05, .45], len:[1.3, 1.1], gap:.03, depth:.25, lip:[.4, .09], grout:-.05,
+      line:.01, warm:[0xe0b88e, 0xc99a74], cool:[0xb0a39a, 0x948c8e], grass:46, keep:.7},
+    column:{x:-5.05, z:-2.6, r:.34, h:3.15, pole:{y:2.72, len:1.05}},
+    banner:{w:.78, h:2.3, cols:10, rows:14, color:0xc8372d, wind:[.9, 1.5], flutter:2.2, drag:.975, iters:3},
+    lantern:{x:5.25, z:-2.75, h:1.55},
+    rocks:[[-4.15, -2.35, .32], [-5.9, -2.2, .42], [4.45, -2.5, .28], [6.1, -2.45, .36]],
+    bushes:[[-4.55, -2.95, .55], [5.95, -3.05, .6], [-6.6, -2.9, .5]],
+    leaves:10}},
   // Fighter animation (graphics only): blend = frames over which the pose eases into a new free or movement action;
   // the Meshy fighters ease over model frames (their clips' poses differ more: a mid-stride walk to the wide stance) and
   // ease a strike in over its first strikeIn frames (at most its startup minus 1: the active frames stay exact).

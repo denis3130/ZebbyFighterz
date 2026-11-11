@@ -1,8 +1,10 @@
 cd "$(dirname "$0")"
-FILES="a0_cfg.js c1_sim.js c2_moves.js c3_dummy.js b_input.js d_render.js e_poses.js e_fighter3d.js e_model.js f_fx.js g_hud.js h_menu.js z_main.js"
+FILES="a0_cfg.js c1_sim.js c2_moves.js c3_dummy.js b_input.js d_arena.js d_render.js e_poses.js e_fighter3d.js e_model.js f_fx.js g_hud.js h_menu.js z_main.js"
 # game_w.html = test build (keeps window.__VF); index.html = playable build (no test API)
-python3 build.py game_w.html 1 --assets=viewer_assets $FILES >/dev/null
-python3 build.py index.html 0 --assets=viewer_assets $FILES
+# the flat backdrop (arena/cascata.jpg, cascata_mask.png) is only for the character viewers now: the game draws the 3D arena
+FLAT="--drop=arena/cascata.jpg,arena/cascata_mask.png"
+python3 build.py game_w.html 1 --assets=viewer_assets $FLAT $FILES >/dev/null
+python3 build.py index.html 0 --assets=viewer_assets $FLAT $FILES
 python3 - <<PY
 p="index.html";s=open(p).read();i=s.find("window.__VF={");j=s.find("\nboot();",i)
 assert i>0 and j>i
