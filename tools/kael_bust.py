@@ -14,9 +14,20 @@ sheet's flat palette, piece by piece, and the skin's shadow (Denis chose "Ombre 
   shades (14%, fit on the three views: light from above and the hollows matched their shadows best), crumbs under
   SKIN_SMALL mm2 left out.
 - Palette (PAL): measured on the three views sent to Meshy (docs/ref/personaggi/kael_busto_senza_code_*.png).
+- The arms and the hands (Denis: "ok migliora i disegni sulle braccia e mani"; arms()):
+  * cameras on the three views sent to Meshy (fit_cams: yaw, scale and place where the silhouettes overlap most, 85-92%),
+    and per near arm and view a turn, scale and shift laying the model's upper-arm skin on the drawing's (fit_arms:
+    84-88%; the far arms, half hidden behind the body, are not used); stored in docs/meshy/kael_bust_cams.json (--fit);
+  * on the arms' skin seen by a view, the drawing's lines and shadows (its outline at the silhouette left out); the
+    model's own tattoos stay (the drawing's fell beside them and broke them); Meshy's dark islands in the skin (cloth
+    pieces under ISLE mm2 ringed by skin) skin first;
+  * the right shoulder's tattoo the left one mirrored and laid on the right deltoid (ICP on the skin): Meshy had painted it
+    in fragments; then the shoulders' leftover bits (under LEFT mm2) skin;
+  * the hands (beyond the wrist cuffs, HAND_D): the fingers clean skin, the glove plum with its large shadows black, its
+    edges smoothed, no purple past the cuff.
 
-usage: python3 tools/kael_bust.py IN_30k.glb OUT.glb [--png OUT.png]"""
-import io, os, sys
+usage: python3 tools/kael_bust.py IN_30k.glb OUT.glb [--png OUT.png] [--fit]   (--fit: measure the cameras again into CAMS)"""
+import io, json, os, sys
 import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
@@ -34,6 +45,15 @@ SKIN_T = (120, 182)                    # Meshy's skin lightness: under [0] ink, 
 SKIN_SMALL = 15.                       # mm2: the skin's shadow pieces under this: skin
 SHADE = (0., 60., 1., .144)            # the skin's shadow: light from azimuth [0], elevation [1] (degrees), occlusion's weight [2], its share [3]
 AO_DIRS, AO_RES, AO_EPS = 96, 700, .025   # the occlusion: directions, depth maps' size, self-test (GLB units)
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+VIEWS = {k: os.path.join(ROOT, 'docs', 'ref', 'personaggi', 'kael_busto_senza_code_%s.png' % k) for k in ('fronte', 'destra', 'sinistra')}
+CAMS = os.path.join(ROOT, 'docs', 'meshy', 'kael_bust_cams.json')
+YAWS = {'fronte': (-15, 15), 'destra': (-75, -20), 'sinistra': (20, 75)}   # fit_cams: the yaws tried per view
+BG = (211, 211, 213)
+NEAR_ARMS = (('fronte', -1), ('fronte', 1), ('destra', -1), ('sinistra', 1))   # (view, side): the arms the drawings paint (+1 his left)
+FACE_MIN, VIEW_W, VIS_EPS, EDGE = .3, {'fronte': 1., 'destra': .85, 'sinistra': .85}, .012, 5
+ISLE, LEFT, HAND_D, GLOVE_SMALL = 400., 60., .925, 25.
+ZONE = ((.28, .55), (.38, .78))   # the shoulders: |x|, y (GLB units)
 
 
 def occlusion(P, N, I):
@@ -51,7 +71,155 @@ def occlusion(P, N, I):
     return vis / np.maximum(ws, 1e-9)
 
 
-def main(src, dst, png=None):
+def _ids(P, I, cam):
+    """The triangle drawn at each pixel of a view (orthographic camera cam: yaw, s, cx, by, W, H), and the vertices' place and depth."""
+    t = np.radians(cam['yaw']); uv = np.c_[cam['cx'] + cam['s'] * (P[:, 0] * np.cos(t) - P[:, 2] * np.sin(t)), cam['by'] - cam['s'] * P[:, 1]]
+    dv = P[:, 0] * np.sin(t) + P[:, 2] * np.cos(t); im = Image.new('I', (cam['W'], cam['H']), -1); dr = ImageDraw.Draw(im)
+    for q in np.argsort(dv[I].mean(1)): a, b, c = I[q]; dr.polygon([(uv[a, 0], uv[a, 1]), (uv[b, 0], uv[b, 1]), (uv[c, 0], uv[c, 1])], fill=int(q))
+    return np.asarray(im), uv, dv
+
+
+def fit_cams(P, I):
+    """Per view: the yaw, scale and place where the model's silhouette overlaps the drawing's most."""
+    def mask(uv, W, H):
+        im = Image.new('L', (W, H), 0); dr = ImageDraw.Draw(im)
+        for a, b, c in I: dr.polygon([tuple(uv[a]), tuple(uv[b]), tuple(uv[c])], fill=1)
+        return np.asarray(im).astype(bool)
+    def proj(yaw, s, cx, by):
+        t = np.radians(yaw); return np.c_[cx + s * (P[:, 0] * np.cos(t) - P[:, 2] * np.sin(t)), by - s * P[:, 1]]
+    cams = {}
+    for k, (y0, y1) in YAWS.items():
+        A = np.asarray(Image.open(VIEWS[k]).convert('RGB')).astype(int); F = np.abs(A - BG).max(2) > 14; H, W = F.shape
+        ys, xs = np.nonzero(F); fb = (xs.min(), ys.min(), xs.max(), ys.max())
+        def place(yaw):
+            u = proj(yaw, 1, 0, 0); s = (fb[3] - fb[1]) / np.ptp(u[:, 1]); u = u * s
+            return s, (fb[0] + fb[2]) / 2 - (u[:, 0].min() + u[:, 0].max()) / 2, fb[1] - u[:, 1].min()
+        def iou(yaw, s, cx, by): M = mask(proj(yaw, s, cx, by), W, H); return (M & F).sum() / (M | F).sum()
+        best = None
+        for yaw in range(y0, y1 + 1, 5):
+            s, cx, by = place(yaw); v = iou(yaw, s, cx, by)
+            if best is None or v > best[0]: best = (v, yaw, s, cx, by)
+        v, yaw, s, cx, by = best
+        for step in (2, 1, .5):
+            for _ in range(3):
+                for cand in ((yaw + step, s, cx, by), (yaw - step, s, cx, by), (yaw, s * (1 + .005 * step), cx, by), (yaw, s * (1 - .005 * step), cx, by),
+                             (yaw, s, cx + 2 * step, by), (yaw, s, cx - 2 * step, by), (yaw, s, cx, by + 2 * step), (yaw, s, cx, by - 2 * step)):
+                    vv = iou(*cand)
+                    if vv > v: v, (yaw, s, cx, by) = vv, cand
+        cams[k] = dict(yaw=float(yaw), s=float(s), cx=float(cx), by=float(by), iou=float(v), W=W, H=H)
+        print('camera %-8s yaw %+.1f, overlap %.0f%%' % (k, yaw, 100 * v))
+    return cams
+
+
+def fit_arms(P, I, ks, mat, tat, cams):
+    """Per arm and view: the turn, scale and shift (pixels, about the model arm's centre) laying the model's upper-arm skin on the drawing's."""
+    sk_t = np.bincount(ks, weights=((mat == 0) | tat).astype(float), minlength=len(I)) > .5 * np.bincount(ks, minlength=len(I))
+    C = P[I].mean(1); side = np.sign(C[:, 0]); arm_t = sk_t & (np.abs(C[:, 0]) > .25)
+    def warp(M, a, k, tx, ty, cx, cy):
+        ys, xs = np.nonzero(M); ca, sa = np.cos(np.radians(a)), np.sin(np.radians(a))
+        X = k * (ca * (xs - cx) - sa * (ys - cy)) + cx + tx; Y = k * (sa * (xs - cx) + ca * (ys - cy)) + cy + ty
+        out = np.zeros_like(M); ok = (X >= 0) & (X < M.shape[1] - 1) & (Y >= 0) & (Y < M.shape[0] - 1)
+        out[np.round(Y[ok]).astype(int), np.round(X[ok]).astype(int)] = True
+        return ndimage.binary_closing(out, iterations=1)
+    res = {}
+    for k, cam in cams.items():
+        A = np.asarray(Image.open(VIEWS[k]).convert('RGB')).astype(int); r, g, b = A[..., 0], A[..., 1], A[..., 2]
+        S = ((r > 140) & (r - b > 40)) | ((r > 120) & (r - b > 50) & (g > 80)); ID = _ids(P, I, cam)[0]
+        for sd in (-1, 1):
+            Mm = (ID >= 0) & arm_t[np.maximum(ID, 0)] & (side[np.maximum(ID, 0)] == sd); lab, n = ndimage.label(Mm)
+            if n == 0: continue
+            Mm = lab == np.argmax(np.bincount(lab.ravel())[1:]) + 1
+            if Mm.sum() < 3000: continue
+            lb, nb = ndimage.label(S); ov = np.bincount(lb[Mm], minlength=nb + 1); ov[0] = 0; dm = lb == ov.argmax()
+            yc, xc = np.argwhere(Mm).mean(0); yd, xd = np.argwhere(dm).mean(0)
+            def iou(p): w = warp(Mm, p[0], p[1], p[2], p[3], xc, yc); return (w & dm).sum() / (w | dm).sum()
+            best = (iou((0, 1, xd - xc, yd - yc)), (0., 1., xd - xc, yd - yc))
+            for step in (4., 2., 1., .5):
+                imp = True
+                while imp:
+                    imp = False; p = best[1]
+                    for dp in ((step, 0, 0, 0), (-step, 0, 0, 0), (0, .01 * step, 0, 0), (0, -.01 * step, 0, 0), (0, 0, 2 * step, 0), (0, 0, -2 * step, 0), (0, 0, 0, 2 * step), (0, 0, 0, -2 * step)):
+                        q = tuple(np.add(p, dp)); v = iou(q)
+                        if v > best[0] + 1e-4: best = (v, q); imp = True
+            a, kk, tx, ty = best[1]; res['%s %+d' % (k, sd)] = dict(view=k, side=sd, a=float(a), k=float(kk), tx=float(tx), ty=float(ty), cx=float(xc), cy=float(yc), iou=float(best[0]))
+            print('arm %-8s %s: overlap %.0f%%' % (k, 'his left ' if sd > 0 else 'his right', 100 * best[0]))
+    return res
+
+
+def arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cams, fits, names, cols, ix, jw, okw, ok):
+    """The arms' skin from the drawings, the right tattoo mirrored from the left, the shoulders' leftovers, the hands (see the docstring)."""
+    from scipy.spatial import cKDTree
+    j = jw[:, :KF.KNN - 1]; lab = lab.copy(); mat = mat.copy()
+    sk_t = np.bincount(ks, weights=((mat == 0) | tat).astype(float), minlength=len(I)) > .5 * np.bincount(ks, minlength=len(I))
+    arm_t = sk_t & (np.abs(P[I].mean(1)[:, 0]) > .25)
+    # (Meshy's dark islands in the arms' skin)
+    comp = KF._comps(mat, j, ok); nc = comp.max() + 1; ca = np.bincount(comp, weights=area, minlength=nc)
+    diff = ok & (comp[j] != comp[:, None]); rr = np.repeat(np.arange(len(mat)), j.shape[1])[diff.ravel()]; qq = j[diff]
+    rs = np.bincount(comp[rr], weights=((mat[qq] == 0) | tat[qq]).astype(float), minlength=nc); rn = np.bincount(comp[rr], minlength=nc)
+    cm = np.zeros(nc, np.int64); cm[comp] = mat; ax = np.zeros(nc); np.maximum.at(ax, comp, np.abs(pos[:, 0]))
+    isl_c = (cm == 1) & (ca < ISLE) & (rs > .6 * np.maximum(rn, 1)) & (ax > .25); isl = isl_c[comp]; mat[isl] = 0; lab[isl] = ix['skin']
+    arm_x = arm_t[ks] & ((mat == 0) | tat); sd_x = np.sign(pos[:, 0])
+    best = np.full(len(ks), -1.); newl = np.full(len(ks), -1)
+    for k, cam in cams.items():
+        A = np.asarray(Image.open(VIEWS[k]).convert('RGB')).astype(float)
+        bg = np.abs(A - BG).max(2) <= 14; near_bg = ndimage.binary_dilation(bg, iterations=EDGE)
+        dc = np.abs(A[..., None, :] - cols[None, None]).max(3).argmin(2); dc[dc == ix['black']] = ix['ink']; dc[near_bg & (dc == ix['ink'])] = -2; dc[bg] = -1
+        t = np.radians(cam['yaw']); W, H = cam['W'], cam['H']; ID, uv, dv = _ids(P, I, cam)
+        tp = np.c_[cam['cx'] + cam['s'] * (pos[:, 0] * np.cos(t) - pos[:, 2] * np.sin(t)), cam['by'] - cam['s'] * pos[:, 1]]; td = pos[:, 0] * np.sin(t) + pos[:, 2] * np.cos(t)
+        px = np.clip(np.round(tp[:, 0]).astype(int), 0, W - 1); py = np.clip(np.round(tp[:, 1]).astype(int), 0, H - 1); fid = ID[py, px]; okp = fid >= 0
+        fd = np.full(len(ks), -1e9); f = fid[okp]; Pa, Pb, Pc = uv[I[f, 0]], uv[I[f, 1]], uv[I[f, 2]]; Pp = tp[okp]
+        v0 = Pb - Pa; v1 = Pc - Pa; v2 = Pp - Pa; d00 = (v0 * v0).sum(1); d01 = (v0 * v1).sum(1); d11 = (v1 * v1).sum(1); d20 = (v2 * v0).sum(1); d21 = (v2 * v1).sum(1)
+        den = d00 * d11 - d01 * d01; den[np.abs(den) < 1e-12] = 1e-12; b1 = (d11 * d20 - d01 * d21) / den; b2 = (d00 * d21 - d01 * d20) / den
+        fd[okp] = (1 - b1 - b2) * dv[I[f, 0]] + b1 * dv[I[f, 1]] + b2 * dv[I[f, 2]]
+        vis = okp & ((fid == ks) | (td >= fd - VIS_EPS)); facing = nor @ np.array([np.sin(t), 0, np.cos(t)])
+        for sd in (-1, 1):
+            if (k, sd) not in NEAR_ARMS: continue
+            F = fits['%s %+d' % (k, sd)]; c_, s_ = np.cos(np.radians(F['a'])), np.sin(np.radians(F['a']))
+            sel = arm_x & (sd_x == sd) & vis & (facing > FACE_MIN)
+            X = F['k'] * (c_ * (tp[:, 0] - F['cx']) - s_ * (tp[:, 1] - F['cy'])) + F['cx'] + F['tx']; Y = F['k'] * (s_ * (tp[:, 0] - F['cx']) + c_ * (tp[:, 1] - F['cy'])) + F['cy'] + F['ty']
+            c = dc[np.clip(np.round(Y).astype(int), 0, H - 1), np.clip(np.round(X).astype(int), 0, W - 1)]
+            good = sel & ~tat & np.isin(c, [ix['skin'], ix['skinS'], ix['ink'], ix['purple'], ix['purpleS'], -2])
+            c = np.where((c == -2) | (c == ix['purple']) | (c == ix['purpleS']), ix['skin'], c)
+            w = np.where(good, facing ** 2 * VIEW_W[k], -1.); bet = w > best; best[bet] = w[bet]; newl[bet] = c[bet]
+    got = newl >= 0; lab[got] = newl[got]
+    keep = ~arm_x; lab = KF._mode(lab, j, ok, len(names), keep=keep | (lab == ix['ink']))
+    KF._small(lab, j, ok, area, np.where(arm_x, np.where(lab == ix['ink'], .8, 4.), 0.), keep)
+    print('arms: %d texels from the drawings, %d of dark islands in the skin' % (int(got.sum()), int(isl.sum())))
+    # (the right tattoo: the left one mirrored and laid on the right deltoid)
+    zone = lambda sd: (np.sign(pos[:, 0]) == sd) & (np.abs(pos[:, 0]) > ZONE[0][0]) & (np.abs(pos[:, 0]) < ZONE[0][1]) & (pos[:, 1] > ZONE[1][0]) & (pos[:, 1] < ZONE[1][1])
+    src = np.nonzero(zone(1) & ((mat == 0) | tat))[0]; dst = np.nonzero(zone(-1) & (mat == 0) & ~tat)[0]
+    S = pos[src] * [-1, 1, 1]; Sn = nor[src] * [-1, 1, 1]; Rm = np.eye(3); tv = np.zeros(3); D = pos[dst][::4]; tree = cKDTree(D)
+    for _ in range(40):
+        X = S[::6] @ Rm.T + tv; dd, nn = tree.query(X); kp = dd < np.quantile(dd, .8)
+        A_, B_ = X[kp], D[nn[kp]]; ma, mb = A_.mean(0), B_.mean(0); U, _, Vt = np.linalg.svd((A_ - ma).T @ (B_ - mb)); Ri = (U @ Vt).T
+        if np.linalg.det(Ri) < 0: Vt[-1] *= -1; Ri = (U @ Vt).T
+        Rm = Ri @ Rm; tv = Ri @ tv + (mb - Ri @ ma)
+    Sa = S @ Rm.T + tv; San = Sn @ Rm.T; cand = np.nonzero(zone(-1))[0]; dd, nn = cKDTree(Sa).query(pos[cand]); agree = (nor[cand] * San[nn]).sum(1) > .5
+    src_edge = tat[src] & (lab[src] == ix['purpleS']); old_t = np.nonzero(tat & (np.sign(pos[:, 0]) == -1))[0]
+    dot_ = cKDTree(pos[old_t]).query(pos[cand])[0] if len(old_t) else np.full(len(cand), 9.)
+    may = ((mat[cand] == 0) | tat[cand] | ((mat[cand] == 1) & (dot_ < .035))) & (dd < .012) & agree
+    m_t = tat[src][nn]; c_ = cand[may]; new = np.where(m_t[may], np.where(src_edge[nn][may], ix['purpleS'], ix['purple']), -1)
+    was = tat[c_] | (mat[c_] == 1); lab[c_[new >= 0]] = new[new >= 0]; lab[c_[(new < 0) & was]] = ix['skin']
+    print('right tattoo: the left one mirrored (mean gap %.4f), %d texels' % (dd[may].mean() if may.any() else 0, int((new >= 0).sum())))
+    # (the shoulders' leftovers)
+    skz = (zone(-1) | zone(1)) & ((mat == 0) | tat | (lab == ix['skin']))
+    comp2 = KF._comps(lab, j, ok); ca2 = np.bincount(comp2, weights=area); nc2 = len(ca2); inz = np.zeros(nc2); np.add.at(inz, comp2, skz.astype(float)); cnt2 = np.bincount(comp2, minlength=nc2)
+    lc = np.zeros(nc2, np.int64); lc[comp2] = lab
+    bad = (ca2 < LEFT) & (inz > .5 * cnt2) & np.isin(lc, [ix['purple'], ix['purpleS'], ix['black'], ix['plum'], ix['ink']]); fix = bad[comp2] & skz; lab[fix] = ix['skin']
+    # (the hands)
+    hand = np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6 > HAND_D; hd = np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6
+    m2 = mat.copy(); isk = np.isin(lab, [ix['skin'], ix['skinS'], ix['ink']]); m2[hand & isk] = 0; m2[hand & ~isk & (m2 == 0)] = 1
+    for _ in range(4): m2 = np.where(hand, KF._mode(m2, jw, okw, 3), m2)
+    KF._small(m2, j, ok, area, np.where(hand, 30., 0.), ~hand); m2[hand & (m2 == 2) & (hd > HAND_D + .02)] = 1
+    fing = hand & (m2 == 0); glv = hand & (m2 == 1); cuff = hand & (m2 == 2); lab[fing] = ix['skin']
+    gl = lab.copy(); gl[glv & ~np.isin(lab, [ix['black'], ix['plum']])] = ix['plum']; KF._small(gl, j, ok, area, np.where(glv, GLOVE_SMALL, 0.), ~glv)
+    for _ in range(3): gl = np.where(glv, KF._mode(gl, jw, okw, len(names)), gl)
+    lab[glv] = gl[glv]; lab[cuff & ~np.isin(lab, [ix['purple'], ix['purpleS']])] = ix['purple']
+    print('shoulders: %d leftover bits to skin; hands: %d texels of fingers, %d of glove' % (int(bad.sum()), int(fing.sum()), int(glv.sum())))
+    return lab
+
+
+def main(src, dst, png=None, fit=False):
     m = glbio.read(src); P, N, UV, I = m['pos'], m['nor'], m['uv'], m['idx']
     T = np.asarray(Image.open(io.BytesIO(m['img'])).convert('RGB').resize((TS, TS), Image.LANCZOS)).astype(float)
     ys, xs, ks, bary, pos, nor = texel_table(P, N, UV, I, TS); nor = nor / np.maximum(np.linalg.norm(nor, axis=1, keepdims=True), 1e-9)
@@ -87,6 +255,12 @@ def main(src, dst, png=None):
     for _ in range(2): lab = KF._mode(lab, j, ok, nl, keep=(lab == ix['ink']) | tat)
     KF._small(lab, j, ok, area, np.where(lab == ix['ink'], 1.5, np.where(lab == ix['skinS'], SKIN_SMALL, 10.)), tat)
     print('  '.join('%s %.1f%%' % (n, 100 * (lab == i).mean()) for i, n in enumerate(names)))
+    if fit or not os.path.exists(CAMS):
+        cams = fit_cams(P, I); fits = fit_arms(P, I, ks, mat, tat, cams)
+        json.dump({'_': 'tools/kael_bust.py --fit: the three views\' cameras (orthographic: u = cx + s (x cos yaw - z sin yaw), v = by - s y, GLB units) and per near arm a turn (a, degrees), scale (k) and shift (tx, ty px) about (cx, cy) laying its skin on the drawing\'s',
+                   'cams': cams, 'arms': fits}, open(CAMS, 'w'), indent=1)
+    cj = json.load(open(CAMS)); lab = arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cj['cams'], cj['arms'], names, cols, ix, jw, okw, ok)
+    if os.environ.get('KAEL_BUST_DUMP'): np.savez(os.environ['KAEL_BUST_DUMP'], ys=ys, xs=xs, ks=ks, bary=bary, pos=pos, nor=nor, mat=mat, lab=lab, tat=tat, mey=mey, area=area)
     out = np.zeros((TS, TS, 3)); cov = np.zeros((TS, TS), bool); out[ys, xs] = cols[lab]; cov[ys, xs] = True
     _, (iy, jx) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], jx[~cov]]
     im = Image.fromarray(out.round().astype(np.uint8)); bio = io.BytesIO(); im.save(bio, 'PNG', optimize=True)
@@ -95,7 +269,7 @@ def main(src, dst, png=None):
 
 
 if __name__ == '__main__':
-    av = sys.argv[1:]; png = None
+    av = sys.argv[1:]; png = None; fit = '--fit' in av; av = [a for a in av if a != '--fit']
     if '--png' in av: k = av.index('--png'); png = av[k + 1]; av = av[:k] + av[k + 2:]
     if len(av) != 2: sys.exit(__doc__)
-    main(av[0], av[1], png)
+    main(av[0], av[1], png, fit)

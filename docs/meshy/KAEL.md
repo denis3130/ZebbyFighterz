@@ -526,6 +526,14 @@ il nodo in vita resta di Meshy (Denis: "no il nodo in vita no solo togli meglio 
   bordo scuro, e le ombre della pelle (scelta di Denis, "Ombre sulla pelle") come una luce dall'alto più gli incavi,
   quanto ne ombreggia il disegno (14%). Proiettare le 3 viste sul modello è stato provato e lasciato: coincidono
   all'85-92% e le ombre venivano a pezzi, i bordi sfilacciati. La gonna dietro resta (Denis non l'ha scelta).
+- **Braccia e mani** (Denis: "ok migliora i disegni sulle braccia e mani"; `tools/kael_bust.py`, `arms`, versione
+  `busto_k3.glb`): sulla pelle delle braccia le righe e le ombre dei muscoli dei disegni, ogni braccio adattato alla sua
+  vista (rotazione, scala e spostamento: coincide all'84-88%; le braccia lontane, mezze nascoste, non si usano;
+  misure in `docs/meshy/kael_bust_cams.json`, si rifanno con `--fit`); i tatuaggi restano quelli del modello (quelli del
+  disegno cadevano accanto e li spezzavano); il tatuaggio destro, che Meshy aveva dipinto a pezzi, è il sinistro
+  specchiato e appoggiato sulla spalla destra; le isole scure di Meshy nella pelle e i pezzetti rimasti sulle spalle
+  sono pelle; le mani: dita pelle pulita, guanto viola scuro con le sue ombre nere grandi, bordi lisciati, niente viola
+  oltre il polsino.
 - Prossimi passi: metterlo sulle ossa di Kael al posto del suo busto e delle braccia (come la testa,
   `tools/kael_head.py`), la testa sopra, le gambe di adesso sotto; poi le code della fascia come nastri.
 
