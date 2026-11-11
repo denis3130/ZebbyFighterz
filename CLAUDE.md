@@ -10,10 +10,11 @@ Rispondi sempre a Denis **in italiano**, con messaggi brevi e chiari (spesso usa
 ## Struttura, build e test
 - `src/` contiene i moduli, uniti da `mk.sh` (ordine dei file in `FILES`) tramite `build.py` in `game_w.html` (versione di test, con `window.__VF`) e in `index.html` (versione giocabile, un solo file con le immagini incorporate).
 - Build: `bash mk.sh` (deve stampare `SYNTAX_OK`).
-- Test: `python3 tests/run.py tests/<file>.test.js [--viewport WxH] [--touch] [--mobile] [--seed N]`. File: smoke sim attack guard round input touch render fighter3d feel hud menu orient perf model. L'elenco completo dei comandi è in `docs/HANDOFF.md`, "Build e test".
+- Test: `python3 tests/run.py tests/<file>.test.js [--viewport WxH] [--touch] [--mobile] [--seed N]`. File: smoke sim attack guard round input touch render fighter3d feel hud menu orient perf model arena (l'arena 3D: anche con `--viewport 844x390` e `1280x720`). L'elenco completo dei comandi è in `docs/HANDOFF.md`, "Build e test".
   - Servono `pip install playwright` e un browser Chromium (il runner usa Chrome o Chromium di sistema se c'è).
   - `three.min.js` (r128) è nel repository: i test lo usano al posto del CDN.
 - Leggi per primo `docs/HANDOFF.md`: stato, decisioni e prossimo passo.
+- Arene 3D: `src/d_arena.js`, `CFG.arenas`, strati da `tools/make_layers.py`, inquadrature `tools/arena_shots.py`, tempi `tools/frame_ms.py` (vedi `docs/HANDOFF.md`, "Arene 3D").
 - Lottatori Meshy: `docs/meshy/REN.md` (task, crediti, come rifare il pacchetto `assets/ren/` con `tools/meshy_pack.py`); disegno e pose in `src/e_model.js`, tabella azione → clip in `CFG.clips`. Foglio delle pose: `python3 tools/pose_sheet.py out.png`.
 - Meshy, animazioni: `is_free` del catalogo non vale per la API, ogni azione costa 3 crediti.
 

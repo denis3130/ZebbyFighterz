@@ -4,21 +4,28 @@
 // only: it reads the sim state and never writes it. Metres; the fighters stand at z ~ 0 on y = 0 (the slabs' tops);
 // the camera looks along -z (d_render.js).
 
-// group = the whole arena; layers = {sky, cliffs, mist} meshes; banner = the cloth mesh; leaves = the drifting leaves
-// (d_render.js); waterMat = the cliffs' ShaderMaterial; stats() = {draws, tris} of the arena group.
+// group = the near 3D arena (in the scene); layers = {bg (the far layers' full-screen quad), rects}; banner = the cloth
+// mesh; leaves = the drifting leaves (d_render.js); waterMat = the far layers' ShaderMaterial; stats() = {draws, tris}.
 const ARENA = {group: null, layers: {}, banner: null, leaves: new THREE.Group(), waterMat: null, stats: arStats};
-// Private: def = the arena's CFG entry, seed = render-only generator, cloth = the banner's points.
-const AR = {def: null, seed: 11, cloth: null, last: -1, acc: 0};
+// Private: def = the arena's CFG entry, seed = render-only generator, cloth = the banner's points, bgScene/bgCam = the
+// far layers' own scene and clip-space camera (drawn before the 3D scene).
+const AR = {def: null, seed: 11, cloth: null, last: -1, bgScene: new THREE.Scene(),
+  bgCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)};
 
-const AR_LAYER_VERT = 'varying vec2 vUv;\nvoid main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }';
-// Sky and cliffs. uScale turns layer uv into painting uv (the water's numbers are the flat backdrop's, per painting
-// width/height). SKY: the clouds sway in u (mirrored past the edges). WATER: the mask (uWater) shimmers and scrolls
-// streaks as before; ALPHA: the cliffs' cut-out (uAlpha).
-const AR_LAYER_FRAG = `
-uniform sampler2D uMap, uAlpha, uWater;
-uniform vec2 uScale;
-uniform float uTime, uContrast, uLift, uFlow, uStreak, uWobble, uSkyOff;
-varying vec2 vUv;
+// The far layers in one full-screen pass (no overdraw, no blending): per pixel, the camera ray (the camera looks along
+// -z without pitch: uTan = tan of the half view, x and y) meets each layer's plane at its depth (uZ: sky, cliffs,
+// mist), where the layer's rect (x0, y0, x1, y1, metres) gives its uv. Sky: the clouds sway in u (mirrored past the
+// edges; not read where the cliffs hide it); cliffs over it by their alpha (red of uAW), the waterfall (green of uAW) shimmering and streaking as on the flat backdrop (uScale = layer
+// uv to painting uv); the mist band over both. A ray that meets the ground in front of uCover is under the terrace,
+// drawn over it: it only writes the grout colour.
+const AR_BG_VERT = 'varying vec2 vS;\nvoid main(){ vS = uv; gl_Position = vec4(position.xy, 0., 1.); }';
+const AR_BG_FRAG = `
+uniform sampler2D uSky, uCliffs, uAW, uMist;
+uniform vec3 uCam, uZ, uMistColor, uGround;
+uniform vec2 uTan, uScale;
+uniform vec4 uSkyRect, uCliffRect, uMistRect;
+uniform float uTime, uContrast, uLift, uFlow, uStreak, uWobble, uSkyOff, uMistDrift, uMistOpacity, uMistRep, uCover;
+varying vec2 vS;
 float arHash(vec2 p){ p = 50. * fract(p * .3183099 + vec2(.71, .113)); return fract(p.x * p.y * (p.x + p.y)); }
 float arNoise(vec2 p){
   vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
@@ -26,38 +33,33 @@ float arNoise(vec2 p){
   return mix(mix(arHash(vec2(i.x, y0)), arHash(vec2(i.x + 1., y0)), f.x),
              mix(arHash(vec2(i.x, y1)), arHash(vec2(i.x + 1., y1)), f.x), f.y);
 }
+vec2 arAt(vec3 d, float z, vec4 r){ return (uCam.xy + d.xy * (uCam.z - z) - r.xy) / (r.zw - r.xy); }
 void main(){
-  vec2 uv = vUv;
-#ifdef SKY
-  uv.x = 1. - abs(1. - mod(uv.x + uSkyOff + 2., 2.));
-#endif
-  float a = 1.;
-#ifdef ALPHA
-  a = texture2D(uAlpha, uv).r;
-  if (a < .01) discard;
-#endif
-  vec3 c;
-#ifdef WATER
-  float m = texture2D(uWater, uv).r;
-  vec2 p = uv * uScale;
-  vec2 w = uv + vec2(0., sin(p.x * 90. + mod(uTime * 3., 6.2831853)) * uWobble * m / uScale.y);
-  c = (texture2D(uMap, w).rgb - .5) * uContrast + .5 + uLift;
-  if (m > .004) c += m * (arNoise(vec2(p.x * 140., p.y * 6. + mod(uTime * uFlow * 6., 64.))) - .5) * uStreak;
-#else
-  c = (texture2D(uMap, uv).rgb - .5) * uContrast + .5 + uLift;
-#endif
-  gl_FragColor = vec4(c, a);
-}`;
-// The mist band: alpha from the noise texture (red), drifting in u, in the painting's mist colour.
-const AR_MIST_FRAG = `
-uniform sampler2D uMap;
-uniform vec3 uColor;
-uniform float uTime, uDrift, uOpacity, uRep;
-varying vec2 vUv;
-void main(){
-  float a = texture2D(uMap, vec2(vUv.x * uRep + uTime * uDrift, vUv.y)).r * uOpacity;
-  a *= smoothstep(0., .08, vUv.x) * smoothstep(1., .92, vUv.x);
-  gl_FragColor = vec4(uColor, a);
+  vec3 d = vec3((vS * 2. - 1.) * uTan, -1.);
+  if (d.y < 0. && uCam.z - uCam.y / -d.y > uCover) { gl_FragColor = vec4(uGround, 1.); return; }
+  vec2 uc = arAt(d, uZ.y, uCliffRect);
+  vec2 aw = texture2D(uAW, uc).rg;
+  float a = aw.r;
+  vec3 c = vec3(0.);
+  if (a < .996) {
+    vec2 us = arAt(d, uZ.x, uSkyRect);
+    us.x = 1. - abs(1. - mod(us.x + uSkyOff + 2., 2.));
+    c = texture2D(uSky, us).rgb;
+  }
+  if (a > .004) {
+    float m = aw.g;
+    vec2 p = uc * uScale;
+    vec3 cc = texture2D(uCliffs, uc + vec2(0., sin(p.x * 90. + mod(uTime * 3., 6.2831853)) * uWobble * m / uScale.y)).rgb;
+    if (m > .004) cc += m * (arNoise(vec2(p.x * 140., p.y * 6. + mod(uTime * uFlow * 6., 64.))) - .5) * uStreak / uContrast;
+    c = mix(c, cc, a);
+  }
+  c = (c - .5) * uContrast + .5 + uLift;
+  vec2 um = arAt(d, uZ.z, uMistRect);
+  if (um.y > 0. && um.y < 1.) {
+    float ma = texture2D(uMist, vec2(um.x * uMistRep + mod(uTime * uMistDrift, 1.), um.y)).r * uMistOpacity;
+    c = mix(c, uMistColor, ma * smoothstep(0., .08, um.x) * smoothstep(1., .92, um.x));
+  }
+  gl_FragColor = vec4(c, 1.);
 }`;
 
 // Render-only generator (mulberry32 on AR.seed), so the arena is built the same every time.
@@ -73,20 +75,22 @@ function arenaBuild(def) {
   AR.def = def; AR.seed = 11;
   const g = ARENA.group = new THREE.Group();
   g.name = 'arena';
-  const keys = ['sky.jpg', 'cliffs.jpg', 'cliffs_a.png', 'water.png', 'mist.png'].map(k => 'arena/cascata_' + k);
-  return Promise.all(keys.map(rdTexture)).then(([sky, cliffs, alpha, water, mist]) => {
-    const gl2 = renderer.capabilities.isWebGL2;
-    for (const t of [sky, cliffs, alpha, water]) {   // not powers of two: WebGL1 has no mipmaps for them
-      t.generateMipmaps = gl2; t.minFilter = gl2 ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
-      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  const keys = ['sky.jpg', 'cliffs.jpg', 'cliffs_aw.png', 'mist.png'].map(k => 'arena/cascata_' + k);
+  return Promise.all(keys.map(rdTexture)).then(([sky, cliffs, aw, mist]) => {
+    for (const t of [sky, cliffs, aw]) {   // seen at about their own size: no mipmaps (cheaper, and WebGL1 has none for them)
+      t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     }
     mist.wrapS = THREE.RepeatWrapping;
     f3Shared();
-    arLayers(def, sky, cliffs, alpha, water, mist);
-    arTerrace(def);
-    arProps(def);
+    arLayers(def, sky, cliffs, aw, mist);
+    const M = arMesh();   // terrace, column and props: one mesh and one outline (each draw costs, on phones too)
+    arTerrace(def, M); arProps(def, M);
+    const G = arMesh(); arGrass(def, G);
+    const stone = arStoneTex(); stone.minFilter = THREE.LinearFilter; stone.generateMipmaps = false;   // seen magnified
+    arToon(M, stone, def.terrace.line, 'stone', G);
     scene.add(g);
-    for (const t of [sky, cliffs, alpha, water, mist]) renderer.initTexture(t);
+    for (const t of [sky, cliffs, aw, mist]) renderer.initTexture(t);
+    renderer.compile(AR.bgScene, AR.bgCam);
   });
 }
 
@@ -106,47 +110,40 @@ function arPaintToWorld(def, P, u, v, z) {
   return [((u - P.px) / P.su * 2 - 1) * L * t * asp, y0 + ((v - P.py) / P.sv * 2 - 1) * L * t];
 }
 
-// A plane at depth z covering the layer whose painting box (in layer uv) is box = {u0, u1, v0, v1}.
-function arLayerPlane(def, P, box, z) {
+// The rect (x0, y0, x1, y1, metres) at depth z of the layer whose painting box (in layer uv) is box = {u0, u1, v0, v1}.
+function arLayerRect(def, P, box, z) {
   const pu = U => (U - box.u0) / (box.u1 - box.u0), pv = V => (V - box.v0) / (box.v1 - box.v0);
-  const [x0, y0] = arPaintToWorld(def, P, pu(0), pv(0), z), [x1, y1] = arPaintToWorld(def, P, pu(1), pv(1), z);
-  const geo = new THREE.PlaneGeometry(x1 - x0, y1 - y0);
-  geo.translate((x0 + x1) / 2, (y0 + y1) / 2, z);
-  return {geo, rect: [x0, y0, x1, y1]};
+  return arPaintToWorld(def, P, pu(0), pv(0), z).concat(arPaintToWorld(def, P, pu(1), pv(1), z));
 }
 
-function arLayers(def, sky, cliffs, alpha, water, mist) {
-  const P = arRefPlace(def), meta = ASSETS['arena/cascata_layers.json'], L = def.layers;
-  const base = {uTime: {value: 0}, uContrast: {value: def.contrast}, uLift: {value: def.lift}, uFlow: {value: def.flow},
-    uStreak: {value: def.streak}, uWobble: {value: def.wobble}, uSkyOff: {value: 0}};
-  const scale = b => new THREE.Vector2(1 / (b.u1 - b.u0), 1 / (b.v1 - b.v0));
-  // Sky: opaque, first.
-  const sp = arLayerPlane(def, P, meta.sky, L.sky);
-  const skyMat = new THREE.ShaderMaterial({vertexShader: AR_LAYER_VERT, fragmentShader: AR_LAYER_FRAG, defines: {SKY: 1},
-    depthWrite: false, uniforms: Object.assign({}, base, {uMap: {value: sky}, uScale: {value: scale(meta.sky)}})});
-  // Cliffs: cut out of the sky, with the waterfall; drawn after the opaque scene (transparent), behind everything.
-  const cp = arLayerPlane(def, P, meta.cliffs, L.cliffs);
-  ARENA.waterMat = new THREE.ShaderMaterial({vertexShader: AR_LAYER_VERT, fragmentShader: AR_LAYER_FRAG,
-    defines: {ALPHA: 1, WATER: 1}, transparent: true, depthWrite: false,
-    uniforms: Object.assign({}, base, {uTime: {value: 0}, uMap: {value: cliffs}, uAlpha: {value: alpha},
-      uWater: {value: water}, uScale: {value: scale(meta.cliffs)}})});
-  // Mist: painting rows mist.rows projected at its depth, as wide as the cliffs' plane there.
-  const m = def.mist, [ih] = [def.ref.img[1]];
+function arLayers(def, sky, cliffs, aw, mist) {
+  const P = arRefPlace(def), meta = ASSETS['arena/cascata_layers.json'], L = def.layers, m = def.mist, ih = def.ref.img[1];
+  const sr = arLayerRect(def, P, meta.sky, L.sky), cr = arLayerRect(def, P, meta.cliffs, L.cliffs);
+  // Mist: painting rows mist.rows projected at its depth, as wide as the cliffs' rect there.
   const [, ytop] = arPaintToWorld(def, P, .5, 1 - m.rows[0] / ih, L.mist), [, ybot] = arPaintToWorld(def, P, .5, 1 - m.rows[1] / ih, L.mist);
-  const k = (CFG.cam.distMax - L.mist) / (CFG.cam.distMax - L.cliffs), mw = (cp.rect[2] - cp.rect[0]) * k;
-  const mgeo = new THREE.PlaneGeometry(mw, ytop - ybot);
-  mgeo.translate(0, (ytop + ybot) / 2, L.mist);
+  const mw = (cr[2] - cr[0]) * (CFG.cam.distMax - L.mist) / (CFG.cam.distMax - L.cliffs), mr = [-mw / 2, ybot, mw / 2, ytop];
   const mc = new THREE.Color().fromArray(meta.mistColor);
   mc.r = Math.min(1, mc.r + m.lift); mc.g = Math.min(1, mc.g + m.lift); mc.b = Math.min(1, mc.b + m.lift);
-  const mistMat = new THREE.ShaderMaterial({vertexShader: AR_LAYER_VERT, fragmentShader: AR_MIST_FRAG, transparent: true,
-    depthWrite: false, uniforms: {uMap: {value: mist}, uColor: {value: mc}, uTime: {value: 0}, uDrift: {value: m.drift},
-      uOpacity: {value: m.opacity}, uRep: {value: Math.max(1, Math.round(mw / 30))}}});
-  const add = (name, geo, mat, order) => {
-    const me = new THREE.Mesh(geo, mat); me.name = name; me.renderOrder = order; me.frustumCulled = false;
-    ARENA.layers[name] = me; ARENA.group.add(me);
-  };
-  add('sky', sp.geo, skyMat, -3); add('cliffs', cp.geo, ARENA.waterMat, -2); add('mist', mgeo, mistMat, -1);
-  ARENA.layers.rects = {sky: sp.rect, cliffs: cp.rect};
+  const T = def.terrace, v4 = r => new THREE.Vector4(...r), U = v => ({value: v});
+  ARENA.waterMat = new THREE.ShaderMaterial({vertexShader: AR_BG_VERT, fragmentShader: AR_BG_FRAG, depthTest: false,
+    depthWrite: false, uniforms: {uSky: U(sky), uCliffs: U(cliffs), uAW: U(aw), uMist: U(mist),
+      uCam: U(new THREE.Vector3()), uTan: U(new THREE.Vector2()), uZ: U(new THREE.Vector3(L.sky, L.cliffs, L.mist)),
+      uSkyRect: U(v4(sr)), uCliffRect: U(v4(cr)), uMistRect: U(v4(mr)),
+      uScale: U(new THREE.Vector2(1 / (meta.cliffs.u1 - meta.cliffs.u0), 1 / (meta.cliffs.v1 - meta.cliffs.v0))),
+      uTime: U(0), uContrast: U(def.contrast), uLift: U(def.lift), uFlow: U(def.flow), uStreak: U(def.streak),
+      uWobble: U(def.wobble), uSkyOff: U(0), uMistColor: U(mc), uMistDrift: U(m.drift), uMistOpacity: U(m.opacity),
+      uMistRep: U(Math.max(1, Math.round(mw / 30))), uCover: U(T.back - T.lip[0] + .05), uGround: U(new THREE.Color(0x4a3f3a))}});
+  const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ARENA.waterMat);
+  bg.frustumCulled = false; bg.name = 'far';
+  AR.bgScene.add(bg);
+  ARENA.layers = {bg, rects: {sky: sr, cliffs: cr, mist: mr}};
+}
+
+// Draws the far layers through the camera as it is now (with any shake), before the 3D scene.
+function arenaDrawBack() {
+  const u = ARENA.waterMat.uniforms, t = Math.tan(camera.fov * Math.PI / 360);
+  u.uCam.value.copy(camera.position); u.uTan.value.set(t * camera.aspect, t);
+  renderer.render(AR.bgScene, AR.bgCam);
 }
 
 // --- Geometry helpers ---
@@ -191,13 +188,35 @@ function arAppend(M, geo, mx, col, colFn) {
   if (g.index) for (let i = 0; i < g.index.count; i++) M.i.push(o + g.index.getX(i));
   else for (let i = 0; i < p.count; i++) M.i.push(o + i);
 }
-// A toon mesh and its outline shell (width w) from M, added to the arena.
-function arToon(M, map, w, name) {
-  const geo = arGeo(M), mat = new THREE.MeshToonMaterial({map, vertexColors: true, gradientMap: F3.grad});
-  const mesh = new THREE.Mesh(geo, mat); mesh.name = name; ARENA.group.add(mesh);
-  if (w > 0) {
+// The fighters' toon light (f3Lights: the sun through the 3-band gradient F3.grad, plus the sky/stone hemisphere)
+// for normal n, as an RGB factor. The arena's pieces do not move, so it is baked into their vertex colours once
+// (same look as MeshToonMaterial, without per-pixel lighting).
+const AR_SUN = new THREE.Vector3(-4, 6, 5).normalize(), AR_SUN_C = new THREE.Color(0xfff2dc).multiplyScalar(.75);
+const AR_SKY = new THREE.Color(0xdcecff), AR_GROUND = new THREE.Color(0x6b5a4a), AR_BANDS = [90 / 255, 170 / 255, 1];
+function arLight(nx, ny, nz) {
+  const g = Math.min(2, Math.floor((Math.max(-1, nx * AR_SUN.x + ny * AR_SUN.y + nz * AR_SUN.z) * .5 + .5) * 3));
+  const w = ny * .5 + .5, b = AR_BANDS[g];
+  return [AR_SUN_C.r * b + (AR_GROUND.r + (AR_SKY.r - AR_GROUND.r) * w) * .5,
+    AR_SUN_C.g * b + (AR_GROUND.g + (AR_SKY.g - AR_GROUND.g) * w) * .5,
+    AR_SUN_C.b * b + (AR_GROUND.b + (AR_SKY.b - AR_GROUND.b) * w) * .5];
+}
+// A mesh with the toon light baked in, and the outline shell (width w) of M; G (optional) joins the mesh without an
+// outline (the grass blades).
+function arToon(M, map, w, name, G) {
+  for (const X of G ? [M, G] : [M]) for (let i = 0; i < X.c.length; i += 3) {
+    const L = arLight(X.n[i], X.n[i + 1], X.n[i + 2]);
+    X.c[i] *= L[0]; X.c[i + 1] *= L[1]; X.c[i + 2] *= L[2];
+  }
+  const line = w > 0 ? f3OutlineGeo(arGeo(M)) : null;
+  if (G) {
+    const o = M.p.length / 3;
+    M.p.push(...G.p); M.n.push(...G.n); M.uv.push(...G.uv); M.c.push(...G.c); for (const i of G.i) M.i.push(o + i);
+  }
+  const mesh = new THREE.Mesh(arGeo(M), new THREE.MeshBasicMaterial({map, vertexColors: true}));
+  mesh.name = name; ARENA.group.add(mesh);
+  if (line) {
     const om = F3.outMat.clone(); om.uniforms.uW.value = w;
-    const out = new THREE.Mesh(f3OutlineGeo(geo), om); out.name = name + '.line'; ARENA.group.add(out);
+    const out = new THREE.Mesh(line, om); out.name = name + '.line'; ARENA.group.add(out);
   }
   return mesh;
 }
@@ -230,8 +249,8 @@ function arStoneTex() {
 // --- Terrace ---
 // Rows of slabs from the front (z = front) to the back (z = back), staggered, tops at y = 0, the dark grout bed under
 // the gaps, the back step (lip) and its drop; one mesh and one outline. Colours: warm (sun) on the left, cool on the right.
-function arTerrace(def) {
-  const T = def.terrace, M = arMesh(), warm = T.warm.map(c => new THREE.Color(c)), cool = T.cool.map(c => new THREE.Color(c));
+function arTerrace(def, M) {
+  const T = def.terrace, warm = T.warm.map(c => new THREE.Color(c)), cool = T.cool.map(c => new THREE.Color(c));
   const col = new THREE.Color(), tmp = new THREE.Color();
   AR.rows = [];
   for (let zf = T.front; zf > T.back + .01;) {
@@ -259,55 +278,41 @@ function arTerrace(def) {
       col.copy(lip).multiplyScalar(.9 + arRand() * .14), .55);
     x += L;
   }
-  arToon(M, arStoneTex(), T.line, 'terrace');
-  arGrass(def);
 }
 
-// Grass tufts: two crossed quads per tuft, one instanced mesh; in the gaps between rows (never in the fighters'
-// lane), along the lip and round the props' feet.
-function arGrass(def) {
-  const T = def.terrace, tex = arCanvas(128, (g, n, r) => {
-    g.clearRect(0, 0, n, n);
-    for (let i = 0; i < 26; i++) {   // thin blades fanning out of one root, dark at the root, light at the tips
-      const x = n * (.42 + (r() - .5) * .25), a = (r() - .5) * 1.5, h = n * (.35 + r() * .6);
-      const tx = x + Math.sin(a) * h, ty = n - Math.cos(a) * h, gr = g.createLinearGradient(0, n, 0, ty);
-      gr.addColorStop(0, '#3f6a24'); gr.addColorStop(.55, i % 4 ? '#79a83a' : '#94b842'); gr.addColorStop(1, '#c8d66a');
-      g.fillStyle = gr; g.beginPath(); g.moveTo(x - 2.2, n); g.quadraticCurveTo(x + (tx - x) * .4, n - h * .55, tx, ty);
-      g.quadraticCurveTo(x + (tx - x) * .4 + 1, n - h * .5, x + 2.2, n); g.fill();
-    }
-  });
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  const geo = new THREE.BufferGeometry(), p = [], uv = [], idx = [];
-  for (const a of [0, Math.PI / 2]) {
-    const c = Math.cos(a) / 2, s = Math.sin(a) / 2, o = p.length / 3;
-    p.push(-c, 0, -s, c, 0, s, c, 1, s, -c, 1, -s); uv.push(0, 0, 1, 0, 1, 1, 0, 1); idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
-  }
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setIndex(idx);
-  const spots = [];
-  const rows = AR.rows;
+// Grass tufts as blades of real geometry (thin triangles, dark at the root and light at the tip, both windings so
+// they show from either side) in G: no texture, no transparency (cheap to draw, on phones too). In the gaps between
+// rows (never in the fighters' lane), along the lip, round the rocks and props, and dense clumps for the bushes.
+function arGrass(def, G) {
+  const T = def.terrace, spots = [], rows = AR.rows;
   for (let i = 0; i < T.grass; i++) {
     const z = rows[Math.floor(arRand() * rows.length)];
     if (Math.abs(z) < T.keep) continue;
-    spots.push([(arRand() * 2 - 1) * (T.half - .5), z, .12 + arRand() * .14]);
+    spots.push([(arRand() * 2 - 1) * (T.half - .5), z, .12 + arRand() * .14, 7]);
   }
-  for (let x = -T.half + .3; x < T.half; x += .35 + arRand() * .9) spots.push([x, T.back - T.lip[0] * .5, .22 + arRand() * .25]);
+  for (let x = -T.half + .3; x < T.half; x += .35 + arRand() * .9) spots.push([x, T.back - T.lip[0] * .5, .22 + arRand() * .25, 7]);
   for (const [x, z, r] of def.rocks) for (let k = 0; k < 4; k++)
-    spots.push([x + (arRand() - .5) * r * 3, z + .2 + arRand() * .4, .2 + arRand() * .2]);
-  for (const [x, z, r] of def.bushes) for (let k = 0; k < 9; k++)   // bushes: dense clumps of tall tufts
-    spots.push([x + (arRand() - .5) * r * 1.6, z + (arRand() - .5) * r * .6, r * (.55 + arRand() * .45)]);
-  spots.push(...[0, 1, 2, 3, 4].map(() => [def.column.x + (arRand() - .5) * 1.2, def.column.z + .35 + arRand() * .3, .25 + arRand() * .2]));
-  spots.push(...[0, 1, 2].map(() => [def.lantern.x + (arRand() - .5) * 1, def.lantern.z + .3 + arRand() * .3, .22 + arRand() * .18]));
-  const mat = new THREE.MeshBasicMaterial({map: tex, alphaTest: .5, side: THREE.DoubleSide});
-  const im = new THREE.InstancedMesh(geo, mat, spots.length), mx = new THREE.Matrix4(), q = new THREE.Quaternion();
-  const c = new THREE.Color(), e = new THREE.Euler();
-  spots.forEach(([x, z, s], i) => {
-    e.set(0, arRand() * Math.PI, 0); q.setFromEuler(e);
-    mx.compose(new THREE.Vector3(x, z < T.back - .05 ? T.lip[1] * .8 : 0, z), q, new THREE.Vector3(s * 1.6, s, s * 1.6));
-    im.setMatrixAt(i, mx);
-    const b = .78 + arRand() * .22; c.setRGB(b, b * (.95 + arRand() * .08), b * .85); im.setColorAt(i, c);
-  });
-  im.name = 'grass'; ARENA.group.add(im);
+    spots.push([x + (arRand() - .5) * r * 3, z + .2 + arRand() * .4, .2 + arRand() * .2, 7]);
+  for (const [x, z, r] of def.bushes) for (let k = 0; k < 9; k++)
+    spots.push([x + (arRand() - .5) * r * 1.6, z + (arRand() - .5) * r * .6, r * (.55 + arRand() * .45), 10]);
+  for (let k = 0; k < 5; k++) spots.push([def.column.x + (arRand() - .5) * 1.2, def.column.z + .35 + arRand() * .3, .25 + arRand() * .2, 8]);
+  for (let k = 0; k < 3; k++) spots.push([def.lantern.x + (arRand() - .5) * 1, def.lantern.z + .3 + arRand() * .3, .22 + arRand() * .18, 8]);
+  const root = new THREE.Color(0x3f6a24), tips = [0x79a83a, 0x94b842, 0xc8d66a].map(c => new THREE.Color(c)), up = [0, 1, 0];
+  const tip = new THREE.Color(), base = new THREE.Color();
+  for (const [x, z, s, n] of spots) {
+    const y = z < T.back - .05 ? T.lip[1] * .8 : 0, b = .8 + arRand() * .2;
+    for (let k = 0; k < n; k++) {
+      const rx = x + (arRand() - .5) * s * .5, rz = z + (arRand() - .5) * s * .3, a = (arRand() - .5) * 1.4, yaw = arRand() * 6.283;
+      const h = s * (.45 + arRand() * .6), w = s * (.05 + arRand() * .03);
+      const tx = rx + Math.sin(a) * Math.cos(yaw) * h, ty = y + Math.cos(a) * h, tz = rz + Math.sin(a) * Math.sin(yaw) * h * .4;
+      base.copy(root).multiplyScalar(b); tip.copy(tips[Math.floor(arRand() * 3)]).multiplyScalar(b);
+      const o = G.p.length / 3;
+      G.p.push(rx - w, y, rz, rx + w, y, rz, tx, ty, tz);
+      for (let v = 0; v < 3; v++) { G.n.push(...up); G.uv.push(.5, .5); }
+      G.c.push(base.r, base.g, base.b, base.r, base.g, base.b, tip.r, tip.g, tip.b);
+      G.i.push(o, o + 1, o + 2, o, o + 2, o + 1);
+    }
+  }
 }
 
 // --- Props ---
@@ -316,30 +321,27 @@ function arJit(x, y, z, k) {
   const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + k * 19.3) * 43758.5453;
   return (h - Math.floor(h)) * 2 - 1;
 }
-// Stone with ivy for the column: joints every ~0.5 m, ivy leaves climbing up from the foot (u wraps round).
-function arColumnTex() {
-  return arCanvas(256, (g, n, r) => {
-    g.fillStyle = '#ece8e0'; g.fillRect(0, 0, n, n);
-    for (let i = 0; i < 160; i++) { g.fillStyle = 'hsla(35,10%,' + (68 + r() * 26).toFixed(0) + '%,.25)'; g.beginPath(); g.arc(r() * n, r() * n, 3 + r() * 14, 0, 6.283); g.fill(); }
-    g.strokeStyle = 'rgba(80,70,64,.55)'; g.lineWidth = 1.5;
-    for (let y = n * .12; y < n; y += n * .16) { g.beginPath(); g.moveTo(0, y + r() * 3); g.lineTo(n, y + r() * 3); g.stroke(); }
-    for (let v = 0; v < 6; v++) {   // vines: from the bottom (canvas y = n) up, thinning out
-      let x = r() * n, y = n; const top = n * (.15 + r() * .5);
-      while (y > top) {
-        const leaves = 1 + Math.round(r() * 2 * (y / n));
-        for (let k = 0; k < leaves; k++) {
-          const lx = x + (r() - .5) * 18, ly = y + (r() - .5) * 10, s = 4 + r() * 5;
-          g.fillStyle = ['#4f7f2a', '#6f9e34', '#9cc048', '#3d6522'][Math.floor(r() * 4)];
-          g.beginPath(); g.ellipse(lx, ly, s, s * .6, r() * 3, 0, 6.283); g.fill();
-        }
-        x += (r() - .5) * 14; y -= 6 + r() * 6;
+// Ivy on the column: a few vines climbing from the foot, small leaves (diamonds facing out of the shaft) in four greens.
+function arIvy(def, M, shaftH) {
+  const C = def.column, greens = [0x4f7f2a, 0x6f9e34, 0x9cc048, 0x3d6522].map(c => new THREE.Color(c)), R = C.r * 1.03 + .012;
+  for (let v = 0; v < 6; v++) {
+    let a = arRand() * 6.283, y = .4;
+    const top = .36 + shaftH * (.35 + arRand() * .55);
+    while (y < top) {
+      const n = 1 + Math.round(arRand() * 2 * (1 - y / (top + .3)));
+      for (let k = 0; k < n; k++) {
+        const b = a + (arRand() - .5) * .35, h = y + (arRand() - .5) * .06, s = .045 + arRand() * .035;
+        const nx = Math.sin(b), nz = Math.cos(b), cx = C.x + R * nx, cz = C.z + R * nz, tx = nz * s * .75, tz = -nx * s * .75;
+        arQuad(M, [cx, h - s, cz], [cx + tx, h, cz + tz], [cx, h + s, cz], [cx - tx, h, cz - tz], [nx, 0, nz],
+          [[.5, 0], [1, .5], [.5, 1], [0, .5]], greens[Math.floor(arRand() * 4)]);
       }
+      a += (arRand() - .5) * .5; y += .06 + arRand() * .05;
     }
-  });
+  }
 }
 
-function arProps(def) {
-  const C = def.column, M = arMesh(), white = new THREE.Color(0xd6cdbf), stoneC = new THREE.Color(0xcbc1b2), mx = new THREE.Matrix4();
+function arProps(def, M) {
+  const C = def.column, white = new THREE.Color(0xd6cdbf), stoneC = new THREE.Color(0xcbc1b2), mx = new THREE.Matrix4();
   // Column: base, shaft, capital, broken stub with a jagged top.
   const box = (w, h, d, x, y, z, ry) => { const g = new THREE.BoxGeometry(w, h, d); mx.makeRotationY(ry || 0).setPosition(x, y, z); return g; };
   arAppend(M, box(.98, .2, .98, C.x, .1, C.z), mx, white);
@@ -356,10 +358,10 @@ function arProps(def) {
   };
   chunk(.62, .34, .7, C.x - .1, .36 + shaftH + .47, C.z, 0, .3, .07);
   chunk(.3, .26, .36, C.x + .2, .36 + shaftH + .42, C.z + .1, .1, -.4, -.25);
-  arToon(M, arColumnTex(), .014, 'column');
+  arIvy(def, M, shaftH);
 
-  // Pole (bronze), lantern, rocks and bushes: one mesh, stone texture tinted per vertex.
-  const P = arMesh(), bronze = new THREE.Color(0x8a6a3c), pole = C.pole, px0 = C.x + C.r * .6, pz = C.z + .12;
+  // Pole (bronze), lantern, rocks.
+  const P = M, bronze = new THREE.Color(0x8a6a3c), pole = C.pole, px0 = C.x + C.r * .6, pz = C.z + .12;
   const rod = new THREE.CylinderGeometry(.032, .032, pole.len, 8);
   mx.makeRotationZ(Math.PI / 2).setPosition(px0 + pole.len / 2, pole.y, pz); arAppend(P, rod, mx, bronze);
   mx.makeTranslation(px0 + pole.len, pole.y, pz); arAppend(P, new THREE.SphereGeometry(.055, 8, 6), mx, bronze);
@@ -380,7 +382,6 @@ function arProps(def) {
     g.computeVertexNormals();
     mx.makeRotationY(x).setPosition(x, r * .3, z); arAppend(P, g, mx, null, moss(new THREE.Color(0xa49d96)));
   }
-  arToon(P, arStoneTex(), .012, 'props');
   arBanner(def, px0, pz);
 }
 
@@ -452,10 +453,9 @@ function arClothSync() {
 
 // Once per drawn frame: water, clouds, mist (time only) and the banner (fixed 1/60 s steps of the drawn time).
 function arenaStep(nowMs, S) {
-  const d = AR.def, t = nowMs / 1000, L = ARENA.layers;
-  L.cliffs.material.uniforms.uTime.value = t;
-  L.sky.material.uniforms.uSkyOff.value = d.skyDrift * Math.sin(t * 6.2831853 / d.skyPeriod);
-  L.mist.material.uniforms.uTime.value = t % 1000;
+  const d = AR.def, t = nowMs / 1000, u = ARENA.waterMat.uniforms;
+  u.uTime.value = t;
+  u.uSkyOff.value = d.skyDrift * Math.sin(t * 6.2831853 / d.skyPeriod);
   if (!AR.cloth) return;
   if (AR.last < 0 || nowMs < AR.last || nowMs - AR.last > 1000) AR.last = nowMs;   // first frame, a reset or a long pause
   let n = Math.floor((nowMs - AR.last) * .06);
@@ -464,7 +464,7 @@ function arenaStep(nowMs, S) {
 
 // Draw calls and triangles of the arena group as it is (visible meshes; instanced meshes count once).
 function arStats() {
-  let draws = 0, tris = 0;
+  let draws = 1, tris = 2;   // the far layers' quad
   ARENA.group.traverse(o => {
     if (!o.isMesh || !o.visible) return;
     const g = o.geometry, n = g.index ? g.index.count : g.attributes.position.count;

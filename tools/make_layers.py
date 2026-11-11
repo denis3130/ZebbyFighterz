@@ -6,8 +6,8 @@ usage: python3 tools/make_layers.py
   assets/arena/cascata_sky.jpg      sky and clouds (the cliffs filled in from the sky), widened and taller
   assets/arena/cascata_cliffs.jpg   cliffs, waterfall and the mist below them; column, banner, lantern, front grass
                                     and floor taken out (they are 3D now) and filled in from around them
-  assets/arena/cascata_cliffs_a.png the cliffs' alpha (0 = sky)
-  assets/arena/cascata_water.png    where the water flows, in the cliffs layer's pixels (as cascata_mask.png)
+  assets/arena/cascata_cliffs_aw.png the cliffs' alpha (red; 0 = sky) and where the water flows (green, as
+                                    cascata_mask.png), in the cliffs layer's pixels
   assets/arena/cascata_mist.png     a soft mist band (alpha in the red channel), coloured in the shader
   assets/arena/cascata_layers.json  where the original painting sits in each layer (uv, v from the bottom)
 Each layer is the painting widened by PAD_X of its width on both sides (mirrored), the sky PAD_TOP taller (a deeper
@@ -175,7 +175,6 @@ def main():
     w = np.linspace(0, 1, BLEND)[:, None, None]
     cl[FLOOR_Y - BLEND:FLOOR_Y] = cl[FLOOR_Y - BLEND:FLOOR_Y] * (1 - w) + cl[FLOOR_Y:FLOOR_Y + 1] * w
     p1, s1 = save(cl, 'cascata_cliffs.jpg', CLIFFS_W)
-    p2, _ = save(al[..., 0] * 255, 'cascata_cliffs_a.png', CLIFFS_W, 'L')
 
     # Water mask in the cliffs layer.
     m = Image.new('L', (W0, H0), 0)
@@ -186,7 +185,10 @@ def main():
     wm = widen(wm[..., None], 0, bot)
     px = round(W0 * PAD_X)
     wm[:, :px] = 0; wm[:, px + W0:] = 0          # no mirrored waterfall
-    p3, _ = save(wm[..., 0], 'cascata_water.png', CLIFFS_W // 2, 'L')
+    # alpha in red, water in green: one texture read in the shader
+    aw = np.concatenate([al * 255, wm, np.zeros_like(wm)], 2)
+    p2, _ = save(aw, 'cascata_cliffs_aw.png', CLIFFS_W)
+    p3 = p2
 
     # Sky: the cliffs filled in from the sky; on top a deeper blue.
     sky = push_pull(rgb, is_sky)
@@ -216,7 +218,7 @@ def main():
     with open(os.path.join(OUT, 'cascata_layers.json'), 'w') as f:
         json.dump(meta, f, indent=1)
     total = 0
-    for p in (p1, p2, p3, p4, p5):
+    for p in (p1, p2, p4, p5):
         kb = os.path.getsize(p) / 1024; total += kb
         im = Image.open(p)
         print('%-34s %4dx%-4d %-2s %6.1f KB' % (os.path.relpath(p, ROOT), im.size[0], im.size[1], im.mode, kb))

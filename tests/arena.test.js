@@ -24,7 +24,7 @@ T.test('no holes at the camera extremes', () => {
       view(...VIEWS[k]);
       for (const [sx, sy] of [[0, 0], [.15, .15], [-.15, -.15], [.15, -.15], [-.15, .15]]) {
         V.camera.position.x = V.cam.x + sx; V.camera.position.y = V.cam.y + sy; V.camera.updateMatrixWorld();
-        V.renderer.clear(); V.renderer.render(V.scene, V.camera);
+        V.renderer.clear(); V.arenaDrawBack(); V.renderer.render(V.scene, V.camera);
         for (const [u, v] of EDGE) { const p = readAt(u, v); T.ok(!(p[0] > 240 && p[1] < 20 && p[2] > 240), k + ' shake ' + sx + ',' + sy + ' hole at ' + u + ',' + v); }
       }
     }
@@ -32,8 +32,8 @@ T.test('no holes at the camera extremes', () => {
 });
 
 T.test('depth: near moves more than far', () => {
-  const V = __VF, L = V.ARENA.layers, d = AD();
-  for (const k of ['sky', 'cliffs', 'mist']) { L[k].geometry.computeBoundingBox(); T.near(L[k].geometry.boundingBox.max.z, d.layers[k], 1e-6, k + ' depth'); }
+  const V = __VF, z = V.ARENA.waterMat.uniforms.uZ.value, d = AD();
+  T.eq([z.x, z.y, z.z].join(), [d.layers.sky, d.layers.cliffs, d.layers.mist].join(), 'layer depths');
   view(-1200, 1200, 0);
   const pts = [[d.column.x, 2, d.column.z], [0, 5, d.layers.cliffs], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
   const a = at(); V.camera.position.x += 1; V.camera.updateMatrixWorld(); const b = at(); view(-1200, 1200, 0);
@@ -55,7 +55,7 @@ T.test('water flows, stone does not', () => {
 });
 
 T.test('slabs top is y=0 under every fighter x', () => {
-  const V = __VF, rc = new THREE.Raycaster(), terr = V.ARENA.group.getObjectByName('terrace'), down = new THREE.Vector3(0, -1, 0);
+  const V = __VF, rc = new THREE.Raycaster(), terr = V.ARENA.group.getObjectByName('stone'), down = new THREE.Vector3(0, -1, 0);
   let on = 0, n = 0;
   for (const z of [-.05, 0, .05]) for (let x = -6; x <= 6.001; x += .25) {
     rc.set(new THREE.Vector3(x, 1, z), down); const h = rc.intersectObject(terr)[0];
@@ -89,11 +89,12 @@ T.test('banner step under 0.2 ms', () => {
 });
 
 T.test("props stay out of the fighters' lane", () => {
-  const V = __VF;
-  for (const k of ['column', 'props', 'banner']) {
-    const b = new THREE.Box3().setFromObject(V.ARENA.group.getObjectByName(k));
-    T.ok(b.max.z < -1.5, k + ' reaches z ' + b.max.z.toFixed(2));
-  }
+  const V = __VF, p = V.ARENA.group.getObjectByName('stone').geometry.attributes.position;
+  let zMax = -99;   // the props are everything standing above the lip (y > 0.12); the slabs are flat at y <= 0
+  for (let i = 0; i < p.count; i++) if (p.getY(i) > .12) zMax = Math.max(zMax, p.getZ(i));
+  T.ok(zMax < -1.5, 'props reach z ' + zMax.toFixed(2));
+  const b = new THREE.Box3().setFromObject(V.ARENA.group.getObjectByName('banner'));
+  T.ok(b.max.z < -1.5, 'banner reaches z ' + b.max.z.toFixed(2));
 });
 
 T.test('arena within 25 draws and 25000 triangles', () => {
@@ -101,10 +102,9 @@ T.test('arena within 25 draws and 25000 triangles', () => {
   T.ok(s.draws <= 25, s.draws + ' draws'); T.ok(s.tris <= 25000, s.tris + ' triangles');
 });
 
-T.test('textures without mipmaps on WebGL1', () => {
-  const V = __VF, gl2 = V.renderer.capabilities.isWebGL2, L = V.ARENA.layers;
-  for (const k of ['uMap', 'uAlpha', 'uWater']) { const t = L.cliffs.material.uniforms[k].value; T.eq(t.generateMipmaps, gl2, k); }
-  T.eq(L.sky.material.uniforms.uMap.value.generateMipmaps, gl2, 'sky');
+T.test('far layers without mipmaps (none on WebGL1 for them, and not needed)', () => {
+  const u = __VF.ARENA.waterMat.uniforms;
+  for (const k of ['uSky', 'uCliffs', 'uAW']) { const t = u[k].value; T.eq(t.generateMipmaps, false, k); T.eq(t.minFilter, THREE.LinearFilter, k); }
 });
 
 T.test('render does not change the sim', () => { const h = __VF.simHash(__VF.G.S); __VF.renderFrame(__VF.G.S, 0); __VF.arenaStep(5000, __VF.G.S); T.eq(__VF.simHash(__VF.G.S), h); });
