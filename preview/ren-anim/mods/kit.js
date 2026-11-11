@@ -401,35 +401,51 @@ const RK_POSE = {
 };
 
 // --- Gomito spezzaguardia: the lead elbow, as the sheet has it ---
-// Entry: the rear foot slides in 18 cm, the lead fist comes up by the face (the elbow low), the rear fist to the chest.
-// Drive: the hips square up a little, then turn the lead side forward and push 13 cm; the lead elbow sweeps up and
-// forward at shoulder height, the forearm flat across the chest, the fist by the right collarbone; the rear hand opens
-// up by the head. Recovery: the rear foot back out, the arm back to the guard's straight fist.
+// Entry: the rear foot slides in 18 cm, the lead hand opens up by the face (palm forward), the rear fist to the chest.
+// Drive: the front foot steps on 18 cm, the hips square up a little, then turn the lead side forward; the lead fist
+// closes and its elbow sweeps up and forward at shoulder height, the forearm flat across the chest, the fist by the
+// right collarbone, as the front foot lands; the rear hand opens up by the head. Recovery: the arm back to the guard's
+// straight fist; he ends 18 cm on (no step back).
 rkAddMove('elbow', {
   len: 34, name: 'Gomito spezzaguardia',
   phase: [[0, 'Entrata'], [9, 'Spinta'], [14, 'Impatto'], [17, 'Recupero']],
   cfg: {s: 13, a: 3, r: 18, h: 'mid', box: [150, 700, 1050, 1450], limb: 'elbowL', bone: 'LeftForeArm'},   // PROPOSAL
+  root: rkMono([[0, 0], [4, 0], [14, .18], [34, .18]]),   // (he moves in 18 cm: the rear foot, then the front foot with the elbow)
   body: {
     yaw: rkMono([[0, 0], [9, 8], [14, -18], [17, -18], [23, -6], [34, 0]]),
     chest: rkMono([[0, 0], [9, 12], [15, -24], [17, -24], [24, -8], [34, 0]]),
     leanL: rkMono([[0, 0], [9, 3], [14, 9], [17, 9], [24, 3], [34, 0]]),
-    lx: rkMono([[0, 0], [9, .06], [14, .13], [17, .13], [26, .05], [34, 0]]),
+    lx: rkMono([[0, 0], [9, .04], [14, .08], [17, .08], [26, .03], [34, 0]]),
     dip: rkMono([[0, .004], [9, .03], [14, .04], [17, .04], [25, .012], [34, .004]]),
     head: rkMono([[0, 0], [9, 3], [14, -2], [34, 0]]),
   },
-  feet: {R: {x: [[0, 0], [3.6, 0], [8.6, .18], [23.2, .18], [27.8, 0]], bumps: [[2.4, 9.8, .02], [22, 29.4, .02]], heel: [[0, 0], [3, 0], [6, 6], [9.2, 0], [14, 8], [17, 8], [22, 0]]}},
+  feet: {R: {x: [[0, 0], [3.6, 0], [8.6, .18]], bumps: [[2.4, 9.8, .02]], heel: [[0, 0], [3, 0], [6, 6], [8.6, 0], [12, 8], [16, 8], [22, 0]]},
+    L: {x: [[0, 0], [9, 0], [13.4, .18]], bumps: [[8.4, 14, .025]]}},
   arms: {L: [[0, 'guard'], [9, 'eUp'], [14, 'eHit', 'snap'], [17, 'eHit'], [25, 'eBack'], [34, 'guard']],
     R: [[0, 'guard'], [8, 'rChest'], [13, 'rHead', undefined, 'rFront'], [18, 'rHead'], [30, 'guard', undefined, 'rFront']]},
   poses: {
     rFront: A => ({p: A.c([-.06, .12, .32]).add(A.C1)}),   // (in front of the chest: the rear hand's way up and down)
-    eUp: A => ({p: A.l([.1, .18, .03]).add(A.sL), f: A.l([.15, 1, 0]).normalize(), n: A.l([-.3, 0, -1]).normalize(), e: A.l([.2, -1, .3]).normalize()}),
-    eHit: A => ({p: A.l([.05, .05, -.24]).add(A.sL), f: A.l([-.2, 0, -1]).normalize(), n: A.l([0, -1, 0]), e: A.l([1, .3, 0]).normalize()}),
+    eUp: A => ({p: A.l([.18, .17, -.04]).add(A.sL), f: RB_UP.clone().addScaledVector(RB_LINE, .15).normalize(), n: RB_LINE.clone(), e: A.l([0, -1, .25]).normalize()}),   // (the sheet's entry: the lead hand open by the face, palm forward)
+    // (the sheet's impact: the upper arm level and forward, the elbow the front of him, the forearm folded back flat
+    // across the chest, the fist before the sternum: seen from the side camera the forearm lies across, not end-on)
+    eHit: A => ({p: A.l([-.15, .03, -.15]).add(A.sL), f: A.l([-1, 0, -.4]).normalize(), n: A.l([0, -1, 0]), e: A.l([1, .3, 0]).normalize()}),
     eBack: A => ({p: A.l([.3, -.05, -.02]).add(A.sL), f: A.l([1, 0, 0]), n: A.l([0, 0, -1]), e: A.l([0, -1, .3]).normalize()}),
     rChest: A => ({p: A.c([.02, .02, .22]).add(A.C1), f: A.c([1, .3, 0]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.5, -1, -.3]).normalize()}),
     rHead: A => ({p: A.c([-.17, .2, .12]).add(A.C1), f: RB_UP.clone().addScaledVector(RB_LINE, .1).normalize(), n: RB_LINE.clone(), e: A.c([-.3, -1, -.1]).normalize()}),
   },
-  hands: {R: (n, f) => rkKey([[0, RK_HAND.rear], [6, 1], [10, 1], [13, .15], [18, .15], [28, RK_HAND.rear]], f)},
+  hands: {L: (n, f) => ({k: rkKey([[0, 1], [3, 1], [6, .08], [9.5, .08], [12.5, 1]], f)}),   // (open on the entry, a fist again for the elbow)
+    R: (n, f) => rkKey([[0, RK_HAND.rear], [6, 1], [10, 1], [13, .15], [18, .15], [28, RK_HAND.rear]], f)},
 });
+
+// A Catmull-Rom curve through points pts ([[x, y], ...]) at k (0 the first point .. 1 the last), uniform per segment.
+function rkCR(pts, k) {
+  const n = pts.length - 1, t = Math.max(0, Math.min(1, k)) * n, i = Math.min(n - 1, Math.floor(t)), u = t - i;
+  const P = j => pts[Math.max(0, Math.min(n, j))], a = P(i - 1), b = P(i), c = P(i + 1), d = P(i + 2);
+  return b.map((_, m) => .5 * (2 * b[m] + (-a[m] + c[m]) * u + (2 * a[m] - 5 * b[m] + 4 * c[m] - d[m]) * u * u + (-a[m] + 3 * b[m] - 3 * c[m] + d[m]) * u * u * u));
+}
+// the deflection's path of the lead wrist from its shoulder, [forward, up] (m): the cover, down in front of the face,
+// forward low, rising, out at shoulder height
+const RK_DEV_PATH = [[.10, .24], [.21, .1], [.28, -.04], [.39, -.02], [.45, .08], [.43, .14]];
 
 // --- Deviazione circolare: absorb, a circle of the lead forearm that turns the attack aside, a palm in answer ---
 // Absorb: the weight back and down, the lead hand up in front of the forehead (open), the rear fist to the chin.
@@ -443,28 +459,33 @@ rkAddMove('dev', {
   body: {
     yaw: rkMono([[0, 0], [6, 4], [11, -6], [15, -2], [21, -16], [25, -16], [32, -5], [42, 0]]),
     chest: rkMono([[0, 0], [6, 6], [11, -10], [15, -4], [22, -20], [25, -20], [32, -6], [42, 0]]),
-    leanL: rkMono([[0, 0], [6, -5], [11, -2], [15, 0], [21, 7], [25, 7], [32, 2], [42, 0]]),
+    leanL: rkMono([[0, 0], [6, 3], [11, -1], [15, 0], [21, 7], [25, 7], [32, 2], [42, 0]]),
     lx: rkMono([[0, 0], [6, -.07], [11, -.05], [15, -.03], [21, .08], [25, .08], [33, .02], [42, 0]]),
-    dip: rkMono([[0, .004], [6, .045], [11, .035], [15, .03], [25, .03], [33, .012], [42, .004]]),
-    head: rkMono([[0, 0], [6, 4], [11, 1], [21, -1], [42, 0]]),
+    dip: rkMono([[0, .004], [6, .055], [11, .04], [15, .03], [25, .03], [33, .012], [42, .004]]),
+    head: rkMono([[0, 0], [6, 6], [11, 1], [21, -1], [42, 0]]),
   },
   feet: {R: {x: [[0, 0], [15, 0], [21, .15]], bumps: [[14.4, 21.6, .025]], heel: [[0, 0], [15, 0], [18, 8], [21, 0]]},
     L: {x: [[0, 0], [25, 0], [31, .15]], bumps: [[24.4, 31.6, .03]]}},
-  arms: {L: [[0, 'guard'], [6, 'dCover'], [7, 'dCover'], [15, 'dCircle', 'lin'], [21, 'dPush', 'snap'], [25, 'dPush'], [34, 'guard']],
-    R: [[0, 'guard'], [6, 'rChin'], [26, 'rChin'], [36, 'guard']]},
+  arms: {L: [[0, 'guard'], [6, 'dCover'], [7, 'dCircle'], [15, 'dCircle'], [21, 'dPush', 'snap'], [25, 'dPush'], [34, 'guard']],   // (the circle starts at the cover and ends at rest: no hitch)
+    R: [[0, 'guard'], [6, 'rFace', undefined, 'rFront'], [10, 'rChin'], [17, 'rChin'], [23, 'guard']]},
   poses: {
-    dCover: A => ({p: A.l([.1, .2, -.06]).add(A.sL), f: RB_UP.clone(), n: RB_LINE.clone(), e: A.l([.15, -1, .25]).normalize()}),
-    // (the circle: the wrist from the cover around a centre in front of the face, down, forward and up)
+    dCover: A => ({p: A.l([.1, .24, -.06]).add(A.sL), f: RB_UP.clone(), n: RB_LINE.clone(), e: A.l([.15, -1, .25]).normalize()}),
+    rFace: A => ({p: A.c([-.02, .32, .22]).add(A.C1), f: A.c([1, .5, .2]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.3, -1, -.2]).normalize()}),   // (the rear fist before the face)
+    // (the circle: one smooth curve from the cover itself, down in front of the face, forward and up to the arm out at
+    // shoulder height, the wrist never closer than 22 cm to the shoulder (a folded arm there makes the elbow swing); it
+    // starts and ends at rest)
     dCircle: (A, f) => {
-      const u = Math.max(0, Math.min(1, (f - 7) / 8)), th = (125 + 265 * rkEase(u)) * RB_R, R = .14;
-      const C = A.l([.24, .06, -.02]).add(A.sL), dir = A.l([Math.cos(th), Math.sin(th), 0]);
-      return {p: C.addScaledVector(dir, R * (1 + .15 * u)), f: RB_UP.clone().addScaledVector(RB_LINE, .4 * u).normalize(), n: dir.clone().addScaledVector(RB_LINE, .5).normalize(), e: A.l([.1, -1, .3]).normalize()};
+      const u = Math.max(0, Math.min(1, (f - 7) / 8)), k = rkEase(u), q = rkCR(RK_DEV_PATH, k);
+      const p = A.l([q[0], q[1], -.06 + .04 * k]).add(A.sL), rd = A.l([q[0] - .3, q[1] - .05, 0]).normalize();
+      const n = RB_LINE.clone().lerp(rd.addScaledVector(RB_LINE, .5).normalize(), k).normalize();
+      const e = A.l([.15, -1, .25]).normalize().lerp(A.l([0, -.35, 1]).normalize(), rnSm(3 * k) * (1 - rnSm((k - .75) / .25))).normalize();
+      return {p, f: RB_UP.clone().addScaledVector(RB_LINE, .4 * k).normalize(), n, e: e.lerp(A.l([.1, -1, .3]).normalize(), rnSm((k - .75) / .25)).normalize()};
     },
     dPush: A => ({p: A.sL.clone().addScaledVector(RB_LINE, RK.reach * A.armL), f: RB_UP.clone().addScaledVector(RB_LINE, .2).normalize(), n: RB_LINE.clone().addScaledVector(RB_UP, -.12).normalize(), e: A.l([0, -1, .3]).normalize()}),
     rChin: A => ({p: A.c([-.04, .26, .2]).add(A.C1), f: A.c([1, .4, .2]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.4, -1, -.2]).normalize()}),
   },
   hands: {L: rkSnap({open: 1, press: 21, close: 26.5, thumbOpen: .4, thumbClose: 30.5, split: 24.5, thumbSplit: 24}),
-    R: (n, f) => rkKey([[0, RK_HAND.rear], [6, .9], [26, .9], [34, RK_HAND.rear]], f)},
+    R: (n, f) => rkKey([[0, RK_HAND.rear], [6, .95], [17, .95], [23, RK_HAND.rear]], f)},
 });
 
 // --- Calcio a frusta: the lead leg, the standing foot turning on its tip ---
@@ -521,37 +542,45 @@ rkAddMove('ps', {
   len: 74, name: 'Passo spezzato',
   phase: [[0, 'Finta indietro'], [10, 'Compressione'], [20, 'Scatto basso'], [30, 'Entrata di spalla'], [38, 'Doppio palmo'], [48, 'Assestamento'], [60, 'Ritorno in guardia']],
   cfg: {s: 43, a: 3, r: 28, h: 'mid', box: [250, 950, 950, 1400], limb: 'handL'},   // PROPOSAL
-  root: rkMono([[0, 0], [8, -.1], [20, -.22], [26, .06], [33, .3], [74, .3]]),
+  root: rkMono([[0, 0], [8, -.1], [20, -.46], [29, .05], [35, .3], [74, .3]]),
   body: {
-    yaw: rkMono([[0, 0], [10, 6], [20, 4], [26, -6], [33, -24], [38, -24], [43, 4], [47, 4], [58, 0], [74, 0]]),
-    chest: rkMono([[0, 0], [10, 8], [20, 6], [26, -4], [33, -18], [38, -18], [43, 6], [47, 6], [60, 0], [74, 0]]),
-    leanL: rkMono([[0, 0], [10, -6], [20, 14], [26, 24], [33, 10], [38, 8], [47, 8], [60, 2], [74, 0]]),
-    lx: rkMono([[0, 0], [10, -.04], [20, 0], [26, .04], [33, .02], [38, .04], [43, .1], [47, .1], [60, .02], [74, 0]]),
-    dip: rkMono([[0, .004], [10, .025], [20, .16], [26, .15], [33, .07], [38, .05], [43, .045], [49, .045], [60, .012], [74, .004]]),
-    head: rkMono([[0, 0], [10, 3], [20, -6], [26, -10], [33, -2], [43, -2], [60, 0], [74, 0]]),
+    yaw: rkMono([[0, 0], [10, 6], [20, 4], [29, -6], [35, -24], [38, -24], [43, 4], [47, 4], [58, 0], [74, 0]]),
+    chest: rkMono([[0, 0], [10, 8], [20, 6], [29, -4], [35, -18], [38, -18], [43, 6], [47, 6], [60, 0], [74, 0]]),
+    leanL: rkMono([[0, 0], [10, -6], [20, 30], [29, 30], [35, 24], [38, 12], [47, 8], [60, 2], [74, 0]]),
+    lx: rkMono([[0, 0], [10, -.04], [20, 0], [29, .04], [35, .02], [38, .04], [43, .1], [47, .1], [60, .02], [74, 0]]),
+    dip: rkMono([[0, .004], [10, .025], [20, .24], [29, .16], [35, .07], [38, .05], [43, .045], [49, .045], [60, .012], [74, .004]]),
+    head: rkMono([[0, 0], [10, 3], [20, -14], [29, -14], [35, -4], [43, -2], [60, 0], [74, 0]]),   // (the eyes kept on the opponent as the body folds forward)
   },
   feet: {
-    R: {x: [[0, 0], [1.2, 0], [7.4, -.15], [26.8, -.15], [32.2, .3]], bumps: [[0, 8.4, .03], [26, 33, .035]],
-      heel: [[0, 0], [12, 0], [18, 15], [24, 25], [26.8, 25], [32, 0]]},
-    L: {x: [[0, 0], [10.8, 0], [16.2, -.45], [20.8, -.45], [25.4, .3]], bumps: [[10, 17, .03], [20, 26.2, .05]],
-      toe: [[0, 0], [20.5, 0], [23, 15], [25.4, 0]]},
+    // the rear foot: half a step back (the feint), on its ball through the compression and the drive, then it follows
+    R: {x: [[0, 0], [1.2, 0], [7.4, -.15], [29.6, -.15], [35, .3]], bumps: [[0, 8.4, .03], [29, 35.6, .035]],
+      heel: [[0, 0], [5, 0], [8, 15], [12, 10], [18, 15], [26, 25], [29.6, 25], [35, 0]]},
+    // the front foot: back beside the rear one (the compression: feet together, both on their balls), then the long low
+    // step forward (the burst)
+    L: {x: [[0, 0], [10.8, 0], [16.2, -.8], [20.6, -.8], [28.6, .3]], bumps: [[10, 17, .04], [20, 29.2, .07]],
+      heel: [[0, 0], [16.5, 0], [18, 14], [20.6, 14], [23, 0]], toe: [[0, 0], [21, 0], [25, 15], [28.6, 0]]},
   },
   arms: {
-    L: [[0, 'guard'], [9, 'pFeint'], [16, 'pCoverL'], [20, 'pCoverL'], [26, 'pReachL'], [31, 'pTuckL'], [36, 'pTuckL'], [43, 'pPalmL', 'snap'], [46, 'pPalmL'], [56, 'pBackL'], [72, 'guard']],
-    R: [[0, 'guard'], [14, 'rChin', undefined, 'rFront'], [26, 'rChest'], [31, 'rChin'], [36, 'rChin'], [43, 'pPalmR', 'snap'], [46, 'pPalmR'], [56, 'pBackR'], [72, 'guard']],
+    L: [[0, 'guard'], [9, 'pFeint'], [16, 'pCoverL'], [20, 'pCoverL'], [27, 'pReachL'], [33, 'pTuckL'], [37, 'pTuckL'], [43, 'pPalmL', 'snap'], [46, 'pPalmL'], [56, 'pBackL'], [72, 'guard']],
+    R: [[0, 'guard'], [14, 'rChest', undefined, 'rFront'], [37, 'pTuckR'], [43, 'pPalmR', 'snap'], [46, 'pPalmR'], [56, 'pBackR'], [72, 'guard']],
   },
   poses: {
     pFeint: A => ({p: A.l([.25, .02, .03]).add(A.sL), f: A.l([1, 0, 0]), n: A.l([0, 0, -1]), e: A.l([0, -1, .25]).normalize()}),
     pCoverL: A => ({p: A.l([.18, .2, -.04]).add(A.sL), f: RB_UP.clone(), n: RB_LINE.clone(), e: A.l([.15, -1, .25]).normalize()}),
     pReachL: A => ({p: A.l([.36, -.1, .02]).add(A.sL), f: A.l([1, .3, 0]).normalize(), n: A.l([.5, -1, 0]).normalize(), e: A.l([0, -1, .3]).normalize()}),
-    pTuckL: A => ({p: A.l([.12, .08, -.14]).add(A.sL), f: RB_UP.clone(), n: A.l([0, 0, -1]), e: A.l([.3, -1, .1]).normalize()}),
+    // (the sheet's entry: both fists tucked before the chest, the lead one a little ahead, the shoulder leading)
+    pTuckL: A => ({p: A.c([.08, .08, .28]).add(A.C1), f: A.c([.2, 1, .3]).normalize(), n: A.c([-1, 0, 0]), e: A.c([.4, -1, .2]).normalize()}),
+    pTuckR: A => ({p: A.c([-.07, .03, .25]).add(A.C1), f: A.c([-.2, 1, .3]).normalize(), n: A.c([1, 0, 0]), e: A.c([-.4, -1, -.1]).normalize()}),
     pPalmL: A => ({p: A.sL.clone().addScaledVector(RB_LINE, RK.reach * A.armL).addScaledVector(RB_UP, .02), f: RB_UP.clone().addScaledVector(RB_LINE, .2).normalize(), n: RB_LINE.clone().addScaledVector(RB_UP, -.12).normalize(), e: A.l([0, -1, .3]).normalize()}),
     pPalmR: A => ({p: A.sR.clone().addScaledVector(RB_LINE, RK.reach * A.armR).addScaledVector(RB_UP, -.08), f: RB_UP.clone().addScaledVector(RB_LINE, .2).normalize(), n: RB_LINE.clone().addScaledVector(RB_UP, -.12).normalize(), e: A.c([-.2, -1, -.1]).normalize()}),
     pBackL: A => ({p: A.l([.25, 0, .02]).add(A.sL), f: A.l([1, .3, 0]).normalize(), n: A.l([0, 0, -1]), e: A.l([0, -1, .25]).normalize()}),
     pBackR: A => ({p: A.c([.02, .02, .25]).add(A.C1), f: A.c([1, .3, 0]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.5, -1, -.3]).normalize()}),
   },
   hands: {
-    L: rkSnap({open: 10, press: 44, close: 50, thumbOpen: 9.4, thumbClose: 54, split: 47.5, thumbSplit: 47}),
+    // the lead hand: a fist, open by the face for the compression and the burst, a fist again for the entry (closed by
+    // 31), open for the double palm, a fist again in the settle
+    L: (n, f) => ({k: f < 33 ? rkSnapK(n, f, {open: 10, press: null, close: 26, thumbOpen: 9.4, thumbClose: 29, split: 25.5, thumbSplit: 25})
+      : rkSnapK(n, f, {open: 37.5, press: 44, close: 50, thumbOpen: 37, thumbClose: 54, split: 47.5, thumbSplit: 47})}),
     R: (n, f) => f < 36 ? rkKey([[0, RK_HAND.rear], [12, 1]], f) : f < 60 ? {k: rkSnapK(n, f, {open: 37, press: 44, close: 50, thumbOpen: 36.4, thumbClose: 54, split: 47.5, thumbSplit: 47})} : rkKey([[60, 1], [68, RK_HAND.rear]], f),
   },
 });
