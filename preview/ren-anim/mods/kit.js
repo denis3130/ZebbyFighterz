@@ -225,7 +225,35 @@ RB.post.push((md, p, F, S, y) => {
   rsArm(md, p, rbFK(md, p, RB.W), 'R', T.rp, T.re, T.rf, T.rpn, 1);
   if (br) mdBoneTurn(p, ix.Spine01, MD_X, -2 * br);   // the chest opens on the breath in
   if (RK.g.headYaw) mdBoneTurn(p, ix.Head, MD_Y, RK.g.headYaw);   // the eyes on the opponent
+  if (mv && mv.kickLeg) rkKickLeg(md, p, mv.kickLeg, rkF(F, act));
 });
+// A kicking leg in the air, set as an animator keys it, once the solver has put its ankle where the keys say: (1) the
+// leg turned about its hip-ankle line until the knee bends toward k.pole ([forward, up, side]: the knee forward and up,
+// the shin folding under it, in the side camera's plane, as the sheet draws it), (2) the foot set against the shin, not
+// the floor: the rest pose's ankle bent by k.point degrees (the toes pointed), so it never twists or hangs off the
+// leg. Both by k.air (0 on the floor .. 1 off it).
+function rkKickLeg(md, p, k, f) {
+  const w = rkTrack(k.air, f);
+  if (w <= 0) return;
+  const T = THREE, L = RB.leg[k.s], W = rbFK(md, p, RB.W), A = W.p[L.iu].clone(), K = W.p[L.il].clone(), E = W.p[L.ia].clone();
+  const dir = E.sub(A).normalize(), off = K.sub(A), pole = rsVec(k.pole, new T.Vector3());
+  off.addScaledVector(dir, -off.dot(dir)); pole.addScaledVector(dir, -pole.dot(dir));
+  if (off.lengthSq() > 1e-6 && pole.lengthSq() > 1e-6) {
+    const bend = rnSm((off.length() - .02) / .05);
+    off.normalize(); pole.normalize();
+    const phi = Math.atan2(new T.Vector3().crossVectors(off, pole).dot(dir), off.dot(pole)) * w * bend;
+    const par = md.bones[L.iu].p, qU = W.q[L.iu].clone().premultiply(new T.Quaternion().setFromAxisAngle(dir, phi));
+    W.q[par].clone().invert().multiply(qU).toArray(p.q, L.iu * 4);
+  }
+  // the foot: the rest ankle bent about the knee's hinge axis (in the shin's frame), slerped in from the solver's
+  const R = RK.restLeg || (RK.restLeg = {});
+  const r = R[k.s] || (R[k.s] = (() => {
+    const rest = mdRest(md), qL = new T.Quaternion().fromArray(rest.q, L.il * 4), qF = new T.Quaternion().fromArray(rest.q, L.ia * 4);
+    return {qF, hinge: L.hu.clone().applyQuaternion(qL.clone().invert()).normalize()};
+  })());
+  const want = r.qF.clone().premultiply(new T.Quaternion().setFromAxisAngle(r.hinge, rkTrack(k.point, f) * RB_R));
+  new T.Quaternion().fromArray(p.q, L.ia * 4).slerp(want, w).toArray(p.q, L.ia * 4);
+}
 
 // --- Hands: the lead a closed fist and the rear half closed (Denis, 12/11). In the palm the lead fist snaps open as it
 // is drawn back: the thumb first, out of the way, then the fingers, index to little finger, each from its knuckle out
@@ -439,37 +467,38 @@ rkAddMove('dev', {
     R: (n, f) => rkKey([[0, RK_HAND.rear], [6, .9], [26, .9], [34, RK_HAND.rear]], f)},
 });
 
-// --- Calcio a frusta: the lead leg, the standing foot turning with the hips ---
-// Load: the rear foot steps in under the body (30 cm), the weight goes onto it, the lead knee comes up (the foot under
-// it, toes down). Pivot and whip: the standing foot turns on its tip as the hips turn over (never a body turning on a
-// planted foot), the body leans away and the shin snaps out at stomach height, the standing leg nearly straight. Back:
-// the knee folds back in, then he steps down forward out of the kick (no step back: the fighter ends 30 cm on, in the
-// same guard).
+// --- Calcio a frusta: the lead leg, the standing foot turning on its tip ---
+// Load: the rear foot steps in under the body (30 cm), the weight goes onto it and he rises on it, the lead knee comes
+// up high (the foot folded under it, toes pointed). Pivot and whip: the standing foot turns on its tip as the hips turn
+// a little (never a body turning on a planted foot), the body leans away and the shin snaps out at chest height, the
+// standing leg nearly straight. The body stays three-quarters, as the sheet has it. Back: the knee folds back in, then
+// he steps down forward out of the kick (no step back: the fighter ends 30 cm on, in the same guard). The kicking leg
+// itself is set after the pose (rkKickLeg): its knee forward and up, its foot pointed against the shin.
 rkAddMove('kick', {
   len: 34, name: 'Calcio a frusta',
   phase: [[0, 'Caricamento'], [9, 'Pivot'], [14, 'Impatto'], [17, 'Rientro'], [22, 'Atterraggio'], [28, 'Guardia']],
   cfg: {s: 13, a: 3, r: 18, h: 'mid', box: [300, 1000, 750, 1250], limb: 'footL'},   // PROPOSAL
   root: rkMono([[0, 0], [19, 0], [27, .3], [34, .3]]),
   body: {
-    yaw: rkMono([[0, 0], [6, -6], [10, -14], [14, -40], [17, -40], [22, -18], [28, 0]]),
-    chest: rkMono([[0, 0], [6, -4], [14, -12], [17, -12], [24, -2], [30, 0]]),
-    leanL: rkMono([[0, 0], [6, -3], [10, -6], [14, -22], [17, -22], [22, -8], [27, 4], [34, 0]]),
+    yaw: rkMono([[0, 0], [6, -3], [10, -6], [14, -12], [17, -12], [22, -5], [28, 0]]),
+    chest: rkMono([[0, 0], [6, -2], [14, -5], [17, -5], [24, -1], [30, 0]]),
+    leanL: rkMono([[0, 0], [6, -3], [10, -7], [14, -22], [17, -22], [22, -8], [27, 4], [34, 0]]),
     lx: rkMono([[0, 0], [5, -.12], [14, -.1], [17, -.1], [20, -.12], [27, 0], [34, 0]]),
     dip: rkMono([[0, .004], [5, -.03], [9.5, -.15], [14, -.17], [17, -.17], [22, -.1], [27, .03], [31, .01], [34, .004]]),   // (up on the standing leg, nearly straight)
     head: rkMono([[0, 0], [14, -4], [17, -4], [28, 0]]),
   },
   feet: {
     R: {x: [[0, 0], [.6, 0], [4, .3]], bumps: [[0, 5, .025]],
-      heel: [[0, 0], [6, 0], [9, 10], [17, 12], [21, 6], [24, 0]], yaw: [[0, 0], [7, 0], [12, -65], [18, -65], [21.5, -6], [22.5, 0]]},
-    // the kicking foot: up on its toes, off the floor on frame 5, folded under the knee (frame 9.5), out at stomach height
-    // (14), back under the knee (21), down forward on its toes (26), the heel down (28). Its pitch in the world (heel and
-    // toe together: the heel's lift tips the toes down) follows the shin: about 50 degrees down while the shin hangs
-    // under the knee, near level when the leg is out straight (the foot continues the leg's line, the toes pointed)
+      heel: [[0, 0], [6, 0], [9, 10], [17, 10], [21, 5], [24, 0]], yaw: [[0, 0], [7, 0], [12, -30], [18, -30], [21.5, -4], [22.5, 0]]},
+    // the kicking foot's ankle: off the floor on frame 5, folded high under the knee (9.5), out at chest height (14),
+    // back under the knee (21), down forward on its toes (26), the heel down (28)
     L: {free: true, heel: [[0, 0], [3.5, 0], [5, 16], [26, 16], [28, 0]],
-      x: [[0, 0], [5, 0], [9.5, -.2], [14, .35, 'whip'], [16, .35], [21, -.1], [25.8, .3]],
-      up: [[0, 0], [5, 0], [9.5, .45], [14, .97, 'whip'], [16, .97], [21, .45], [26, 0]],
-      toe: [[0, 0], [5, 0], [9.5, -34], [14, 11, 'whip'], [16, 11], [21, -34], [25.5, 0]]},
+      x: [[0, 0], [5, 0], [9.5, -.15], [14, .35, 'whip'], [16, .35], [21, -.1], [25.8, .3]],
+      up: [[0, 0], [5, 0], [9.5, .55], [14, .97, 'whip'], [16, .97], [21, .5], [26, 0]],
+      toe: [[0, 0]]},
   },
+  kickLeg: {s: 'L', pole: [1, 1, 0], point: [[0, 30], [9.5, 45], [14, 62, 'whip'], [16, 62], [21, 45], [25, 30]],
+    air: [[0, 0], [5, 0], [7, 1], [23.5, 1], [25.6, 0]]},
   arms: {L: [[0, 'guard'], [7, 'kGuardL'], [22, 'kGuardL'], [30, 'guard']], R: [[0, 'guard'], [6, 'rChin'], [24, 'rChin'], [31, 'guard']]},
   poses: {
     kGuardL: A => ({p: A.l([.26, -.04, .05]).add(A.sL), f: A.l([1, .1, 0]).normalize(), n: A.l([0, 0, -1]), e: A.l([0, -1, .25]).normalize()}),
