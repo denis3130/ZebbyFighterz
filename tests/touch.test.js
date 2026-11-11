@@ -42,8 +42,9 @@ T.test('menus and the pause button take taps while another finger is held', () =
   tapEl(btn('pause','resume'),88); T.eq(V.G.state,'fight','resume tap');
   pu('stickZone',170,300,82); ptr($('sc-menu'),'pointerup',80,-200,100); T.eq(V.G.state,'fight','lifting the other fingers does nothing'); });
 T.test('a tap that changes the screen: its click on the new screen does nothing', () => { const V=__VF; V.menu.pause();
-  tapEl(document.querySelector('#sc-pause [data-act="quit"]'),89); T.eq(V.G.state,'title');
-  document.querySelector('#sc-menu [data-act="train"]').click(); T.eq(V.G.state,'title','a click with no pointer type, under the finger: no match'); });
+  tapEl(document.querySelector('#sc-pause [data-act="quit"]'),89); T.eq(V.G.state,'pause','asked first'); tapEl(document.querySelector('#uiDlg [data-act="yes"]'),890);
+  return Promise.resolve().then(() => { T.eq(V.G.state,'title');
+    document.querySelector('#sc-menu [data-act="train"]').click(); T.eq(V.G.state,'title','a click with no pointer type, under the finger: no match'); }); });
 T.test('the mouse still clicks the menu once', () => later(1000, () => { const V=__VF; V.startMatch('training',{seed:1,dummy:'fermo'}); V.menu.pause(); const opp=$('bOpp'), d=V.G.S.dummy;
   for(const t of ['pointerdown','pointerup']) opp.dispatchEvent(new PointerEvent(t,{pointerId:1,bubbles:true,cancelable:true,pointerType:'mouse'}));
   opp.click(); T.ok(V.G.S.dummy!==d,'toggled once'); opp.click(); T.eq(V.G.S.dummy,d,'and back'); V.menu.resume(); }));

@@ -8,10 +8,6 @@ const MN = {rot: false, fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw
 function mnEl(id) { return document.getElementById(id); }
 function mnTouchDevice() { return (window.matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0; }
 function mnSeed() { return (Math.random() * 1e9) | 0; }
-// A plain interface button (styled by u_style.css): label, data-act, optional id.
-function mnBtn(label, act, id) { return '<div class="ub" data-focus role="button" data-act="' + act + '"' + (id ? ' id="' + id + '"' : '') + '><span' + (id ? ' id="' + id.replace(/^b/, '').toLowerCase() + 'Tx"' : '') + '>' + label + '</span></div>'; }
-function mnActs(r, fn) { r.querySelectorAll('[data-act]').forEach(b => { b.uiAct = dev => fn(b.dataset.act, dev); }); }
-
 // The pause screen's opponent button exists only in training; its label shows the current dummy.
 function mnPauseRefresh() {
   const b = mnEl('bOpp'); if (!b) return;
@@ -22,7 +18,7 @@ function mnPauseRefresh() {
 function menuSync() {
   const st = G.state;
   if (st === 'fight' && NAV.cur) navClear();
-  mnEl('hud').style.visibility = st === 'title' || st === 'end' ? 'hidden' : '';
+  mnEl('hud').style.visibility = st === 'fight' ? '' : 'hidden';   // (the pause screen covers the fight, as in the reference)
   mnEl('tPause').classList.toggle('on', st === 'fight' && !MN.rot);
   mnEl('rotate').classList.toggle('on', MN.rot);
   touchShow(st === 'fight' && !MN.rot);
@@ -83,26 +79,32 @@ function menuFps(now, simMs, steps, drawMs) {
   mnEl('fps').textContent = 'FPS ' + Math.round(f.frames * 1000 / (now - f.t)) + ' · sim ' + (f.steps ? f.sim / f.steps : 0).toFixed(2) + ' ms · disegno ' + (f.draw / f.frames).toFixed(1) + ' ms';
   f.t = now; f.frames = f.sim = f.steps = f.draw = 0;
 }
+// Builds a column of components into r: [cBtn options...], each with act0 = its action name (data-act).
+function mnColumn(r, head, btns, fn) {
+  r.appendChild(head);
+  const col = uiEl('div', 'ucol');
+  col.setAttribute('data-wrap', '');
+  for (const o of btns) col.appendChild(cBtn(Object.assign({act: dev => fn(o.act0, dev)}, o)));
+  r.appendChild(col);
+}
 function menuScreens() {
   navRegister({id: 'menu', build(r) {
-    r.innerHTML = '<div class="logo"><div class="l1">VOIDRISE</div><div class="l2">FIGHTERS</div></div><div class="ucol" data-wrap>' +
-      mnBtn('1 Giocatore · Allenamento', 'train') + mnBtn('2 Giocatori', 'vs') + '</div>';
-    mnActs(r, (a, dev) => { if (dev === 'touch') mnFullscreen(); mnStart(a === 'train' ? 'training' : 'versus', dev); });
+    mnColumn(r, cLogo('l'), [{label: '1 Giocatore · Allenamento', act0: 'train'}, {label: '2 Giocatori', act0: 'vs'}],
+      (a, dev) => { if (dev === 'touch') mnFullscreen(); mnStart(a === 'train' ? 'training' : 'versus', dev); });
   }});
   navRegister({id: 'pause', build(r) {
-    r.innerHTML = '<div class="mh">Pausa</div><div class="ucol" data-wrap>' + mnBtn('Riprendi', 'resume') + mnBtn('Ricomincia', 'restart') +
-      mnBtn('Avversario: Fermo', 'opp', 'bOpp') + mnBtn('FPS: No', 'fps', 'bFps') + mnBtn('Abbandona', 'quit') + '</div>';
-    mnActs(r, a => {
+    mnColumn(r, cHead('Pausa'), [{label: 'Riprendi', act0: 'resume'}, {label: 'Ricomincia', act0: 'restart'},
+      {label: 'Avversario: Fermo', act0: 'opp', id: 'bOpp', txId: 'oppTx'}, {label: 'FPS: No', act0: 'fps', id: 'bFps', txId: 'fpsTx'}, {label: 'Abbandona', act0: 'quit'}], a => {
       if (a === 'resume') menu.resume();
       else if (a === 'restart') menu.restart();
       else if (a === 'opp') { G.S.dummy = G.S.dummy === 'casuale' ? 'fermo' : 'casuale'; mnPauseRefresh(); }
       else if (a === 'fps') mnFpsSet(!MN.fps.on, true);
-      else if (a === 'quit') menu.toTitle();
+      else if (a === 'quit') uiConfirm({title: 'Abbandonare la partita?', text: 'Tornerai al menu principale.', yes: 'Abbandona', no: 'Annulla'}).then(ok => { if (ok) menu.toTitle(); });
     });
   }, enter() { mnPauseRefresh(); }, back() { menu.resume(); return false; }});
   navRegister({id: 'results', guardMs: CFG.menu.endGuardMs, build(r) {
-    r.innerHTML = '<div class="mh" id="endTitle"></div><div class="ucol" data-wrap>' + mnBtn('Rivincita', 'rematch') + mnBtn('Menu', 'menu') + '</div>';
-    mnActs(r, a => { if (a === 'rematch') menu.restart(); else menu.toTitle(); });
+    const h = cHead(''); h.querySelector('.uheadT').id = 'endTitle';
+    mnColumn(r, h, [{label: 'Rivincita', act0: 'rematch'}, {label: 'Menu', act0: 'menu'}], a => { if (a === 'rematch') menu.restart(); else menu.toTitle(); });
   }, enter(p) { mnEl('endTitle').textContent = p.title || ''; }, back() { menu.toTitle(); return false; }});
   for (const id of ['menu', 'pause', 'results']) navRootOf(NAV.screens[id]);   // built now: the FPS label and the opponent button exist from the start
 }

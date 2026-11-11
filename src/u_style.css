@@ -1,31 +1,158 @@
-/* Voidrise interface (docs/superpowers/specs/2026-11-11-voidrise-interfaccia-design.md): dark violet dusk, gold and
-   orange accents, serif type. Pasted into the page by build.py where head.html says <!--include:u_style.css-->. */
+/* Voidrise interface (docs/superpowers/specs/2026-11-11-voidrise-interfaccia-design.md, references docs/ref/ui/): dark
+   violet dusk, thin gold edges, orange light and brush strokes on what has the focus, serif type. Pasted into the page by
+   build.py where head.html says <!--include:u_style.css-->. Sizes in --u = 1% of a 16:9 box's height, so phones and
+   monitors keep the same proportions; touch targets never go under 44 px. Animations use only transform and opacity. */
 :root{
   --u-bg:#14121b;--u-panel:rgba(20,17,28,.74);--u-line:rgba(216,166,87,.38);--u-gold:#d8a657;--u-gold2:#f3d6a0;
   --u-orange:#f08a32;--u-ink:#efe8dc;--u-dim:#a59db3;--u-violet:#8f6ad8;--u-teal:#2f8f86;--u-red:#d4513f;
   --u-display:'Cinzel',Georgia,serif;--u-serif:'Cormorant Garamond',Georgia,serif;
+  --u:min(1vh,.5625vw);--u-ease:cubic-bezier(.2,.8,.2,1);
+  --u-brush:polygon(0 72%,16% 58%,38% 50%,58% 36%,78% 26%,100% 12%,100% 44%,84% 54%,66% 64%,46% 76%,24% 88%,0 100%);
 }
-/* Screens (u1_nav.js): one at a time inside #uiScreens; dialogs and notices in #uiOver, over every screen. */
+/* --- screens (u1_nav.js): one at a time inside #uiScreens; dialogs in #uiOver, over every screen --- */
 #uiScreens,#uiOver{position:absolute;inset:0;pointer-events:none}
 #uiOver>*{pointer-events:auto}
 .usc{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;align-items:flex-start;pointer-events:auto;touch-action:none;
-  padding:calc(env(safe-area-inset-top) + 14px) calc(env(safe-area-inset-right) + 28px) calc(env(safe-area-inset-bottom) + 14px) calc(env(safe-area-inset-left) + 36px);
+  padding:calc(env(safe-area-inset-top) + var(--u)*4) calc(env(safe-area-inset-right) + var(--u)*6) calc(env(safe-area-inset-bottom) + var(--u)*4) calc(env(safe-area-inset-left) + var(--u)*7);
   font-family:var(--u-serif);font-style:normal;font-weight:600;color:var(--u-ink)}
 .usc.on{display:flex}
-#sc-menu{background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.72) 46%,rgba(14,12,22,.08) 100%)}
-#sc-pause,#sc-results{align-items:center;background:rgba(14,12,22,.62)}
-.ucol{display:flex;flex-direction:column;gap:10px;width:min(470px,64vw)}
-/* interface button: a slanted panel with a thin gold edge; the focused one glows orange */
-.ub{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;height:52px;padding:0 24px;border:1px solid var(--u-line);
-  background:rgba(20,17,28,.82);color:var(--u-ink);font-size:24px;line-height:1;white-space:nowrap;cursor:pointer;transform:skewX(-14deg);transition:transform .08s,filter .08s,background .12s,border-color .12s}
-.ub>*{transform:skewX(14deg)}
+/* the cascade: what enters a screen slides in, one element a little after the other (--i set by the navigation) */
+.usc.in [data-focus],.usc.in .uhead,.usc.in .ulogo{animation:uIn .38s var(--u-ease) both;animation-delay:calc(var(--i,0)*40ms)}
+@keyframes uIn{from{opacity:0;translate:-16px 0}}
+.uico{width:1em;height:1em;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ucol{display:flex;flex-direction:column;gap:calc(var(--u)*2.2);width:calc(var(--u)*52);max-width:70vw;margin-top:calc(var(--u)*4)}
+/* --- logo: VOIDRISE in spaced capitals, a thin gold crescent cutting behind it, a small orange slash under --- */
+.ulogo{position:relative;display:inline-block;align-self:flex-start;width:max-content;line-height:1;padding:.18em 0}
+.ulogoTx{position:relative;font-family:var(--u-display);font-weight:500;letter-spacing:.2em;color:#f6efe3;
+  text-shadow:0 0 18px rgba(0,0,0,.6),0 2px 3px rgba(0,0,0,.7)}
+.ulogo.s .ulogoTx{font-size:max(18px,calc(var(--u)*5.2))}
+.ulogo.l .ulogoTx{font-size:calc(var(--u)*12)}
+.ulogoArc{position:absolute;left:56%;top:-.35em;width:1.75em;height:1.75em;fill:none;stroke:var(--u-gold);stroke-width:2.2;stroke-linecap:round;opacity:.8;
+  font-size:inherit;filter:drop-shadow(0 0 4px rgba(216,166,87,.4))}
+.ulogo.s .ulogoArc{font-size:max(18px,calc(var(--u)*5.2))}.ulogo.l .ulogoArc{font-size:calc(var(--u)*12)}
+.ulogoCut{position:absolute;left:58%;bottom:-.05em;width:22%;height:2px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange));transform:rotate(-22deg);box-shadow:0 0 6px rgba(240,138,50,.7)}
+/* --- section head: orange bar, title, italic subtitle, fading line with a brush stroke --- */
+.uhead{position:relative;padding-left:calc(var(--u)*2.6)}
+.uhead::before{content:'';position:absolute;left:0;top:.2em;height:calc(var(--u)*7);width:max(3px,calc(var(--u)*.6));background:var(--u-orange);box-shadow:0 0 10px rgba(240,138,50,.8)}
+.uheadT{display:block;font-weight:600;font-size:max(24px,calc(var(--u)*7.4));line-height:1.05;color:#f6efe3;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.uheadS{display:block;margin-top:calc(var(--u)*.8);font-style:italic;font-weight:500;font-size:max(14px,calc(var(--u)*3.4));color:var(--u-dim)}
+.uheadL{position:relative;display:block;margin-top:calc(var(--u)*1.4);width:calc(var(--u)*34);height:1px;background:linear-gradient(90deg,rgba(216,166,87,.7),rgba(216,166,87,0))}
+.uheadL::after{content:'';position:absolute;left:0;top:-5px;width:60%;height:10px;background:linear-gradient(90deg,rgba(240,138,50,0),rgba(240,138,50,.85) 70%,rgba(255,200,130,.9));clip-path:var(--u-brush)}
+/* --- slanted button: thin gold edge on dark glass; with the focus, warm bronze, a glow and an orange brush stroke --- */
+.ub{position:relative;display:flex;align-items:center;justify-content:center;gap:calc(var(--u)*1.2);min-height:44px;height:calc(var(--u)*11);min-width:calc(var(--u)*40);
+  padding:0 calc(var(--u)*5);font-family:var(--u-serif);font-style:italic;font-weight:600;font-size:max(17px,calc(var(--u)*4.8));color:var(--u-ink);white-space:nowrap;
+  background:linear-gradient(180deg,rgba(42,36,52,.88),rgba(18,15,24,.92));border:1px solid rgba(216,190,150,.42);transform:skewX(-16deg);cursor:pointer;
+  transition:transform .12s var(--u-ease),border-color .15s,box-shadow .2s,background .2s,color .15s;overflow:hidden}
+.ub>*{transform:skewX(16deg)}
+.ub::after{content:'';position:absolute;right:3%;bottom:6%;width:46%;height:32%;opacity:0;transition:opacity .2s;
+  background:linear-gradient(90deg,rgba(255,140,50,0),rgba(255,140,50,.8) 55%,rgba(255,214,150,.95));clip-path:var(--u-brush)}
+.ub::before{content:'';position:absolute;top:0;bottom:0;left:-40%;width:30%;opacity:0;background:linear-gradient(90deg,rgba(255,230,190,0),rgba(255,230,190,.35),rgba(255,230,190,0))}
+.ub.f{border-color:var(--u-gold2);color:#fff7ea;background:linear-gradient(100deg,rgba(156,82,30,.96),rgba(96,52,26,.95) 45%,rgba(46,31,27,.93));
+  box-shadow:0 0 0 1px rgba(243,214,160,.22),0 0 22px rgba(240,138,50,.35),inset 0 1px 0 rgba(255,222,176,.35)}
+.ub.f::after{opacity:1}
+.ub.f::before{animation:uShine .7s var(--u-ease) .05s 1}
+@keyframes uShine{0%{opacity:0;transform:translateX(0)}30%{opacity:1}100%{opacity:0;transform:translateX(480%)}}
+.ub:active{transform:skewX(-16deg) scale(.95)}
+.ub.lock{color:var(--u-dim)}
+.ub.lock .uico{color:var(--u-gold);font-size:.8em}
 .ub[hidden]{display:none}
-.ub.f{background:linear-gradient(180deg,rgba(240,138,50,.55),rgba(120,58,20,.75));border-color:var(--u-gold2);box-shadow:0 0 0 2px rgba(240,138,50,.3),0 4px 16px rgba(0,0,0,.55)}
-.ub:active{transform:skewX(-14deg) scale(.95);filter:brightness(1.15)}
-/* screen change: a slanted blade of orange light crosses the screen */
+.ub.small{min-width:44px;height:max(44px,calc(var(--u)*9));padding:0 calc(var(--u)*2);font-size:max(16px,calc(var(--u)*4));font-style:normal}
+/* the main one (Conferma, Combatti, Inizia): wider, upright, always bronze, gold lines running out to both sides */
+.umw{display:flex;align-items:center;gap:calc(var(--u)*2.4);width:100%}
+.umw::before,.umw::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(216,166,87,0),rgba(216,166,87,.6))}
+.umw::after{background:linear-gradient(90deg,rgba(216,166,87,.6),rgba(216,166,87,0))}
+.ub.main{height:max(48px,calc(var(--u)*13));min-width:calc(var(--u)*58);font-style:normal;font-size:max(20px,calc(var(--u)*6.4));letter-spacing:.02em;
+  background:linear-gradient(100deg,rgba(120,74,38,.94),rgba(58,38,30,.94) 55%,rgba(32,25,28,.94));border-color:rgba(232,196,140,.7)}
+.ub.main::after{opacity:.75}
+.ub.main.f{background:linear-gradient(100deg,rgba(178,96,36,.98),rgba(104,58,30,.97) 50%,rgba(52,34,28,.95));box-shadow:0 0 0 1px rgba(243,214,160,.3),0 0 28px rgba(240,138,50,.45)}
+/* --- menu entry: big serif text; with the focus bigger, light gold, an orange bar and a brush stroke behind --- */
+.uitem{position:relative;display:flex;width:max-content;align-items:center;gap:calc(var(--u)*1.2);min-height:44px;padding:0 calc(var(--u)*2) 0 calc(var(--u)*3);
+  font-size:max(19px,calc(var(--u)*5.2));line-height:1.2;color:rgba(239,232,220,.84);cursor:pointer;transition:font-size .18s var(--u-ease),color .18s}
+.uitem::before{content:'';position:absolute;left:0;top:22%;bottom:22%;width:max(3px,calc(var(--u)*.6));background:var(--u-orange);box-shadow:0 0 10px rgba(240,138,50,.8);opacity:0;transition:opacity .18s}
+.uitem::after{content:'';position:absolute;z-index:-1;left:45%;width:calc(var(--u)*28);top:30%;height:50%;opacity:0;transition:opacity .2s;
+  background:linear-gradient(90deg,rgba(240,138,50,0),rgba(240,138,50,.55) 45%,rgba(255,170,80,.8) 70%,rgba(255,200,130,0));clip-path:var(--u-brush)}
+.uitem.f{font-size:max(26px,calc(var(--u)*8));color:#fff7ea;text-shadow:0 0 18px rgba(240,138,50,.35)}
+.uitem.f::before,.uitem.f::after{opacity:1}
+.uitem.lock{color:rgba(165,157,179,.75)}
+.uitem.lock .uico{font-size:.62em;color:var(--u-gold)}
+/* --- card with a picture: italic label at the bottom; with the focus an orange frame, glow and a slow zoom --- */
+.ucard{position:relative;flex:none;width:calc(var(--u)*25);height:calc(var(--u)*16);min-width:88px;min-height:56px;overflow:hidden;cursor:pointer;
+  background:#1b1824;border:1px solid rgba(222,206,186,.38);box-shadow:0 6px 16px rgba(0,0,0,.4);transition:box-shadow .2s,border-color .2s}
+.ucardImg{position:absolute;inset:0;background:#241f30 center/cover no-repeat;transition:transform .5s var(--u-ease),filter .3s}
+.ucard::before{content:'';position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(10,8,14,0) 45%,rgba(10,8,14,.85))}
+.ucardTx{position:absolute;z-index:2;left:calc(var(--u)*1.8);right:calc(var(--u)*1.2);bottom:calc(var(--u)*1.2);display:flex;align-items:center;gap:.35em;
+  font-style:italic;font-weight:600;font-size:max(14px,calc(var(--u)*3.8));line-height:1.05;color:#f6efe3;text-shadow:0 1px 4px #000}
+.ucardBadge{position:absolute;z-index:2;top:calc(var(--u)*1);right:calc(var(--u)*1.2);font-style:normal;font-family:var(--u-display);font-size:max(10px,calc(var(--u)*2.2));letter-spacing:.12em;color:var(--u-gold2)}
+.ucard::after{content:'';position:absolute;z-index:2;right:4%;bottom:5%;width:40%;height:16%;opacity:0;transition:opacity .2s;
+  background:linear-gradient(90deg,rgba(255,140,50,0),rgba(255,150,60,.9));clip-path:var(--u-brush)}
+.ucard.f{border-color:#f2a24c;box-shadow:0 0 0 1px #f2a24c,0 0 20px rgba(240,138,50,.5),0 8px 18px rgba(0,0,0,.5)}
+.ucard.f .ucardImg{transform:scale(1.07)}
+.ucard.f::after{opacity:1}
+.ucard.lock .ucardImg{filter:grayscale(.55) brightness(.65)}
+.ucard.lock .uico{color:var(--u-gold);font-size:.85em}
+/* --- tabs --- */
+.utabs{display:flex;gap:calc(var(--u)*5);align-items:flex-end}
+.utab{position:relative;min-height:44px;display:flex;align-items:center;font-style:italic;font-size:max(16px,calc(var(--u)*4.4));color:var(--u-dim);cursor:pointer;transition:color .15s}
+.utab.on{color:#f6efe3}
+.utab.on::after{content:'';position:absolute;left:-10%;right:-10%;bottom:6px;height:6px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange) 40%,rgba(255,200,130,.9));clip-path:var(--u-brush)}
+.utab.f{color:#fff7ea;text-shadow:0 0 12px rgba(240,138,50,.6)}
+/* --- stepper ‹ label: value › in a pointed frame --- */
+.ustep{position:relative;display:flex;align-items:center;justify-content:space-between;height:max(44px,calc(var(--u)*10));min-width:calc(var(--u)*50);cursor:pointer;
+  background:rgba(216,190,150,.5);clip-path:polygon(5% 0,95% 0,100% 50%,95% 100%,5% 100%,0 50%);transition:background .2s,filter .2s}
+.ustep::before{content:'';position:absolute;inset:1px;background:linear-gradient(180deg,rgba(36,31,46,.97),rgba(18,15,24,.97));clip-path:polygon(5% 0,95% 0,100% 50%,95% 100%,5% 100%,0 50%)}
+.ustep>*{position:relative}
+.ustepA{display:flex;align-items:center;justify-content:center;width:max(44px,calc(var(--u)*9));height:100%;color:var(--u-gold2);font-size:max(16px,calc(var(--u)*4.2))}
+.ustepA.off{opacity:.22}
+.ustepT{font-size:max(16px,calc(var(--u)*4.4));color:var(--u-ink)}
+.ustepT b{display:inline-block;min-width:1.4em;text-align:center;font-family:var(--u-display);font-weight:600;color:#fff4e0}
+.ustepT b.bump{animation:uBump .22s var(--u-ease)}
+@keyframes uBump{0%{transform:scale(1.45)}100%{transform:scale(1)}}
+.ustep.f{background:rgba(243,214,160,.95);filter:drop-shadow(0 0 10px rgba(240,138,50,.55))}
+/* --- stat bar: label and slanted notches --- */
+.ustat{display:flex;align-items:center;gap:calc(var(--u)*2);font-style:normal;font-weight:500;font-size:max(12px,calc(var(--u)*2.9));color:var(--u-dim)}
+.ustatL{min-width:5.4em}
+.ustatB{display:flex;gap:calc(var(--u)*.6)}
+.ustatB i{width:calc(var(--u)*3.2);height:calc(var(--u)*1.5);min-width:10px;min-height:5px;background:rgba(255,255,255,.14);transform:skewX(-20deg)}
+.ustatB i.on{background:linear-gradient(180deg,#fbe7c2,var(--u-gold))}
+/* --- progress bar --- */
+.uprog{position:relative;height:max(4px,calc(var(--u)*.9));background:rgba(255,255,255,.12);overflow:hidden}
+.uprog i{position:absolute;inset:0;background:linear-gradient(90deg,#c9692a,var(--u-orange) 60%,var(--u-gold2));transform-origin:0 50%;transition:transform .3s var(--u-ease)}
+/* --- player chip: round portrait, name, level --- */
+.uchip{display:flex;align-items:center;gap:calc(var(--u)*1.6)}
+.uchipFace{width:max(32px,calc(var(--u)*7.5));height:max(32px,calc(var(--u)*7.5));border-radius:50%;background:#241f30 center 20%/cover no-repeat;border:1px solid var(--u-gold);box-shadow:0 0 10px rgba(216,166,87,.35)}
+.uchipN{font-size:max(15px,calc(var(--u)*4));color:#f6efe3}
+.uchipL{font-family:var(--u-display);font-size:max(11px,calc(var(--u)*2.6));letter-spacing:.08em;color:var(--u-gold2)}
+/* --- «‹ Indietro» --- */
+.uback{display:flex;align-items:center;gap:calc(var(--u)*.8);min-height:44px;padding:0 calc(var(--u)*2) 0 0;font-style:italic;font-size:max(15px,calc(var(--u)*3.8));color:var(--u-dim);cursor:pointer}
+.uback.f{color:#fff7ea;text-shadow:0 0 10px rgba(240,138,50,.6)}
+/* --- notice, top centre --- */
+.utoast{position:absolute;z-index:20;left:50%;top:calc(env(safe-area-inset-top) + var(--u)*4);display:flex;align-items:center;gap:calc(var(--u)*1.4);max-width:86vw;
+  padding:calc(var(--u)*1.6) calc(var(--u)*3.6);font-family:var(--u-serif);font-style:italic;font-weight:600;font-size:max(15px,calc(var(--u)*4));color:var(--u-ink);
+  background:linear-gradient(180deg,rgba(36,30,46,.96),rgba(18,15,24,.96));border:1px solid var(--u-line);box-shadow:0 8px 24px rgba(0,0,0,.5);pointer-events:none;
+  opacity:0;visibility:hidden;transform:translate(-50%,-14px);transition:opacity .2s,transform .25s var(--u-ease),visibility 0s .25s}
+.utoast.on{opacity:1;visibility:visible;transform:translate(-50%,0);transition:opacity .2s,transform .25s var(--u-ease)}
+.utoast .uico{color:var(--u-gold2)}
+.utoast.err{border-color:rgba(212,81,63,.8)}.utoast.err .uico{color:var(--u-red)}
+/* --- confirm dialog --- */
+.udlg{position:absolute;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;background:rgba(8,6,12,.66);touch-action:none;animation:uFade .18s both}
+.udlgBox{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*2.2);min-width:calc(var(--u)*64);max-width:90vw;padding:calc(var(--u)*5) calc(var(--u)*6);text-align:center;
+  font-family:var(--u-serif);color:var(--u-ink);background:linear-gradient(180deg,rgba(36,30,46,.98),rgba(18,15,24,.98));border:1px solid var(--u-line);box-shadow:0 18px 50px rgba(0,0,0,.6);
+  animation:uPop .24s var(--u-ease) both}
+.udlgT{font-weight:600;font-size:max(20px,calc(var(--u)*6))}
+.udlgP{margin:0;font-style:italic;font-weight:500;font-size:max(15px,calc(var(--u)*3.8));color:var(--u-dim)}
+.udlgBtns{display:flex;gap:calc(var(--u)*3);margin-top:calc(var(--u)*1.5)}
+.udlgBtns .ub{min-width:calc(var(--u)*30)}
+@keyframes uFade{from{opacity:0}}
+@keyframes uPop{from{opacity:0;transform:scale(.94)}}
+/* --- screen change: a slanted blade of orange light crosses the screen --- */
 #uiBlade{position:absolute;top:-10%;bottom:-10%;left:0;width:18%;pointer-events:none;opacity:0;transform:translateX(-30vw) skewX(-18deg);
-  background:linear-gradient(90deg,rgba(240,138,50,0),rgba(255,190,120,.55),rgba(240,138,50,0))}
+  background:linear-gradient(90deg,rgba(240,138,50,0),rgba(255,190,120,.5),rgba(240,138,50,0))}
 #uiBlade.go{animation:uBlade .42s cubic-bezier(.3,.6,.3,1)}
 #uiBlade.back{animation:uBladeBack .42s cubic-bezier(.3,.6,.3,1)}
 @keyframes uBlade{0%{opacity:0;transform:translateX(-30vw) skewX(-18deg)}20%{opacity:1}100%{opacity:0;transform:translateX(120vw) skewX(-18deg)}}
 @keyframes uBladeBack{0%{opacity:0;transform:translateX(120vw) skewX(-18deg)}20%{opacity:1}100%{opacity:0;transform:translateX(-30vw) skewX(-18deg)}}
+/* --- the screens of the fight cycle (h_menu.js) --- */
+#sc-menu{background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.72) 46%,rgba(14,12,22,.08) 100%)}
+#sc-pause{justify-content:flex-start;background:linear-gradient(90deg,rgba(14,12,22,.9) 0%,rgba(14,12,22,.62) 42%,rgba(14,12,22,.2) 100%)}
+#sc-pause .ucol{width:calc(var(--u)*46);gap:calc(var(--u)*2)}
+#sc-results{align-items:center;background:rgba(14,12,22,.66)}

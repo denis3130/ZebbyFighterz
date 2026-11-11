@@ -14,7 +14,8 @@ T.test('hidden tab pauses and does not catch up', () => { __VF.tick(performance.
   T.eq(__VF.G.state,'pause'); T.eq(__VF.G.last,null); const f0=__VF.G.S.frame; __VF.tick(performance.now()+5000); T.eq(__VF.G.S.frame,f0,'no steps while hidden');
   Object.defineProperty(document,'hidden',{value:false,configurable:true}); __VF.menu.resume(); T.eq(__VF.G.last,null); const f=__VF.G.S.frame; __VF.tick(performance.now()+5000); T.eq(__VF.G.S.frame,f); });
 T.test('restart resets the match', () => { __VF.startMatch('versus',{seed:1}); __VF.frame(200); __VF.menu.pause(); uiClick('Ricomincia'); T.eq(__VF.G.state,'fight'); T.eq(__VF.G.S.frame,0); });
-T.test('abandon goes back to the menu', () => { __VF.startMatch('versus',{seed:1}); __VF.menu.pause(); uiClick('Abbandona'); T.eq(__VF.G.state,'title'); T.eq(__VF.UI.NAV.cur,'menu'); T.eq(__VF.G.S,null); });
+T.test('abandon asks, then goes back to the menu', () => { __VF.startMatch('versus',{seed:1}); __VF.menu.pause(); uiClick('Abbandona'); T.eq(__VF.G.state,'pause','asked first'); uiClick('Abbandona');
+  return Promise.resolve().then(() => { T.eq(__VF.G.state,'title'); T.eq(__VF.UI.NAV.cur,'menu'); T.eq(__VF.G.S,null); }); });
 T.test('pad disconnect pauses only an assigned pad; the player keeps the keyboard', () => {
   const V=__VF, ev=i=>{ const e=new Event('gamepaddisconnected'); if(i!==undefined) e.gamepad={index:i}; window.dispatchEvent(e); };
   V.startMatch('versus',{seed:1}); fakePads([{},{}]); V.inputAssign('versus',{pad:0}); V.menu.resume();

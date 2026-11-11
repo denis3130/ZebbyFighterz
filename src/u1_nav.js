@@ -1,5 +1,6 @@
 // One navigation for every interface screen (spec 2026-11-11-voidrise-interfaccia-design.md §6): a stack of screens,
-// one focused element, the same rules on keyboard, mouse, touch and controller.
+// one focused element, the same rules on keyboard, mouse, touch and controller. Confirming calls el.uiAct(device, target):
+// target = the part of the element that was tapped or clicked (a stepper's arrow), undefined from keyboard and controller.
 // A screen is {id, build(root), enter(params, isBack), leave(), back(), tab(d), onFocus(el), guardMs}: its root
 // <section class="usc" id="sc-<id>"> is made the first time it is shown. Focusable = any visible [data-focus] element of
 // the screen (or of the dialog open in #uiOver). Confirming an element calls el.uiAct(device) or goes to data-go.
@@ -75,6 +76,8 @@ function navReplace(id, params) { NAV.stack.pop(); NAV.stack.push({id, params: p
 function navReset(id, params) { NAV.stack = [{id, params: params || {}, focus: null}]; navShow(NAV.stack[0], false); }
 function navClear() { NAV.stack = []; navShow(null); }
 function navBack() {
+  const dlg = document.getElementById('uiDlg');
+  if (dlg && dlg.uiBack) { dlg.uiBack(); return; }   // an open dialog answers «no» first
   const d = navDef();
   if (!d || navGuarded()) return;
   if (d.back && d.back() === false) return;
@@ -119,8 +122,8 @@ function navPress(dev) {
   const el = NAV.focus;
   if (el && navItems().includes(el)) navAct(el);
 }
-function navAct(el) {
-  if (el.uiAct) el.uiAct(navDevice());
+function navAct(el, target) {
+  if (el.uiAct) el.uiAct(navDevice(), target);
   else if (el.dataset.go) navGo(el.dataset.go);
 }
 function navTab(d) {
@@ -132,11 +135,11 @@ function navTab(d) {
 }
 // A pointer confirm: only an element of the screen in front (not one under an open dialog), and not in the first
 // CFG.ui.t.tapGuard ms of a screen (a double tap would confirm on the next screen too).
-function navPointerAct(el, dev) {
+function navPointerAct(el, dev, target) {
   if (MN.rot || !navItems().includes(el)) return;
   navSetDev(dev);
   if (performance.now() < NAV.busyUntil || navGuarded()) return;
-  navFocus(el); navAct(el);
+  navFocus(el); navAct(el, target);
 }
 
 // Activation of a button outside the screens (fn) — the pause button over the fight: touch and pen on pointerup, when
@@ -168,7 +171,7 @@ function navPointers(box) {
   box.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse') return;
     const el = e.target.closest && e.target.closest('[data-focus]');
-    NAV.down = el ? {id: e.pointerId, el} : null;
+    NAV.down = el ? {id: e.pointerId, el, t: e.target} : null;
   });
   box.addEventListener('pointercancel', e => { if (NAV.down && NAV.down.id === e.pointerId) NAV.down = null; });
   box.addEventListener('pointerup', e => {
@@ -177,14 +180,14 @@ function navPointers(box) {
     NAV.down = null;
     if (!navNear(d.el, e)) return;
     NAV.tapEnd = performance.now() + NAV_TAP.ms;
-    navPointerAct(d.el, 'touch');
+    navPointerAct(d.el, 'touch', d.t);
   });
   box.addEventListener('click', e => {
     const el = e.target.closest && e.target.closest('[data-focus]');
     if (!el) return;
     e.preventDefault();
     if (e.pointerType === 'touch' || e.pointerType === 'pen' || performance.now() < NAV.tapEnd) { NAV.tapEnd = 0; return; }
-    navPointerAct(el, 'kb');
+    navPointerAct(el, 'kb', e.target);
   });
   box.addEventListener('pointermove', e => {
     if (e.pointerType !== 'mouse') return;

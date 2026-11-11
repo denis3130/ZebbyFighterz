@@ -1,5 +1,5 @@
 cd "$(dirname "$0")"
-FILES="a0_cfg.js a1_ui_cfg.js c1_sim.js c2_moves.js c3_dummy.js b_input.js d_render.js e_poses.js e_fighter3d.js e_model.js f_fx.js g_hud.js u0_save.js u7_prog.js u1_nav.js h_menu.js z_main.js"
+FILES="a0_cfg.js a1_ui_cfg.js c1_sim.js c2_moves.js c3_dummy.js b_input.js d_render.js e_poses.js e_fighter3d.js e_model.js f_fx.js g_hud.js u0_save.js u7_prog.js u1_nav.js u2_comp.js h_menu.js z_main.js"
 # game_w.html = test build (keeps window.__VF); index.html = playable build (no test API)
 python3 build.py game_w.html 1 --assets=viewer_assets $FILES >/dev/null
 python3 build.py index.html 0 --assets=viewer_assets $FILES

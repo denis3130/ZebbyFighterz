@@ -22,7 +22,8 @@ window.T = (() => {
       this.seed(this.SEED);
       const out = [];
       for (const t of tests) {
-        try { t.fn(); out.push({name: t.name, ok: true}); }
+        // a test may return a Promise (a dialog's answer): awaited here; it settles in microtasks, so no frame runs in between
+        try { const r = t.fn(); if (r && typeof r.then === 'function') await r; out.push({name: t.name, ok: true}); }
         catch (e) { out.push({name: t.name, ok: false, msg: e instanceof Fail ? e.message : String(e && e.stack || e)}); }
       }
       return out;
@@ -206,3 +207,9 @@ function byText(t) { const e = navEls().find(e => e.textContent.includes(t)); if
 function focused() { const f = __VF.UI.NAV.focus; return f ? f.textContent.trim() : null; }
 function uiClick(t) { byText(t).click(); }
 function hover(t) { byText(t).dispatchEvent(new PointerEvent('pointermove', {bubbles: true, cancelable: true, pointerType: 'mouse', pointerId: 1})); }
+// mount(list) = the test screen 'uiMount' (root #sc-uiMount) showing the given elements in a column, focus on the first.
+function mount(list) {
+  if (!__VF.UI.NAV.screens.uiMount) __VF.navRegister({id: 'uiMount', enter(p) { this.root.innerHTML = ''; const box = document.createElement('div');
+    box.style.cssText = 'display:flex;flex-direction:column;gap:18px;align-items:flex-start'; p.list.forEach(e => box.appendChild(e)); this.root.appendChild(box); }});
+  __VF.navReset('uiMount', {list});
+}
