@@ -9,8 +9,9 @@
 // guard, a short load, a dry acceleration into the strike, a quick but believable recovery.
 //
 // Frames are the game's (60 a second). All the numbers of these three are PROPOSALS: the project defines none of them.
-//   idle  "Guardia elastica": the sheets' guard (3/4 toward the camera, a wide low stance, the lead (left) hand open
-//         and forward at chest height, the rear hand open on the stomach), a loop of 144 frames (2.4 s): two breaths
+//   idle  "Guardia elastica": the sheets' guard (3/4 toward the camera, a wide low stance, the rear hand on the
+//         stomach) with Denis's change (12/11): the lead (left) arm straight out toward the opponent, the hand a closed
+//         fist, as if to keep him away; the rear (right) hand half closed. A loop of 144 frames (2.4 s): two breaths
 //         (72 each) and one shift of the weight forward and back. Feet flat and still.
 //   pr    "Passo radente": 26 frames, 0.40 m forward: load 0-7 (the weight onto the rear leg, the knees give), push
 //         7-14 (the rear leg drives, the front foot leaves on frame 8, 10 cm up at most with its toes up, and lands on
@@ -78,10 +79,11 @@ function rkMono(keys) {
 function rkArc(f, f0, f1) { if (f <= f0 || f >= f1) return 0; const s = Math.sin(Math.PI * (f - f0) / (f1 - f0)); return s * s; }
 const rkF = (F, act) => Math.max(0, Math.min(RK.len[act], F.af));
 
-// --- The guard ("Guardia elastica"): style.js's preset K, from the sheets: the lead hand open, forward at chest height,
-// fingers up, palm toward the opponent; the rear hand open by the solar plexus, fingers across, palm in. ---
+// --- The guard ("Guardia elastica"): style.js's preset K. The lead arm straight out from the shoulder along the fight
+// line, a little down (reach: share of the arm's length, dir: [forward, up, side]), the fist's knuckles forward and its
+// palm in (toward his right); the rear hand half closed on the stomach, fingers across, palm in. ---
 RS.presets.K = {curl: .15, armW: 1, flow: {period: 150, lead: 0, rear: 0},
-  lead: {pos: [.33, -.02, .06], fing: [.4, .9, 0], palm: [1, -.1, -.2], elbow: [.15, -1, .4]},   // (pos: from the lead shoulder)
+  lead: {reach: .975, dir: [1, -.12, .03], fing: [1, -.1, 0], palm: [0, 0, -1], elbow: [0, -1, .2]},
   rear: {pos: [-.02, -.08, .21], fing: [.8, .1, .5], palm: [0, .15, -1], elbow: [-.6, -1, -.35]}};
 rsPreset('K');
 RS.fidget.first = 1e9;   // (no neck roll here: the loop is breath and weight only)
@@ -114,7 +116,7 @@ const RK_PR = {
   // feet: where along the line (m, in the world), how high (bump: from, to, m) and the heel's lift (deg)
   L: {x: [[0, 0], [8.8, 0], [13.4, RK.d]], up: [8, 14, .1], heel: [[0, 0], [7, 6], [8, 4], [14, 0], [26, 0]], toe: [[0, 0], [8, 0], [11, 20], [14, 0]]},
   R: {x: [[0, 0], [15.6, 0], [21.4, RK.d]], up: [14.8, 22.2, .03], heel: [[0, 0], [7, 3], [12, 12], [15, 14], [18, 7], [21.4, 0], [26, 0]], toe: [[0, 0]]},
-  lead: [[0, 0], [8, 0], [13, 1], [20, .3], [26, 0]],   // the lead hand reaching a little ahead with the push
+  lead: [[0, 0], [8, 0], [13, 1], [20, .3], [26, 0]],   // the lead fist dipping a little with the push
   phase: [[0, 'Caricamento'], [7, 'Spinta'], [14, 'Appoggio'], [17, 'Ritorno']],
 };
 RB.styleFor.pr = (y, F) => {
@@ -136,7 +138,7 @@ const RK_PA = {
   head: rkMono([[0, 0], [5, 2], [9, -1], [28, 0]]),
   guard: rkMono([[0, 0], [3, 0], [8, 1], [14, 1], [24, 0]]),   // the rear hand up by the head
   back: rkMono([[12, 0], [16, .6], [28, 1]]),                  // the striking hand's way back to the guard
-  flat: [[0, 0], [5, .6], [9, 1], [13, 1], [24, 0]],           // its fingers straight and together
+  flat: [[0, 0], [4, .7], [7, 1], [13, 1], [22, 0]],           // the fist opening into a palm, then closing again
   phase: [[0, 'Caricamento'], [5, 'Spinta'], [10, 'Impatto'], [13, 'Recupero']],
 };
 RB.styleFor.palm = (y, F) => {
@@ -185,12 +187,13 @@ RB.post.push((md, p, F, S, y) => {
   const mix = (a, b, k) => a.clone().lerp(b, k), nmix = (a, b, k) => a.clone().lerp(b, k).normalize();
   const t = S.frame + 23 * F.side, g = rkGuard(t), br = act === 'idle' ? g.b : 0;
   // the guard's targets (preset K), the breath lifting both hands a little
-  const G = {lp: l(RS.lead.pos).add(W.p[ix.LeftArm]).addScaledVector(RB_UP, .012 * br), lf: l(RS.lead.fing).normalize(), lpn: l(RS.lead.palm).normalize(), le: l(RS.lead.elbow).normalize(),
+  const sL = W.p[ix.LeftArm], armL = sL.distanceTo(W.p[ix.LeftForeArm]) + W.p[ix.LeftForeArm].distanceTo(W.p[ix.LeftHand]);
+  const G = {lp: l(RS.lead.dir).normalize().multiplyScalar(RS.lead.reach * armL).add(sL).addScaledVector(RB_UP, .012 * br), lf: l(RS.lead.fing).normalize(), lpn: l(RS.lead.palm).normalize(), le: l(RS.lead.elbow).normalize(),
     rp: c(RS.rear.pos).add(C1).addScaledVector(RB_UP, .009 * br), rf: c(RS.rear.fing).normalize(), rpn: c(RS.rear.palm).normalize(), re: c(RS.rear.elbow).normalize()};
   let T = G;
   if (act === 'pr') {
     const r = rkKey(RK_PR.lead, rkF(F, 'pr'));
-    T = Object.assign({}, G, {lp: G.lp.clone().addScaledVector(RB_LINE, .05 * r).addScaledVector(RB_UP, -.01 * r)});
+    T = Object.assign({}, G, {lp: G.lp.clone().addScaledVector(RB_UP, -.015 * r)});   // (the arm already straight: the fist dips a little with the push)
   } else if (act === 'palm') {
     const f = rkF(F, 'palm');
     // the striking (lead) hand. The load: drawn back in front of the face, fingers up, palm forward. The drive:
@@ -217,10 +220,11 @@ RB.post.push((md, p, F, S, y) => {
   if (RK.g.headYaw) mdBoneTurn(p, ix.Head, MD_Y, RK.g.headYaw);   // the eyes on the opponent
 });
 
-// --- Hands: open in the guard; in the palm the striking (lead) hand's fingers straight and together, the thumb tucked ---
+// --- Hands: the lead a closed fist and the rear half closed (Denis, 12/11); in the palm the striking (lead) hand opens,
+// fingers straight and together, the thumb tucked, and closes again in the recovery ---
 RN.hooks.applied.push((it, F) => {
   if (!it.fingers || !RN.on || !RK_OWN[F.act]) return;
-  const kL = .15, kR = .3, flat = F.act === 'palm' ? rkKey(RK_PA.flat, rkF(F, 'palm')) : 0;
+  const kL = 1, kR = .55, flat = F.act === 'palm' ? rkKey(RK_PA.flat, rkF(F, 'palm')) : 0;
   for (let i = 0; i < it.fingers.length; i++) {
     const n = it.fingers[i].name, left = /^Left/.test(n);
     let k = left ? kL : kR;
