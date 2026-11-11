@@ -1,0 +1,136 @@
+{
+ "_": "Kael's body (wip_assets/kael, 11/11/2026) against Denis's body sheets, per panel: tools/sheet_scan.py's camera (yaw degrees, + = his left side seen; s px/m; u = cx + s x', v = by - s y), the box of its figure and its overlaps; tools/kael_body.py paints from them",
+ "views": {
+  "busto_dx": {
+   "sheet": "kael_busto_3viste.png",
+   "box": [
+    0,
+    82,
+    570,
+    812
+   ],
+   "yaw": -48.0,
+   "s": 718.949,
+   "cx": 291.77,
+   "by": 1236.189,
+   "iou": {
+    "silhouette": 0.618,
+    "skin": 0.411,
+    "dark": 0.36,
+    "purple": 0.199
+   }
+  },
+  "busto_fronte": {
+   "sheet": "kael_busto_3viste.png",
+   "box": [
+    521,
+    87,
+    1246,
+    818
+   ],
+   "yaw": -5.0,
+   "s": 720.023,
+   "cx": 885.427,
+   "by": 1243.124,
+   "iou": {
+    "silhouette": 0.655,
+    "skin": 0.516,
+    "dark": 0.419,
+    "purple": 0.398
+   }
+  },
+  "busto_sx": {
+   "sheet": "kael_busto_3viste.png",
+   "box": [
+    1200,
+    81,
+    1774,
+    819
+   ],
+   "yaw": 44.0,
+   "s": 720.307,
+   "cx": 1491.226,
+   "by": 1244.613,
+   "iou": {
+    "silhouette": 0.664,
+    "skin": 0.393,
+    "dark": 0.377,
+    "purple": 0.348
+   }
+  },
+  "gambe_dx": {
+   "sheet": "kael_gambe_3viste.png",
+   "box": [
+    104,
+    0,
+    580,
+    860
+   ],
+   "yaw": -30.0,
+   "s": 703.368,
+   "cx": 333.721,
+   "by": 814.123,
+   "iou": {
+    "silhouette": 0.715,
+    "dark": 0.657,
+    "purple": 0.383
+   }
+  },
+  "gambe_fronte": {
+   "sheet": "kael_gambe_3viste.png",
+   "box": [
+    643,
+    0,
+    1147,
+    854
+   ],
+   "yaw": 0.0,
+   "s": 712.726,
+   "cx": 887.505,
+   "by": 818.868,
+   "iou": {
+    "silhouette": 0.783,
+    "dark": 0.709,
+    "purple": 0.598
+   }
+  },
+  "gambe_sx": {
+   "sheet": "kael_gambe_3viste.png",
+   "box": [
+    1186,
+    0,
+    1686,
+    858
+   ],
+   "yaw": 14.0,
+   "s": 707.375,
+   "cx": 1432.947,
+   "by": 815.215,
+   "iou": {
+    "silhouette": 0.73,
+    "dark": 0.63,
+    "purple": 0.568
+   }
+  },
+  "retro": {
+   "sheet": "kael_retro.png",
+   "box": [
+    28,
+    0,
+    990,
+    1528
+   ],
+   "yaw": 179.0,
+   "s": 822.684,
+   "cx": 503.393,
+   "by": 1466.851,
+   "iou": {
+    "silhouette": 0.853,
+    "skin": 0.579,
+    "hair": 0.286,
+    "dark": 0.727,
+    "purple": 0.324
+   }
+  }
+ }
+}
