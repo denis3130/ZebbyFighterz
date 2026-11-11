@@ -168,17 +168,8 @@ function barScale(id) {
   return m.a;
 }
 
-// Menu helpers (Task 11). clickText(text) = click the visible menu button (or button) whose text contains `text`;
-// padTick() = run the menu's controller polling once (the real loop does it every frame); endMatch(winner) = drive the
-// running match to phase 'end' with that winner (0, 1 or 2 = draw) and let the loop react once.
-function clickText(text) {
-  const els = [...document.querySelectorAll('.mb,button')].filter(e => {
-    const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
-    return r.width > 0 && r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && e.textContent.includes(text);
-  });
-  if (!els.length) throw new Error('no visible button with "' + text + '"');
-  els[0].click();
-}
+// Menu helpers (Task 11). padTick() = run the menu's controller polling once (the real loop does it every frame);
+// endMatch(winner) = drive the running match to phase 'end' with that winner (0, 1 or 2 = draw) and let the loop react once.
 function padTick() { __VF.menuPad(); }
 function endMatch(winner) {
   const S = __VF.G.S;
@@ -199,3 +190,19 @@ function later(ms, fn) {
   performance.now = () => real() + ms;
   try { fn(); } finally { performance.now = real; }
 }
+
+// Interface helpers (U1). The pointer guard against double taps is off for the tests (they click one after another);
+// 'double tap navigates once' turns it back on. keyTap(code) = key down and up; navEls() = the focusable elements on
+// screen (inside an open dialog in #uiOver only, as the navigation does); byText(t) = the first of them whose text
+// contains t; focused() = the text of the element with the focus; uiClick(t) = a click on byText(t) (mouse or
+// programmatic, as a page click); hover(t) = the mouse moving over it.
+if (__VF.CFG.ui) __VF.CFG.ui.t.tapGuard = 0;
+function keyTap(code) { key(code); keyUp(code); }
+function navEls() {
+  const o = document.getElementById('uiOver'), box = o && o.firstElementChild ? o : document;
+  return [...box.querySelectorAll('[data-focus]')].filter(e => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
+}
+function byText(t) { const e = navEls().find(e => e.textContent.includes(t)); if (!e) throw new Error('no focusable element with "' + t + '"'); return e; }
+function focused() { const f = __VF.UI.NAV.focus; return f ? f.textContent.trim() : null; }
+function uiClick(t) { byText(t).click(); }
+function hover(t) { byText(t).dispatchEvent(new PointerEvent('pointermove', {bubbles: true, cancelable: true, pointerType: 'mouse', pointerId: 1})); }

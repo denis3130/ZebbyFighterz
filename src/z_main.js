@@ -1,7 +1,7 @@
 // Entry point: game state, the fixed step and boot. Later tasks add the full real-time loop (tick) and the menus.
 const G={state:'boot',mode:null,S:null,acc:0,last:null};
 // Input first, then the renderer: the title comes only once the arena's textures are decoded.
-function boot(){inputInit();hudInit();menuInit();renderInit().then(()=>{G.state='title';menuOrient();requestAnimationFrame(loop);});}
+function boot(){saveLoad();inputInit();hudInit();menuInit();renderInit().then(()=>{G.state='title';navReset('menu');menuOrient();requestAnimationFrame(loop);});}
 // The animation-frame callback: the next frame is scheduled first, and an exception in one frame is reported, not fatal.
 function loop(now){requestAnimationFrame(loop);try{tick(now);}catch(e){console.error(e);}}
 // The real-time cycle: an accumulator of 1000/60 ms feeds stepGame (at most CFG.loop.maxSteps per tick, the rest of a
@@ -46,5 +46,5 @@ function startMatch(mode,o){
   G.S=simCreate({seed:o.seed===undefined?1:o.seed,mode,chars:['ren','kael'],dummy:o.dummy});
   G.mode=mode; G.state='fight'; G.acc=0; G.last=null; menuSync();
 }
-window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,showScreen,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,modelBuild,mdData,mdPoseOf,mdMix,mdSample,mdApply,headTop,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD,UI:{get SV(){return SV;}},saveDefaults,saveLoad,saveWrite,progLevel,progMatchXp,progAddXp,progRecord};
+window.__VF={G,CFG,ASSETS,BTN,simCreate,simStep,simClone,simHash,fighterOf,simRand,hitstunFor,scaleFor,canBeHit,moveBox,hurtBoxes,isBlocking,dummyInput,startMatch,frame,tick,menu,menuMove,menuPress,menuBack,menuPad,menuOrient,menuFpsInit,navRegister,navGo,navBack,navReset,navReplace,navClear,navMove,navPress,navTab,navFocus,navPadPoll,uiTap,inputInit,inputRead,inputAssign,IN,touchShow,renderInit,renderFrame,renderResize,cam,toScreen,ARENA,scene,camera,renderer,F3D,fighterBuild,poseOf,limbWorld,modelBuild,mdData,mdPoseOf,mdMix,mdSample,mdApply,headTop,FX,fxEvents,fxUpdate,hudInit,hudUpdate,hudEvents,HUD,UI:{get SV(){return SV;},NAV},saveDefaults,saveLoad,saveWrite,progLevel,progMatchXp,progAddXp,progRecord};
 boot();

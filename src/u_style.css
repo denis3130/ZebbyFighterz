@@ -5,3 +5,27 @@
   --u-orange:#f08a32;--u-ink:#efe8dc;--u-dim:#a59db3;--u-violet:#8f6ad8;--u-teal:#2f8f86;--u-red:#d4513f;
   --u-display:'Cinzel',Georgia,serif;--u-serif:'Cormorant Garamond',Georgia,serif;
 }
+/* Screens (u1_nav.js): one at a time inside #uiScreens; dialogs and notices in #uiOver, over every screen. */
+#uiScreens,#uiOver{position:absolute;inset:0;pointer-events:none}
+#uiOver>*{pointer-events:auto}
+.usc{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;align-items:flex-start;pointer-events:auto;touch-action:none;
+  padding:calc(env(safe-area-inset-top) + 14px) calc(env(safe-area-inset-right) + 28px) calc(env(safe-area-inset-bottom) + 14px) calc(env(safe-area-inset-left) + 36px);
+  font-family:var(--u-serif);font-style:normal;font-weight:600;color:var(--u-ink)}
+.usc.on{display:flex}
+#sc-menu{background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.72) 46%,rgba(14,12,22,.08) 100%)}
+#sc-pause,#sc-results{align-items:center;background:rgba(14,12,22,.62)}
+.ucol{display:flex;flex-direction:column;gap:10px;width:min(470px,64vw)}
+/* interface button: a slanted panel with a thin gold edge; the focused one glows orange */
+.ub{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;height:52px;padding:0 24px;border:1px solid var(--u-line);
+  background:rgba(20,17,28,.82);color:var(--u-ink);font-size:24px;line-height:1;white-space:nowrap;cursor:pointer;transform:skewX(-14deg);transition:transform .08s,filter .08s,background .12s,border-color .12s}
+.ub>*{transform:skewX(14deg)}
+.ub[hidden]{display:none}
+.ub.f{background:linear-gradient(180deg,rgba(240,138,50,.55),rgba(120,58,20,.75));border-color:var(--u-gold2);box-shadow:0 0 0 2px rgba(240,138,50,.3),0 4px 16px rgba(0,0,0,.55)}
+.ub:active{transform:skewX(-14deg) scale(.95);filter:brightness(1.15)}
+/* screen change: a slanted blade of orange light crosses the screen */
+#uiBlade{position:absolute;top:-10%;bottom:-10%;left:0;width:18%;pointer-events:none;opacity:0;transform:translateX(-30vw) skewX(-18deg);
+  background:linear-gradient(90deg,rgba(240,138,50,0),rgba(255,190,120,.55),rgba(240,138,50,0))}
+#uiBlade.go{animation:uBlade .42s cubic-bezier(.3,.6,.3,1)}
+#uiBlade.back{animation:uBladeBack .42s cubic-bezier(.3,.6,.3,1)}
+@keyframes uBlade{0%{opacity:0;transform:translateX(-30vw) skewX(-18deg)}20%{opacity:1}100%{opacity:0;transform:translateX(120vw) skewX(-18deg)}}
+@keyframes uBladeBack{0%{opacity:0;transform:translateX(120vw) skewX(-18deg)}20%{opacity:1}100%{opacity:0;transform:translateX(-30vw) skewX(-18deg)}}

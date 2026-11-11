@@ -1,16 +1,20 @@
-// Menu, pause, end screen and the real-time loop (Task 11). Tests share page state and run in order, starting on the title.
-T.test('title → training with keyboard', () => { key('Enter'); keyUp('Enter'); T.eq(__VF.G.state,'fight'); T.eq(__VF.G.mode,'training'); });
-T.test('Esc pauses, Esc resumes', () => { key('Escape'); keyUp('Escape'); T.eq(__VF.G.state,'pause'); key('Escape'); keyUp('Escape'); T.eq(__VF.G.state,'fight'); });
+// Menu, pause, end screen and the real-time loop, on the interface navigation (Interface U1, Task 3; first written for
+// Tappa 1 Task 11). Tests share page state and run in order, starting on the menu. Until the real main menu (U1 Task 8)
+// the menu screen is the old title's two choices: «1 Giocatore · Allenamento» and «2 Giocatori».
+const act = (scr, a) => document.querySelector('#sc-' + scr + ' [data-act="' + a + '"]');
+T.test('menu → training with keyboard', () => { __VF.menu.toTitle(); key('Enter'); keyUp('Enter'); T.eq(__VF.G.state,'fight'); T.eq(__VF.G.mode,'training'); });
+T.test('Esc pauses, Esc resumes', () => { key('Escape'); keyUp('Escape'); T.eq(__VF.G.state,'pause'); T.eq(__VF.UI.NAV.cur,'pause'); key('Escape'); keyUp('Escape'); T.eq(__VF.G.state,'fight'); T.eq(__VF.UI.NAV.cur,null); });
 T.test('pause stops the sim', () => { __VF.menu.pause(); const f=__VF.G.S.frame; __VF.tick(performance.now()+500); T.eq(__VF.G.S.frame,f); __VF.menu.resume(); });
-T.test('opponent toggle in training', () => { __VF.menu.pause(); clickText('AVVERSARIO'); T.eq(__VF.G.S.dummy,'casuale'); __VF.menu.resume(); });
-T.test('gamepad navigates the title and becomes G1', () => { __VF.menu.toTitle(); fakePads([{buttons:{13:1}}]); padTick(); fakePads([{buttons:{0:1}}]); padTick(); fakePads([]); padTick(); T.eq(__VF.G.mode,'versus'); T.eq(__VF.IN.assign[0].pad,0); });
-T.test('match end screen and rematch', () => { endMatch(0); T.eq(__VF.G.state,'end'); T.eq(txt('endTitle'),'VINCE REN!'); later(__VF.CFG.menu.endGuardMs+50,()=>clickText('RIVINCITA')); T.eq(__VF.G.state,'fight'); });
+T.test('opponent toggle in training', () => { __VF.menu.pause(); uiClick('Avversario'); T.eq(__VF.G.S.dummy,'casuale'); T.ok(txt('oppTx').includes('Casuale')); __VF.menu.resume(); });
+T.test('gamepad navigates the menu and becomes G1', () => { __VF.menu.toTitle(); fakePads([{buttons:{13:1}}]); padTick(); fakePads([{buttons:{0:1}}]); padTick(); fakePads([]); padTick(); T.eq(__VF.G.mode,'versus'); T.eq(__VF.IN.assign[0].pad,0); });
+T.test('match end screen and rematch', () => { endMatch(0); T.eq(__VF.G.state,'end'); T.eq(txt('endTitle'),'VINCE REN!'); later(__VF.CFG.menu.endGuardMs+50,()=>uiClick('Rivincita')); T.eq(__VF.G.state,'fight'); });
 T.test('mouse click on pause button', () => { $('tPause').click(); T.eq(__VF.G.state,'pause'); __VF.menu.resume(); });
 T.test('hidden tab pauses and does not catch up', () => { __VF.tick(performance.now()); T.ok(__VF.G.last!==null);
   Object.defineProperty(document,'hidden',{value:true,configurable:true}); document.dispatchEvent(new Event('visibilitychange'));
   T.eq(__VF.G.state,'pause'); T.eq(__VF.G.last,null); const f0=__VF.G.S.frame; __VF.tick(performance.now()+5000); T.eq(__VF.G.S.frame,f0,'no steps while hidden');
   Object.defineProperty(document,'hidden',{value:false,configurable:true}); __VF.menu.resume(); T.eq(__VF.G.last,null); const f=__VF.G.S.frame; __VF.tick(performance.now()+5000); T.eq(__VF.G.S.frame,f); });
-T.test('restart resets the match', () => { __VF.startMatch('versus',{seed:1}); __VF.frame(200); __VF.menu.pause(); clickText('RICOMINCIA'); T.eq(__VF.G.state,'fight'); T.eq(__VF.G.S.frame,0); });
+T.test('restart resets the match', () => { __VF.startMatch('versus',{seed:1}); __VF.frame(200); __VF.menu.pause(); uiClick('Ricomincia'); T.eq(__VF.G.state,'fight'); T.eq(__VF.G.S.frame,0); });
+T.test('abandon goes back to the menu', () => { __VF.startMatch('versus',{seed:1}); __VF.menu.pause(); uiClick('Abbandona'); T.eq(__VF.G.state,'title'); T.eq(__VF.UI.NAV.cur,'menu'); T.eq(__VF.G.S,null); });
 T.test('pad disconnect pauses only an assigned pad; the player keeps the keyboard', () => {
   const V=__VF, ev=i=>{ const e=new Event('gamepaddisconnected'); if(i!==undefined) e.gamepad={index:i}; window.dispatchEvent(e); };
   V.startMatch('versus',{seed:1}); fakePads([{},{}]); V.inputAssign('versus',{pad:0}); V.menu.resume();
@@ -29,13 +33,13 @@ T.test('loop: fixed steps from real time, at most loop.maxSteps per tick', () =>
   const f=S.frame; __VF.tick(t+1000/60*3+1+2000); T.eq(S.frame-f,__VF.CFG.loop.maxSteps);
 });
 T.test('menu keys move the focus and wrap', () => {
-  __VF.menu.toTitle(); key('ArrowDown'); keyUp('ArrowDown'); T.ok(document.querySelectorAll('#title .mb')[1].classList.contains('f'));
-  key('KeyW'); keyUp('KeyW'); key('KeyW'); keyUp('KeyW'); T.ok(document.querySelectorAll('#title .mb')[1].classList.contains('f'),'wraps to the last');
+  __VF.menu.toTitle(); T.eq(focused(),'1 Giocatore · Allenamento'); key('ArrowDown'); keyUp('ArrowDown'); T.eq(focused(),'2 Giocatori');
+  key('KeyW'); keyUp('KeyW'); key('KeyW'); keyUp('KeyW'); T.eq(focused(),'2 Giocatori','wraps to the last');
   key('Space'); keyUp('Space'); T.eq(__VF.G.mode,'versus'); T.eq(__VF.IN.assign[0].pad,null);
 });
-T.test('screens: one at a time, hud hidden on the title', () => {
-  __VF.menu.toTitle(); T.ok(vis('title')); T.ok(!vis('pause')&&!vis('end')&&!vis('tPause')); T.ok(!vis('hud'));
-  __VF.startMatch('training',{seed:1}); T.ok(!vis('title')&&vis('tPause'));
+T.test('screens: one at a time, hud hidden on the menu', () => {
+  __VF.menu.toTitle(); T.ok(vis('sc-menu')); T.ok(!vis('sc-pause')&&!vis('sc-results')&&!vis('tPause')); T.ok(!vis('hud'));
+  __VF.startMatch('training',{seed:1}); T.ok(!vis('sc-menu')&&vis('tPause'));
 });
 T.test('confirm key held into the fight does not attack', () => {
   const V=__VF; V.menu.toTitle(); key('KeyJ'); T.eq(V.G.state,'fight'); T.eq(V.inputRead(0)&B.P,0,'J held: no punch');
@@ -48,11 +52,11 @@ T.test('pad A held into the fight does not kick', () => {
   fakePads([{}]); T.eq(V.inputRead(0)&B.K,0); fakePads([{buttons:{0:1}}]); T.ok((V.inputRead(0)&B.K)!==0,'pressed again: counts'); fakePads([]); });
 T.test('end screen ignores confirm and back for a moment', () => {
   const V=__VF; V.startMatch('versus',{seed:1}); endMatch(1); T.eq(V.G.state,'end');
-  clickText('RIVINCITA'); V.menuPress('kb'); V.menuBack(); key('Space'); keyUp('Space'); T.eq(V.G.state,'end','guarded');
-  later(V.CFG.menu.endGuardMs+50,()=>V.menuBack()); T.eq(V.G.state,'title','back works after the guard'); });
+  uiClick('Rivincita'); V.menuPress('kb'); V.menuBack(); key('Space'); keyUp('Space'); T.eq(V.G.state,'end','guarded');
+  later(V.CFG.menu.endGuardMs+50,()=>V.menuBack()); T.eq(V.G.state,'title','back works after the guard'); T.eq(V.UI.NAV.cur,'menu'); });
 
-// Final fix wave.
-T.test('a blocked Gamepad API (SecurityError) breaks neither the title, a match start nor the loop', () => {
+// Final fix wave (Tappa 1).
+T.test('a blocked Gamepad API (SecurityError) breaks neither the menu, a match start nor the loop', () => {
   const V=__VF, err=console.error; let errors=0; console.error=(...a)=>{ errors++; err.apply(console,a); };
   Object.defineProperty(navigator,'getGamepads',{value:()=>{ throw new DOMException('blocked by the permissions policy','SecurityError'); },configurable:true});
   try {
@@ -67,15 +71,18 @@ T.test('training chosen with the second controller: that controller plays G1', (
   padsAt([{},{}]); V.inputRead(0);   // A let go (it was masked at the confirm)
   padsAt([{},{axes:[.9,0]}]); T.eq(V.inputRead(0)&B.R, B.R, 'pad 1 stick right');
   padsAt([{},{buttons:{2:1}}]); T.eq(V.inputRead(0)&B.P, B.P, 'pad 1 X'); fakePads([]); padTick(); });
-T.test('pause menu: FPS SÌ / NO shows the counter and is remembered on this device', () => {
-  const V=__VF, K='voidrise.prefs', saved=()=>JSON.parse(localStorage.getItem(K)); V.startMatch('training',{seed:1}); V.menu.pause();
-  localStorage.removeItem(K); V.menuFpsInit(); T.ok(!vis('fps'),'off by default'); T.eq(txt('fpsTx'),'FPS: NO');
-  clickText('FPS'); T.ok(vis('fps'),'counter shown'); T.eq(txt('fpsTx'),'FPS: SÌ'); T.eq(saved().fps,true,'saved'); T.eq(saved().v,1,'versioned');
-  V.menuFpsInit(); T.ok(vis('fps'),'still on after a reload');
-  clickText('FPS'); T.ok(!vis('fps'),'hidden again'); T.eq(txt('fpsTx'),'FPS: NO'); T.eq(saved().fps,false); V.menuFpsInit(); T.ok(!vis('fps'),'still off after a reload');
-  localStorage.setItem(K,'{broken'); V.menuFpsInit(); T.ok(!vis('fps'),'unreadable data: off');
+T.test('pause menu: FPS Sì / No shows the counter and is remembered in the device save', () => {
+  const V=__VF, K='voidrise.save', saved=()=>JSON.parse(localStorage.getItem(K)); V.startMatch('training',{seed:1}); V.menu.pause();
+  localStorage.removeItem(K); V.saveLoad(); V.menuFpsInit(); T.ok(!vis('fps'),'off by default'); T.eq(txt('fpsTx'),'FPS: No');
+  uiClick('FPS'); T.ok(vis('fps'),'counter shown'); T.eq(txt('fpsTx'),'FPS: Sì'); T.eq(saved().settings.showFps,true,'saved'); T.eq(saved().v,1,'versioned');
+  V.saveLoad(); V.menuFpsInit(); T.ok(vis('fps'),'still on after a reload');
+  uiClick('FPS'); T.ok(!vis('fps'),'hidden again'); T.eq(txt('fpsTx'),'FPS: No'); T.eq(saved().settings.showFps,false); V.saveLoad(); V.menuFpsInit(); T.ok(!vis('fps'),'still off after a reload');
+  localStorage.setItem(K,'{broken'); V.saveLoad(); V.menuFpsInit(); T.ok(!vis('fps'),'unreadable data: off');
   const own=Object.getOwnPropertyDescriptor(window,'localStorage');   // storage that throws (a sandboxed frame): the toggle still works
   Object.defineProperty(window,'localStorage',{get(){ throw new DOMException('denied','SecurityError'); },configurable:true});
-  try { clickText('FPS'); T.ok(vis('fps'),'toggled without storage'); clickText('FPS'); T.ok(!vis('fps')); }
+  try { uiClick('FPS'); T.ok(vis('fps'),'toggled without storage'); uiClick('FPS'); T.ok(!vis('fps')); }
   finally { if(own) Object.defineProperty(window,'localStorage',own); else delete window.localStorage; }
-  localStorage.removeItem(K); V.menu.resume(); });
+  localStorage.removeItem(K); V.saveLoad(); V.menu.resume(); });
+T.test('the menu screens use the new navigation (no old title, pause or end screen left)', () => {
+  T.eq(document.getElementById('title'),null); T.eq(document.getElementById('pause'),null); T.eq(document.getElementById('end'),null);
+  T.ok(act('pause','resume') && act('pause','quit') && act('menu','train') && act('menu','vs')); });

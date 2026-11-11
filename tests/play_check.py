@@ -45,7 +45,7 @@ async def main():
         async def route(r):   # like a phone with no CDN: only the page's own server answers
             await (r.continue_() if r.request.url.startswith(base) else r.abort())
         await ctx.route('**/*', route)
-        title = "document.getElementById('title').classList.contains('on')"
+        title = "document.getElementById('sc-menu') && document.getElementById('sc-menu').classList.contains('on')"
         await pg.goto(base, wait_until='domcontentloaded')
         await pg.wait_for_function(title, timeout=60000)
         check(True, 'online: title shown')
@@ -56,7 +56,8 @@ async def main():
         await pg.reload(wait_until='domcontentloaded')
         await pg.wait_for_function(title, timeout=60000)
         check(True, 'offline reload: title shown')
-        await pg.tap('#title .mb[data-act="train"]')
+        await pg.wait_for_timeout(500)   # (a tap in the first moments of a screen is taken for a double tap and ignored)
+        await pg.tap('#sc-menu [data-act="train"]')
         await pg.wait_for_timeout(2000)
         st = await pg.evaluate("({hud: getComputedStyle(document.getElementById('hud')).visibility, touch: document.getElementById('touch').classList.contains('on'), timer: document.getElementById('timer').textContent})")
         check(st == {'hud': 'visible', 'touch': True, 'timer': '∞'}, 'offline: training fight with HUD and touch controls ' + json.dumps(st, ensure_ascii=False))
