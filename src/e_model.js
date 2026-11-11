@@ -157,15 +157,21 @@ function modelBuild(key) {
     }
   }
   if (bust) {   // the bust: its own toon mesh and outline on the same skeleton; both sides (its skirt is open below); in flat light
-    // (its texture has the sheet's shadows, as the images of it); the body's outline
+    // (its texture has the sheet's shadows, as the images of it) but where its part says not (aFlat: the hands); the body's outline
     const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = bust.jpg; tex.anisotropy = 4;
     tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
     const bm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
+    const bf = !!bust.geo.attributes.aFlat, bg = !!bust.geo.attributes.aGlove;   // (per vertex: the hands in the game's light, their volume reads; their glove)
+    const c3 = c => 'vec3(' + c.map(v => (v / 255).toFixed(4)).join(', ') + ')';
     bm.onBeforeCompile = sh => {
-      sh.fragmentShader = sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + MD_BUST_FLAT.toFixed(2) + ');');
+      if (bf) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
+      if (bg) sh.vertexShader = 'attribute vec2 aGlove;\nvarying vec2 vGlove;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGlove = aGlove;');
+      sh.fragmentShader = (bf ? 'varying float vFlat;\n' : '') + (bg ? 'varying vec2 vGlove;\n' : '') + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, ' + (bf ? 'vFlat * ' : '') + MD_BUST_FLAT.toFixed(2) + ');');
+      // (the glove on the hands: where the distance to its edge is under 0 its plum, along the edge its ink: a clean line in every triangle)
+      if (bg) sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n\tif (vGlove.y > .99) { if (vGlove.x < 0.) diffuseColor.rgb = ' + c3(MD_GLOVE.c) + '; if (abs(vGlove.x) < ' + MD_GLOVE.w.toFixed(4) + ') diffuseColor.rgb = ' + c3(MD_GLOVE.ink) + '; }');
     };
-    bm.customProgramCacheKey = () => 'bust';
+    bm.customProgramCacheKey = () => 'bust' + (bf ? 'V' : '') + (bg ? 'G' : '');
     const bmesh = new THREE.SkinnedMesh(bust.geo, bm), bline = new THREE.SkinnedMesh(bust.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: ol.back}));
     bmesh.frustumCulled = bline.frustumCulled = false; body.add(bmesh, bline);
     bmesh.bind(skel, mesh.matrixWorld); bline.bind(skel, mesh.matrixWorld);
@@ -592,6 +598,8 @@ function mdSpikes(list, back) {
 const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
 // Kael's bust's light: flat (its texture, the sheet's colours, has the skin's shadows)
 const MD_BUST_FLAT = 1;
+// Kael's gloves (on his bust's hands, aGlove): their plum, the ink along their edge, its half width (m) (the bust's palette)
+const MD_GLOVE = {c: [65, 49, 74], ink: [9, 6, 9], w: .0012};
 
 // The triangles of the parts' hide lists together (each a Uint32Array or null)
 function mdJoin(a, b) {
@@ -621,6 +629,7 @@ function mdPartData(md, key, name) {
     if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
     if (j.line) geo.setAttribute('aLine', new THREE.BufferAttribute(f32(j.line), 1));   // (its outline's width per vertex: Kael's earrings' thin)
     if (j.hv) geo.setAttribute('aHide', new THREE.BufferAttribute(f32(j.hv), 2));   // (the locks hidden when seen from his right, from his left: mdHeadHide)
+    if (j.glove) geo.setAttribute('aGlove', new THREE.BufferAttribute(f32(j.glove), 2));   // (Kael's bust: on the hands the signed distance to the glove's edge, m, and 1)
     md.parts[name] = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
       noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null};
   }

@@ -591,6 +591,17 @@ Denis ("manda anteprima").
 - Luce piatta sul busto (la sua pittura ha le ombre del foglio, come nelle immagini viste da Denis), contorno del corpo.
 - Controllato nel visore: guardia, pugno forte, calcio forte, calcio lanciante, speciale (mani aperte), presa, a terra; pugni,
   collo e spalle da vicino. Triangoli disegnati 84.000 → 111.000 (con i contorni).
+- **Pugni come le immagini** (Denis, sulla versione 18, cerchiando i due pugni e il polso in guardia: "sono da migliorare
+  nettamente guarda le sue immagini di riferimento"). Misurate, le proporzioni di mano e polsiera erano già quelle del
+  disegno; i problemi erano tre:
+  - in luce piatta il pugno era una macchia scura senza volume: le mani ora hanno la luce del gioco, come i pugni di Ren
+    (`HAND_FLAT`, il resto del busto resta in luce piatta);
+  - il bordo del guanto cadeva sulla piega delle nocche e nel pugno si rompeva a dentini: ora lo disegna il gioco
+    (`aGlove`: per ogni punto della mano la distanza dal bordo; dove è sotto zero il prugna del guanto, lungo il bordo la
+    riga nera), dritto in ogni triangolo; la pittura sotto le mani è pelle fino a 3 mm dentro il guanto;
+  - il polso di Ren era il 70-75% della banda viola, una strozzatura col polso piegato: allargato del 32% dalla
+    cucitura, sfumando sul palmo (`WRIST` in `tools/kael_bust.py`), come nel disegno dove il guanto esce largo dalla polsiera.
+  Provato e lasciato: ammorbidire i pesi della pelle sulle mani (il pugno si apriva, un buco vicino al pollice).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

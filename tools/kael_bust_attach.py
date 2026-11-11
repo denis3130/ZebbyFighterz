@@ -23,6 +23,10 @@ his legs below.
   wrists' seams (SEAM m round them).
 - The finger bones: Ren's, laid as his hands were (the fit of tools/kael_bust.py, the place, the pose: in the hand bone as
   Ren's, scaled), the fists' turns Ren's (src/e_model.js: the part's fingers in place of the look's).
+- The glove's edge on the hands drawn by the game (src/e_model.js aGlove: per vertex its signed distance to the painted
+  edge): in the fist the painted edge, bent over the knuckles, broke into teeth.
+- Light: flat (its paint has the sheet's shadows), but on the hands the game's (HAND_FLAT; Denis, 11/11, on the fists in
+  flat light, dark blocks: "sono da migliorare nettamente guarda le sue immagini di riferimento").
 - His own triangles hidden: those mostly on the upper body's bones (HIDE_W), his torso from under its sash up (his sash
   and its knot were wider than its), and his trousers under its skirt. The skirt (the sheet's tunic, over the trousers):
   where his baggy trousers stood out of it (1-2 cm at the sides), pushed out SKIRT_OUT over them, smoothed. His old sash's
@@ -51,6 +55,10 @@ GROUPS = ('Arm', 'ForeArm', 'Hand')    # (with the torso: the pose's four)
 FACE = .3                              # (nearest points: their normals within this of each other's)
 SMOOTH, SEAM, SEAM_SMOOTH = 4, .03, 6
 HIDE_W = .5
+GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
+GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
+HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
+HAND_FLAT = 0.                           # the hands' share of flat light (the game's toon light: the fists' volume reads, as Ren's)
 COLLAR_CUT = (1.472, (.0085, -.005), .11)   # m: its collar over this height within [2] of the neck's axis [1] (the head's collar from 1.464 m)
 SASH = (-.32, -.10)                    # the bust's sash: its bottom, its top (bust units)
 SKIRT_OUT, SKIRT_WIN, SKIRT_SMOOTH, HEM_KEEP = .006, (.012, .03), 10, .025   # the skirt over his trousers: so far out, looking within [1][0] m of its normal up to [1][1] m out; the push smoothed; his trousers kept up to [3] m over its hem (under it they showed the sky)
@@ -246,6 +254,7 @@ def main(bust):
     Wf = np.zeros((len(X), len(allnames))); np.add.at(Wf, (np.repeat(np.arange(len(X)), 4), K['JN'][near].ravel()), K['WG'][near].ravel())
     Wr = np.zeros((len(rr), len(allnames))); np.add.at(Wr, (np.repeat(np.arange(len(rr)), 4), rsi[rr].ravel()), rsw[rr].ravel()); Wf[isR] = Wr
     Wf = smooth(Wf, wv, A, deg, 2, ~isR)
+    if HAND_SMOOTH: Wf = smooth(Wf, wv, A, deg, HAND_SMOOTH, isR)
     seam_c = np.zeros(len(X), bool); seam_c[Ib[(isR[Ib].sum(1) > 0) & (isR[Ib].sum(1) < 3)].ravel()] = True
     dseam = cKDTree(X2[seam_c]).query(X2)[0]
     Wf = smooth(Wf, wv, A, deg, SEAM_SMOOTH, dseam < SEAM)
@@ -302,6 +311,25 @@ def main(bust):
     hide = np.nonzero(hid | band | inside)[0].astype(np.uint32)
     print('his triangles hidden: %d (%d on the upper body, %d more of his torso, %d under the skirt)' % (
         len(hide), int(hid.sum()), int((band & ~hid).sum()), int((inside & ~hid & ~band).sum())))
+    # the glove's edge on the hands drawn by the game (src/e_model.js, aGlove): per vertex of Ren's hands and of the seam its
+    # signed distance (m) to the edge the texture paints (the glove under 0, the edge between its texels and the skin's) and
+    # 1 (a hand's); the texture skin up to GLOVE_PAD into the glove (the game paints the glove and the edge's ink). In the fist the painted edge,
+    # bent over the knuckles, broke into teeth; drawn from the distances it is straight in every triangle
+    from paint_views import texel_table
+    hv = isR.copy(); hv[Ib[isR[Ib].any(1)].ravel()] = True
+    ys, xs, ks, bary, tpos, _ = texel_table(Pb, Nb, UVb, Ib, BS)
+    th = hv[Ib[ks]].all(1); tcol = bt[ys, xs]; near_c = lambda c: np.abs(tcol - c).max(1) < 10
+    gl = th & (near_c(GLOVE_C) | near_c(BLACK_C)); ink = th & near_c(INK_C); sk = th & ~gl & ~ink
+    ti = np.nonzero(ink)[0]
+    if len(ti):   # (the edge's ink: the side it is nearer)
+        dg_, _ = cKDTree(tpos[gl]).query(tpos[ti]); ds_, _ = cKDTree(tpos[sk]).query(tpos[ti]); gl[ti[dg_ < ds_]] = True; sk[ti[dg_ >= ds_]] = True
+    tg, ts_ = cKDTree(tpos[gl]), cKDTree(tpos[sk]); vh = np.nonzero(hv)[0]
+    in_g = tg.query(Pb[vh])[0] < ts_.query(Pb[vh])[0]
+    d = np.where(in_g, -ts_.query(Pb[vh])[0], tg.query(Pb[vh])[0]) * SCALE
+    gfield = np.zeros((len(X), 2), np.float32); gfield[:, 0] = 1.; gfield[vh, 0] = d; gfield[vh, 1] = 1.
+    near_edge = gl & (ts_.query(tpos)[0] < GLOVE_PAD) | (th & near_c(INK_C))
+    bt2 = bt.copy(); bt2[ys[near_edge], xs[near_edge]] = SKIN_C; BT = Image.fromarray(bt2.astype(np.uint8))   # (only by the edge: skin painted under all of the glove bled into the seam's triangles, skin hairlines at the cuff)
+    print('glove: its edge drawn by the game on %d vertices (%d in the glove), the texture by the edge skin (%d texels)' % (len(vh), int(in_g.sum()), int(near_edge.sum())))
     # the part
     used = np.unique(Ib); mp = -np.ones(len(X), np.int64); mp[used] = np.arange(len(used)); It = mp[Ib]
     pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
@@ -312,6 +340,8 @@ def main(bust):
     put('pos', X2[used].astype(np.float32)); put('nor', N2[used].astype(np.float32)); put('uv', UVb[used].astype(np.float32))
     put('jnt', top[used].astype(np.uint8)); put('wgt', tw[used].astype(np.float32))
     put('idx', It.astype(np.uint16 if len(used) < 65536 else np.uint32)); put('hide', hide)
+    put('flat', np.where(isR, HAND_FLAT, 1.)[used].astype(np.float32))   # (its light: flat, the hands the game's)
+    put('glove', gfield[used])   # (the hands' glove: the signed distance to its edge, m; 1 a hand's vertex)
     jo['bones'] = {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}; jo['fingers'] = fingers
     open(os.path.join(KAEL_PKG, 'kael_bust.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_bust.json'), 'w'), separators=(',', ':'))
     BT.save(os.path.join(KAEL_PKG, 'kael_bust.png'), optimize=True)

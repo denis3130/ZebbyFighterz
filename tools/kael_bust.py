@@ -27,7 +27,8 @@ sheet's flat palette, piece by piece, and the skin's shadow (Denis chose "Ombre 
     fingers clean skin, the glove plum with its large shadows black, its edges smoothed, no purple past the cuff.
 - Ren's hands in place of Kael's (Denis, 11/11: "ora rendi quelle mani simili come quelli di ren"; ren_hands()): Kael's
   hand cut past his cuff, Ren's (assets/ren, past his wrist band) laid on it by a similarity fit on the wrist and the five
-  tips, its wrist blended onto the cut and the two rings zipped (the seam's triangles turned as their neighbours); a new
+  tips, its wrist blended onto the cut and the two rings zipped (the seam's triangles turned as their neighbours), the
+  wrist then as wide as the cuff's band (WRIST: 32%, fading over the palm's base; the sheet's glove leaves the cuff that wide); a new
   UV atlas (xatlas, unwrap()). On them Ren's paint: his skin and his lines (the skin's shadow where his paint is darker
   than REN_LINE, softened a little; bits under REN_SMALL mm2 left out), and the sheet's fingerless glove (glove_of(),
   glove_texels()): plain plum over the palm up to a straight edge GLOVE_M under the fingers' webs (the webs found where
@@ -72,6 +73,7 @@ ZONE = ((.28, .55), (.38, .78))   # the shoulders: |x|, y (GLB units)
 REN = os.path.join(ROOT, 'assets', 'ren', 'ren.json'), os.path.join(ROOT, 'viewer_assets', 'ren', 'ren_painted.jpg')   # Ren's package and paint
 KAEL_TIPS = {-1: ((-.941, -.57, .004), ((-.739, -.847, .057), (-.829, -.84, .059), (-.653, -.797, .075), (-.892, -.788, .084))),
              1: ((.933, -.588, .033), ((.823, -.84, .085), (.734, -.841, .073), (.654, -.795, .076), (.885, -.785, .092)))}   # per hand (-1 his right): the thumb's and the fingers' tips (GLB units)
+WRIST = (.32, .05, .07)   # the glove's wrist pushed out by [0] from the seam, fading from [1] over [2] past the cut (GLB units)
 CUT_K, CUT_R, BLEND, GAP = .015, .022, .05, .006   # the cut: Kael's past his cuff's edge (GLB units), Ren's past his hand bone (m); the wrist's blend; the seam's width
 GLOVE_M, THUMB_M, SMOOTH, REN_LINE, REN_SMALL, GLOVE_SMOOTH = .02, .005, 30, (110, 182), 5., 4   # Ren's hands: the glove's edge under the webs, the thumb bare up to [1] short of its web; the distance's smoothing; his lines: ink, shadow under these lightnesses, their bits under [4] mm2 skin (they looked like scratches); the glove's edge smoothed [5] times (the glove plain plum: the light's black on it came out in blotches)
 CLOTH = (48, 33, 59)                              # the glove's colour as Meshy's dark cloth (then it is the vest's plum)
@@ -188,6 +190,12 @@ def ren_hands(P, N, UV, I, cloth_v):
         t0 = ((rr0 - c0) @ ax).mean(); w = np.clip(1 - ((Q - c0) @ ax - t0) / BLEND, 0, 1); w = w * w * (3 - 2 * w)
         Q = Q + per(ang(Q), aR[oR], dR[oR]) * w[:, None]
         for k_, wvid in enumerate(h['ringR']): Q[rwv[vs] == wvid] = rr0[k_] + dR[k_]
+        # (the glove's wrist as wide as the sheet draws it under the cuff (Denis, 11/11: the fists "sono da migliorare nettamente
+        # guarda le sue immagini di riferimento"): Ren's wrist was 70-75% of the cuff's band, the sheet's nearly all of it: pushed out
+        # from the axis by WRIST[0] from just past the seam, fading to nothing over the palm's base)
+        tq = (Q - c0) @ ax; rad = (Q - c0) - np.outer(tq, ax); sm = lambda x: (lambda u: u * u * (3 - 2 * u))(np.clip(x, 0, 1))
+        kq = 1 + WRIST[0] * sm((tq - GAP - .002) / .01) * (1 - sm((tq - WRIST[1]) / WRIST[2]))
+        Q = c0 + np.outer(tq, ax) + rad * kq[:, None]
         Ps.append(Q); Ns.append(np.zeros_like(Q)); UVs.append(RUV[vs]); Ts.append(mpR[RI[h['triR']]] + off); Ss.append(np.ones(len(h['triR']), np.int8)); Rs.append(np.ones(len(Q), bool))
         Ids.append(vs)
         kA = [rep[w_] for w_ in lk]; rA = [int(np.nonzero(rwv[vs] == wvid)[0][0]) + off for wvid in h['ringR']]
