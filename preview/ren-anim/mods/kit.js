@@ -442,38 +442,39 @@ rkAddMove('dev', {
 // --- Calcio a frusta: the lead leg, the standing foot turning with the hips ---
 // Load: the rear foot steps in under the body (30 cm), the weight goes onto it, the lead knee comes up (the foot under
 // it, toes down). Pivot and whip: the standing foot turns on its tip as the hips turn over (never a body turning on a
-// planted foot), the body leans away and the shin snaps out at hip height. Back: the knee folds back in, the foot lands
-// where it was, the rear foot steps back out, the guard.
+// planted foot), the body leans away and the shin snaps out at stomach height, the standing leg nearly straight. Back:
+// the knee folds back in, then he steps down forward out of the kick (no step back: the fighter ends 30 cm on, in the
+// same guard).
 rkAddMove('kick', {
   len: 34, name: 'Calcio a frusta',
-  phase: [[0, 'Caricamento'], [9, 'Pivot'], [14, 'Impatto'], [17, 'Rientro'], [26, 'Guardia']],
-  cfg: {s: 13, a: 3, r: 18, h: 'mid', box: [300, 1000, 650, 1150], limb: 'footL'},   // PROPOSAL
+  phase: [[0, 'Caricamento'], [9, 'Pivot'], [14, 'Impatto'], [17, 'Rientro'], [22, 'Atterraggio'], [28, 'Guardia']],
+  cfg: {s: 13, a: 3, r: 18, h: 'mid', box: [300, 1000, 750, 1250], limb: 'footL'},   // PROPOSAL
+  root: rkMono([[0, 0], [19, 0], [27, .3], [34, .3]]),
   body: {
     yaw: rkMono([[0, 0], [6, -6], [10, -14], [14, -40], [17, -40], [22, -18], [28, 0]]),
     chest: rkMono([[0, 0], [6, -4], [14, -12], [17, -12], [24, -2], [30, 0]]),
-    leanL: rkMono([[0, 0], [6, -3], [10, -6], [14, -18], [17, -18], [22, -7], [30, 0]]),
-    lx: rkMono([[0, 0], [5, -.14], [14, -.1], [17, -.1], [22, -.12], [27, .02], [33, 0]]),
-    dip: rkMono([[0, .004], [5, -.025], [14, -.04], [17, -.04], [22, -.03], [26, .03], [30, .012], [34, .004]]),
+    leanL: rkMono([[0, 0], [6, -3], [10, -6], [14, -22], [17, -22], [22, -8], [27, 4], [34, 0]]),
+    lx: rkMono([[0, 0], [5, -.12], [14, -.1], [17, -.1], [20, -.12], [27, 0], [34, 0]]),
+    dip: rkMono([[0, .004], [5, -.03], [9.5, -.15], [14, -.17], [17, -.17], [22, -.1], [27, .03], [31, .01], [34, .004]]),   // (up on the standing leg, nearly straight)
     head: rkMono([[0, 0], [14, -4], [17, -4], [28, 0]]),
   },
   feet: {
-    R: {x: [[0, 0], [.6, 0], [4, .3], [27.8, .3], [32, 0]], bumps: [[0, 5, .025], [27, 33, .02]],
-      heel: [[0, 0], [6, 0], [9, 10], [17, 12], [22, 6], [25, 0]], yaw: [[0, 0], [7, 0], [12, -65], [18, -65], [22.5, -6], [23.5, 0]]},   // (turned back while still on its tip)
-    // the kicking foot: up on its toes, off the floor on frame 5, folded under the knee (frame 9.5), out at hip height
-    // (14), back under the knee (21), down on its toes (25), the heel down (27). Its pitch in the world (heel and toe
-    // together: the heel's lift tips the toes down) follows the shin: about 50 degrees down while the shin hangs under the
-    // knee, near level when the leg is out straight (the foot continues the leg's line, the toes pointed)
-    L: {free: true, heel: [[0, 0], [3.5, 0], [5, 16], [25, 16], [27, 0]],
-      x: [[0, 0], [5, 0], [9.5, -.2], [14, .36, 'whip'], [16, .36], [21, -.2], [24.8, 0]],
-      up: [[0, 0], [5, 0], [9.5, .42], [14, .77, 'whip'], [16, .77], [21, .42], [25, 0]],
-      toe: [[0, 0], [5, 0], [9.5, -34], [14, 11, 'whip'], [16, 11], [21, -34], [24.5, 0]]},
+    R: {x: [[0, 0], [.6, 0], [4, .3]], bumps: [[0, 5, .025]],
+      heel: [[0, 0], [6, 0], [9, 10], [17, 12], [21, 6], [24, 0]], yaw: [[0, 0], [7, 0], [12, -65], [18, -65], [21.5, -6], [22.5, 0]]},
+    // the kicking foot: up on its toes, off the floor on frame 5, folded under the knee (frame 9.5), out at stomach height
+    // (14), back under the knee (21), down forward on its toes (26), the heel down (28). Its pitch in the world (heel and
+    // toe together: the heel's lift tips the toes down) follows the shin: about 50 degrees down while the shin hangs
+    // under the knee, near level when the leg is out straight (the foot continues the leg's line, the toes pointed)
+    L: {free: true, heel: [[0, 0], [3.5, 0], [5, 16], [26, 16], [28, 0]],
+      x: [[0, 0], [5, 0], [9.5, -.2], [14, .35, 'whip'], [16, .35], [21, -.1], [25.8, .3]],
+      up: [[0, 0], [5, 0], [9.5, .45], [14, .97, 'whip'], [16, .97], [21, .45], [26, 0]],
+      toe: [[0, 0], [5, 0], [9.5, -34], [14, 11, 'whip'], [16, 11], [21, -34], [25.5, 0]]},
   },
-  arms: {L: [[0, 'guard'], [6, 'kLow'], [18, 'kLow'], [28, 'guard']], R: [[0, 'guard'], [6, 'rChin'], [22, 'rChin'], [30, 'guard']]},
+  arms: {L: [[0, 'guard'], [7, 'kGuardL'], [22, 'kGuardL'], [30, 'guard']], R: [[0, 'guard'], [6, 'rChin'], [24, 'rChin'], [31, 'guard']]},
   poses: {
-    kLow: A => ({p: A.l([.36, -.14, .04]).add(A.sL), f: A.l([1, -.3, 0]).normalize(), n: A.l([0, 0, -1]), e: A.l([0, -1, .2]).normalize()}),
-    rChin: A => ({p: A.c([-.04, .26, .2]).add(A.C1), f: A.c([1, .4, .2]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.4, -1, -.2]).normalize()}),
+    kGuardL: A => ({p: A.l([.26, -.04, .05]).add(A.sL), f: A.l([1, .1, 0]).normalize(), n: A.l([0, 0, -1]), e: A.l([0, -1, .25]).normalize()}),
   },
-  hands: {R: (n, f) => rkKey([[0, RK_HAND.rear], [6, .95], [22, .95], [30, RK_HAND.rear]], f)},
+  hands: {R: (n, f) => rkKey([[0, RK_HAND.rear], [6, .95], [24, .95], [31, RK_HAND.rear]], f)},
 });
 
 // --- Passo spezzato (the signature): half a step back to draw the attack, down under the opponent's line, a low burst
