@@ -173,14 +173,19 @@
 #lyHero,#lyRival{background-position:right bottom;background-size:contain;transform-origin:50% 100%}
 #lyHero{right:-3%;bottom:0;width:64%;height:100%}
 #lyRival{right:0;top:9%;bottom:auto;width:21%;height:58%;opacity:.6;filter:brightness(.62) saturate(.85)}
+#lyRival{-webkit-mask-image:radial-gradient(ellipse 38% 44% at 54% 44%,#000 30%,transparent 100%);mask-image:radial-gradient(ellipse 38% 44% at 54% 44%,#000 30%,transparent 100%)}
 #lyGlow{right:2%;bottom:0;width:60%;height:100%;background:radial-gradient(ellipse at 55% 55%,rgba(240,138,50,.22),rgba(240,138,50,0) 62%)}
 #uiParts{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #lyShade{inset:0;background:radial-gradient(ellipse at 62% 42%,rgba(10,8,14,0) 35%,rgba(10,8,14,.55) 100%),linear-gradient(180deg,rgba(10,8,14,.25),rgba(10,8,14,0) 30%,rgba(10,8,14,0) 70%,rgba(10,8,14,.45))}
 /* per scene: only the menu shows the characters behind the interface; other screens draw their own */
 #uiLayers:not([data-scene="menu"]):not([data-scene="title"]) #lyHero,#uiLayers:not([data-scene="menu"]):not([data-scene="title"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
 /* the title: Ren's and Kael's profiles high at the sides, the logo between them, as in the reference */
-#uiLayers[data-scene="title"] #lyHero{left:-2%;right:auto;top:0;bottom:auto;width:38%;height:86%;background-position:left top;opacity:.96;filter:none}
-#uiLayers[data-scene="title"] #lyRival{left:auto;right:-2%;top:0;bottom:auto;width:38%;height:90%;background-position:right top;opacity:.96;filter:none}
+#uiLayers[data-scene="title"] #lyHero{left:-3%;right:auto;top:0;bottom:auto;width:44%;height:94%;background-position:left top;background-size:auto 100%;opacity:.97;filter:none;
+  -webkit-mask-image:linear-gradient(90deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);mask-composite:intersect}
+#uiLayers[data-scene="title"] #lyRival{left:auto;right:-3%;top:0;bottom:auto;width:44%;height:94%;background-position:right top;background-size:auto 100%;opacity:.97;filter:none;
+  -webkit-mask-image:linear-gradient(270deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(270deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);mask-composite:intersect}
 #uiLayers[data-scene="off"] .ly,#uiLayers[data-scene="off"] #uiParts{opacity:0}
 /* quality: 'bassa' keeps the scene still (no drift, no breathing, no embers) and drops the glows; 'media' has fewer embers */
 /* --- the intro (u4_intro.js): every value set per frame from JS; only the layout lives here --- */

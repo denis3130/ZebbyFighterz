@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Placeholder images of the interface, in layers, from the references in docs/ref/ (needs Pillow with WebP).
+"""Placeholder images of the interface, in layers, ONLY from Denis's interface references docs/ref/ui/00-04 (Denis: no other
+image, never the A-pose sheets nor the older backdrops). Needs Pillow with WebP.
 
 usage: python3 tools/make_ui_assets.py
 
 They stand in for the final art (to be generated as separate high-resolution pieces): the same file names, so the
 final images go in without code changes. Written to assets/ui/ (WebP); build.py embeds them in the page.
 
-  sky.webp            1600x900  the far layer: docs/ref/sfondo-rovine.png turned to dusk (violet, warm light low in the
-                                middle, the blue sky into a sunset), its near ruins and floor blurred away (they are ruins.webp)
-  ruins.webp          1600x900  the near layer, transparent: the arches at the sides and the stone floor, same dusk grade
-  clouds.webp         1600x300  drifting cloud bands (drawn), transparent
-  fog1.webp, fog2.webp 1600x300 fog bands (drawn), transparent
-  ren_full.webp, kael_full.webp  Ren of the main menu and Kael of the settings in docs/ref/ui/ (Denis: only the characters
-                      of those references, never the A-pose sheets), their painted background faded out at the edges
-  ren_vs.webp, kael_vs.webp      the two faces of the VS reference; title_ren.webp, title_kael.webp the title's profiles
+  sky.webp            the backdrop: the dusk ruins with the arch behind «Scegli l'arena» (01, first panel)
+  clouds.webp, fog1.webp, fog2.webp  drifting cloud and fog bands, drawn here (no picture)
+  ren_full.webp, kael_full.webp  Ren of the main menu (00) and Kael of the settings (03), their painted background faded out
+  ren_vs.webp, kael_vs.webp      the two faces of the VS (01), also the title's two sides
   face_ren/kael/astra/raigon.webp 256x256  portraits (VS and pass references); silhouette.webp 256x256 (drawn: a coming fighter)
-  arena_cascata.webp, arena_rovine.webp 640x360; arena_montagne/tetti/foresta/deserto.webp 320x140
-  intro_clash.webp    1280x720  the clash of the opening (docs/ref/ui/00-*.png, first panel)
+  arena_rovine.webp   the same dusk ruins; arena_montagne/tetti/foresta/deserto.webp the arena thumbnails (01)
+  card_arcade.webp, card_online.webp  the two mode cards of the main menu (00)
+  intro_clash.webp    the clash of the opening (00, first panel)
+No picture of «La Grande Cascata» exists in the references: its card shows a snapshot of the real arena taken in the game.
+No near ruins layer (ruins.webp) yet: the references paint each scene in one piece; the final art brings it.
 Prints each file's size; fails if they add up to more than BUDGET_KB (the page keeps the interface under 3 MB as base64).
 """
 import os, sys
@@ -30,11 +30,6 @@ BUDGET_KB = 2200
 Q = 82
 RNG = np.random.default_rng(7)
 
-# The near parts of sfondo-rovine.png (1672x941): the arch at each side and the floor, as polygons (x, y).
-NEAR = [[(0, 40), (300, 40), (300, 380), (250, 720), (0, 720)],
-        [(1330, 20), (1672, 20), (1672, 720), (1380, 720), (1330, 400)],
-        [(0, 700), (1672, 700), (1672, 941), (0, 941)]]
-NEAR_FEATHER = 6
 U0, U1, U3, U4 = 'ui/00-intro-titolo-menu-personaggi.png', 'ui/01-arena-vs-arcade-versus.png', 'ui/03-profilo-impostazioni-pausa-vittoria.png', 'ui/04-pass-missioni-archivio-sblocco.png'
 FACES = {'ren': (U1, (980, 92, 1172, 284)), 'kael': (U1, (1392, 66, 1592, 266)),
          'astra': (U4, (420, 22, 556, 158)), 'raigon': (U4, (676, 62, 796, 182))}
@@ -45,9 +40,9 @@ CROPS = {
     'kael_full': (U3, (850, 52, 1132, 470), [(44, 14), (236, 14), (256, 120), (256, 418), (26, 418), (26, 140)], 22, 900),
     'ren_vs': (U1, (836, 54, 1196, 338), [(0, 0), (330, 0), (360, 150), (360, 284), (0, 284)], 22, 600),
     'kael_vs': (U1, (1306, 0, 1672, 338), [(30, 0), (366, 0), (366, 338), (0, 338), (0, 160)], 22, 600),
-    'title_ren': (U0, (900, 0, 1092, 300), [(0, 0), (168, 0), (168, 270), (0, 270)], 24, 600),
-    'title_kael': (U0, (1416, 0, 1600, 320), [(22, 0), (184, 0), (184, 290), (22, 290)], 24, 600),
 }
+ARENA_BG = (300, 0, 836, 262)   # the clean dusk ruins above the arena cards in 01
+CARDS = {'arcade': (34, 740, 146, 800), 'online': (162, 740, 274, 800)}   # the pictures of the two mode cards in 00
 THUMBS = {'montagne': (42, 272, 218, 348), 'tetti': (238, 272, 410, 348), 'foresta': (432, 272, 605, 348), 'deserto': (626, 272, 800, 348)}
 
 
@@ -55,43 +50,6 @@ def save(img, name):
     p = os.path.join(OUT, name)
     img.save(p, 'WEBP', quality=Q, method=6)
     return os.path.getsize(p)
-
-
-def dusk(rgb):
-    """The painting at dusk: desaturated, violet, a warm light low in the middle; saturated blue sky becomes a sunset."""
-    a = np.asarray(rgb).astype(np.float32) / 255
-    h, w, _ = a.shape
-    r, g, b = a[..., 0], a[..., 1], a[..., 2]
-    lum = (.3 * r + .59 * g + .11 * b)[..., None]
-    out = (a * .3 + lum * .7) * np.array([.40, .33, .56]) * 1.18
-    out = np.clip((out - .5) * 1.12 + .5 - .04, 0, 1)   # a little more contrast, a little darker
-    yy = np.linspace(0, 1, h)[:, None, None]
-    xx = np.linspace(-1, 1, w)[None, :, None]
-    warm = np.clip(1 - np.sqrt((xx * .62) ** 2 + ((yy - .58) * 1.9) ** 2), 0, 1) ** 1.6   # the sun low behind the middle
-    out = out + warm * np.array([.95, .45, .16]) * (.3 + .9 * lum) * .75
-    # sky: how blue and bright a pixel is (0..1) -> mixed toward a sunset gradient that keeps the clouds' light
-    sky = np.clip(((b - r) - .18) / .25, 0, 1)[..., None] * np.clip((lum - .35) / .3, 0, 1) * np.clip(1.15 - yy * 1.6, 0, 1)
-    top, mid, hor = np.array([.16, .12, .27]), np.array([.46, .27, .40]), np.array([.98, .58, .32])
-    t = yy[..., 0][..., None] * np.ones((1, w, 1))
-    sunset = np.where(t < .5, top + (mid - top) * (t / .5), mid + (hor - mid) * np.clip((t - .5) / .35, 0, 1))
-    out = out * (1 - sky) + sunset * (.55 + .7 * lum) * sky
-    return Image.fromarray((np.clip(out, 0, 1) * 255).astype(np.uint8))
-
-
-def layers_from_ruins():
-    src = Image.open(os.path.join(REF, 'sfondo-rovine.png')).convert('RGB')
-    graded = dusk(src)
-    mask = Image.new('L', src.size, 0)
-    d = ImageDraw.Draw(mask)
-    for poly in NEAR:
-        d.polygon(poly, fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(NEAR_FEATHER))
-    # far layer: where the near parts were, a strong blur of the picture (a parallax step shows soft colour, not a second arch)
-    far = Image.composite(graded.filter(ImageFilter.GaussianBlur(28)), graded, mask.filter(ImageFilter.MaxFilter(9)))
-    near = graded.convert('RGBA')
-    near.putalpha(mask)
-    size = (1600, 900)
-    return far.resize(size, Image.LANCZOS), near.resize(size, Image.LANCZOS)
 
 
 def noise_band(size, scale, alpha, tint, seed):
@@ -147,9 +105,8 @@ def silhouette(size=256):
 def main():
     os.makedirs(OUT, exist_ok=True)
     sizes = {}
-    far, near = layers_from_ruins()
-    sizes['sky.webp'] = save(far, 'sky.webp')
-    sizes['ruins.webp'] = save(near, 'ruins.webp')
+    arena_bg = Image.open(os.path.join(REF, U1)).convert('RGB').crop(ARENA_BG)
+    sizes['sky.webp'] = save(arena_bg.resize((1600, round(1600 * arena_bg.height / arena_bg.width)), Image.LANCZOS).filter(ImageFilter.GaussianBlur(.6)), 'sky.webp')
     sizes['clouds.webp'] = save(noise_band((1600, 300), (96, 48, 24), .7, (196, 150, 170), 3), 'clouds.webp')
     sizes['fog1.webp'] = save(noise_band((1600, 300), (120, 60, 30), .55, (176, 160, 196), 5), 'fog1.webp')
     sizes['fog2.webp'] = save(noise_band((1600, 300), (160, 80, 40), .45, (150, 134, 176), 9), 'fog2.webp')
@@ -158,12 +115,14 @@ def main():
     sizes['silhouette.webp'] = save(silhouette(), 'silhouette.webp')
     for c, (f, box) in FACES.items():
         sizes['face_%s.webp' % c] = save(Image.open(os.path.join(REF, f)).convert('RGB').crop(box).resize((256, 256), Image.LANCZOS), 'face_%s.webp' % c)
-    sizes['arena_cascata.webp'] = save(Image.open(os.path.join(REF, 'sfondo-cascata.png')).convert('RGB').resize((640, 360), Image.LANCZOS), 'arena_cascata.webp')
-    sizes['arena_rovine.webp'] = save(Image.open(os.path.join(REF, 'sfondo-rovine.png')).convert('RGB').resize((640, 360), Image.LANCZOS), 'arena_rovine.webp')
-    sheet = Image.open(os.path.join(REF, 'ui', '01-arena-vs-arcade-versus.png')).convert('RGB')
+    sizes['arena_rovine.webp'] = save(arena_bg.resize((640, round(640 * arena_bg.height / arena_bg.width)), Image.LANCZOS), 'arena_rovine.webp')
+    menu_sheet = Image.open(os.path.join(REF, U0)).convert('RGB')
+    for k, box in CARDS.items():
+        sizes['card_%s.webp' % k] = save(menu_sheet.crop(box).resize((320, round(320 * (box[3] - box[1]) / (box[2] - box[0]))), Image.LANCZOS), 'card_%s.webp' % k)
+    sheet = Image.open(os.path.join(REF, U1)).convert('RGB')
     for k, box in THUMBS.items():
         sizes['arena_%s.webp' % k] = save(sheet.crop(box).resize((320, 140), Image.LANCZOS), 'arena_%s.webp' % k)
-    clash = Image.open(os.path.join(REF, 'ui', '00-intro-titolo-menu-personaggi.png')).convert('RGB').crop((0, 0, 836, 412))
+    clash = Image.open(os.path.join(REF, U0)).convert('RGB').crop((0, 0, 836, 412))
     sizes['intro_clash.webp'] = save(clash.resize((1280, 631), Image.LANCZOS), 'intro_clash.webp')
     total = 0
     for k in sorted(sizes):

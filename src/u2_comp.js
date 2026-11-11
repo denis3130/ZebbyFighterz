@@ -83,7 +83,7 @@ function cProgress(frac) {
   return e;
 }
 // The player's chip, top right: round portrait, name, level.
-function uiFace(c) { return ASSETS['ui/face_' + c + '.webp'] || ASSETS['ui/' + c + '_face.jpg'] || ''; }
+function uiFace(c) { return ASSETS['ui/face_' + c + '.webp'] || ''; }   // (only Denis's interface references: the faces of the VS screen)
 function cChip() {
   const e = uiEl('div', 'uchip');
   const lv = progLevel(SV ? SV.xp : 0).lvl;

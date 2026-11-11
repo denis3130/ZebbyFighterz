@@ -22,9 +22,9 @@ function layersInit() {
   layersQuality(q);
   layersSet('menu', {hero: (SV && SV.lastChar) || 'ren'});
 }
-// A character layer: c = 'ren' | 'kael' | null; pose = which picture ('full' in the menus, 'title' for the title's profiles).
+// A character layer: c = 'ren' | 'kael' | null; pose = which picture ('full' in the menus, 'vs' the big faces of the title).
 function lyChar(id, c, pose) {
-  const el = document.getElementById(id), key = c ? 'ui/' + (pose === 'title' ? 'title_' + c : c + '_full') + '.webp' : '';
+  const el = document.getElementById(id), key = c ? 'ui/' + c + (pose === 'vs' ? '_vs' : '_full') + '.webp' : '';
   if (el.dataset.k === key) return;
   el.dataset.k = key; el.dataset.c = c || '';
   el.style.backgroundImage = key && ASSETS[key] ? 'url(' + ASSETS[key] + ')' : 'none';

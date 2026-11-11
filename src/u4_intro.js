@@ -100,7 +100,7 @@ function uiNameError(v) {
 }
 function uiNameProposal() { const p = CFG.ui.name.pool; return p[(Math.random() * p.length) | 0] + (10 + ((Math.random() * 90) | 0)); }
 function titleScreens() {
-  navRegister({id: 'title', scene: 'title', layers: () => ({hero: 'ren', rival: 'kael', pose: 'title'}),
+  navRegister({id: 'title', scene: 'title', layers: () => ({hero: 'ren', rival: 'kael', pose: 'vs'}),
     build(r) {
       r.appendChild(cLogo('l'));
       r.appendChild(uiEl('div', 'uprompt', '<i></i><span id="uPrompt"></span><i></i>'));
