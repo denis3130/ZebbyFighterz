@@ -23,15 +23,20 @@ sheet's flat palette, piece by piece, and the skin's shadow (Denis chose "Ombre 
     pieces under ISLE mm2 ringed by skin) skin first;
   * the right shoulder's tattoo the left one mirrored and laid on the right deltoid (ICP on the skin): Meshy had painted it
     in fragments; then the shoulders' leftover bits (under LEFT mm2) skin;
-  * the hands (beyond the wrist cuffs, HAND_D): the fingers clean skin, the glove plum with its large shadows black, its
-    edges smoothed, no purple past the cuff.
-- The extra thumbs flattened into the hands first (remove_extra_thumbs; the glove painted there).
-- The thumbs, the gloves and the black borders (Denis: "sistema i pollici che sono buggati e dipingi meglio i bordi neri delle
-  dita e del resto"; finish()): the thumbs all skin from their base (THUMB: along the surface from each tip; Meshy had
-  left glove across them and skin blobs on the palm beside them: the thumb looked cut in two); the glove's edge over the
-  fingers Meshy's smoothed over GLOVE_R (it was frayed), between the thumb and the index the glove, the glove's black only
-  in its large folds; on the shoulders the tattoos Meshy painted behind (dark purple with black edges) purple with a rim of
-  its shadow, as the back sheet draws them, and its fragments there skin; then the black lines where the sheet draws
+  * Kael's own hands (beyond the wrist cuffs, HAND_D; since 11/11 only what the cut leaves of them, Ren's below): the
+    fingers clean skin, the glove plum with its large shadows black, its edges smoothed, no purple past the cuff.
+- Ren's hands in place of Kael's (Denis, 11/11: "ora rendi quelle mani simili come quelli di ren"; ren_hands()): Kael's
+  hand cut past his cuff, Ren's (assets/ren, past his wrist band) laid on it by a similarity fit on the wrist and the five
+  tips, its wrist blended onto the cut and the two rings zipped (the seam's triangles turned as their neighbours); a new
+  UV atlas (xatlas, unwrap()). On them Ren's paint: his skin and his lines (the skin's shadow where his paint is darker
+  than REN_LINE, softened a little; bits under REN_SMALL mm2 left out), and the sheet's fingerless glove (glove_of(),
+  glove_texels()): plain plum over the palm up to a straight edge GLOVE_M under the fingers' webs (the webs found where
+  the fingers part going down from the tips), the thumb bare up to its web (along the surface from its tip), the edge
+  smoothed; under the cuffs, where Kael's hand was, Meshy's black and small purple islands the glove's plum.
+- The gloves and the black borders (Denis: "sistema i pollici che sono buggati e dipingi meglio i bordi neri delle
+  dita e del resto"; finish()): what is left of Kael's own hands the glove's plum; on the shoulders the tattoos Meshy
+  painted behind (dark purple with black edges) purple with a rim of its shadow, as the back sheet draws them, and its
+  fragments there skin; then the black lines where the sheet draws
   them: between the skin and the cloth or the purple (the gloves' edges, the armholes, the collar), round the sash, the
   bracers' bands and the collar's trim, and between the sash's folds (not round the vest's stripes nor the tattoos; the
   fingers' own outlines are the outline's, as the game draws it).
@@ -64,39 +69,220 @@ NEAR_ARMS = (('fronte', -1), ('fronte', 1), ('destra', -1), ('sinistra', 1))   #
 FACE_MIN, VIEW_W, VIS_EPS, EDGE = .3, {'fronte': 1., 'destra': .85, 'sinistra': .85}, .012, 5
 ISLE, LEFT, HAND_D, GLOVE_SMALL = 400., 60., .925, 25.
 ZONE = ((.28, .55), (.38, .78))   # the shoulders: |x|, y (GLB units)
-EXTRA_THUMBS = (((-.889, -.58, .153), (-.941, -.57, .004)), ((.874, -.588, .136), (.933, -.588, .033)))   # (the extra thumb's tip, the real one's) per hand, GLB units
-EXTRA_LEN = .10                                 # the extra thumb: within this of its tip along the surface (and nearer to it than to the real thumb's)
-THUMB = (.095, ((-.94, -.585, .035), (.933, -.588, .033)))   # the thumbs: skin within [0] (GLB units, along the surface) of their tips (his right, his left)
+REN = os.path.join(ROOT, 'assets', 'ren', 'ren.json'), os.path.join(ROOT, 'viewer_assets', 'ren', 'ren_painted.jpg')   # Ren's package and paint
+KAEL_TIPS = {-1: ((-.941, -.57, .004), ((-.739, -.847, .057), (-.829, -.84, .059), (-.653, -.797, .075), (-.892, -.788, .084))),
+             1: ((.933, -.588, .033), ((.823, -.84, .085), (.734, -.841, .073), (.654, -.795, .076), (.885, -.785, .092)))}   # per hand (-1 his right): the thumb's and the fingers' tips (GLB units)
+CUT_K, CUT_R, BLEND, GAP = .015, .022, .05, .006   # the cut: Kael's past his cuff's edge (GLB units), Ren's past his hand bone (m); the wrist's blend; the seam's width
+GLOVE_M, THUMB_M, SMOOTH, REN_LINE, REN_SMALL, GLOVE_SMOOTH = .02, .005, 30, (110, 182), 5., 4   # Ren's hands: the glove's edge under the webs, the thumb bare up to [1] short of its web; the distance's smoothing; his lines: ink, shadow under these lightnesses, their bits under [4] mm2 skin (they looked like scratches); the glove's edge smoothed [5] times (the glove plain plum: the light's black on it came out in blotches)
+CLOTH = (48, 33, 59)                              # the glove's colour as Meshy's dark cloth (then it is the vest's plum)
 LINE, LINE_FOLD, SASH, COLLAR_Y = .003, .0018, (-.32, -.10, .40), .70   # the borders' half widths (GLB units: 1.3 and 0.8 mm); the sash (y from, to, |x| under); the collar's trim over
-GLOVE_R, THUMB_WEB, SAMPLE = .027, .12, .04   # the glove's edge: smoothed over [0]; between the thumb and the index (within [1] of its tip) the glove; [2] of the texels sampled
-GLOVE_BLACK, EDGE_CLEAR = 15., .008            # the glove's black: pieces over this (mm2) and none within [1] of its edge over the fingers
+GLOVE_BLACK, EDGE_CLEAR, UNDER_CUFF = 15., .008, .045           # the glove's black: pieces over this (mm2) and none within [1] of its edge over the fingers
 BACK_BITS, TAT_MAX, TAT_RIM, TAT_PUR = 200., 2500., .55, .15   # the shoulders: fragments behind under [0] mm2 skin; tattoo pieces under [1] mm2, over [2] of their rim skin, over [3] of them purple
 
 
-def remove_extra_thumbs(P, N, I):
-    """Meshy gave each hand two thumbs from one base, one outward (the sheet's) and one forward (Denis, 11/11: "noto che kael
-    ha due pollici, rimuovi completamente quello in piu"): the forward one's vertices (EXTRA_LEN of its tip along the surface,
-    nearer to it than to the real thumb's tip) moved onto a membrane spanning its rim (Laplace, the rim fixed), the ring
-    around smoothed; its normals again. Returns the new positions and normals and the moved vertices."""
-    from scipy.sparse import coo_matrix, diags
+def _weld(P):
+    _, wv = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_inverse=True); return wv.ravel()
+
+
+def _graph(P, I):
+    from scipy.sparse import coo_matrix
+    wv = _weld(P); nw = wv.max() + 1; Pw = np.zeros((nw, 3)); Pw[wv] = P; W = wv[I]
+    E = np.unique(np.sort(np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]]), 1), axis=0); w = np.linalg.norm(Pw[E[:, 0]] - Pw[E[:, 1]], axis=1)
+    return wv, Pw, W, E, coo_matrix((np.r_[w, w], (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr()
+
+
+def _loops(Tri, wv):
+    """The boundary loops of a triangle set (welded ids, in order)."""
+    W = wv[Tri]; E = np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]])
+    _, inv, c = np.unique(np.sort(E, 1), axis=0, return_inverse=True, return_counts=True); nxt = {}
+    for a, b in E[c[inv.ravel()] == 1]: nxt.setdefault(a, []).append(b)
+    seen, out = set(), []
+    for a0 in list(nxt):
+        if a0 in seen: continue
+        lp = [a0]; seen.add(a0); cur = a0
+        while True:
+            nb = [x for x in nxt.get(cur, []) if x not in seen]
+            if not nb: break
+            cur = nb[0]; lp.append(cur); seen.add(cur)
+        out.append(lp)
+    return out
+
+
+def ren_hands(P, N, UV, I, cloth_v):
+    """Ren's hands in place of Kael's (Denis, 11/11: "ora rendi quelle mani simili come quelli di ren"): Kael's hand past CUT_K
+    beyond his cuff out (its part joined to the fingertips); Ren's hand past CUT_R beyond his hand bone (his wrist band left
+    out) placed on Kael's by a similarity (rotation, scale, shift) fit on the wrist's centre (weight 4), the thumb's and the four
+    fingers' tips; its wrist blended (over BLEND) onto a ring GAP past Kael's cut, the two rings zipped. Returns the new positions,
+    normals, triangles, per vertex the source UV and whether it is Ren's, per triangle its source (0 Kael's paint, 1 Ren's, 2 the
+    seam), and per hand the cut's ring, Ren's thumb tip."""
+    import json as _j
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra, connected_components
+    rj = _j.load(open(REN[0])); RB = open(REN[0][:-4] + 'bin', 'rb').read(); rm = rj['mesh']
+    rf = lambda a, dt=np.float32: np.frombuffer(RB, dt, a[1], a[0])
+    RP = rf(rm['pos']).reshape(-1, 3).astype(float); RUV = rf(rm['uv']).reshape(-1, 2).astype(float)
+    RI = rf(rm['idx'], np.uint16 if rm['verts'] < 65536 else np.uint32).reshape(-1, 3).astype(np.int64)
+    def qm(q):
+        x, y, z, w = q; return np.array([[1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)], [2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)], [2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)]])
+    Wm = {}
+    for i, bn in enumerate(rj['bones']):
+        M = np.eye(4); M[:3, :3] = qm(bn['q']); M[:3, 3] = bn['t']; Wm[i] = (Wm[bn['p']] @ M) if bn['p'] >= 0 else M
+    rn = [bn['n'] for bn in rj['bones']]
+    kwv, kPw, kW, kE, kG = _graph(P, I); rwv, rPw, rW, rE, rG = _graph(RP, RI)
+    hdw = np.abs(kPw[:, 0]) * .8 - kPw[:, 1] * .6; kcl = np.zeros(len(kPw), bool); kcl[kwv[cloth_v[0]]] = True; kpu = np.zeros(len(kPw), bool); kpu[kwv[cloth_v[1]]] = True
+    keep = np.ones(len(I), bool); hands = []
+    for sd, side in ((-1, 'Right'), (1, 'Left')):
+        s_ = np.sign(kPw[:, 0]) == sd
+        cuff = s_ & kpu & (hdw > .80) & (hdw < .97); glove = s_ & kcl & (hdw > .88)
+        ci = np.nonzero(cuff)[0]; dd, _ = cKDTree(kPw[glove]).query(kPw[ci], distance_upper_bound=.01); edge = ci[np.isfinite(dd)]
+        Hc = kPw[s_ & (hdw > .97)].mean(0); e_c = kPw[edge].mean(0)
+        _, _, Vt = np.linalg.svd(kPw[edge] - e_c, full_matrices=False); ax = Vt[2] * np.sign(Vt[2] @ (Hc - e_c))
+        tK = (kPw - e_c) @ ax; cut = np.percentile(tK[edge], 90) + CUT_K; c0 = e_c + ax * cut
+        cand = s_ & (tK > cut); idx = np.nonzero(cand)[0]; mp = -np.ones(len(kPw), int); mp[idx] = np.arange(len(idx)); e_ = kE[cand[kE[:, 0]] & cand[kE[:, 1]]]
+        _, lab = connected_components(coo_matrix((np.ones(len(e_)), (mp[e_[:, 0]], mp[e_[:, 1]])), shape=(len(idx), len(idx))), directed=False)
+        tipv = np.argmin(np.linalg.norm(kPw - np.array(KAEL_TIPS[sd][1][0]), axis=1)); hv = np.zeros(len(kPw), bool); hv[idx[lab == lab[mp[tipv]]]] = True
+        keep &= ~hv[kW].any(1)
+        # Ren's hand
+        hb = Wm[rn.index(side + 'Hand')][:3, 3]; fa = Wm[rn.index(side + 'ForeArm')][:3, 3]; rax = (hb - fa) / np.linalg.norm(hb - fa)
+        tR = (rPw - hb) @ rax; rR = np.linalg.norm((rPw - hb) - np.outer(tR, rax), axis=1)
+        hR = (tR > CUT_R) & (rR < .12) & (np.sign(rPw[:, 0]) == sd); triR = np.nonzero(hR[rW].all(1))[0]
+        vs = np.unique(rW[triR]); mp = -np.ones(len(rPw), int); mp[vs] = np.arange(len(vs)); e_ = rE[np.isin(rE[:, 0], vs) & np.isin(rE[:, 1], vs)]
+        _, lab = connected_components(coo_matrix((np.ones(len(e_)), (mp[e_[:, 0]], mp[e_[:, 1]])), shape=(len(vs), len(vs))), directed=False)
+        inb = np.zeros(len(rPw), bool); inb[vs[lab == np.argmax(np.bincount(lab))]] = True; triR = triR[inb[rW[triR]].all(1)]
+        ringR = np.array(max(_loops(RI[triR], rwv), key=len)); reg = np.zeros(len(rPw), bool); reg[np.unique(rW[triR])] = True
+        dist = dijkstra(rG, indices=ringR, min_only=True); nb = [[] for _ in range(len(rPw))]; Gc = rG.tocoo()
+        for a, b in zip(Gc.row, Gc.col): nb[a].append(b)
+        cands = []
+        for v in np.nonzero(reg & np.isfinite(dist))[0]:
+            rg_ = {v}; fr = {v}
+            for _ in range(3): fr = {u for x in fr for u in nb[x]} - rg_; rg_ |= fr
+            if dist[v] >= max(dist[u] for u in rg_ if np.isfinite(dist[u])): cands.append(v)
+        cands = sorted(cands, key=lambda v: -dist[v]); tips = []
+        for v in cands:
+            if all(np.linalg.norm(rPw[v] - rPw[t_]) > .075 * dist[cands[0]] for t_ in tips): tips.append(v)
+            if len(tips) == 5: break
+        th = min(tips, key=lambda v: dist[v]); fing = sorted([v for v in tips if v != th], key=lambda v: np.linalg.norm(rPw[v] - rPw[th]))
+        srcL = np.array([rPw[ringR].mean(0), rPw[th]] + [rPw[v] for v in fing])
+        thK = np.array(KAEL_TIPS[sd][0]); fK = sorted(KAEL_TIPS[sd][1], key=lambda q: np.linalg.norm(np.array(q) - thK))
+        dstL = np.array([c0, thK] + [np.array(q) for q in fK]); wts = np.array([4., 1, 1, 1, 1, 1])
+        mu_s = (wts[:, None] * srcL).sum(0) / wts.sum(); mu_d = (wts[:, None] * dstL).sum(0) / wts.sum()
+        Xs = (srcL - mu_s) * np.sqrt(wts)[:, None]; Xd = (dstL - mu_d) * np.sqrt(wts)[:, None]
+        U, S_, Vt2 = np.linalg.svd(Xs.T @ Xd); D_ = np.eye(3); D_[2, 2] = np.sign(np.linalg.det(Vt2.T @ U.T)); R = Vt2.T @ D_ @ U.T
+        sc = (S_ * np.diag(D_)).sum() / (Xs ** 2).sum(); tf = lambda X, sc=sc, mu_s=mu_s, R=R, mu_d=mu_d: sc * (X - mu_s) @ R.T + mu_d
+        hands.append(dict(sd=sd, side=side, c0=c0, ax=ax, triR=triR, ringR=ringR, tf=tf, thumb=tf(rPw[th])[None][0], tips=tf(rPw[[th] + fing]), err=np.linalg.norm(tf(srcL) - dstL, axis=1)))
+        print("hands: %s: Ren's scaled %.2f, landmarks off by %s (GLB units); Kael's hand out: %d vertices" % (side, sc, np.round(hands[-1]['err'], 3), int(hv.sum())))
+    Ik = I[keep]; lpsK = _loops(Ik, kwv)
+    rep = {}
+    for t_ in Ik:
+        for x in t_: rep.setdefault(kwv[x], x)
+    Ps, Ns, UVs, Ts, Ss, Rs = [P], [N], [UV], [Ik], [np.zeros(len(Ik), np.int8)], [np.zeros(len(P), bool)]; off = len(P)
+    for h in hands:
+        c0, ax = h['c0'], h['ax']; lk = min(lpsK, key=lambda l: np.linalg.norm(kPw[l].mean(0) - c0)); h['ring'] = kPw[lk]
+        u = np.cross(ax, [0, 0, 1.]); u /= np.linalg.norm(u); v = np.cross(ax, u); ang = lambda X: np.arctan2((X - c0) @ v, (X - c0) @ u)
+        aK = ang(kPw[lk]); o = np.argsort(aK); aKs, pKs = aK[o], kPw[lk][o]
+        per = lambda a, xs_, ys_: np.column_stack([np.interp(a, np.r_[xs_ - 2 * np.pi, xs_, xs_ + 2 * np.pi], np.r_[ys_[:, k], ys_[:, k], ys_[:, k]]) for k in range(3)])
+        vs = np.unique(RI[h['triR']]); Q = h['tf'](RP[vs]); mpR = -np.ones(len(RP), int); mpR[vs] = np.arange(len(vs))
+        rr0 = h['tf'](rPw[h['ringR']]); aR = ang(rr0); dR = per(aR, aKs, pKs) + ax * GAP - rr0; oR = np.argsort(aR)
+        t0 = ((rr0 - c0) @ ax).mean(); w = np.clip(1 - ((Q - c0) @ ax - t0) / BLEND, 0, 1); w = w * w * (3 - 2 * w)
+        Q = Q + per(ang(Q), aR[oR], dR[oR]) * w[:, None]
+        for k_, wvid in enumerate(h['ringR']): Q[rwv[vs] == wvid] = rr0[k_] + dR[k_]
+        Ps.append(Q); Ns.append(np.zeros_like(Q)); UVs.append(RUV[vs]); Ts.append(mpR[RI[h['triR']]] + off); Ss.append(np.ones(len(h['triR']), np.int8)); Rs.append(np.ones(len(Q), bool))
+        kA = [rep[w_] for w_ in lk]; rA = [int(np.nonzero(rwv[vs] == wvid)[0][0]) + off for wvid in h['ringR']]
+        def order(ids, a):
+            i0 = int(np.argmin(a)); ids = ids[i0:] + ids[:i0]; a = np.r_[a[i0:], a[:i0]]; un = np.unwrap(a)
+            if un[-1] < un[0]: ids = [ids[0]] + ids[1:][::-1]; un = np.unwrap(np.r_[a[0], a[1:][::-1]])
+            return ids, un - un[0]
+        kI, kU = order(kA, ang(kPw[lk])); rI_, rU = order(rA, aR); rU = rU + (aR[np.argmin(aR)] - aK[np.argmin(aK)]) * 0
+        allp = lambda i: P[i] if i < len(P) else Q[i - off]
+        kUe = np.r_[kU, 2 * np.pi]; rUe = np.r_[rU, 2 * np.pi]; tris = []; i = j = 0; nk, nr = len(kI), len(rI_)
+        while i < nk or j < nr:
+            if j >= nr or (i < nk and kUe[i + 1] <= rUe[j + 1]): tris.append([kI[i], kI[(i + 1) % nk], rI_[j % nr]]); i += 1
+            else: tris.append([kI[i % nk], rI_[(j + 1) % nr], rI_[j]]); j += 1
+        tris = np.array(tris)
+        for t_ in tris:
+            a_, b_, c_ = (allp(x) for x in t_); cen = (a_ + b_ + c_) / 3; rad = (cen - c0) - ((cen - c0) @ ax) * ax
+            if np.cross(b_ - a_, c_ - a_) @ rad < 0: t_[1], t_[2] = t_[2], t_[1]
+        Ts.append(tris); Ss.append(np.full(len(tris), 2, np.int8)); off += len(Q)
+    P2 = np.concatenate(Ps); I2 = np.concatenate(Ts); src = np.concatenate(Ss); isR = np.concatenate(Rs)
+    # (the seam's triangles turned as their neighbours: each shared edge run the other way)
+    wz = _weld(P2)
+    for _ in range(20):
+        Wd = wz[I2]; E_ = np.concatenate([Wd[:, [0, 1]], Wd[:, [1, 2]], Wd[:, [2, 0]]]); tri = np.tile(np.arange(len(I2)), 3)
+        key = E_[:, 0] * (wz.max() + 1) + E_[:, 1]; rkey = E_[:, 1] * (wz.max() + 1) + E_[:, 0]
+        uk, cnt = np.unique(key, return_counts=True); dup = cnt[np.searchsorted(uk, key)] > 1; opp = np.isin(rkey, uk)
+        bad = np.bincount(tri, weights=dup.astype(float), minlength=len(I2)); good = np.bincount(tri, weights=(opp & ~dup).astype(float), minlength=len(I2))
+        flip = (src == 2) & (bad > good)
+        if not flip.any(): break
+        I2[flip] = I2[flip][:, [0, 2, 1]]
+    print('seam: %d edges still run the same way' % int(dup.sum() // 2))
+    wv2 = _weld(P2); fn = np.cross(P2[I2[:, 1]] - P2[I2[:, 0]], P2[I2[:, 2]] - P2[I2[:, 0]]); Nw = np.zeros((wv2.max() + 1, 3)); np.add.at(Nw, wv2[I2].ravel(), np.repeat(fn, 3, 0))
+    Nw /= np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12); N2 = np.concatenate(Ns); ch = isR.copy(); ch[I2[src == 2].ravel()] = True; N2[ch] = Nw[wv2[ch]]
+    used = np.unique(I2); mp = -np.ones(len(P2), int); mp[used] = np.arange(len(used))
+    return P2[used], N2[used], mp[I2], np.concatenate(UVs)[used], isR[used], src, hands
+
+
+def glove_of(P, I, isR, src_t, hands):
+    """The fingerless glove on Ren's hands as the sheet draws it: the palm up to a straight edge GLOVE_M under the fingers'
+    webs, the fingers and the thumb bare from their base. The webs: where the fingers part, on the distance from the cut along
+    the surface (smoothed SMOOTH times) going down from the tips (each web the vertex where two fingers' pieces meet); the
+    edge's plane through the three webs, square to the hand. Returns per hand the plane, the thumb's tip and its web (then
+    glove_texels per texel)."""
     from scipy.sparse.csgraph import dijkstra
-    from scipy.sparse.linalg import spsolve
-    _, wv = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_inverse=True); wv = wv.ravel(); nw = wv.max() + 1; Pw = np.zeros((nw, 3)); Pw[wv] = P
-    W = wv[I]; E = np.unique(np.sort(np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]]), 1), axis=0); w = np.linalg.norm(Pw[E[:, 0]] - Pw[E[:, 1]], axis=1)
-    G = coo_matrix((np.r_[w, w], (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr()
-    A = coo_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr(); deg = np.asarray(A.sum(1)).ravel()
-    region = np.zeros(nw, bool)
-    for ex, th in EXTRA_THUMBS:
-        ve = np.argmin(np.linalg.norm(Pw - np.array(ex), axis=1)); vt = np.argmin(np.linalg.norm(Pw - np.array(th), axis=1))
-        de = dijkstra(G, indices=ve, limit=.3); dt = dijkstra(G, indices=vt, limit=.3); region |= (de < EXTRA_LEN) & (de < dt)
-    idx = np.nonzero(region)[0]; Lp = (diags(deg) - A).tocsr()
-    B = -Lp[idx][:, ~region] @ Pw[~region]; Pw2 = Pw.copy(); Pw2[idx] = np.column_stack([spsolve(Lp[idx][:, idx].tocsc(), B[:, k]) for k in range(3)])
-    ring = (A @ region.astype(float) > 0) & ~region; ring2 = ring | ((A @ ring.astype(float) > 0) & ~region)
-    for _ in range(3): Pw2[ring2] = .5 * Pw2[ring2] + .5 * (A @ Pw2)[ring2] / deg[ring2, None]
-    fn = np.cross(Pw2[W[:, 1]] - Pw2[W[:, 0]], Pw2[W[:, 2]] - Pw2[W[:, 0]]); Nw = np.zeros((nw, 3)); np.add.at(Nw, W.ravel(), np.repeat(fn, 3, 0)); Nw /= np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-12)
-    ch = (region | ring2)[wv]; N2 = N.copy(); N2[ch] = Nw[wv[ch]]
-    print('extra thumbs: %d vertices flattened into the hands (moved up to %.3f units)' % (int(region.sum()), np.linalg.norm(Pw2 - Pw, axis=1).max()))
-    return Pw2[wv], N2, region[wv]   # (the flattened thumb's vertices)
+    wv, Pw, W, E, G = _graph(P, I); rv = np.zeros(len(Pw), bool); rv[wv[isR]] = True
+    ring = np.unique(W[src_t == 2]); ring = ring[~rv[ring]]; dg = dijkstra(G, indices=ring, min_only=True, limit=2.); dg[~np.isfinite(dg)] = 0
+    ip, ic = G.indptr, G.indices; nbm = [ic[ip[v]:ip[v + 1]] for v in range(len(Pw))]
+    out = []
+    deg = np.diff(ip).astype(float); free = rv.copy(); free[ring] = False
+    for _ in range(SMOOTH):
+        avg = np.add.reduceat(dg[ic], ip[:-1]) / np.maximum(deg, 1); dg = np.where(free, avg, dg)
+    for h in hands:
+        vs = np.nonzero(rv & (np.sign(Pw[:, 0]) == h['sd']))[0]; tips = [vs[np.argmin(np.linalg.norm(Pw[vs] - t, axis=1))] for t in h['tips']]
+        par = {}; tipset = {}
+        def root(x):
+            while par[x] != x: par[x] = par[par[x]]; x = par[x]
+            return x
+        webs = {}
+        for v in vs[np.argsort(-dg[vs])]:
+            par[v] = v; tipset[v] = {k for k, t in enumerate(tips) if t == v}
+            for u in nbm[v]:
+                if u not in par: continue
+                a_, b_ = root(u), root(v)
+                if a_ == b_: continue
+                for x in tipset[a_]:
+                    for y in tipset[b_]:
+                        webs.setdefault((min(x, y), max(x, y)), v)
+                par[a_] = b_; tipset[b_] |= tipset.pop(a_)
+        wf = [webs[(k, k + 1)] for k in (1, 2, 3)]; wt = webs[(0, 1)] if (0, 1) in webs else min((webs[k] for k in webs if 0 in k), key=lambda v: -dg[v])
+        c = Pw[wf].mean(0); _, _, Vt = np.linalg.svd(Pw[wf] - c); ln = Vt[0]
+        hx = Pw[tips[2]] - h['c0']; n = hx - (hx @ ln) * ln; n /= np.linalg.norm(n)
+        out.append(dict(sd=h['sd'], c=c, n=n, tip=Pw[tips[0]], web=Pw[wt]))
+        print("glove: %s hand: webs at %s along the surface, the thumb's at %.3f" % (h['side'], np.round(dg[wf], 3), dg[wt]))
+    return out
+
+
+def glove_texels(pos, newh, planes, jw, okw):
+    """Per texel: the glove: under its hand's plane, but the thumb bare up to its web (along the surface from its tip, on
+    the texels' own graph: its base a clean ring round it)."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra
+    g = np.zeros(len(pos), bool); r = np.repeat(np.arange(len(pos)), jw.shape[1])[okw.ravel()]; c = jw[okw]
+    G = coo_matrix((np.linalg.norm(pos[r] - pos[c], axis=1) + 1e-9, (r, c)), shape=(len(pos), len(pos))).tocsr(); tree = cKDTree(pos)
+    for q in planes:
+        sel = newh & (np.sign(pos[:, 0]) == q['sd']); src = np.intersect1d(tree.query_ball_point(q['tip'], .006), np.nonzero(sel)[0])
+        d = dijkstra(G, indices=src, min_only=True, limit=.4); L = d[tree.query(q['web'])[1]] - THUMB_M
+        g[sel] = ((pos[sel] - q['c']) @ q['n'] + GLOVE_M < 0) & ~(d[sel] < L)
+        print('glove: the thumb bare up to %.3f from its tip' % L)
+    return g
+
+
+def unwrap(P, I):
+    """A new UV atlas (xatlas: Kael's and Ren's pieces in one texture). Returns the vertices' map, the triangles, the UVs."""
+    import xatlas
+    at = xatlas.Atlas(); at.add_mesh(P.astype(np.float32), I.astype(np.uint32))
+    po = xatlas.PackOptions(); po.resolution = TS; po.padding = 4; po.bilinear = True; po.blockAlign = True
+    at.generate(xatlas.ChartOptions(), po); vm, idx, uv = at[0]
+    print('atlas: %d charts, %.0f%% used' % (at.chart_count, 100 * at.utilization))
+    return vm.astype(np.int64), idx.astype(np.int64), uv.astype(np.float64)
 
 
 def occlusion(P, N, I):
@@ -189,7 +375,7 @@ def fit_arms(P, I, ks, mat, tat, cams):
     return res
 
 
-def arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cams, fits, names, cols, ix, jw, okw, ok):
+def arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cams, fits, names, cols, ix, jw, okw, ok, newh):
     """The arms' skin from the drawings, the right tattoo mirrored from the left, the shoulders' leftovers, the hands (see the docstring)."""
     from scipy.spatial import cKDTree
     j = jw[:, :KF.KNN - 1]; lab = lab.copy(); mat = mat.copy()
@@ -200,8 +386,8 @@ def arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cams, fits, names, col
     diff = ok & (comp[j] != comp[:, None]); rr = np.repeat(np.arange(len(mat)), j.shape[1])[diff.ravel()]; qq = j[diff]
     rs = np.bincount(comp[rr], weights=((mat[qq] == 0) | tat[qq]).astype(float), minlength=nc); rn = np.bincount(comp[rr], minlength=nc)
     cm = np.zeros(nc, np.int64); cm[comp] = mat; ax = np.zeros(nc); np.maximum.at(ax, comp, np.abs(pos[:, 0]))
-    isl_c = (cm == 1) & (ca < ISLE) & (rs > .6 * np.maximum(rn, 1)) & (ax > .25); isl = isl_c[comp]; mat[isl] = 0; lab[isl] = ix['skin']
-    arm_x = arm_t[ks] & ((mat == 0) | tat); sd_x = np.sign(pos[:, 0])
+    isl_c = (cm == 1) & (ca < ISLE) & (rs > .6 * np.maximum(rn, 1)) & (ax > .25); isl = isl_c[comp] & ~newh; mat[isl] = 0; lab[isl] = ix['skin']
+    arm_x = arm_t[ks] & ((mat == 0) | tat) & ~newh; sd_x = np.sign(pos[:, 0])
     best = np.full(len(ks), -1.); newl = np.full(len(ks), -1)
     for k, cam in cams.items():
         A = np.asarray(Image.open(VIEWS[k]).convert('RGB')).astype(float)
@@ -250,7 +436,7 @@ def arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cams, fits, names, col
     lc = np.zeros(nc2, np.int64); lc[comp2] = lab
     bad = (ca2 < LEFT) & (inz > .5 * cnt2) & np.isin(lc, [ix['purple'], ix['purpleS'], ix['black'], ix['plum'], ix['ink']]); fix = bad[comp2] & skz; lab[fix] = ix['skin']
     # (the hands)
-    hand = np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6 > HAND_D; hd = np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6
+    hd = np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6; hand = (hd > HAND_D) & ~newh   # (Ren's hands: as main() painted them)
     m2 = mat.copy(); isk = np.isin(lab, [ix['skin'], ix['skinS'], ix['ink']]); m2[hand & isk] = 0; m2[hand & ~isk & (m2 == 0)] = 1
     for _ in range(4): m2 = np.where(hand, KF._mode(m2, jw, okw, 3), m2)
     KF._small(m2, j, ok, area, np.where(hand, 30., 0.), ~hand); m2[hand & (m2 == 2) & (hd > HAND_D + .02)] = 1
@@ -262,60 +448,23 @@ def arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cams, fits, names, col
     return lab
 
 
-def finish(P, I, ks, bary, pos, nor, lab, tat, area, names, ix, jw, okw, ok, xthumb):
-    """The thumbs, the gloves' edges, the shoulders' tattoos behind and the black borders (see the docstring)."""
-    from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import dijkstra
+def finish(P, I, ks, bary, pos, nor, lab, tat, area, names, ix, jw, okw, ok, newh, rings=()):
+    """What is left of Kael's hands, the shoulders' tattoos behind and the black borders (see the docstring)."""
     lab = lab.copy(); tat = tat.copy(); j = jw[:, :KF.KNN - 1]
     hd = np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6; hand = hd > .925
-    # 1. the thumbs: geodesic distance from each tip on the welded mesh
-    _, wv = np.unique(np.round(P / 1e-6).astype(np.int64), axis=0, return_inverse=True); wv = wv.ravel(); nw = wv.max() + 1; Pw = np.zeros((nw, 3)); Pw[wv] = P
-    W = wv[I]; E = np.unique(np.sort(np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]]), 1), axis=0); w = np.linalg.norm(Pw[E[:, 0]] - Pw[E[:, 1]], axis=1)
-    G = coo_matrix((np.r_[w, w], (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr()
-    tips = [np.argmin(np.linalg.norm(Pw - np.array(t), axis=1)) for t in THUMB[1]]
-    dtv = dijkstra(G, indices=tips, min_only=True, limit=.3); tri = W[ks]; dtx = (np.where(np.isfinite(dtv[tri]), dtv[tri], 9.) * bary).sum(1)
-    thumb = hand & (dtx < THUMB[0])
-    thumb &= ~xthumb
-    lab[thumb] = ix['skin']
-    # (the glove's edge on the fingers: Meshy's, smoothed: each hand texel skin where over half of the surface within GLOVE_R
-    # (same side) is skin, from SAMPLE of the texels; between the thumb and the index (within THUMB_WEB of the thumb's tip,
-    # not the thumb) the glove; the thumbs skin)
-    isk = np.isin(lab, [ix['skin'], ix['skinS'], ix['ink']])
-    s0 = (hand & isk & (dtx > THUMB_WEB)) | thumb
-    hi_ = np.nonzero(hand)[0]; rng = np.random.default_rng(0); smp = hi_[rng.random(len(hi_)) < SAMPLE]
-    M = cKDTree(pos[smp]).sparse_distance_matrix(cKDTree(pos[smp]), GLOVE_R, output_type='coo_matrix')
-    same = (nor[smp[M.row]] * nor[smp[M.col]]).sum(1) > .2
-    fr = np.bincount(M.row[same], weights=s0[smp[M.col[same]]].astype(float), minlength=len(smp)) / np.maximum(np.bincount(M.row[same], minlength=len(smp)), 1)
-    dd, nn = cKDTree(pos[smp]).query(pos[hi_], k=16); wgt = np.exp(-(dd / (.35 * GLOVE_R)) ** 2) + 1e-9; val = (fr[nn] * wgt).sum(1) / wgt.sum(1)   # (smooth: Gaussian over 16 samples)
-    skin_h = np.zeros(len(lab), bool); skin_h[hi_] = val > .5; skin_h |= thumb; skin_h &= ~(hand & (dtx < THUMB_WEB) & ~thumb)
-    skin_h &= ~xthumb   # (where the extra thumb was: the glove (the real thumb's reach along the surface now crosses it, flattened into the palm))
-    # (and on the hands only the skin joined to a fingertip or the thumb's tip: the bits of the real thumb's reach left over where
-    # the extra one's base was, crescents of skin on the glove, the glove)
-    cs = KF._comps(np.where(hand & skin_h, 1, 0), j, ok); seed = np.zeros(cs.max() + 1, bool)
-    for sd in (-1, 1):
-        hv = np.nonzero(hand & skin_h & (np.sign(pos[:, 0]) == sd))[0]
-        if len(hv): seed[cs[hv[np.argsort(pos[hv, 1])[:400]]]] = True
-    seed[cs[hand & skin_h & (dtx < .02)]] = True
-    loose = hand & skin_h & ~seed[cs]; skin_h &= ~loose
-    print('hands: %d texels of loose skin bits to the glove' % int(loose.sum()))
-    # (the skin's specks on the glove and the glove's in the skin: pieces under 25 mm2 the other)
-    sh_ = np.where(hand, skin_h.astype(int), 2); KF._small(sh_, j, ok, area, np.where(hand, 25., 0.), ~hand)
-    for _ in range(2): sh_ = np.where(hand, KF._mode(sh_, j, ok, 3, keep=~hand), sh_)
-    skin_h = hand & (sh_ == 1)
-    fingers = hand & skin_h; glove = hand & ~skin_h
-    stray = glove & isk
-    lab[fingers] = ix['skin']; lab[stray] = ix['plum']
-    lab[glove & ~np.isin(lab, [ix['plum'], ix['black'], ix['purple'], ix['purpleS']])] = ix['plum']
-    # (purple bits on the hands past the cuffs, under 100 mm2: plum)
-    pc = KF._comps(lab, j, ok); pa = np.bincount(pc, weights=area); pl = np.zeros(len(pa), np.int64); pl[pc] = lab
-    pin = np.zeros(len(pa)); np.add.at(pin, pc, hand.astype(float)); pn = np.bincount(pc)
-    pb = (pa < 100) & np.isin(pl, [ix['purple'], ix['purpleS']]) & (pin > .5 * pn); lab[pb[pc] & hand] = ix['plum']
-    print('thumbs: %d texels skin; fingers %d; hands: %d stray skin texels and %d purple bits to the glove' % (int(thumb.sum()), int(fingers.sum()), int(stray.sum()), int((pb[pc] & hand).sum())))
-    for _ in range(2): lab = np.where(glove, KF._mode(lab, jw, okw, len(names), keep=~glove), lab)
-    # (the glove's black: its large folds only (pieces over GLOVE_BLACK mm2), none within EDGE_CLEAR of its edge over the fingers:
-    # beside the edge's line it frayed it, and Meshy's dashes across the back are gone)
-    gb = np.where(glove, np.where(lab == ix['black'], 1, 0), 2); KF._small(gb, j, ok, area, np.where(glove & (gb == 1), GLOVE_BLACK, 0.), ~glove)
-    lab[glove & (gb == 0) & (lab == ix['black'])] = ix['plum']
+    # 1. the hands: Ren's (ren_hands; newh, their texels): their skin and lines as Ren's paint, the glove as painted there; what
+    # is left of Kael's own past his cuff the glove's plum
+    hand = hand & ~newh
+    lab[hand & ~np.isin(lab, [ix['plum'], ix['black'], ix['purple'], ix['purpleS']])] = ix['plum']
+    glove = newh & np.isin(lab, [ix['plum'], ix['black']]); fingers = newh & np.isin(lab, [ix['skin'], ix['skinS'], ix['ink']]); thumb = np.zeros(len(lab), bool)
+    # (under the cuffs, where Kael's hand was: Meshy's black and its small purple islands there the glove's plum; the cuff's hem
+    # then gets its clean black line with the borders)
+    if len(rings):
+        uc = ~newh & (cKDTree(np.concatenate(rings)).query(pos, distance_upper_bound=UNDER_CUFF)[0] < UNDER_CUFF)
+        pc = KF._comps(lab, j, ok); pa = np.bincount(pc, weights=area); pl = np.zeros(len(pa), np.int64); pl[pc] = lab
+        isle = (pa < 200.)[pc] & np.isin(lab, [ix['purple'], ix['purpleS']]) & uc
+        lab[isle | (uc & np.isin(lab, [ix['black'], ix['ink']]))] = ix['plum']
+        print('under the cuffs: %d texels of purple islands and black to plum' % int((isle | uc).sum()))
     # (the shoulders' tattoos as Meshy painted them behind, dark purple with black edges: on the shoulders, the pieces of purple,
     # its shadow, black or ink lying in the skin (over TAT_RIM of their rim skin, under TAT_MAX mm2) are tattoos: purple, a rim of
     # its shadow, no ink (as the clean V in front)
@@ -365,13 +514,27 @@ def finish(P, I, ks, bary, pos, nor, lab, tat, area, names, ix, jw, okw, ok, xth
 
 def main(src, dst, png=None, fit=False):
     m = glbio.read(src); P, N, UV, I = m['pos'], m['nor'], m['uv'], m['idx']
-    P, N, xv = remove_extra_thumbs(P, N, I)
     T = np.asarray(Image.open(io.BytesIO(m['img'])).convert('RGB').resize((TS, TS), Image.LANCZOS)).astype(float)
+    samp = lambda A, uv: A[np.clip((uv[:, 1] * A.shape[0]).astype(int), 0, A.shape[0] - 1), np.clip((uv[:, 0] * A.shape[1]).astype(int), 0, A.shape[1] - 1)]
+    vc = samp(T, UV); vsk = (vc[:, 0] > 150) & (vc[:, 0] - vc[:, 2] > 35); vpu = (vc[:, 2] > 95) & (vc[:, 2] - vc[:, 1] > 55) & ~vsk
+    P, N, I, SU, isR, src_t, hands = ren_hands(P, N, UV, I, (np.nonzero(~vsk & ~vpu)[0], np.nonzero(vpu)[0]))
+    vm, I, UV = unwrap(P, I); P, N, SU, isR = P[vm], N[vm], SU[vm], isR[vm]
     ys, xs, ks, bary, pos, nor = texel_table(P, N, UV, I, TS); nor = nor / np.maximum(np.linalg.norm(nor, axis=1, keepdims=True), 1e-9)
+    # (each texel's source paint: Kael's by Meshy, Ren's on his hands, the seam the glove's)
+    suv = (SU[I[ks]] * bary[:, :, None]).sum(1); s_ = src_t[ks]; newh = s_ >= 1
+    TR = np.asarray(Image.open(REN[1]).convert('RGB')).astype(float)
+    mey = np.zeros((len(ks), 3)); mey[s_ == 0] = samp(T, suv[s_ == 0]); mey[s_ == 1] = samp(TR, suv[s_ == 1]); mey[s_ == 2] = CLOTH
+    # (the glove on Ren's hands: the palm up to under the knuckles, the fingers and the thumb bare)
+    planes = glove_of(P, I, isR, src_t, hands)
     names = list(PAL); cols = np.array([PAL[k] for k in names], float); ix = {k: i for i, k in enumerate(names)}
     KF.prepare(P * SC, I); cnt = np.bincount(ks, minlength=len(I)).astype(float); area = KF.TRI_AREA[ks] * 1e6 / np.maximum(cnt[ks], 1)
     jw, okw, ok = KF._graph(pos * SC, nor.astype(np.float32), np.sqrt(area) * 1e-3); j = jw[:, :KF.KNN - 1]
-    mey = T[ys, xs]; r, g, b = mey[:, 0], mey[:, 1], mey[:, 2]; L = mey.mean(1)
+    glove = glove_texels(pos, newh, planes, jw, okw) | (s_ == 2)
+    g2 = glove.astype(np.int64)
+    for _ in range(GLOVE_SMOOTH): g2 = KF._mode(g2, jw, okw, 2, keep=~newh | (s_ == 2))
+    glove = g2 == 1   # (the glove's edge smoothed on the surface)
+    print("Ren's hands: %d texels, %d of them the glove" % (int(newh.sum()), int(glove.sum())))
+    r, g, b = mey[:, 0], mey[:, 1], mey[:, 2]; L = mey.mean(1)
     # the pieces: 0 skin, 1 dark cloth, 2 purple
     mat = np.ones(len(ks), np.int64); mat[(r > 150) & (r - b > 35)] = 0; mat[(b > 95) & (b - g > 55) & ~(mat == 0)] = 2
     lines = (mat == 1) & (KF._mode(mat, j, ok, 3, own=0) == 0); mat[lines] = 0
@@ -389,24 +552,28 @@ def main(src, dst, png=None, fit=False):
     cm = np.zeros(nc, np.int64); cm[comp] = mat; tat_c = (cm == 2) & (rim_sk > .6 * np.maximum(rim_n, 1)); tat = tat_c[comp]
     edge = tat & np.where(ok, mat[j] != 2, False).any(1); edge |= tat & np.where(ok, edge[j], False).any(1)
     lab[tat] = ix['purple']; lab[edge] = ix['purpleS']
+    sk3 = [ix['skin'], ix['skinS'], ix['ink']]; rh = newh & ~glove
+    Lr = mey.mean(1)
+    for _ in range(2): Lr = np.where(newh, (np.where(ok, Lr[j], 0).sum(1) + Lr) / (ok.sum(1) + 1), Lr)   # (his strokes a little softened: whole lines, not dashes)
+    Lr = Lr[rh]; lab[rh] = np.where(Lr < REN_LINE[0], ix['ink'], np.where(Lr < REN_LINE[1], ix['skinS'], ix['skin'])); mat[rh] = 0; lab[glove] = ix['plum']; mat[glove] = 1; tat[newh] = False
     print('pieces: skin %.1f%%, cloth %.1f%%, purple %.1f%%; tattoos: %d pieces' % (*(100 * np.bincount(mat, minlength=3) / len(mat)), int(tat_c.sum())))
     # the skin's shadow
     ao = occlusion(P, N, I)[cKDTree(P).query(pos)[1]]
     az, el = np.radians(SHADE[0]), np.radians(SHADE[1]); Lv = np.array([np.sin(az) * np.cos(el), np.sin(el), np.cos(az) * np.cos(el)])
-    sc = nor @ Lv - SHADE[2] * (1 - ao); sk = (mat == 0) & ~tat; tau = np.quantile(sc[sk], SHADE[3])
+    sc = nor @ Lv - SHADE[2] * (1 - ao); sk = (mat == 0) & ~tat & ~newh; tau = np.quantile(sc[sk], SHADE[3])
     lab[sk & (lab == ix['skin']) & (sc < tau)] = ix['skinS']
     nl = len(names)
-    for _ in range(5): lab = KF._mode(lab, jw, okw, nl, keep=(lab == ix['ink']) | tat | (mat != 0))
-    for _ in range(2): lab = KF._mode(lab, j, ok, nl, keep=(lab == ix['ink']) | tat)
-    KF._small(lab, j, ok, area, np.where(lab == ix['ink'], 1.5, np.where(lab == ix['skinS'], SKIN_SMALL, 10.)), tat)
+    for _ in range(5): lab = KF._mode(lab, jw, okw, nl, keep=(lab == ix['ink']) | tat | (mat != 0) | newh)
+    for _ in range(2): lab = KF._mode(lab, j, ok, nl, keep=(lab == ix['ink']) | tat | newh)
+    KF._small(lab, j, ok, area, np.where(newh, np.where(lab == ix['ink'], .3, np.where(glove, GLOVE_BLACK, np.where(lab == ix['skinS'], REN_SMALL, 1.))), np.where(lab == ix['ink'], 1.5, np.where(lab == ix['skinS'], SKIN_SMALL, 10.))), tat)
     print('  '.join('%s %.1f%%' % (n, 100 * (lab == i).mean()) for i, n in enumerate(names)))
     if fit or not os.path.exists(CAMS):
         cams = fit_cams(P, I); fits = fit_arms(P, I, ks, mat, tat, cams)
         json.dump({'_': 'tools/kael_bust.py --fit: the three views\' cameras (orthographic: u = cx + s (x cos yaw - z sin yaw), v = by - s y, GLB units) and per near arm a turn (a, degrees), scale (k) and shift (tx, ty px) about (cx, cy) laying its skin on the drawing\'s',
                    'cams': cams, 'arms': fits}, open(CAMS, 'w'), indent=1)
-    cj = json.load(open(CAMS)); lab = arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cj['cams'], cj['arms'], names, cols, ix, jw, okw, ok)
-    lab = finish(P, I, ks, bary, pos, nor, lab, tat, area, names, ix, jw, okw, ok, (xv[I[ks]] * bary).sum(1) > .15)
-    if os.environ.get('KAEL_BUST_DUMP'): np.savez(os.environ['KAEL_BUST_DUMP'], ys=ys, xs=xs, ks=ks, bary=bary, pos=pos, nor=nor, mat=mat, lab=lab, tat=tat, mey=mey, area=area)
+    cj = json.load(open(CAMS)); lab = arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cj['cams'], cj['arms'], names, cols, ix, jw, okw, ok, newh)
+    lab = finish(P, I, ks, bary, pos, nor, lab, tat, area, names, ix, jw, okw, ok, newh, [h['ring'] for h in hands])
+    if os.environ.get('KAEL_BUST_DUMP'): np.savez(os.environ['KAEL_BUST_DUMP'], newh=newh, glove=glove, ys=ys, xs=xs, ks=ks, bary=bary, pos=pos, nor=nor, mat=mat, lab=lab, tat=tat, mey=mey, area=area)
     out = np.zeros((TS, TS, 3)); cov = np.zeros((TS, TS), bool); out[ys, xs] = cols[lab]; cov[ys, xs] = True
     _, (iy, jx) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], jx[~cov]]
     im = Image.fromarray(out.round().astype(np.uint8)); bio = io.BytesIO(); im.save(bio, 'PNG', optimize=True)

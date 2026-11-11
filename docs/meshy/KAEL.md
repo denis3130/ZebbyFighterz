@@ -550,6 +550,16 @@ il nodo in vita resta di Meshy (Denis: "no il nodo in vita no solo togli meglio 
   punta che a quella del pollice vero: 70 e 61 vertici) è appiattito nel palmo (`remove_extra_thumbs`: i suoi vertici su
   una membrana tesa sul suo bordo, l'anello attorno lisciato, normali rifatte); lì il guanto, e sulle mani solo la pelle
   attaccata alle dita o alla punta del pollice. Il pollice vero resta com'era.
+- **Mani di Ren** (Denis: "ora rendi quelle mani simili come quelli di ren"; versione `busto_k6.glb`, gratis): le mani
+  di Meshy tolte oltre il polsino e al loro posto quelle di Ren (`assets/ren`, senza la sua fascia del polso), messe al
+  posto giusto con polso e cinque punte (scala 2,1-2,2; scarto 1-4 cm sulle dita, 10 cm sul pollice che Ren ha più
+  aperto), il polso raccordato al taglio e cucito (triangoli della cucitura girati come i vicini: niente buchi). Nuova
+  mappa dei colori (xatlas). Sopra: la pelle e le righe di Ren (pieghe delle nocche; i pezzetti sotto 4 mm² tolti, prima
+  sembravano graffi) e il mezzo guanto del foglio: prugna piatto sul palmo fino a un bordo dritto 2 cm sotto le nocche
+  (le nocche trovate dove le dita si separano), dita e pollice scoperti dalla base (il pollice fino al suo incavo, misurato
+  sulla superficie dalla punta), bordo lisciato; sotto i polsini, dove c'era la mano di Meshy, via il nero e le isolette
+  viola. Provati e lasciati: bordo a distanza dal taglio (a zig-zag sui triangoli grandi di Ren), pollice dentro un
+  cilindro (lasciava una linguetta di pelle nell'incavo), nero sul guanto dalla luce (macchie).
 - Prossimi passi: metterlo sulle ossa di Kael al posto del suo busto e delle braccia (come la testa,
   `tools/kael_head.py`), la testa sopra, le gambe di adesso sotto; poi le code della fascia come nastri.
 
