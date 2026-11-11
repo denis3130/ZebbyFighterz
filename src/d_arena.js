@@ -520,6 +520,7 @@ function arClothSync() {
 // Once per drawn frame: water, clouds, mist (time only) and the banner (fixed 1/60 s steps of the drawn time).
 function arenaStep(nowMs, S) {
   const d = AR.def, t = nowMs / 1000;
+  ARENA.far.position.x = d.sway.amp * Math.sin(t * 6.2831853 / d.sway.period);   // nearer planes slide further on screen
   for (const m of AR.mats) {
     m.uniforms.uTime.value = t;
     if (m.uniforms.uSkyOff) m.uniforms.uSkyOff.value = d.skyDrift * AR.skyK * Math.sin(t * 6.2831853 / d.skyPeriod);

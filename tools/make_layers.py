@@ -94,8 +94,11 @@ PLANES = [
      'poly': [(1245, 30), (W0, 30), (W0, 342), (1640, 340), (1600, 352), (1580, 400), (1450, 420), (1300, 432),
               (1245, 440), (1236, 410), (1235, 357), (1240, 300), (1244, 245), (1247, 215)]},
     {'name': 'falls', 'scale': 1., 'water': True,
-     'poly': [(600, 30), (1320, 30), (1320, 300), (1310, 420), (1300, 480)] + FR_MIST_EDGE[:7][::-1] +
-             [(1020, 745), (700, 745), (690, 600), (640, 560), (600, 500)],
+     # it goes on ~170 px behind the near cliffs on both sides (they slide that far over it at the camera's ends);
+     # behind the high cliffs no higher than its own wooded bank (left) and crest (right): above that is sky
+     'poly': [(500, 160), (640, 143), (640, 30), (1245, 30), (1245, 236), (1415, 242), (1415, 505), (1360, 540),
+              (1330, 550)] + FR_MIST_EDGE[:7][::-1] + [(1020, 745), (700, 745), (690, 620), (640, 595), (600, 575),
+                                                         (500, 560)],
      'fade': [('below', [(600, 744), (1330, 744)], 62),
               # the tail of dark trees dissolves into the mist as the right cliff did
               ('below', [(0, 2000), (1029, 2000)] + FR_MIST_EDGE[:7] + [(1313, 2000), (2000, 2000)], 16)]},
@@ -106,6 +109,7 @@ HAZE_TOP = [(0, 172), (215, 157), (260, 178), (300, 205), (345, 240), (420, 300)
             (760, 500), (900, 510), (1050, 500), (1150, 485), (1250, 470), (1350, 440), (1450, 400), (1530, 370),
             (1580, 350), (W0, 340)]
 HAZE_SCALE, SKY_SCALE = .42, .4
+HIDDEN_SOFT = 14
 
 
 def poly_alpha(polys, w, h, ox=0, oy=0):
@@ -260,6 +264,11 @@ def main(preview):
                 a *= np.clip((line_y(where, np.arange(W0))[None, :] - ys) / px, 0, 1)
             else:
                 a *= np.clip((xs - where) / px, 0, 1)
+        # where nearer planes hide it, its edges are soft (HIDDEN_SOFT px): if a camera move uncovers them they
+        # fade into the mist instead of ending on a line
+        hidden = cover > .98
+        if hidden.any():
+            a = np.where(hidden, blur(a, HIDDEN_SOFT) * S, a)
         P['a'] = a
         P['w'] = a * (1 - cover)
         cover = cover + P['w']

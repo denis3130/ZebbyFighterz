@@ -57,8 +57,12 @@ const CFG={
   //   ref screen at the start camera: each far layer shows the painting there, projected to its own depth;
   //  view = the widest view to cover (aspect, camera x reach and shake, metres);
   //  layers: z of each far painted plane (tools/make_layers.py cuts them: LF the dark forest low on the left, FL/FR
-  //   the near cliffs, UL/UR the high cliffs, falls, haze, sky); mists = drifting mist banks between them (z, painting
-  //   rows of the band's top and bottom, opacity, drift u per s: nearer is faster); mistLift = their colour lift;
+  //   the near cliffs, UL/UR the high cliffs, falls, haze, sky). At the start camera they add up to the painting
+  //   whatever their depths (each is scaled for its own); the depths only set how much they slide apart when the
+  //   camera moves: closer than real mountains, as an anime multiplane, so the slide shows; mists = drifting mist banks
+  //   between them (z, painting rows of the band's top and bottom, opacity, drift u per s: nearer is faster);
+  //   sway = the far planes' slow breathing (metres, seconds), so their depth shows with the camera still too;
+  //   mistLift = the mist's colour lift;
   //   contrast/lift = colour grade; flow/streak/wobble = the waterfall's streaks and shimmer; skyDrift = the clouds'
   //   sway (share of the painting's width) over skyPeriod s; water = the painted water itself sliding down (rate =
   //   cycles per s, len = slide per cycle in painting px, mix = how much; crest = painting rows over which it starts
@@ -75,8 +79,9 @@ const CFG={
   arenas:{cascata:{
     ref:{w:844, h:390, footRow:.83, cover:1.1, img:[1672, 941]},
     view:{aspect:2.45, xPad:.4},
-    layers:{LF:-24, FL:-32, FR:-32, UL:-44, UR:-44, falls:-60, haze:-95, sky:-160},
-    mists:[{z:-14, rows:[580, 830], opacity:.45, drift:.006}, {z:-52, rows:[540, 720], opacity:.42, drift:.0025}],
+    layers:{LF:-10, FL:-15, FR:-15, UL:-23, UR:-23, falls:-36, haze:-70, sky:-300},
+    mists:[{z:-6.5, rows:[580, 830], opacity:.45, drift:.006}, {z:-30, rows:[540, 720], opacity:.42, drift:.0025}],
+    sway:{amp:.25, period:24},
     mistLift:.12,
     contrast:.92, lift:.03, flow:.55, streak:.3, wobble:.003, skyDrift:.012, skyPeriod:140,
     water:{rate:.85, len:60, mix:.9, crest:[262, 340], foam:[680, 1200, 540, 735], spray:.85, sprayRate:1.6},
