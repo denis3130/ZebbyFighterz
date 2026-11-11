@@ -10,7 +10,7 @@ T.test('opponent toggle in training', () => { __VF.menu.pause(); uiClick('Avvers
 T.test('gamepad navigates the menu and becomes G1', () => { __VF.menu.toTitle(); const A=()=>{ fakePads([{buttons:{0:1}}]); padTick(); fakePads([{}]); padTick(); };
   A(); T.eq(focused(),'Versus locale'); A(); T.eq(__VF.UI.NAV.cur,'vsopts'); A(); T.eq(__VF.UI.NAV.cur,'select'); A(); A(); T.eq(__VF.UI.NAV.cur,'arena'); A(); T.eq(__VF.UI.NAV.cur,'vs'); fakePads([]); padTick();
   return vsThrough(() => { T.eq(__VF.G.state,'fight'); T.eq(__VF.G.mode,'versus'); T.eq(__VF.IN.assign[0].pad,0); }); });
-T.test('match end screen and rematch', () => { endMatch(0); T.eq(__VF.G.state,'end'); T.eq(txt('endTitle'),'VINCE REN!'); later(__VF.CFG.menu.endGuardMs+50,()=>uiClick('Rivincita')); T.eq(__VF.G.state,'fight'); });
+T.test('match end screen and rematch', () => { endMatch(0); T.eq(__VF.G.state,'end'); T.eq(__VF.UI.NAV.cur,'results'); T.ok(txt('sc-results').includes('Vince G1 · Ren')); later(__VF.CFG.menu.endGuardMs+50,()=>uiClick('Rivincita')); T.eq(__VF.G.state,'fight'); });
 T.test('mouse click on pause button', () => { $('tPause').click(); T.eq(__VF.G.state,'pause'); __VF.menu.resume(); });
 T.test('hidden tab pauses and does not catch up', () => { __VF.tick(performance.now()); T.ok(__VF.G.last!==null);
   Object.defineProperty(document,'hidden',{value:true,configurable:true}); document.dispatchEvent(new Event('visibilitychange'));

@@ -177,7 +177,7 @@
 #uiParts{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #lyShade{inset:0;background:radial-gradient(ellipse at 62% 42%,rgba(10,8,14,0) 35%,rgba(10,8,14,.55) 100%),linear-gradient(180deg,rgba(10,8,14,.25),rgba(10,8,14,0) 30%,rgba(10,8,14,0) 70%,rgba(10,8,14,.45))}
 /* per scene: only the menu shows the characters behind the interface; other screens draw their own */
-#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]) #lyHero,#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
+#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]):not([data-scene="results"]) #lyHero,#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
 /* the title: Ren's and Kael's profiles high at the sides, the logo between them, as in the reference */
 #uiLayers[data-scene="title"] #lyHero{left:-3%;right:auto;top:0;bottom:auto;width:44%;height:94%;background-position:left top;background-size:auto 100%;opacity:.97;filter:none;
   -webkit-mask-image:linear-gradient(90deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);-webkit-mask-composite:source-in;
@@ -356,3 +356,31 @@
 #uiLayers[data-scene="vs"] .ly{opacity:.55}
 #sc-arena .uhead{margin-top:calc(var(--u)*9)}
 .arCards .ucardTx{font-size:max(12px,calc(var(--u)*3.1));overflow-wrap:anywhere}
+/* --- results (u5_play.js), as the reference: the winner large on the left, the column of the outcome on the right --- */
+#uiLayers[data-scene="results"] #lyHero{left:-4%;right:auto;width:58%;height:100%;background-position:left bottom;background-size:auto 100%;
+  -webkit-mask-image:linear-gradient(90deg,#000 62%,transparent 98%);mask-image:linear-gradient(90deg,#000 62%,transparent 98%)}
+#uiLayers[data-scene="results"] #lyRival{opacity:0}
+#sc-results{display:none;padding:0;background:linear-gradient(90deg,rgba(14,12,22,0) 30%,rgba(14,12,22,.72) 58%,rgba(14,12,22,.85))}
+#sc-results.on{display:block}
+.rsCol{position:absolute;right:calc(env(safe-area-inset-right) + var(--u)*7);top:calc(env(safe-area-inset-top) + var(--u)*5);width:min(48%,calc(var(--u)*86));display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.6)}
+.rsHead{display:flex;align-items:center;gap:calc(var(--u)*1.6)}
+.rsTitle{font-weight:600;font-size:max(30px,calc(var(--u)*12));line-height:1;color:#fff4dc;text-shadow:0 2px 14px rgba(0,0,0,.6),0 0 24px rgba(240,170,90,.25)}
+.rsLaurel{width:calc(var(--u)*6);height:calc(var(--u)*12);min-width:18px;min-height:36px;fill:var(--u-gold);stroke:var(--u-gold);stroke-width:1.6;stroke-linecap:round}
+.rsLaurel path{fill:none}
+.rsLaurel:last-child{transform:scaleX(-1)}
+.rsHead::after{content:'';position:absolute}
+.rsWho{min-height:1em;font-family:var(--u-display);font-size:max(13px,calc(var(--u)*3.6));letter-spacing:.12em;color:var(--u-gold2)}
+.rsScore{display:flex;align-items:center;gap:calc(var(--u)*3)}
+.rsFace{width:max(64px,calc(var(--u)*20));height:max(40px,calc(var(--u)*12));background:#241f30 center 30%/cover no-repeat;transform:skewX(-14deg);border:1px solid rgba(222,206,186,.45)}
+.rsNum{font-family:var(--u-display);font-weight:600;font-size:max(30px,calc(var(--u)*11));line-height:1;color:#fff4dc;white-space:nowrap}
+.rsXp{width:100%;display:flex;flex-direction:column;gap:calc(var(--u)*.6)}
+.rsPart{display:flex;justify-content:space-between;padding:calc(var(--u)*.6) calc(var(--u)*1);font-style:italic;font-weight:500;font-size:max(13px,calc(var(--u)*3.4));color:var(--u-ink);border-bottom:1px solid rgba(216,166,87,.18)}
+.rsPart b{font-style:normal;font-weight:600;color:var(--u-gold2)}
+.rsTot{align-self:flex-end;font-family:var(--u-display);font-weight:600;font-size:max(18px,calc(var(--u)*5.4));color:#fff4dc}
+#sc-results.done .rsTot{animation:uBump .26s var(--u-ease)}
+.rsBar .uprog{height:max(5px,calc(var(--u)*1.1))}
+.rsLvl{align-self:flex-start;font-style:italic;font-size:max(13px,calc(var(--u)*3.4));color:var(--u-dim)}
+#sc-results.lvup.done .rsLvl{color:#ffd99a;font-weight:600;text-shadow:0 0 12px rgba(240,138,50,.7);animation:uBump .3s var(--u-ease)}
+.rsBtns{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + var(--u)*4);display:flex;justify-content:flex-end;gap:calc(var(--u)*2.4);padding:0 calc(var(--u)*6)}
+.rsBtns .ub{min-width:0;padding:0 calc(var(--u)*4)}
+@media (max-height:430px){.rsPart{padding:2px 6px}.rsCol{gap:4px}}

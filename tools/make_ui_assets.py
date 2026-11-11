@@ -11,6 +11,7 @@ final images go in without code changes. Written to assets/ui/ (WebP); build.py 
   clouds.webp, fog1.webp, fog2.webp  drifting cloud and fog bands, drawn here (no picture)
   ren_full.webp, kael_full.webp  Ren of the main menu (00) and Kael of the settings (03), their painted background faded out
   ren_vs.webp, kael_vs.webp      the two faces of the VS (01), also the title's two sides
+  ren_win.webp        Ren with the fist up of «Vittoria» (03, last panel), without the logo and the buttons
   face_ren/kael/astra/raigon.webp 256x256  portraits (VS and pass references); silhouette.webp 256x256 (drawn: a coming fighter)
   arena_rovine.webp   the same dusk ruins; arena_montagne/tetti/foresta/deserto.webp the arena thumbnails (01)
   card_arcade.webp, card_online.webp  the two mode cards of the main menu (00)
@@ -39,6 +40,7 @@ CROPS = {
     'ren_full': (U0, (290, 470, 836, 941), [(70, 16), (360, 16), (378, 100), (322, 168), (420, 250), (546, 300), (546, 471), (44, 471), (64, 330), (84, 120)], 26, 900),
     'kael_full': (U3, (850, 52, 1132, 470), [(44, 14), (236, 14), (256, 120), (256, 418), (26, 418), (26, 140)], 22, 900),
     'ren_vs': (U1, (836, 54, 1196, 338), [(0, 0), (330, 0), (360, 150), (360, 284), (0, 284)], 22, 600),
+    'ren_win': (U3, (836, 525, 1241, 852), [(0, 0), (372, 0), (372, 300), (0, 300)], 22, 700),
     'kael_vs': (U1, (1306, 0, 1672, 338), [(30, 0), (366, 0), (366, 338), (0, 338), (0, 160)], 22, 600),
 }
 ARENA_BG = (300, 0, 836, 262)   # the clean dusk ruins above the arena cards in 01

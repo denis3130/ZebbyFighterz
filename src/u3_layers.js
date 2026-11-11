@@ -22,9 +22,10 @@ function layersInit() {
   layersQuality(q);
   layersSet('menu', {hero: (SV && SV.lastChar) || 'ren'});
 }
-// A character layer: c = 'ren' | 'kael' | null; pose = which picture ('full' in the menus, 'vs' the big faces of the title).
+// A character layer: c = 'ren' | 'kael' | null; pose = which picture: '<c>_<pose>' when there is one ('vs' the big faces of
+// the title, 'win' Ren's victory), else '<c>_full' (the menus).
 function lyChar(id, c, pose) {
-  const el = document.getElementById(id), key = c ? 'ui/' + c + (pose === 'vs' ? '_vs' : '_full') + '.webp' : '';
+  const el = document.getElementById(id), key = !c ? '' : pose && ASSETS['ui/' + c + '_' + pose + '.webp'] ? 'ui/' + c + '_' + pose + '.webp' : 'ui/' + c + '_full.webp';
   if (el.dataset.k === key) return;
   el.dataset.k = key; el.dataset.c = c || '';
   el.style.backgroundImage = key && ASSETS[key] ? 'url(' + ASSETS[key] + ')' : 'none';

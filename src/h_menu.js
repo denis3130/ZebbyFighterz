@@ -1,7 +1,6 @@
 // The game cycle around the fight, on the interface navigation (u1_nav.js): pause, end of a match, "gira il telefono",
 // full screen, auto-pause and the FPS counter (pause menu "FPS: Sì / No", or ?fps=1). Reads the sim, never changes it
 // (except the training dummy's mode, chosen in the pause menu).
-// Until the real results screen (Interface U1 Task 11), 'results' is the old end screen ported to the new navigation.
 const MN = {rot: false, fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
 
 function mnEl(id) { return document.getElementById(id); }
@@ -29,11 +28,10 @@ const menu = {
   restart() { if (!G.S) return; inputMaskHeld(); startMatch(G.mode, Object.assign({}, G.opts, {seed: mnSeed(), dummy: G.S.dummy})); },
   toTitle() { G.state = 'title'; G.S = null; navReset('menu'); menuSync(); },
 };
-// The match is over (the sim reached phase 'end'): the end screen with the winner.
+// The match is over (the sim reached phase 'end'): the results (u5_play.js).
 function menuCheckEnd() {
   const S = G.S; if (G.state !== 'fight' || !S || S.phase !== 'end') return;
-  const title = S.winner === 2 ? 'PAREGGIO' : 'VINCE ' + fighterOf(S, S.winner).char.toUpperCase() + '!';
-  G.state = 'end'; navReset('results', {title}); menuSync();
+  G.state = 'end'; navReset('results', bridgeResult(S)); menuSync();
 }
 // Phones: full screen and landscape lock on the first tap of a menu button (unsupported on iOS: ignored).
 function mnFullscreen() {
@@ -99,11 +97,7 @@ function menuScreens() {
       else if (a === 'quit') uiConfirm({title: 'Abbandonare la partita?', text: 'Tornerai al menu principale.', yes: 'Abbandona', no: 'Annulla'}).then(ok => { if (ok) menu.toTitle(); });
     });
   }, enter() { mnPauseRefresh(); }, back() { menu.resume(); return false; }});
-  navRegister({id: 'results', guardMs: CFG.menu.endGuardMs, build(r) {
-    const h = cHead(''); h.querySelector('.uheadT').id = 'endTitle';
-    mnColumn(r, h, [{label: 'Rivincita', act0: 'rematch'}, {label: 'Menu', act0: 'menu'}], a => { if (a === 'rematch') menu.restart(); else menu.toTitle(); });
-  }, enter(p) { mnEl('endTitle').textContent = p.title || ''; }, back() { menu.toTitle(); return false; }});
-  for (const id of ['pause', 'results']) navRootOf(NAV.screens[id]);   // built now: the FPS label and the opponent button exist from the start
+  navRootOf(NAV.screens.pause);   // built now: the FPS label and the opponent button exist from the start   // built now: the FPS label and the opponent button exist from the start
 }
 function menuInit() {
   navInit();

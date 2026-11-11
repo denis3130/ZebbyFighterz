@@ -1,5 +1,5 @@
 // The way into a match (spec §3): main menu, the «Gioca» block, the local versus options, the fighter select, the arena,
-// the VS screen (the bridge to the fight is u9_bridge.js). The results come in Task 11. Locked entries say what is still to come.
+// the VS screen (the bridge to the fight is u9_bridge.js), the results. Locked entries say what is still to come.
 const VSOPT = {r: null, tm: null};   // the versus options chosen in this session (indexes into CFG.ui.vsOpts)
 
 function playScreens() {
@@ -46,6 +46,7 @@ function playScreens() {
     }});
   selScreen();
   arenaScreen();
+  resultsScreen();
 }
 
 // --- Fighter select (params {mode, rounds, timeS, step, picks}): a 2x6 grid of slanted portraits; the focused fighter
@@ -221,4 +222,62 @@ function vsScreen() {
       if (VS.ready && VS.t >= M) vsStart();
     },
     any() { if (!VS.ready || VS.err || VS.t < CFG.ui.vs.tapAfterMs) return false; vsStart(); return true; }});
+}
+
+// --- Results (params = bridgeResult: {mode, chars, winner, wins, rounds, hits, maxCombo, timeS}), as the reference: the
+// winner large on the left, «Vittoria» between laurels (or «Pareggio»), who won, the score between the two faces, the XP
+// of the match part by part with the total counted up and the level bar (G1 is the player of this device: statistics and
+// XP are his, saved at once), then «Rivincita», «Cambia personaggio», «Menu principale». Esc / B = the menu.
+const RS = {t: 0, last: 0, xp: 0, lv: null, done: false};
+const RS_LAUREL = '<svg class="rsLaurel" viewBox="0 0 40 80" aria-hidden="true"><path d="M31 77C11 62 6 36 19 5"/>' +
+  [[12, 60, -40], [9, 47, -60], [10, 34, -75], [14, 22, -95], [19, 12, -110], [22, 66, 30], [17, 52, 15], [16, 39, 0], [19, 27, -20]].map(([x, y, a]) =>
+    '<ellipse cx="' + x + '" cy="' + y + '" rx="6.5" ry="2.6" transform="rotate(' + a + ' ' + x + ' ' + y + ')"/>').join('') + '</svg>';
+function resultsScreen() {
+  navRegister({id: 'results', scene: 'results', guardMs: CFG.menu.endGuardMs,
+    layers: r => ({hero: r.chars[r.winner === 1 ? 1 : 0], rival: null, pose: 'win'}),
+    build(root) {
+      root.innerHTML = '<div class="rsCol"><div class="rsHead">' + RS_LAUREL + '<b class="rsTitle"></b>' + RS_LAUREL + '</div><div class="rsWho"></div>' +
+        '<div class="rsScore"><i class="rsFace l"></i><b class="rsNum"></b><i class="rsFace r"></i></div>' +
+        '<div class="rsXp"><div class="rsParts"></div><div class="rsTot">+<span class="rsXpN">0</span> XP</div><div class="rsBar"></div><div class="rsLvl"></div></div></div><div class="rsBtns"></div>';
+      root.querySelector('.rsBar').appendChild(cProgress(0));
+      root.querySelector('.rsBtns').append(
+        cBtn({label: 'Rivincita', act0: 'rematch', act: () => menu.restart()}),
+        cBtn({label: 'Cambia personaggio', act0: 'change', act: () => {
+          const p = {mode: G.mode, rounds: G.opts && G.opts.rounds, timeS: G.opts && G.opts.timeS, step: 0, picks: []};
+          G.state = 'title'; G.S = null; navReset('menu'); navGo('select', p); menuSync();
+        }}),
+        cBtn({label: 'Menu principale', act0: 'menu', act: () => menu.toTitle()}));
+    },
+    enter(r) {
+      const root = this.root, q = s => root.querySelector(s), N = c => CFG.ui.chars[c].name;
+      q('.rsTitle').textContent = r.winner === 2 ? 'Pareggio' : 'Vittoria';
+      q('.rsWho').textContent = r.winner === 2 ? '' : 'Vince G' + (r.winner + 1) + ' · ' + N(r.chars[r.winner]);
+      q('.rsNum').textContent = r.wins[0] + ' – ' + r.wins[1];
+      q('.rsFace.l').style.backgroundImage = 'url(' + uiFace(r.chars[0]) + ')';
+      q('.rsFace.r').style.backgroundImage = 'url(' + uiFace(r.chars[1]) + ')';
+      // the player's statistics and XP (a local versus: G1 is this device's player)
+      const x = progMatchXp(r), before = progLevel(SV.xp);
+      progRecord(SV, r);
+      const up = progAddXp(SV, x.xp), after = progLevel(SV.xp);
+      saveWrite();
+      q('.rsParts').innerHTML = x.parts.map(p => '<div class="rsPart"><span>' + uiEsc(p.label) + '</span><b>+' + p.xp + ' XP</b></div>').join('');
+      q('.rsLvl').textContent = up.after > up.before ? 'Livello ' + up.after + '!' : 'Livello ' + up.after;
+      root.classList.toggle('lvup', up.after > up.before);
+      root.classList.remove('done');
+      RS.t = 0; RS.last = 0; RS.xp = x.xp; RS.done = false;
+      RS.lv = {from: up.after > up.before ? 0 : before.into / before.need, to: after.into / after.need};
+      q('.rsXpN').textContent = '0';
+      q('.rsBar .uprog').uiSet(RS.lv.from);
+    },
+    // the total climbs from 0 in CFG.ui.t.go * 2 ms of shown frames, the level bar with it; then a bump (and «Livello N!»)
+    frame(now) {
+      if (RS.done) return;
+      const dt = RS.last ? Math.min(100, now - RS.last) : 0;
+      RS.last = now; RS.t += dt;
+      const k = Math.min(1, RS.t / (CFG.ui.t.go * 2)), e = 1 - (1 - k) * (1 - k), root = this.root;
+      root.querySelector('.rsXpN').textContent = String(Math.round(RS.xp * e));
+      root.querySelector('.rsBar .uprog').uiSet(RS.lv.from + (RS.lv.to - RS.lv.from) * e);
+      if (k >= 1) { RS.done = true; root.classList.add('done'); }
+    },
+    back() { menu.toTitle(); return false; }});
 }
