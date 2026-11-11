@@ -269,7 +269,9 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     `side_paint`); un piccolo triangolo scuro al centro del bordo del colletto sulla nuca.
 - **Colori piatti, niente sfumature né sovrapposizioni** (11/11, Denis rimandando le sei immagini: "rendere la testa del
   modello 3d senza sfumature o sovrapposizioni tra le cose", poi "occhi e sopracciglia non si toccano, perfeziona ciò
-  che vedi fuori posto e rimuovi se vedi le cose di troppo"). `tools/kael_flat.py`, chiamato alla fine di
+  che vedi fuori posto e rimuovi se vedi le cose di troppo"). Pubblicata nell'anteprima di Kael l'11/11 (versione 9
+  della pagina) su richiesta di Denis ("non mi hai dato l'anteprima da vedere"); aspetta il suo giudizio.
+  `tools/kael_flat.py`, chiamato alla fine di
   `tools/kael_head.py` (`FLAT = True`):
   - la pittura veniva da sei disegni proiettati su una forma che non è la loro: dove due si incontrano erano
     sfumati tra loro, ognuno portava i suoi bordi morbidi e, visto di striscio, veniva stirato. I disegni invece sono
