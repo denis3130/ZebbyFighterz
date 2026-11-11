@@ -220,17 +220,39 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     disegnare pelle (monconi sopra l'occhio, pezzi segati visti da dietro) e spariva il gancio dell'orecchino
     sinistro. Ora c'è **un insieme per lato** (`hv` a 2 valori: nascosto dal suo lato destro, dal sinistro), le
     ciocche davanti al viso si nascondono **intere o per niente** (`HIDE_WHOLE`), con loro i "piedi" appoggiati sulla
-    pelle accanto (`HIDE_FOOT`) e i pezzetti che resterebbero in aria, mai gli orecchini. La prova dei buchi non vale
-    per le ciocche intere né per i pezzetti sospesi (oltre il bordo del viso dietro non c'è niente, ma non è un buco). Nel gioco (`mdHeadHide`) il lato destro si nasconde quando la telecamera è oltre
-    -12,5° attorno alla testa, il sinistro oltre +11°, con 4° di gioco (isteresi) e una dissolvenza a puntini in
-    circa 6 fotogrammi (`mdHideShader`, `MD_HIDE`); un salto di oltre 40° in un fotogramma cambia subito;
+    pelle accanto (`HIDE_FOOT`), i pezzetti che resterebbero in aria e le **pareti interne** delle ciocche vicine che
+    si vedrebbero attraverso il vuoto (`HIDE_IN`: erano blocchi grigio-lilla sulla tempia), mai gli orecchini. La
+    prova dei buchi non vale per le ciocche intere né per i pezzetti sospesi (oltre il bordo del viso dietro non c'è
+    niente, ma non è un buco); diventa parte del viso solo un triangolo girato verso la telecamera. Nel gioco
+    (`mdHeadHide`, `MD_HIDE`): le ciocche del lato destro si vedono quando la telecamera è tra -12,5° e 100° attorno
+    alla testa, quelle del sinistro tra -100° e +11° (da dietro di loro restavano solo schegge oltre la testa); il
+    cambio parte solo se l'angolo lo chiede per 12 fotogrammi di fila (un jab gira la testa e torna in 8: la ciocca
+    lampeggiava a ogni colpo), con 4° di gioco, e poi è una dissolvenza a puntini di circa 10 fotogrammi
+    (`mdHideShader`). Al primo fotogramma, dopo 8 disegni senza la testa e con `window.__HIDE_SNAP` (per le immagini
+    degli strumenti) lo stato è subito quello finale;
+  - **una ciocca disegnata sulla pelle al bordo della zona dell'immagine di fronte** (accanto all'angolo dell'occhio)
+    veniva sfumata con la pelle: una macchia chiara sulla tempia. Ora lì è tutta o niente (`side_paint`);
+  - **righe a pettine, trattini e scaglie nei capelli**: `paint` prendeva le righe anche da un'immagine che vede quel
+    punto di striscio. Ora un'immagine dipinge i capelli solo se li vede con più di 0,3 e le righe scure con più di
+    0,4 (`PAINT['min']`, `PAINT['line_min']`); i grigi neutri di Meshy rimasti sui triangoli dei capelli prendono il
+    lavanda dipinto più vicino (`GREY`);
+  - **puntini attorno agli orecchini e riga viola sul collo**: la maschera degli orecchini disegnati ora copre anche
+    il loro bordo sfumato (`JEWEL[7]`); sulla pelle non si dipinge mai viola, e in basso sul collo (sotto
+    `NECK_LOW`) nemmeno le righe scure: le immagini disegnano il colletto più in alto del modello e il suo bordo
+    finiva sul collo (si vedeva quando la testa si piega nel "colpito"); sotto e dietro le orecchie niente color
+    capelli dalle immagini di lato né righe scure da quella di fronte;
   - **macchia lilla nell'orecchio**: nelle scatole degli orecchini (`BUST['ears']`) anche le righe scure dell'orecchio
     contavano come orecchino: dipinte color argento, e i triangoli vicini saltati dalla pittura dalle immagini. Ora
     orecchino è solo ciò che pende dal lobo (`EAR_HANG`), più i pezzi del gancio lungo il suo asse (`EAR_AXIS`);
     dentro l'orecchio si usa solo il profilo dove lo vede (i due disegni dell'orecchio non cadono nello stesso punto);
   - **orecchini**: una luce sola li lasciava scuri da dietro e dal lato sinistro: ora ognuno è illuminato dal suo
-    lato esterno, davanti e dietro uguale. Sopra la punta del cristallo tutto è gancio e perlina, color argento
-    (`EAR_APEX`), qualunque colore avesse dato Meshy;
+    lato esterno, davanti e dietro uguale. Sopra la punta del cristallo tutto è gancio e perlina (`EAR_APEX`), nel
+    lavanda del disegno (`EAR_SILVER`, misurato sulle immagini di profilo) e col contorno nero come il cristallo
+    (prima il contorno del gancio era spinto dietro la testa con quello della frangia: una striscia chiara senza
+    bordo). La forma resta quella di Meshy (un nastrino, senza anellino né perlina tonda);
+  - **macchietta sopra il sopracciglio destro**: una mia regola (`LOCK_FILL`, il color pelle sulle ciocche in piedi
+    diventa capelli) prendeva anche i triangoli misti sulla cresta del sopracciglio che l'immagine di fronte aveva
+    appena dipinto come pelle. Ora non tocca ciò che le immagini hanno dipinto e prende il colore solo dai capelli;
   - **segni sulle guance e all'attaccatura**: i pezzetti di capelli rimasti appoggiati al viso fanno parte del viso,
     dipinti come pelle e senza contorno (`SCRAP`); `skin_fill` in alto sulla fronte riempie solo triangoli con un
     vertice di pelle (prima riempiva di pelle le righe scure tra i capelli alla radice della ciocca); la riga sotto il
@@ -240,8 +262,11 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
   - resta: il ciuffetto sfrangiato in alto davanti alla fronte visto di profilo (i resti delle ciocche tolte sopra
     l'occhio destro); vicino alla coda delle sopracciglia, con le ciocche nascoste, qualche trattino lilla (la ciocca
     dell'immagine di fronte e la coda del sopracciglio dei profili dipinte sugli stessi punti); la ciocca grande, vista di fronte e da destra, arriva fino alla guancia (da
-    sinistra è nascosta): se Denis vuole si può accorciare con la punta sopra il sopracciglio come l'altra, ma è un
-    cambio di forma e serve il suo ok.
+    sinistra è nascosta) e di profilo da destra è un filo lungo staccato dalla fronte: se Denis vuole si può
+    accorciare con la punta sopra il sopracciglio come l'altra, ma è un cambio di forma e serve il suo ok; il gancio
+    dell'orecchino si può rifare in codice come nel disegno (anellino nel lobo e perlina tonda): anche questo è un
+    cambio di forma; sotto la mascella il cuneo nero ha ancora i bordi a dentini (lo dipingono sia `face` sia
+    `side_paint`); un piccolo triangolo scuro al centro del bordo del colletto sulla nuca.
 - **Come cercare un difetto** (strumenti di lavoro, non nel repository): registrare quale passaggio di
   `tools/kael_head.py` ha scritto per ultimo ogni texel (avvolgendo `paint`, `side_paint`, `skin_fill` e confrontando
   la texture prima e dopo), poi disegnare la testa in software da qualunque angolo colorando ogni pixel per passaggio o

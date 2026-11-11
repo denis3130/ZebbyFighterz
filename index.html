@@ -514,8 +514,9 @@ function resolveHit(S, A, D, m, id, pt, dir) {
     S.stop = Math.max(S.stop, CFG.stop[m.stop === 'light' ? 'blockLight' : 'blockHeavy']);
     simEmit(S, proj ? 'projBlock' : 'block', A, {x: pt.x, y: pt.y, move: id, dmg: chip, heavy: m.stop === 'heavy'});
     setAct(D, 'block'); D.stun = m.bs;
-    if (dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
-    else D.vx = dir * m.push;
+    const push = m.push || 0;   // (a move without push, the heavy kicks: nobody moves. Undefined, the blocker's speed was NaN, then its place and the camera's)
+    if (dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * push; }
+    else D.vx = dir * push;
     return 2;
   }
   const n = D.combo + 1, dmg = Math.floor(m.dmg * scaleFor(n) / 100);
@@ -596,7 +597,7 @@ function hitReaction(A, D, m, n, dir) {
   } else {
     setAct(D, 'hitStun'); D.stun = hitstunFor(m.hs, n);
     if (m.push && dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
-    else D.vx = dir * m.push;
+    else D.vx = dir * (m.push || 0);
   }
 }
 
@@ -2053,35 +2054,38 @@ function mdLineMat(o) {   // (perBack: a per-vertex extra push back, m, in the a
 function mdHideShader(sh, hu) {
   sh.uniforms.uHide = hu;
   sh.vertexShader = 'attribute vec2 aHide;\nuniform vec2 uHide;\nvarying float vHide;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvHide = dot(aHide, uHide);');
-  sh.fragmentShader = 'varying float vHide;\nfloat mdB2(vec2 a) { a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); }\n'
+  sh.fragmentShader = 'varying float vHide;\nfloat mdB2(vec2 a) { a = mod(floor(a), 2.); return fract(a.x * .5 + a.y * .75); }\n'   // (a 2x2 pattern: 0, .5, .75, .25; from 0 and 1 alone: exact at any precision)
     + sh.fragmentShader.replace('void main() {', 'void main() {\n\tif (vHide > mdB2(.5 * gl_FragCoord.xy) * .25 + mdB2(gl_FragCoord.xy) + .03125) discard;');
 }
 
 // Before the head is drawn: where the camera is around it, seen from the Head bone (its bind frame: the package's, x his
-// left, z his front): a = (camera's x - az[0], z - az[1]) degrees around. His right side's locks are hidden as a is
-// under az[2] (midway between the front image's angle and the right 3/4's), his left side's as it is over az[3]: each
-// with MD_HIDE[0] degrees of play either way (at rest on the angle, walking, a lock blinked) and eased MD_HIDE[1] of the
-// way a frame (hu.value: 0 shown to 1 hidden, the shader's dissolve); at once on the first frame, when the angle jumps
-// over MD_HIDE[2] degrees in one (a cut) and with window.__HIDE_SNAP (the tools' stills). Per camera (its own state: a
+// left, z his front): a = (camera's x - az[0], z - az[1]) degrees around. His right side's locks are shown as a is
+// between az[2] (midway between the front image's angle and the right 3/4's) and MD_HIDE[3] (from the front and from
+// his left: from further behind, what shows of them beyond the head is loose shards), his left side's between
+// -MD_HIDE[3] and az[3]; hidden outside. A set changes once the angle has asked for it MD_HIDE[2] frames running, with
+// MD_HIDE[0] degrees of play either way (at rest on the angle, walking, a lock blinked; a jab whips the head past it
+// and back in 8 frames: the lock by his temple flashed on every one), then eases MD_HIDE[1] of the way a frame
+// (hu.value: 0 shown to 1 hidden, the shader's dissolve). At once on the first frame, after MD_HIDE[4] renders without
+// the head (the game draws two a frame) and with window.__HIDE_SNAP (the tools' stills). Per camera (its own state: a
 // second view of the fighter does not pull the first's). hmesh: the head (its bind matrices), skel, hb the Head bone.
-const MD_HIDE = [4, .3, 40];
+const MD_HIDE = [4, .3, 12, 100, 8];
 const MD_HV = [new THREE.Matrix4(), new THREE.Matrix4(), new THREE.Vector3()];
 function mdHeadHide(hmesh, skel, hb, az, hu) {
   const hi = skel.bones.indexOf(hb), per = new WeakMap();
   return (renderer, scene, camera) => {
     let st = per.get(camera);
-    if (!st) per.set(camera, st = {frame: -1, a: null, on: [0, 0], e: [0, 0]});
+    if (!st) per.set(camera, st = {frame: -1, on: [0, 0], n: [0, 0], e: [0, 0]});
     if (st.frame !== renderer.info.render.frame) {   // (once a frame: the head and its outline both come here)
+      const cut = st.frame < 0 || renderer.info.render.frame - st.frame > MD_HIDE[4] || (typeof window !== 'undefined' && window.__HIDE_SNAP);
       st.frame = renderer.info.render.frame;
       const M = MD_HV[0].multiplyMatrices(hmesh.matrixWorld, hmesh.bindMatrixInverse).multiply(MD_HV[1].multiplyMatrices(hb.matrixWorld, skel.boneInverses[hi])).multiply(hmesh.bindMatrix);
       const c = MD_HV[2].setFromMatrixPosition(camera.matrixWorld).applyMatrix4(M.invert()), a = Math.atan2(c.x - az[0], c.z - az[1]) * 180 / Math.PI;
-      const cut = st.a === null || Math.abs((a - st.a + 540) % 360 - 180) > MD_HIDE[2] || (typeof window !== 'undefined' && window.__HIDE_SNAP);
-      st.a = a;
-      if (cut) { st.on[0] = a < az[2] ? 1 : 0; st.on[1] = a > az[3] ? 1 : 0; st.e[0] = st.on[0]; st.e[1] = st.on[1]; }
-      else {
-        if (a < az[2] - MD_HIDE[0]) st.on[0] = 1; else if (a > az[2] + MD_HIDE[0]) st.on[0] = 0;
-        if (a > az[3] + MD_HIDE[0]) st.on[1] = 1; else if (a < az[3] - MD_HIDE[0]) st.on[1] = 0;
-        for (let k = 0; k < 2; k++) { st.e[k] += (st.on[k] - st.e[k]) * MD_HIDE[1]; if (Math.abs(st.on[k] - st.e[k]) < .02) st.e[k] = st.on[k]; }
+      const from = [az[2], -MD_HIDE[3]], to = [MD_HIDE[3], az[3]], h = cut ? 0 : MD_HIDE[0];   // (each side's locks shown between from and to)
+      for (let k = 0; k < 2; k++) {
+        const w = a < from[k] - h || a > to[k] + h ? 1 : cut || (a > from[k] + h && a < to[k] - h) ? 0 : st.on[k];   // (asked for; in the play, as it is)
+        if (w === st.on[k]) st.n[k] = 0; else if (cut || ++st.n[k] >= MD_HIDE[2]) { st.on[k] = w; st.n[k] = 0; }
+        if (cut) st.e[k] = st.on[k];
+        else { st.e[k] += (st.on[k] - st.e[k]) * MD_HIDE[1]; if (Math.abs(st.on[k] - st.e[k]) < .02) st.e[k] = st.on[k]; }
       }
     }
     hu.value.set(st.e[0], st.e[1]);

@@ -27,3 +27,8 @@ T.test('a crouch-blocker keeps the crouching hurtbox in blockstun', () => { for(
   const S=N(); near(S); T.feed(S,1,atk,def); let seen=0;
   for(let i=0;i<24;i++){ T.feed(S,1,hold,def); const d=F(S,1); if(d.act==='block'){ seen++; T.eq(__VF.hurtBoxes(d)[1].y1, d.y+h, 'frame '+i); } }
   T.ok(seen>8, 'blockstun frames '+seen); } });
+// A move without push (the heavy kick knocks down, the crouching heavy kick launches) moves nobody when it is blocked: with
+// push undefined the blocker's speed was NaN, then its position and the camera's.
+T.test('a blocked move without push leaves every number finite', () => { for(const [atk,hold,def] of [[B.K,B.K,B.GUARD],[B.D|B.K,B.D|B.K,B.D|B.GUARD]]){ const S=N(); near(S); let blocked=false;
+  for(let i=0;i<60;i++){ T.feed(S,1,i<14?hold:0,def); blocked=blocked||S.ev.some(e=>e.t==='block'); for(const f of [F(S,0),F(S,1)]) for(const k of ['x','y','vx','vy']) T.ok(Number.isFinite(f[k]), k+' of side '+f.side+' at frame '+i+': '+f[k]); }
+  T.ok(blocked, 'the move was blocked'); } });

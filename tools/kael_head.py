@@ -74,7 +74,7 @@ SHADE = {'L': (0., .5, .87), 'Lh': (0., 1., .2), 'skin': (.006, .0015, -.15), 'n
 # (cams: tools/kael_hair_fit.py, fit on the face's skin), each of the hair's texels from the views that see it and draw
 # hair there (see paint(); ink: the images' lines, darker than this); not the face, the earrings and the collar (ours).
 # None: the colours above alone
-PAINT = {'cams': 'docs/meshy/kael_head_cams.json', 'seen': .002, 'min': .2, 'pow': 16., 'line': 3, 'ink': 90}
+PAINT = {'cams': 'docs/meshy/kael_head_cams.json', 'seen': .002, 'min': .3, 'pow': 16., 'line': 3, 'ink': 90, 'line_min': .4}
 # the face (tools/kael_fringe.py): painted from the images, Meshy's locks over it out, the front image's bangs a sheet in
 # front of it; FACE_MID: the face's middle (x, m)
 PRESS_SIDES = False              # (FACE 'paint': the temples pressed, see tools/kael_fringe.py press; tried: the front image's locks by the eyes went too)
@@ -96,11 +96,12 @@ EAR_LINE, HAIR_LINE_W = .3, .4
 EAR_RINGS, EAR_LIGHT, EAR_STEPS = 4, (-.35, .6, .7), (-.1, .35, .8)
 EAR_HANG = (.1, .02)   # (see main: the earrings' pieces; bust units, .1 = 16 mm)
 EAR_AXIS = (.037, .08, .12)   # (see main: the hook's own pieces within [0] of the earring's axis, taken over its top [1], from [2] under its top; bust units)
-EAR_APEX = (.015, .009, .003, .004)   # (see main: the crystal's point: within [0] m over the earring's widest, the last height narrower than [2] before it is [3] wide again, the bead)
+EAR_APEX = (.015, .009, .003, .004)   # (see main: the crystal's point: within [0] m over the earring's widest, the last height narrower than [2] before it is [3] wide again, the bead; [1] not used)
 COLLAR_SHELF = (25, 20, 36)  # (see main: the triangles between the neck and the collar's rim, in the collar's dark lining)
+GREY = (16, 80, .03)         # (see main: Meshy's greys on the hair's triangles: channels within [0] of each other, lighter than [1]; as the painted hair within [2] m)
 HAIR_FILL = (.008, 30)       # (see main: the hair no image paints takes the nearest painted hair's fill, within [0] m; fill: lighter than the ink plus [1])
 EAR_TONES = ((232, 164, 245), (156, 75, 198), (107, 50, 143), (76, 36, 109))
-EAR_SILVER = ((205, 200, 222), (140, 134, 160))
+EAR_SILVER = ((204, 182, 218), (146, 124, 162))   # (the drawn link and bead: lit, shade; medians over the crystals in the profile images)
 FRINGE = (.02, .008, .004, 3, .002)
 HEAD_TEX = 2048
 
@@ -150,6 +151,7 @@ def paint(out, Q, I, ys, xs, ks, pos, nor, sel):
         # (nor the line where its hair ends on its skin: the model's tips over the neck are longer than the drawn ones, the drawn
         # tip's outline was stamped across them and the lock went on under it, pale: a lock ending twice)
         near_skin = ndimage.binary_dilation(is_skin(D) & F, iterations=3); hair_px &= ~((Lp < PAINT['ink']) & near_skin[vi, ui])
+        hair_px &= ~((Lp < PAINT['ink']) & (facing < PAINT['line_min']))   # (nor a line from an image the texel barely faces: stretched along the lock, it was dashes, comb teeth and hatching)
         vis = (dep >= Z[vi, ui] - PAINT['seen']) & (facing > PAINT['min']) & (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1) & F[vi, ui] & hair_px
         x0, y0 = np.clip(np.floor(u).astype(int), 0, W - 2), np.clip(np.floor(v).astype(int), 0, H - 2); fx, fy = (u - x0)[:, None], (v - y0)[:, None]
         col = (D[y0, x0] * (1 - fx) + D[y0, x0 + 1] * fx) * (1 - fy) + (D[y0 + 1, x0] * (1 - fx) + D[y0 + 1, x0 + 1] * fx) * fy
@@ -439,6 +441,15 @@ def main(bust):
             dd, jj = cKDTree(pos[fill]).query(pos[unp], distance_upper_bound=HAIR_FILL[0]); nr = np.isfinite(dd)
             out[ys[unp[nr]], xs[unp[nr]]] = out[ys[fill[jj[nr]]], xs[fill[jj[nr]]]]; out[ys[unp[~nr]], xs[unp[~nr]]] = np.array(HAIR[1], float)
             print('hair: %d texels no image paints as the nearest painted hair (%d too far: the shadow\'s lavender)' % (int(nr.sum()), int((~nr).sum())))
+        # (and Meshy's neutral greys left on the hair's triangles, neither hair's colour nor a line: the locks' inner sides no image sees,
+        # flat grey polygons among the lavender. As the nearest painted fill, else the shadow's)
+        cg = out[ys, xs]; grey = (hair_v[It[ks]].sum(1) >= 2) & ~hair_x & ~painted & ~ear_v[It[ks]].any(1) & ~collar_v[It[ks]].any(1) & ~is_skin(cg) & (np.ptp(cg, axis=1) < GREY[0]) & (cg.mean(1) > GREY[1])
+        if free_t is not None: grey &= ~free_t[ks]
+        gi = np.nonzero(grey)[0]
+        if len(gi) and len(fill):
+            dd, jj = cKDTree(pos[fill]).query(pos[gi], distance_upper_bound=GREY[2]); nr = np.isfinite(dd)
+            out[ys[gi[nr]], xs[gi[nr]]] = out[ys[fill[jj[nr]]], xs[fill[jj[nr]]]]; out[ys[gi[~nr]], xs[gi[~nr]]] = np.array(HAIR[1], float)
+            print('hair: %d grey texels on the hair\'s triangles as the nearest painted hair' % len(gi))
         print('painted from the images: %d texels (%.0f%% of the head\'s)' % (n_p, 100 * n_p / len(ys)))
     keep_t, card, sides_t, face_t = np.ones(len(It), bool), None, None, None
     if FACE:   # the face from the images, Meshy's locks over it out, the front image's bangs a sheet (tools/kael_fringe.py)
@@ -518,6 +529,7 @@ def main(bust):
     lb, n_over = face_back(Q, It, is_skin(vc) & ~hair_v & (Q[:, 1] > JAW_Y), hair_v)
     if PAINT: lb = np.maximum(lb, np.where(hairish, HAIR_BACK, 0.))   # (the hair's outline pushed back: only the mane's outer edge drawn, the lines inside it the images')
     lb = np.where(scrap_v, 0., lb)
+    lb = np.where(ear_v, 0., lb)   # (the earrings' outline not pushed back: the hook, hair's colour, was pushed behind the head with the fringe, a pale strip with no contour)
     print('outline: the hair\'s %.2f of the width, the earrings\' %.2f; %d hair vertices over the face pushed back %.0f mm (%d with the smoothing)' % (
         HAIR_LINE_W, EAR_LINE, n_over, 1000 * FRINGE[0], int((lb > 0).sum())))
     pad = lambda bts: bts + b'\0' * (-len(bts) % 4)

@@ -204,8 +204,9 @@ function resolveHit(S, A, D, m, id, pt, dir) {
     S.stop = Math.max(S.stop, CFG.stop[m.stop === 'light' ? 'blockLight' : 'blockHeavy']);
     simEmit(S, proj ? 'projBlock' : 'block', A, {x: pt.x, y: pt.y, move: id, dmg: chip, heavy: m.stop === 'heavy'});
     setAct(D, 'block'); D.stun = m.bs;
-    if (dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
-    else D.vx = dir * m.push;
+    const push = m.push || 0;   // (a move without push, the heavy kicks: nobody moves. Undefined, the blocker's speed was NaN, then its place and the camera's)
+    if (dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * push; }
+    else D.vx = dir * push;
     return 2;
   }
   const n = D.combo + 1, dmg = Math.floor(m.dmg * scaleFor(n) / 100);
@@ -286,7 +287,7 @@ function hitReaction(A, D, m, n, dir) {
   } else {
     setAct(D, 'hitStun'); D.stun = hitstunFor(m.hs, n);
     if (m.push && dir * D.x >= CFG.stage.half - CFG.body.push && !A.air) { D.vx = 0; A.vx = -dir * m.push; }
-    else D.vx = dir * m.push;
+    else D.vx = dir * (m.push || 0);
   }
 }
 

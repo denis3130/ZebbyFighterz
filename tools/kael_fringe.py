@@ -60,7 +60,7 @@ PRESS_FAR = (.025, .035)          # see press(): the hair standing further off t
 PRESS_NEED = (2, 3, 90)           # see press(): the front image's hair kept, grown over [0] rings of neighbours, smoothed over [1]; its lines darker than [2]
 # the sides seen from the side (side_hide, side_paint; used): per side, its images (the profile, the 3/4)
 HIDE_VIEWS = {'dx': ('profilo_dx', '34_dx'), 'sx': ('profilo_sx', '34_sx')}
-HIDE_ORDER = ('profilo_dx', '34_dx', '34_sx', 'profilo_sx')   # (the head's aHide: x, y, z, w)
+HIDE_ORDER = ('profilo_dx', '34_dx', '34_sx', 'profilo_sx')   # (the side images, his right's then his left's; the head's aHide has one value per side: HIDE_VIEWS)
 HIDE = (2, 5, .05, 22., (.03, .075), 40, .04, -.02, .006)   # see side_hide(): the drawing's skin eroded [0] px; up to [1] layers; the skin behind within [2] m;
                                   # from [3] degrees around the head; y from the chin minus [4][0] to the eyes plus [4][1] (m); pieces under [5]
                                   # triangles; no holes: a surface behind each within [6] m; the camera's half of the head: depth over [7] m;
@@ -72,18 +72,20 @@ SIDE_POW, SIDE_FACING = 24., (.05, .35)  # side_paint's weights: how much the te
 SIDE_LINE = (90, .12)             # side_paint: a line (darker than [0]) from an image only as it faces the texel more than the other by [1]
 SKIN_FILL = (.075, .0, .01, 1.58, .012, .035)   # see skin_fill(): the front ([0], [1], [2]); all round the neck under [3] m; the jaw's shadow under the chin plus [4];
 # within [5] m under the forehead's top only the triangles with a corner skin's
-JEWEL = (30, 300, (110, 220), (20, 95, 1100), 110, 5, 60)   # see jewel_mask()
+JEWEL = (30, 300, (110, 220), (20, 95, 1100), 110, 5, 60, 9)   # see jewel_mask()
 LINE_RULE = (90, .5, 8)           # the images' dark lines (under [0]) on the skin, but the front image's: only from an image the texel faces over
                                   # [1]; not within [2] px of the figure's edge (its outer line: on the neck's side it was black blobs from behind)
 NECK_FACING = .35                 # the neck (under the chin or behind the ears' plane): only from an image it faces over this
 UNDER_EAR = (.03, (1.545, 1.578), .003)   # under and behind the ears (|x - middle| over [0], y in [1], z under [2]; the skin's triangles): no dark
                                   # lines (the profile's lobe is bigger than the model's: its outline fell on the neck, a black arc from behind)
+NECK_LOW = 1.522                  # the neck's skin under this (m, just over the collar's rim): no dark line from the images (their collar's rim)
 NECK_SKIN = 1.545                 # side_paint: the neck's skin under this (m) takes the images' skin alone, not their hair nor its outlines
 BEHIND_EAR = 92.                  # side_paint: the hair's triangles further round the head than this (degrees) take no skin from the images
 LOCK_LINE = (5, 120, 6)           # see lock_lines()
 SCRAP = (40, .0025, .075)         # see face(): the hair's scraps lying on the face
 FREE_LOCK = (.006, 60, .5, .02)   # see free_locks()
 HIDE_WHOLE = 1 / 3                # see side_hide(): a lock hanging before the face is hidden whole from its side if over this share of its area is
+HIDE_IN = (.2, 80., 4)            # see side_hide(): the inner walls behind the hidden locks
 HIDE_FOOT = (3, 70.)              # see side_hide(): the hidden locks' feet: this many rings of triangles next to them, not further round the head than [1] degrees
 LOCK_FILL = 110                   # see face(): the hair's fill colours (not its lines) are lighter than this
 
@@ -201,6 +203,7 @@ def jewel_mask(D, F, boxes, is_skin, is_hair, is_purple):
             if not add: break
             acc |= np.isin(ls, add); left = [k for k in left if k not in add]
         J |= ndimage.binary_dilation(acc, iterations=JEWEL[5]) & (dark | silver | pur)
+        J |= ndimage.binary_dilation(acc, iterations=JEWEL[7])   # (and their outline's soft rim, brown on the skin: left out, it was a dotted diamond round the crystal)
     return J
 
 
@@ -408,8 +411,8 @@ def under_ears(p, mid):
 def free_locks(Q, I, hair_v, cams, mid, side=None):
     """Meshy's locks hanging before the face: the hair's pieces (two corners hair or more, welded, FREE_LOCK[1]
     triangles or more) standing over FREE_LOCK[0] m before the face's layer seen from the front camera. Returns, per
-    triangle, its piece (-1: none; side_hide() hides a piece from its side whole or not at all) and whether it is of
-    one hanging free: less than FREE_LOCK[2] of its area within side (PAINT_SIDE) of the face's middle (the others
+    triangle, whether it is of one hanging free, then its piece (-1: none; side_hide() hides a piece from its side whole
+    or not at all). Hanging free: less than FREE_LOCK[2] of its area within side (PAINT_SIDE) of the face's middle (the others
     are the bangs face() leaves out, painted on the forehead) and in the median over FREE_LOCK[3] m off the head seen
     from both of its side's images too (the big one before his left brow; not the temples' locks lying on the head).
     Those are kept whole and unpainted: face() cut this one lengthwise at PAINT_SIDE (its inner wall out: an open
@@ -481,13 +484,13 @@ def side_hide(Q, I, keep, vc, hair_v, cams, mid, eye_m, chin_m, is_skin, ear_v=N
         tv_ = np.radians(cam['yaw']); turned_ = (fn @ np.array([np.sin(tv_), 0, np.cos(tv_)]) > .2) & (d_ > HIDE[7])
         Zs_ = -zbuffer(uq_, vq_, -dq_, I[keep & turned_], W, H); zs_ = Zs_[np.clip(np.round(v_).astype(int), 0, H - 1), np.clip(np.round(u_).astype(int), 0, W - 1)]
         return np.isfinite(zs_) & (zs_ < d_ - DROP_DZ) & (zs_ > d_ - HIDE[2])
-    def no_holes(hid, cam, W, H, proj, d, zs, only=None):   # (from this image, behind all of each hidden triangle another surface within HIDE[6] m; else
+    def no_holes(hid, cam, W, H, proj, d, zs, turned, only=None):   # (from this image, behind all of each hidden triangle another surface within HIDE[6] m; else
         # it stays, and lying on the face (within HIDE[8] m of it) it is part of it: Meshy's skin has gaps under some of its locks)
         for _ in range(4):
             Zb, _ = view_depth(Q, I[keep & ~hid], cam, W, H); hk = np.nonzero(hid if only is None else hid & only)[0]
             g = hk[covers_gap(Q, I, hk, Zb, proj)]
             if not len(g): break
-            hid[g] = False; force[g[d[g] - zs[g] < HIDE[8]]] = True
+            hid[g] = False; force[g[(d[g] - zs[g] < HIDE[8]) & turned[g]]] = True   # (turned to the camera: a lock's inner side painted as skin was a skin-coloured wedge in the hair)
     Ff = drawing('fronte')[1]; stand = layer(cams['fronte'], Ff.shape[1], Ff.shape[0])   # (from the front too: the locks hanging before the face)
     for side, sign in (('dx', -1), ('sx', 1)):
         cand = keep & hair_t & ywin & (az * sign > HIDE[3]) & not_ear
@@ -511,16 +514,16 @@ def side_hide(Q, I, keep, vc, hair_v, cams, mid, eye_m, chin_m, is_skin, ear_v=N
                 c = cand & ~hid & (d >= Z[vi, ui] - SEEN) & over & behind
                 if not c.any(): break
                 hid |= c
-            no_holes(hid, cam, W, H, proj, d, zs, only=None if piece is None else piece < 0)   # (the locks before the face: decided whole, below)
-            both |= hid; stand |= behind; seen[view] = (cam, W, H, proj, d, zs)
-        n0 = int(both.sum()); whole = np.zeros(len(I), bool)
+            no_holes(hid, cam, W, H, proj, d, zs, turned, only=None if piece is None else piece < 0)   # (the locks before the face: decided whole, below)
+            both |= hid; stand |= behind; seen[view] = (cam, W, H, proj, d, zs, turned)
+        n0 = int(both.sum()); whole = np.zeros(len(I), bool); shown = np.zeros(len(I), bool)
         if piece is not None:   # (the locks hanging before the face on this side: whole or not at all)
             for k in np.unique(piece[(piece >= 0) & keep & not_ear & (((C[:, 0] - mid) * sign) > 0)]):
                 t = (piece == k) & keep & not_ear
-                if ((C[t, 0] - mid) * sign).mean() <= 0: continue
+                if ((C[t, 0] - mid) * sign).mean() <= 0: both &= ~t; shown |= t; continue   # (the other side's lock: whole)
                 share = ar[t & both].sum() / ar[t].sum()
                 if share > HIDE_WHOLE: both |= t; whole |= t
-                else: both &= ~t
+                else: both &= ~t; shown |= t
                 print('face: the lock of %d triangles before the face on his %s: %.0f%% of it where the images draw the face, %s' % (
                     int(t.sum()), 'right' if side == 'dx' else 'left', 100 * share, 'hidden whole from that side' if share > HIDE_WHOLE else 'shown whole'))
         n1 = int(both.sum())
@@ -528,7 +531,7 @@ def side_hide(Q, I, keep, vc, hair_v, cams, mid, eye_m, chin_m, is_skin, ear_v=N
             # side's images, in front of the ear. Where the image draws a brow's end or a line there, not skin, they stayed: lavender
             # flecks on the temple by the brow)
             hv = np.zeros(wv.max() + 1, bool); hv[wv[I[both]].ravel()] = True
-            foot = cand & on_skin & ~both & (az * sign < HIDE_FOOT[1]) & hv[wv[I]].any(1)
+            foot = cand & on_skin & ~both & ~shown & (az * sign < HIDE_FOOT[1]) & hv[wv[I]].any(1)
             if not foot.any(): break
             both |= foot
         print('face: %d triangles of the hidden locks\' feet on his %s' % (int(both.sum()) - n1, 'right' if side == 'dx' else 'left'))
@@ -548,8 +551,26 @@ def side_hide(Q, I, keep, vc, hair_v, cams, mid, eye_m, chin_m, is_skin, ear_v=N
         print('face: %d triangles in small pieces left by the hidden locks on his %s: hidden with them' % (int(loose.sum()), 'right' if side == 'dx' else 'left'))
         for view in HIDE_VIEWS[side]:   # (of those, the ones lying on the face over a gap of its skin stay, part of it; the others hang in the air:
             # nothing behind them is no hole)
-            cam, W, H, proj, d, zs = seen[view]
-            no_holes(both, cam, W, H, proj, d, zs, only=loose & np.isfinite(zs) & (d - zs < HIDE[8]))
+            cam, W, H, proj, d, zs, turned = seen[view]
+            no_holes(both, cam, W, H, proj, d, zs, turned, only=loose & np.isfinite(zs) & (d - zs < HIDE[8]))
+        # (and the inner walls this opens: behind a hidden lock are the insides of the locks next to it, turned away from the camera,
+        # grey-lavender blocks on the temple. The hair's triangles turned away from both of this side's cameras (by over HIDE_IN[0]),
+        # in front of the ear (HIDE_IN[1] degrees), that one of the two now sees (the front-most there): hidden too, layer by layer
+        # (HIDE_IN[2]), unless nothing is behind them (no_holes))
+        dirs = [np.array([np.sin(np.radians(cams[v_]['yaw'])), 0, np.cos(np.radians(cams[v_]['yaw']))]) for v_ in HIDE_VIEWS[side]]
+        inner_c = keep & hair_t & not_ear & ywin & (az * sign > HIDE[3]) & (az * sign < HIDE_IN[1]) & np.all([fn @ dv < -HIDE_IN[0] for dv in dirs], 0)
+        inner = np.zeros(len(I), bool)
+        for _ in range(HIDE_IN[2]):
+            new = np.zeros(len(I), bool)
+            for view in HIDE_VIEWS[side]:
+                cam, W, H, proj, d, zs, _t = seen[view]
+                Z, _ = view_depth(Q, I[keep & ~both], cam, W, H); u, v, _ = proj(C)
+                new |= inner_c & ~both & (d >= Z[np.clip(np.round(v).astype(int), 0, H - 1), np.clip(np.round(u).astype(int), 0, W - 1)] - SEEN)
+            if not new.any(): break
+            both |= new; inner |= new
+            for view in HIDE_VIEWS[side]: no_holes(both, *seen[view], only=inner)
+            inner &= both
+        print('face: %d triangles of inner walls seen through the hidden locks on his %s: hidden with them' % (int(inner.sum()), 'right' if side == 'dx' else 'left'))
         for view in HIDE_VIEWS[side]: res[view] = both
         stand |= both
         print('face: from his %s side, %d of Meshy\'s triangles over the temple and the cheek hidden (%d where its images draw the face; whole locks and small pieces with them)' % (
@@ -570,7 +591,7 @@ def side_hide(Q, I, keep, vc, hair_v, cams, mid, eye_m, chin_m, is_skin, ear_v=N
 
 def hide_shares(Q, I, keep, hid):
     """Per vertex: the share (by area) of its kept triangles that hid holds, alike over its copies along the texture's
-    seams (src/e_model.js leaves out what interpolates over a half: aHideR, aHideL)."""
+    seams. Not used: hidden by shares, the skin next to the locks was cut too (side_hide(): whole triangles)."""
     _, wld = np.unique(np.round(Q / 1e-6).astype(np.int64), axis=0, return_inverse=True); wld = wld.ravel()
     ar = .5 * np.linalg.norm(np.cross(Q[I[:, 1]] - Q[I[:, 0]], Q[I[:, 2]] - Q[I[:, 0]]), axis=1) * keep
     tot = np.zeros(wld.max() + 1); np.add.at(tot, wld[I].ravel(), np.repeat(ar, 3))
@@ -578,7 +599,7 @@ def hide_shares(Q, I, keep, hid):
     return (hs / np.maximum(tot, 1e-12))[wld]
 
 
-def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=None, jm=None, skin_tri=None, is_hair=None, hair_tri=None, free=None):
+def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=None, jm=None, skin_tri=None, is_hair=None, hair_tri=None, free=None, is_purple=None):
     """The head's sides as their images draw them, seen from that side (Meshy's locks there hidden, side_hide): each
     texel on the side (SIDE_PAINT: from [0] degrees around the head, fading in over [1], to [3] behind the ear, fading
     out over [4]: further round it painted the profiles' neck on the hair behind the ears and their edge-on streaks on
@@ -618,6 +639,8 @@ def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_
             # skin: painted as skin, it was skin-coloured pieces before the face from the other side)
             dk = col.mean(1) < LINE_RULE[0]
             vis &= ~(dk & ((facing < LINE_RULE[1]) | u_ear))   # (a dark line only from an image the texel faces; none under and behind the ears)
+            if is_purple is not None: vis &= ~(sk3 & (is_purple(col) | ((p[:, 1] < NECK_LOW) & dk)))   # (nor the collar the images draw higher than the model's: face())
+            if is_hair is not None: vis &= ~(u_ear & is_hair(col) & ~is_skin(col))   # (nor the hair the profile draws lower than the model's: a lavender blade on the neck behind the lobe)
             vis &= ~(h_back & is_skin(col))   # (the hair behind the ear turns to the front: the 3/4 image won there and draws its ear and cheek on it, a skin-coloured wedge behind the ear)
             if LL is not None: vis &= ~(n_skin & ((is_hair(col) & ~is_skin(col)) | LL[vi, ui]))   # (the neck's skin: not the mane's tips the profile draws lower than the model's, loose black ticks on bare neck)
             samples.append((np.where(vis, facing, -1.), col))
@@ -631,8 +654,11 @@ def side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_
             dark = col.mean(1) < SIDE_LINE[0]
             w = np.where(dark & (other > -1), w * sm(0, SIDE_LINE[1], fc - other), w)
             acc += w[:, None] * col; wsum += w
-        ok = wsum > 0; k = sel[ok]; a = wwin[k][:, None]
-        out[ys[k], xs[k]] = out[ys[k], xs[k]] * (1 - a) + (acc[ok] / wsum[ok, None]) * a
+        ok = wsum > 0; k = sel[ok]; a = wwin[k][:, None]; got = acc[ok] / wsum[ok, None]
+        if is_hair is not None:   # (a lock the image draws on the skin, where the side's zone fades into the front image's (by the eye's
+            # corner): all of it or none. Blended, its edge there was a pale smear on the temple)
+            lockc = sk3[ok] & is_hair(got) & ~is_skin(got); a = np.where(lockc[:, None], (a >= .5).astype(float), a)
+        out[ys[k], xs[k]] = out[ys[k], xs[k]] * (1 - a) + got * a
         if done is not None: done[k] = True
         total += int(ok.sum())
     print('face: %d texels of the temples and the cheeks painted from the side images (as seen from the side)' % total)
@@ -784,6 +810,10 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
         if pressed is not None: ok |= vis & F[vi, ui] & pr_sel   # (the pressed temples: all of the drawing there)
         x0, y0 = np.clip(np.floor(u).astype(int), 0, Wv - 2), np.clip(np.floor(v).astype(int), 0, Hv - 2); fx, fy = (u - x0)[:, None], (v - y0)[:, None]
         col = (D[y0, x0] * (1 - fx) + D[y0, x0 + 1] * fx) * (1 - fy) + (D[y0 + 1, x0] * (1 - fx) + D[y0 + 1, x0 + 1] * fx) * fy
+        if paint_bangs:   # (the images draw the collar higher on the neck than the model's: its purple trim and its black rim, painted on the neck's
+            # skin, showed above the collar as the head tipped: a second trim line on the bare neck in the hit reaction)
+            ok &= ~(skin_t[ks[sel]] & (is_purple(col) | ((p[:, 1] < NECK_LOW) & (col.mean(1) < LINE_RULE[0]))))
+        if paint_bangs and view == 'fronte': ok &= ~((col.mean(1) < LINE_RULE[0]) & under_ear)   # (the front image's lines neither: a black arc on the neck behind the lobe)
         if paint_bangs and view != 'fronte':   # (LINE_RULE, UNDER_EAR, NECK_FACING)
             dk = col.mean(1) < LINE_RULE[0]
             ok &= ~(dk & ((facing < LINE_RULE[1]) | EDGE[view][vi, ui] | under_ear))
@@ -816,12 +846,13 @@ def face(out, Q, N, UV, I, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, mi
         print('face: %d texels of the forehead painted with the front image\'s bangs' % int(k.sum()))
     if hide is not None:
         side_paint(out, Q, I, keep, hide, locks, is_skin, ys, xs, ks, pos, nor, ear_v, collar_v, cams, mid, eye_m, chin_m, done=done, jm=JM, skin_tri=skin_t, is_hair=is_hair,
-                   hair_tri=hair_v[I].sum(1) >= 2, free=free)
+                   hair_tri=hair_v[I].sum(1) >= 2, free=free, is_purple=is_purple)
         skin_fill(out, I, ys, xs, ks, pos, hair_v, ear_v, collar_v, done, keep, mid, chin_m, top, is_skin, force, locks[HIDE_ORDER[0]], is_skin(vc))
     if lock_t is not None:   # (the skin's colour left on the standing locks, Meshy's own and the side images': as the nearest hair's, not its lines')
         from scipy.spatial import cKDTree
         lt = np.nonzero(lock_t[ks] & keep[ks] & ~ear_v[I[ks]].any(1) & ~collar_v[I[ks]].any(1))[0]; c_ = out[ys[lt], xs[lt]]
-        bad = is_skin(c_); src = lt[~bad & (c_.mean(1) > LOCK_FILL)]
+        bad = is_skin(c_) & ~done[lt]; src = lt[is_hair(c_) & ~is_skin(c_) & ~done[lt] & (c_.mean(1) > LOCK_FILL)]   # (not what the images painted there: the features' zone on the face's
+        # own layer, the brow's ridge; filled, a block of the brow's lavender sat on top of his right brow)
         if bad.any() and len(src):
             _, j_ = cKDTree(pos[src]).query(pos[lt[bad]]); out[ys[lt[bad]], xs[lt[bad]]] = out[ys[src[j_]], xs[src[j_]]]
         print('face: %d skin-coloured texels on the locks standing over the head as the hair next to them' % int(bad.sum()))
