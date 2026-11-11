@@ -64,10 +64,11 @@ const CFG={
   //   sway = the far planes' slow breathing (metres, seconds), so their depth shows with the camera still too;
   //   mistLift = the mist's colour lift;
   //   contrast/lift = colour grade; skyDrift = the clouds'
-  //   sway (share of the painting's width) over skyPeriod s; water = the painted water itself sliding down (rate =
-  //   cycles per s, len = slide per cycle in painting px, mix = how much; crest = painting rows over which it starts
-  //   below the crest), foam = painting rect [x0, x1, row0, row1] of the boiling spray at the foot of the fall, spray =
-  //   its strength, sprayRate = how fast it rises;
+  //   sway (share of the painting's width) over skyPeriod s; water = the painted water itself falling: v = its speed
+  //   in painting px/s at rows[0] (under the crest) and rows[1] (low: it speeds up as it falls), each stream 0.7-1.3
+  //   times that; beat = s between the two copies' swaps (each stream at its own moment); mix = how much; crest =
+  //   painting rows over which it starts below the crest; foam = painting rect [x0, x1, row0, row1] of the boiling
+  //   spray at the foot of the fall, spray = its strength, sprayRate = how fast it rises;
   //  terrace = the stone slabs: x half width, z front/back, row depth, slab length range [min, spread], gap, slab
   //   thickness, lip (back step: depth, height above the slabs), grout = the dark bed under the gaps, line = outline
   //   width, warm/cool = slab colours (left in the sun, right in the shade), grass = tufts, keep = no grass nearer
@@ -84,7 +85,7 @@ const CFG={
     sway:{amp:.25, period:24},
     mistLift:.12,
     contrast:.92, lift:.03, skyDrift:.012, skyPeriod:140,
-    water:{rate:.85, len:60, mix:.9, crest:[262, 340], foam:[680, 1200, 540, 735], spray:.85, sprayRate:1.6},
+    water:{v:[45, 230], rows:[262, 640], beat:.6, mix:.85, crest:[256, 320], foam:[680, 1200, 495, 700], spray:.9, sprayRate:1.3},
     terrace:{half:14, front:4.2, back:-3.5, row:[1.05, .45], len:[1.3, 1.1], gap:.03, depth:.25, lip:[.4, .09], grout:-.05,
       line:.01, warm:[0xe0b88e, 0xc99a74], cool:[0xb0a39a, 0x948c8e], grass:46, keep:.7},
     column:{x:-5.05, z:-2.6, r:.34, h:3.15, pole:{y:2.72, len:1.05}},

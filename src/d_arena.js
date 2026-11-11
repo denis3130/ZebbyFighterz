@@ -44,10 +44,13 @@ void main(){ vec2 u = vec2(1. - abs(1. - mod(vU.x + uSkyOff + 2., 2.)), vU.y);
   mist: `uniform vec3 uColor; uniform float uRep, uDrift, uOpacity;
 void main(){ float a = texture2D(uMist, vec2(vU.x * uRep + mod(uTime * uDrift, 1.), vU.y)).r * uOpacity;
   gl_FragColor = vec4(uColor, a); }`,
-  // The waterfall: the painted water slides down (two copies half a cycle apart, each counting only where it samples
-  // water too, starting softly under the crest) and the spray boils at its foot (the first stage's shimmer and noise
-  // streaks are gone: Denis, 11/11). uBox = the plane's painting box (x0, y0, x1, y1, px, y down), uAt = its atlas rect.
-  water: `uniform vec4 uBox, uAt, uFoam; uniform vec3 uWater; uniform vec2 uSpray, uCrest;
+  // The waterfall: the painted water falls, slow under the crest and faster and faster lower down (uFlowV.xy = px/s at
+  // painting rows uRows.x and uRows.y); each stream (a few tens of px wide) has its own speed and its own beat, so the
+  // fall never pulses as one; two copies of the painting half a beat apart (uFlowV.z = s), each counting only where
+  // it samples water too, starting softly under the crest (uCrest rows), mixed in by uFlowV.w; at its foot the spray
+  // boils up: a light veil and puffs. uBox = the plane's painting box (x0, y0, x1, y1, px, y down), uAt = its atlas
+  // rect. (The first stage's shimmer and noise streaks are gone: Denis, 11/11.)
+  water: `uniform vec4 uBox, uAt, uFoam, uFlowV; uniform vec2 uSpray, uCrest, uRows;
 void main(){
   vec2 am = texture2D(uM, vUv).rg; float a = am.r, m = am.g;
   if (a < .003) { gl_FragColor = vec4(0.); return; }
@@ -55,19 +58,21 @@ void main(){
   float hy = uBox.w - uBox.y;
   vec3 c = texture2D(uC, vUv).rgb;
   if (m > .004) {
-    float ph = fract(uTime * uWater.x), wa = 1. - abs(2. * ph - 1.);
-    vec2 sa = uAt.xy + clamp(u + vec2(0., ph * uWater.y / hy), 0., 1.) * uAt.zw;
-    vec2 sb = uAt.xy + clamp(u + vec2(0., fract(ph + .5) * uWater.y / hy), 0., 1.) * uAt.zw;
+    float s = arNoise(vec2(px.x / 38., 3.7)), o = arNoise(vec2(px.x / 23., 9.1));
+    float v = mix(uFlowV.x, uFlowV.y, smoothstep(uRows.x, uRows.y, px.y)) * (.7 + .6 * s);
+    float ph = fract(uTime / uFlowV.z + o), wa = 1. - abs(2. * ph - 1.), d = v * uFlowV.z / hy;
+    vec2 sa = uAt.xy + clamp(u + vec2(0., ph * d), 0., 1.) * uAt.zw;
+    vec2 sb = uAt.xy + clamp(u + vec2(0., fract(ph + .5) * d), 0., 1.) * uAt.zw;
     float ka = wa * texture2D(uM, sa).g, kb = (1. - wa) * texture2D(uM, sb).g;
     vec3 fl = texture2D(uC, sa).rgb * ka + texture2D(uC, sb).rgb * kb + c * (1. - ka - kb);
-    c = mix(c, fl, m * uWater.z * smoothstep(uCrest.x, uCrest.y, px.y));
+    c = mix(c, fl, m * uFlowV.w * smoothstep(uCrest.x, uCrest.y, px.y));
   }
   vec2 f = vec2((px.x - uFoam.x) / (uFoam.y - uFoam.x), (uFoam.w - px.y) / (uFoam.w - uFoam.z));
   if (f.x > 0. && f.x < 1. && f.y > 0. && f.y < 1.) {
     float e = smoothstep(0., .18, f.x) * smoothstep(1., .82, f.x) * smoothstep(1., .45, f.y) * smoothstep(0., .12, f.y);
-    float t = mod(uTime * uSpray.y, 64.);
-    float n = arNoise(vec2(f.x * 26., f.y * 7. - t)) * .6 + arNoise(vec2(f.x * 61. + 7., f.y * 16. - t * 1.7)) * .4;
-    c = mix(c, vec3(.93, .98, 1.) / uContrast, smoothstep(.42, .78, n) * e * uSpray.x);
+    float t = mod(uTime * uSpray.y, 64.), sx = (f.x - .5) * (1. + f.y * .6);   // the puffs spread as they rise
+    float n = arNoise(vec2(sx * 26., f.y * 7. - t)) * .6 + arNoise(vec2(sx * 61. + 7., f.y * 16. - t * 1.7)) * .4;
+    c = mix(c, vec3(.93, .98, 1.) / uContrast, (smoothstep(.4, .85, n) * .8 + .14) * e * uSpray.x);
   }
   gl_FragColor = vec4(arGrade(c), a);
 }`};
@@ -188,8 +193,8 @@ function arLayers(def, col, msk, mist) {
       continue;
     }
     const W = def.water, uni = name === 'falls' ? () => ({uBox: U(new THREE.Vector4(...pls[0].box)), uAt: U(at(pls[0].strips[0])),
-      uFoam: U(new THREE.Vector4(...W.foam)), uWater: U(new THREE.Vector3(W.rate, W.len, W.mix)),
-      uSpray: U(new THREE.Vector2(W.spray, W.sprayRate)), uCrest: U(new THREE.Vector2(...W.crest)),
+      uFoam: U(new THREE.Vector4(...W.foam)), uFlowV: U(new THREE.Vector4(W.v[0], W.v[1], W.beat, W.mix)),
+      uRows: U(new THREE.Vector2(...W.rows)), uSpray: U(new THREE.Vector2(W.spray, W.sprayRate)), uCrest: U(new THREE.Vector2(...W.crest)),
       }) : () => ({});
     const kind = name === 'falls' ? 'water' : 'plane';
     arFarMesh(name + '.core', arQuads(pls, true), z, arFarMat(kind, uni(), true), rank);
