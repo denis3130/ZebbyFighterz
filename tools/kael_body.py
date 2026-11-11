@@ -39,14 +39,17 @@ PAL = {'plum': (76, 58, 84), 'black': (28, 24, 30), 'purple': (166, 90, 202), 'p
        'skin': (247, 188, 146), 'skinS': (172, 116, 90)}
 INKC = (10, 9, 11)
 SEEN, OUTLINE, FACING, POW = .004, 3, .25, 8.   # m: in front at its pixel; px of the figure's rim left out; the least facing; its weight's power
-USE = {'retro': 'all', 'gambe_fronte': 'shaft', 'gambe_dx': 'shaft', 'gambe_sx': 'shaft'}   # the views that paint, and what (see main)
+USE = {'retro': 'dark', 'gambe_fronte': 'shaft', 'gambe_dx': 'shaft', 'gambe_sx': 'shaft'}   # the views that paint, and what (see main)
 SHAFT = (.195, .285)                             # m: the boots' shafts (bind pose's height), between their purple strap and the trousers' cuff
 ARM_SKIN = .45                                  # the arms' (shoulders' to hands') share of a texel's bones over this: its skin not repainted
 RECOLOUR = {(46, 45, 48): 'plum', (14, 13, 15): 'black'}   # tools/kael_fix.py's suit tones (lit, folds) -> the drawings'
-TAT = (.006, .5, 1, 20, .25)                   # see the tattoos in main(): rim (m), its skin share, edge (texels); the least piece (texels), its inside's share
+TAT = (.006, .5, 1, 20, .25, .003, 3, 30.)     # see the tattoos in main(): rim (m), its skin share, edge (texels); the least piece (texels), its inside's share;
+                                               # the dark strokes beside them within [5] m, [6] rounds
 UPPER, BACK_FACING = .3, .5                    # the shoulders' and upper arms' bones' share; the back sheet: the least facing
-SPECK = (8., 1.)                               # mm2: specks of a colour (cloth, lines) taken by what is around them
-MAT = (25, 45, 40, 30.)                        # Meshy's purple: blue over green by [0], blue over [1], red under blue plus [2]; pieces under [3] mm2 as around them
+SPECK = (8., 1., 60.)                          # mm2: specks of a colour (cloth, lines) taken by what is around them; on the boots' shafts
+HAND = (.5, .5, .3, .5)                        # see the hands and the elbows in main()
+BIG = (4, 200.)                                # the bracers', gloves' and boots' pieces: rounds of smoothing, the least piece (mm2)
+MAT = (25, 45, 40, 30., 150.)                        # Meshy's purple: blue over green by [0], blue over [1], red under blue plus [2]; pieces under [3] mm2 as around them
 SMOOTH = (2, 1)                                # rounds of the pieces' smoothing (wide), of the colours' borders (near)
 
 
@@ -111,6 +114,8 @@ def main(pkg, debug=None):
         x0, y0 = np.clip(np.floor(u).astype(int), 0, W - 2), np.clip(np.floor(v).astype(int), 0, H - 2); fx, fy = (u - x0)[:, None], (v - y0)[:, None]
         col = (D[y0, x0] * (1 - fx) + D[y0, x0 + 1] * fx) * (1 - fy) + (D[y0 + 1, x0] * (1 - fx) + D[y0 + 1, x0 + 1] * fx) * fy
         if USE.get(key) == 'shaft': ok &= shaft & (sheet_scan.classes(col) == 3)
+        elif USE.get(key) == 'dark': ok &= sheet_scan.classes(col) == 3   # (its shadows on the suit: its purples, on the model's back, fell beside its purple
+        # pieces, purple patches on the trousers' back; Denis, 11/11, circling them. The purples are the model's own pieces)
         else: ok &= (facing > BACK_FACING) & ~upper[idx]   # (the back, seen well; not the shoulders and the upper arms: there the
         # sheet's tattoos and the vest's edge fell at a slant, purple smears on the deltoid from the side)
         w = np.where(ok, facing ** POW, -1.); bet = w > best[idx]
@@ -135,6 +140,16 @@ def main(pkg, debug=None):
         rows = RI[sl][me]; near = np.unique(np.concatenate(tr.query_ball_point(pos[rows][::max(1, len(rows) // 200)], TAT[0])))
         near = near[~np.isin(ui_[near], rows)]
         if len(near) and skin_u[near].mean() >= TAT[1]: tat[sl] |= me; nt += 1
+    # (and the dark strokes beside them (TAT[5] m) on the shoulders' and upper arms' skin: the tattoos' thin parts, left black, made the right
+    # shoulder's tattoo a mix of purple shards and black strokes; Denis, 11/11, circling it)
+    tr_t = np.nonzero(tat[ys, xs] & use)[0]
+    if len(tr_t):
+        cd = np.nonzero(use & upper & ~tat[ys, xs] & (sheet_scan.classes(cur) == 3))[0]
+        for _ in range(TAT[6]):
+            if not len(cd): break
+            dd, _ = cKDTree(pos[tr_t]).query(pos[cd], distance_upper_bound=TAT[5]); gr = cd[np.isfinite(dd)]
+            if not len(gr): break
+            tat[ys[gr], xs[gr]] = True; tr_t = np.r_[tr_t, gr]; cd = cd[~np.isfinite(dd)]
     edge = tat & ~ndimage.binary_erosion(tat, iterations=TAT[2])
     tt = tat[ys, xs] & use; cur[tt] = PAL['purple']; te = edge[ys, xs] & use; cur[te] = PAL['purpleS']
     print('body: %d pieces of the arms\' tattoos (%d texels) to the drawings\' purple' % (nt, int(tt.sum())))
@@ -157,18 +172,48 @@ def main(pkg, debug=None):
     mat[(b_ - g_ > MAT[0]) & (b_ > MAT[1]) & (r_ < b_ + MAT[2])] = 1              # 1 a purple piece
     mat[(r_ > 120) & (r_ - b_ > 40) & (g_ > 70)] = 2                               # 2 the skin
     pc = sheet_scan.classes(cur[u_]); pv = painted[u_]
-    mat[pv] = np.where(pc[pv] == 4, 1, np.where(pc[pv] == 1, 2, 0))
-    keep = (lab == names.index('skin')) | (lab == names.index('skinS')) | tt[u_] | te[u_]   # (the skin and the tattoos as they are)
-    for _ in range(SMOOTH[0]):
-        mm = KF._mode(mat, jw, okw, 3, keep=pv); mat = np.where(pv, mat, mm)
-    KF._small(mat, j, ok, area, np.full(len(u_), MAT[3]), pv | keep)
+    # (the fingerless gloves and the bracers by the bones (Denis, 11/11, circling the fists and the elbows): the fingers (their bones' share over
+    # HAND[0]) bare skin, as the sheets draw them, the glove's ragged edge across them gone; the hands' backs and palms (the hand's bone over
+    # HAND[1], the fingers' under HAND[2]) the glove, no skin; above the elbow (the upper arm's bone over the forearm's, the forearm's share
+    # under HAND[3]) no bracer: the purple of its top band and its dark that had run onto the elbow's skin, skin (not the tattoos))
+    jt = I[ks[u_]]; bwt = lambda w_: (w_[jt] * bary[u_]).sum(1)
+    fw_ = bwt(((jn >= nb) * wn).sum(1)); hw_ = bwt(bw('LeftHand', 'RightHand')); fa_ = bwt(bw('LeftForeArm', 'RightForeArm')); ua_ = bwt(bw('LeftArm', 'RightArm'))
+    is_sk = (lab == names.index('skin')) | (lab == names.index('skinS'))
+    fing = fw_ > HAND[0]; lab[fing & ~is_sk] = names.index('skin')
+    glove = (hw_ > HAND[1]) & (fw_ < HAND[2]); lab[glove & is_sk] = names.index('plum'); mat[glove & (mat == 2)] = 0
+    elbow = (ua_ > fa_) & (fa_ < HAND[3]) & (fa_ > .02) & ~tt[u_] & ~te[u_]; nel = int((elbow & ~is_sk).sum()); lab[elbow & ~is_sk] = names.index('skin')
+    print('body: hands: %d texels of the fingers bare, %d of the gloves\' skin to the glove; %d texels of the bracers above the elbows to skin' % (
+        int((fing & ~is_sk).sum()), int((glove & is_sk).sum()), nel))
+    keep = (lab == names.index('skin')) | (lab == names.index('skinS')) | tt[u_] | te[u_] | fing   # (the skin and the tattoos as they are; the gloves as the rest of the suit: their wrist cuffs purple)
+    for _ in range(SMOOTH[0]):   # (the views paint the suit's shadows alone now: the pieces are Meshy's everywhere, smoothed everywhere)
+        mm = KF._mode(mat, jw, okw, 3, keep=keep); mat = np.where(keep, mat, mm)
+    KF._small(mat, j, ok, area, np.where(mat == 0, MAT[4], MAT[3]), keep)   # (the suit's pieces inside a purple one, Meshy's folds across it, up to
+    # MAT[4] mm2: purple; they were dark streaks across the sash's tails and the trousers' stripes behind)
     i_pl, i_bk, i_pu, i_ps = names.index('plum'), names.index('black'), names.index('purple'), names.index('purpleS')
+    # (the bracers, the gloves and the boots (BIG zones): their pieces smoothed wider, the purple pieces flat purple, the shafts flat plum. Black
+    # streaks crossed the cuffs and the straps, patches of the purple's shadow spotted the soles, the shafts were plum and black blotches)
+    sh_ = (pos[u_, 1] > SHAFT[0] - .02) & (pos[u_, 1] < SHAFT[1]); boot = pos[u_, 1] < SHAFT[1]
+    big = boot | (fa_ > .5) | (hw_ > HAND[1])
+    for _ in range(BIG[0]):
+        mm = KF._mode(mat, jw, okw, 3, keep=~big | keep); mat = np.where(big & ~keep, mm, mat)
+    KF._small(mat, j, ok, area, np.where(big, BIG[1], MAT[3]), keep | ~big)
     on_p = (mat == 1) & ~keep; on_s = (mat == 0) & ~keep
+    lab[big & on_p] = names.index('purple'); lab[sh_ & on_s] = names.index('plum')
+    lab[on_p & pv] = names.index('purple')   # (the back sheet's shadows paint the suit, not the purple pieces: on them they were dark streaks
+    # across the trousers' purple stripes behind)
     n1 = int((on_p & (lab == i_bk)).sum()) + int((on_p & (lab == i_pl)).sum()); n2 = int((on_s & ((lab == i_pu) | (lab == i_ps))).sum())
     lab[on_p & (lab == i_bk)] = i_ps; lab[on_p & (lab == i_pl)] = i_pu
     lab[on_s & (lab == i_pu)] = i_pl; lab[on_s & (lab == i_ps)] = i_bk
     print('body: %d texels of the suit\'s colours on the purple pieces, %d of the purples on the suit, to their own piece\'s' % (n1, n2))
-    ns = KF._small(lab, j, ok, area, np.where(lab == len(names), SPECK[1], SPECK[0]), keep)
+    # (the bracers' and the gloves' black only in large folds (SPECK[2]); in small ones they were blotches, Denis circling them
+    # pieces they were blotches, Denis circling them)
+    lab[(lab == len(names)) & (mat == 1)] = i_ps; lab[(lab == len(names)) & (mat == 0)] = i_bk   # (no ink of its own: the lines are the outline's)
+    # (the purple shards on the shoulders' and upper arms' skin, up to TAT[7] mm2, the tattoos' frayed bits among them: skin. By the right
+    # shoulder's tattoo, under the collar's point, they were a fringe of purple slivers; Denis, 11/11, circling it)
+    ua2 = upper[u_] & ((lab == i_pu) | (lab == i_ps))
+    nsh = KF._small(lab, j, ok, area, np.where(ua2, TAT[7], 0.), (keep & ~(tt[u_] | te[u_])) | ~upper[u_], rounds=2)
+    print('body: %d texels of purple shards on the arms\' skin as the skin' % nsh)
+    ns = KF._small(lab, j, ok, area, np.where(lab == len(names), SPECK[1], np.where(big, SPECK[2], SPECK[0])), keep)
     for _ in range(SMOOTH[1]):
         mm = KF._mode(lab, j, ok, len(names_), keep=keep); lab = np.where(keep, lab, mm)
     print('body: %d texels of specks as what is around them, the borders smoothed %d times' % (ns, SMOOTH[1]))

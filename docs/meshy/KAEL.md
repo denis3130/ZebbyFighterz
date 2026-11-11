@@ -488,6 +488,19 @@ crediti, saldo 1000): Denis ha scelto di tenere le forme e ridipingere ("Solo ri
   stoffa e ombra nera (`MAT`). Poi i puntini sotto 8 mm² (righe sotto 1) prendono il colore attorno e i bordi sono
   lisciati (`SPECK`, `SMOOTH`); pelle e tatuaggi restano come sono. Su questo modello: 30.141 texel di stoffa sui
   pezzi viola, 4.630 di viola sulla stoffa, 8.086 di puntini.
+- **Zone cerchiate sulla versione 14** (versione 15; Denis, cerchiando due immagini dal gioco):
+  - **dita**: il bordo del guanto a strappi sulle dita: ora le dita (le loro ossa oltre metà) sono pelle, il dorso e il
+    palmo (l'osso della mano, poco dito) sono guanto (`HAND`);
+  - **polsiere al gomito**: sopra il gomito (più osso del braccio che dell'avambraccio) niente polsiera, la pelle;
+  - **polsiere, guanti e stivali** (`BIG`): i loro pezzi lisciati più largo, i pezzi viola in viola pieno (via le
+    strisce nere sui polsini e sui cinturini e le macchie sulle suole), i gambali viola scuro (prima a chiazze nere);
+  - **dietro sui pantaloni**: il foglio della schiena dipinge solo le ombre della stoffa (i suoi viola cadevano accanto
+    ai pezzi viola del modello: macchie viola); sui pezzi viola niente ombre (erano strisce scure) e i pezzi di stoffa
+    dentro un pezzo viola fino a 150 mm² sono viola (`MAT[4]`);
+  - **spalle**: i tratti scuri accanto ai tatuaggi (le loro parti sottili rimaste nere) diventano viola, e le schegge
+    viola fino a 30 mm² sulla pelle delle braccia diventano pelle (`TAT[5:]`). Resta qualche scheggia viola sotto la
+    punta del colletto sulla spalla destra (è il bordo della punta visto da sotto o il tatuaggio a pezzi: da guardare);
+  - niente inchiostro proprio sul corpo: le righe sono quelle del contorno.
 - Resta (forme di Meshy, non toccate per scelta di Denis): la fascia è una banda e non un nodo, dietro sui fianchi due
   code e il bordo viola dell'orlo, le strisce viola del davanti sono quelle di Meshy (simili, non le stesse del foglio).
 
