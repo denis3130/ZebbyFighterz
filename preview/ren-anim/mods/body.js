@@ -27,6 +27,7 @@ const RB = {
   blend: 6, hitBlend: 3,   // frames: easing into a new free act / into a hit reaction
   md: null, W: null, sty: null, con: null, pol: 'none', rawOk: {},
   post: [],           // functions (md, p, F, S, y) applied to the finished pose (other modules: arms, hands, head)
+  styleFor: {},       // act -> function (y, F, S, st) setting the style of an act another module owns
   // Per move, what the style adds to the clip. hip/chest = twist at the impact (degrees; the sign follows the hitting
   // side), coil = share wound the other way first, lean = pitch at the impact (degrees, < 0 back) and leanCoil in the
   // coil, dip = pelvis drop in the coil and rise at the impact (shares of the height), back/fwd = metres the pelvis
@@ -156,6 +157,7 @@ function rbStyle(F, S, st) {
   const y = RB.sty, act = F.act, H = RB.H, t = S.frame + 23 * F.side, af = F.af;
   y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = 0; y.stab = .6; y.free = null; y.freeW = 1; y.back = 0; y.backTo = null; y.box = 0; y.move = null; y.foot = 1; y.lift = 1; y.freeB = 1; y.after = false; y.knee = 0;
   y.h.L = y.h.R = 0;
+  if (RB.styleFor[act]) { RB.styleFor[act](y, F, S, st); return y; }   // an act another module styles (swag.js)
   const mv = RB.moves[act], m = mv && (CFG.moves[act] || mv.fd);
   if (mv && m) {
     const s = m.s, a = m.a, r = m.r === 'land' ? 14 : m.r, e = CFG.clips[act] || {};

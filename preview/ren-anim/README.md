@@ -13,11 +13,13 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
 - `mods/hair.js`: i capelli che seguono la testa con un piccolo ritardo.
 - `mods/extra.js`: altre animazioni: calcio rotante e spazzata (clip di Meshy non ancora usate), caduta da KO,
   colpi in volo, combo, vittoria.
+- `mods/swag.js`: entrata (si scioglie, poi scatta in guardia con un anello d'acqua a terra) e provocazione
+  ("no-no" col dito), fatte a mano posa per posa.
 - `mods/body_v1.js`: il primo tentativo, tenuto solo come confronto.
 
 ## Costruire
 
-    python3 build.py --assets ASSETS.js --out pagina.html --mods body.js,style.js,trail.js,fx.js,hair.js,extra.js
+    python3 build.py --assets ASSETS.js --out pagina.html --mods body.js,style.js,trail.js,fx.js,hair.js,extra.js,swag.js
 
 `ASSETS.js` è la riga `const ASSETS={...};` della pagina pubblicata (circa 9,7 MB, non sta nel repository).
 
