@@ -163,9 +163,24 @@ function arFarMat(kind, uni, core) {
 }
 
 // A plane group's quads: its strips, or the opaque cores of its strips.
+// cores = the opaque cores; otherwise the rest of each strip (above and below each core, and full height between
+// them): the blended edges are drawn only where no core is, so nothing is shaded twice.
 function arQuads(pls, cores) {
-  return pls.flatMap(pl => pl.strips.flatMap(st => cores ? st.cores.map(c => ({rect: pl.rect, f: c.f, uv: c.uv}))
-    : [{rect: pl.rect, f: st.f, uv: st.uv}]));
+  const out = [];
+  for (const pl of pls) for (const st of pl.strips) {
+    if (cores) { for (const c of st.cores) out.push({rect: pl.rect, f: c.f, uv: c.uv}); continue; }
+    const f = st.f, U = (a, k) => st.uv[k] + (a - f[k]) / (f[k + 2] - f[k]) * (st.uv[k + 2] - st.uv[k]);
+    const q = (x0, y0, x1, y1) => { if (x1 - x0 > 1e-6 && y1 - y0 > 1e-6) out.push({rect: pl.rect, f: [x0, y0, x1, y1], uv: [U(x0, 0), U(y0, 1), U(x1, 0), U(y1, 1)]}); };
+    let x = f[0];
+    for (const c of st.cores.slice().sort((a, b) => a.f[0] - b.f[0])) {
+      q(x, f[1], c.f[0], f[3]);                       // full height, left of this core
+      q(c.f[0], c.f[3], c.f[2], f[3]);                // above it (v up)
+      q(c.f[0], f[1], c.f[2], c.f[1]);                // below it
+      x = c.f[2];
+    }
+    q(x, f[1], f[2], f[3]);
+  }
+  return out;
 }
 
 function arLayers(def, col, msk, mist) {

@@ -124,7 +124,7 @@ PLANES = [
 HAZE_TOP = [(0, 172), (215, 157), (260, 178), (300, 205), (345, 240), (420, 300), (500, 350), (580, 410), (660, 470),
             (760, 500), (900, 510), (1050, 500), (1150, 485), (1250, 470), (1350, 440), (1450, 400), (1530, 370),
             (1580, 335), (1625, 300), (W0, 285)]   # (on the right, up behind the forest's misty foot)
-HAZE_SCALE, SKY_SCALE = .42, .4
+HAZE_SCALE, SKY_SCALE = .42, .32
 GLOW_X = (250, 470)  # px: left of these the sun's glow in the sky and the haze turns to the cool sky and mist
 HAZE_SOFT = 70   # px: the haze's top fades into the sky over this
 
@@ -467,7 +467,7 @@ def main(preview):
     # further from the peak, hazier (aerial perspective: its sides fade towards the horizon's blue)
     d = np.clip(np.abs(np.arange(w) - cpx * k) / (w / 2), 0, 1)[None, :, None]
     fc = fc * (1 - .35 * d) + horizon * .35 * d
-    islands.append({'name': 'far', 'box': [bx0, by0, bx0 + w, by0 + h], 'rgb': fc, 'm': fa, 'water': None, 'scale': .9})
+    islands.append({'name': 'far', 'box': [bx0, by0, bx0 + w, by0 + h], 'rgb': fc, 'm': fa, 'water': None, 'scale': .6})
 
     # Haze: the painting where it shows, smoothly filled elsewhere; below the painted floor the mist goes on down
     # (the mean of rows 690-720 per column, paler further down); past both edges it is mirrored.
