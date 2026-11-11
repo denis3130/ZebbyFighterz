@@ -70,7 +70,6 @@ function renderFrame(S, nowMs) {
   fxUpdate(nowMs, S);
   renderer.clear();
   const shaken = fxShakeApply();
-  arenaDrawBack();
   renderer.render(scene, camera);
   if (shaken) rdCamApply();
 }

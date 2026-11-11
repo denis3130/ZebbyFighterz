@@ -1,34 +1,29 @@
-// The 3D arena: far painted layers (sky, cliffs with the flowing waterfall, mist) on big planes at their own depth,
-// and near 3D pieces in the fighters' toon style (stone terrace with grass, column with a waving banner, lantern,
-// rocks, bushes). Built from CFG.arenas[name] (arenaBuild) and animated once per drawn frame (arenaStep). Graphics
-// only: it reads the sim state and never writes it. Metres; the fighters stand at z ~ 0 on y = 0 (the slabs' tops);
-// the camera looks along -z (d_render.js).
+// The 3D arena: far painted depth planes, like an anime multiplane camera (the dark forest low on the left, the near
+// cliffs, the high cliffs, the waterfall, the far haze, the sky, with drifting mist banks between them), and near 3D
+// pieces in the fighters' toon style (stone terrace with grass, column with a waving banner, lantern, rocks). Built
+// from CFG.arenas[name] (arenaBuild) and animated once per drawn frame (arenaStep). Graphics only: it reads the sim
+// state and never writes it. Metres; the fighters stand at z ~ 0 on y = 0 (the slabs' tops); the camera looks along
+// -z (d_render.js).
 
-// group = the near 3D arena (in the scene); layers = {bg (the far layers' full-screen quad), rects}; banner = the cloth
-// mesh; leaves = the drifting leaves (d_render.js); waterMat = the far layers' ShaderMaterial; stats() = {draws, tris}.
-const ARENA = {group: null, layers: {}, banner: null, leaves: new THREE.Group(), waterMat: null, stats: arStats};
-// Private: def = the arena's CFG entry, seed = render-only generator, cloth = the banner's points, bgScene/bgCam = the
-// far layers' own scene and clip-space camera (drawn before the 3D scene).
-const AR = {def: null, seed: 11, cloth: null, last: -1, bgScene: new THREE.Scene(),
-  bgCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)};
+// group = the near 3D arena; far = the far planes' group; layers = {planes: [{name, z, rect, box}] nearest first,
+// mists: [{z, rect}]}; banner = the cloth mesh; leaves = the drifting leaves (d_render.js); waterMat = the waterfall
+// plane's ShaderMaterial; stats() = {draws, tris} of the arena (near and far).
+const ARENA = {group: null, far: null, layers: {}, banner: null, leaves: new THREE.Group(), waterMat: null, stats: arStats};
+// Private: def = the arena's CFG entry, seed = render-only generator, cloth = the banner's points, mats = the far
+// planes' materials (their time uniforms), skyK = sky sway per painting width.
+const AR = {def: null, seed: 11, cloth: null, last: -1, mats: [], skyK: 1};
 
-// The far layers in one full-screen pass (no overdraw, no blending): per pixel, the camera ray (the camera looks along
-// -z without pitch: uTan = tan of the half view, x and y) meets each layer's plane at its depth (uZ: sky, cliffs,
-// mist), where the layer's rect (x0, y0, x1, y1, metres) gives its uv. Sky: the clouds sway in u (mirrored past the
-// edges; not read where the cliffs hide it); cliffs over it by their alpha (red of uAW), the waterfall (green of uAW) shimmering and streaking as on the flat backdrop (uScale = layer
-// uv to painting uv); the mist band over both. A ray that meets the ground in front of uCover is under the terrace,
-// drawn over it: it only writes the grout colour.
-const AR_BG_VERT = 'varying vec2 vS;\nvoid main(){ vS = uv; gl_Position = vec4(position.xy, 0., 1.); }';
-const AR_BG_FRAG = `
-uniform sampler2D uSky, uCliffs, uAW, uMist;
-uniform vec3 uCam, uZ, uMistColor, uGround;
-uniform vec2 uTan, uScale;
-uniform vec4 uSkyRect, uCliffRect, uMistRect;
-uniform float uTime, uContrast, uLift, uFlow, uStreak, uWobble, uSkyOff, uMistDrift, uMistOpacity, uMistRep, uCover;
-uniform vec4 uFoam;
-uniform vec3 uWater;
-uniform vec2 uSpray, uCrest;
-varying vec2 vS;
+// The far planes are real 3D meshes at their own depth, each made only of its strips (tight quads, tools/
+// make_layers.py), drawn far to near with alpha blending after the near scene, so whatever the terrace and the fighters
+// cover is never drawn. uv = the texel in the atlas (uC colours, uM: red = alpha, green = water); aU = the plane's own
+// uv (0..1 over its painting box).
+const AR_FAR_VERT = `attribute vec2 aU;
+varying vec2 vUv, vU;
+void main(){ vUv = uv; vU = aU; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`;
+const AR_FAR_HEAD = `uniform sampler2D uC, uM, uMist;
+uniform float uTime, uContrast, uLift;
+varying vec2 vUv, vU;
+vec3 arGrade(vec3 c){ return (c - .5) * uContrast + .5 + uLift; }
 float arHash(vec2 p){ p = 50. * fract(p * .3183099 + vec2(.71, .113)); return fract(p.x * p.y * (p.x + p.y)); }
 float arNoise(vec2 p){
   vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
@@ -36,53 +31,48 @@ float arNoise(vec2 p){
   return mix(mix(arHash(vec2(i.x, y0)), arHash(vec2(i.x + 1., y0)), f.x),
              mix(arHash(vec2(i.x, y1)), arHash(vec2(i.x + 1., y1)), f.x), f.y);
 }
-vec2 arAt(vec3 d, float z, vec4 r){ return (uCam.xy + d.xy * (uCam.z - z) - r.xy) / (r.zw - r.xy); }
+`;
+const AR_FAR_FRAG = {
+  // A plane: its colours by its alpha (the colour is read only where it shows).
+  // No discard anywhere: with it the GPU would shade the pixels the near scene hides before testing their depth.
+  plane: `void main(){ float a = texture2D(uM, vUv).r; vec3 c = vec3(0.); if (a > .003) c = arGrade(texture2D(uC, vUv).rgb); gl_FragColor = vec4(c, a); }`,
+  // The sky: opaque, the clouds sway in u (mirrored past the edges); uAt = its atlas rect (u0, v0, du, dv).
+  sky: `uniform vec4 uAt; uniform float uSkyOff;
+void main(){ vec2 u = vec2(1. - abs(1. - mod(vU.x + uSkyOff + 2., 2.)), vU.y);
+  gl_FragColor = vec4(arGrade(texture2D(uC, uAt.xy + clamp(u, .002, .998) * uAt.zw).rgb), 1.); }`,
+  // A mist bank: the noise band drifting in u, in the painting's mist colour.
+  mist: `uniform vec3 uColor; uniform float uRep, uDrift, uOpacity;
+void main(){ float a = texture2D(uMist, vec2(vU.x * uRep + mod(uTime * uDrift, 1.), vU.y)).r * uOpacity;
+  gl_FragColor = vec4(uColor, a); }`,
+  // The waterfall: the painted water slides down (two copies half a cycle apart, each counting only where it samples
+  // water too, starting softly under the crest), its streaks scroll and the spray boils at its foot. uBox = the
+  // plane's painting box (x0, y0, x1, y1, px, y down), uAt = its atlas rect, uPaint = the painting's size in px.
+  water: `uniform vec4 uBox, uAt, uFoam; uniform vec3 uWater; uniform vec2 uSpray, uCrest, uPaint; uniform float uFlow, uStreak, uWobble;
 void main(){
-  vec3 d = vec3((vS * 2. - 1.) * uTan, -1.);
-  if (d.y < 0. && uCam.z - uCam.y / -d.y > uCover) { gl_FragColor = vec4(uGround, 1.); return; }
-  vec2 uc = arAt(d, uZ.y, uCliffRect);
-  vec2 aw = texture2D(uAW, uc).rg;
-  float a = aw.r;
-  vec3 c = vec3(0.);
-  if (a < .996) {
-    vec2 us = arAt(d, uZ.x, uSkyRect);
-    us.x = 1. - abs(1. - mod(us.x + uSkyOff + 2., 2.));
-    c = texture2D(uSky, us).rgb;
+  vec2 am = texture2D(uM, vUv).rg; float a = am.r, m = am.g;
+  if (a < .003) { gl_FragColor = vec4(0.); return; }
+  vec2 u = vU, px = vec2(uBox.x + u.x * (uBox.z - uBox.x), uBox.w - u.y * (uBox.w - uBox.y)), p = vec2(px.x / uPaint.x, 1. - px.y / uPaint.y);
+  float hy = uBox.w - uBox.y;
+  vec2 sh = u + vec2(0., sin(p.x * 90. + mod(uTime * 3., 6.2831853)) * uWobble * m * uPaint.y / hy);
+  vec3 c = texture2D(uC, uAt.xy + clamp(sh, 0., 1.) * uAt.zw).rgb;
+  if (m > .004) {
+    float ph = fract(uTime * uWater.x), wa = 1. - abs(2. * ph - 1.);
+    vec2 sa = uAt.xy + clamp(sh + vec2(0., ph * uWater.y / hy), 0., 1.) * uAt.zw;
+    vec2 sb = uAt.xy + clamp(sh + vec2(0., fract(ph + .5) * uWater.y / hy), 0., 1.) * uAt.zw;
+    float ka = wa * texture2D(uM, sa).g, kb = (1. - wa) * texture2D(uM, sb).g;
+    vec3 fl = texture2D(uC, sa).rgb * ka + texture2D(uC, sb).rgb * kb + c * (1. - ka - kb);
+    c = mix(c, fl, m * uWater.z * smoothstep(uCrest.x, uCrest.y, px.y));
+    c += m * (arNoise(vec2(p.x * 140., p.y * 6. + mod(uTime * uFlow * 6., 64.))) - .5) * uStreak / uContrast;
   }
-  if (a > .004) {
-    float m = aw.g;
-    vec2 p = uc * uScale;
-    vec2 sh = uc + vec2(0., sin(p.x * 90. + mod(uTime * 3., 6.2831853)) * uWobble * m / uScale.y);
-    vec3 cc = texture2D(uCliffs, sh).rgb;
-    if (m > .004) {
-      // The painted water slides down: two copies, half a cycle apart, each sampled from higher up as its cycle runs;
-      // each fades out as it jumps back (weights 1 - |2ph - 1| and the rest), so no seam ever shows.
-      // A copy counts only where it samples water too (near the crest it would pull down the sky above).
-      float ph = fract(uTime * uWater.x), wa = 1. - abs(2. * ph - 1.);
-      vec2 sa = sh + vec2(0., ph * uWater.y), sb = sh + vec2(0., fract(ph + .5) * uWater.y);
-      float ka = wa * texture2D(uAW, sa).g, kb = (1. - wa) * texture2D(uAW, sb).g;
-      vec3 fl = texture2D(uCliffs, sa).rgb * ka + texture2D(uCliffs, sb).rgb * kb + cc * (1. - ka - kb);
-      cc = mix(cc, fl, m * uWater.z * smoothstep(uCrest.x, uCrest.y, uc.y));
-      cc += m * (arNoise(vec2(p.x * 140., p.y * 6. + mod(uTime * uFlow * 6., 64.))) - .5) * uStreak / uContrast;
-    }
-    // Spray at the foot: rising, boiling puffs of white, fading out to the rect's edges.
-    vec2 f = (uc - uFoam.xy) / (uFoam.zw - uFoam.xy);
-    if (f.x > 0. && f.x < 1. && f.y > 0. && f.y < 1.) {
-      float e = smoothstep(0., .18, f.x) * smoothstep(1., .82, f.x) * smoothstep(1., .45, f.y) * smoothstep(0., .12, f.y);
-      float t = mod(uTime * uSpray.y, 64.);
-      float n = arNoise(vec2(f.x * 26., f.y * 7. - t)) * .6 + arNoise(vec2(f.x * 61. + 7., f.y * 16. - t * 1.7)) * .4;
-      cc = mix(cc, vec3(.93, .98, 1.) / uContrast, smoothstep(.42, .78, n) * e * uSpray.x);
-    }
-    c = mix(c, cc, a);
+  vec2 f = vec2((px.x - uFoam.x) / (uFoam.y - uFoam.x), (uFoam.w - px.y) / (uFoam.w - uFoam.z));
+  if (f.x > 0. && f.x < 1. && f.y > 0. && f.y < 1.) {
+    float e = smoothstep(0., .18, f.x) * smoothstep(1., .82, f.x) * smoothstep(1., .45, f.y) * smoothstep(0., .12, f.y);
+    float t = mod(uTime * uSpray.y, 64.);
+    float n = arNoise(vec2(f.x * 26., f.y * 7. - t)) * .6 + arNoise(vec2(f.x * 61. + 7., f.y * 16. - t * 1.7)) * .4;
+    c = mix(c, vec3(.93, .98, 1.) / uContrast, smoothstep(.42, .78, n) * e * uSpray.x);
   }
-  c = (c - .5) * uContrast + .5 + uLift;
-  vec2 um = arAt(d, uZ.z, uMistRect);
-  if (um.y > 0. && um.y < 1.) {
-    float ma = texture2D(uMist, vec2(um.x * uMistRep + mod(uTime * uMistDrift, 1.), um.y)).r * uMistOpacity;
-    c = mix(c, uMistColor, ma * smoothstep(0., .08, um.x) * smoothstep(1., .92, um.x));
-  }
-  gl_FragColor = vec4(c, 1.);
-}`;
+  gl_FragColor = vec4(arGrade(c), a);
+}`};
 
 // Render-only generator (mulberry32 on AR.seed), so the arena is built the same every time.
 function arRand() {
@@ -91,33 +81,32 @@ function arRand() {
   return ((t ^ t >>> 14) >>> 0) / 4294967296;
 }
 
-// Loads the layers, builds the arena from def (a CFG.arenas entry) and adds it to the scene. Resolves when the
+// Loads the planes, builds the arena from def (a CFG.arenas entry) and adds it to the scene. Resolves when the
 // textures are decoded.
 function arenaBuild(def) {
-  AR.def = def; AR.seed = 11;
+  AR.def = def; AR.seed = 11; AR.mats = [];
   const g = ARENA.group = new THREE.Group();
   g.name = 'arena';
-  const keys = ['sky.jpg', 'cliffs.jpg', 'cliffs_aw.png', 'mist.png'].map(k => 'arena/cascata_' + k);
-  return Promise.all(keys.map(rdTexture)).then(([sky, cliffs, aw, mist]) => {
-    for (const t of [sky, cliffs, aw]) {   // seen at about their own size: no mipmaps (cheaper, and WebGL1 has none for them)
+  const keys = ['atlas.jpg', 'atlas_m.png', 'mist.png'].map(k => 'arena/cascata_' + k);
+  return Promise.all(keys.map(rdTexture)).then(([col, msk, mist]) => {
+    for (const t of [col, msk]) {   // seen at about their own size: no mipmaps (cheaper, and WebGL1 has none for them)
       t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     }
     mist.wrapS = THREE.RepeatWrapping;
     f3Shared();
-    arLayers(def, sky, cliffs, aw, mist);
+    arLayers(def, col, msk, mist);
     const M = arMesh();   // terrace, column and props: one mesh and one outline (each draw costs, on phones too)
     arTerrace(def, M);
     AR.props = [M.p.length / 3]; arProps(def, M); AR.props.push(M.p.length / 3);   // the props' vertices (for the tests)
     const G = arMesh(); arGrass(def, G);
     const stone = arStoneTex(); stone.minFilter = THREE.LinearFilter; stone.generateMipmaps = false;   // seen magnified
     arToon(M, stone, def.terrace.line, 'stone', G);
-    scene.add(g);
-    for (const t of [sky, cliffs, aw, mist]) renderer.initTexture(t);
-    renderer.compile(AR.bgScene, AR.bgCam);
+    scene.add(g, ARENA.far);
+    for (const t of [col, msk, mist]) renderer.initTexture(t);
   });
 }
 
-// --- Far layers ---
+// --- Far planes ---
 // The flat backdrop's placement on the ref screen at the start camera, as (painting u, v) -> screen uv: {px, py, su, sv}.
 function arRefPlace(def) {
   const r = def.ref, [iw, ih] = r.img, W = r.w, H = r.h, gy = CFG.cam.footScreen * H;
@@ -133,48 +122,94 @@ function arPaintToWorld(def, P, u, v, z) {
   return [((u - P.px) / P.su * 2 - 1) * L * t * asp, y0 + ((v - P.py) / P.sv * 2 - 1) * L * t];
 }
 
-// The rect (x0, y0, x1, y1, metres) at depth z of the layer whose painting box (in layer uv) is box = {u0, u1, v0, v1}.
-function arLayerRect(def, P, box, z) {
-  const pu = U => (U - box.u0) / (box.u1 - box.u0), pv = V => (V - box.v0) / (box.v1 - box.v0);
-  return arPaintToWorld(def, P, pu(0), pv(0), z).concat(arPaintToWorld(def, P, pu(1), pv(1), z));
+// The rect (x0, y0, x1, y1, metres) at depth z of a painting box (x0, y0, x1, y1 painting px, y down).
+function arBoxRect(def, P, b, z) {
+  const [iw, ih] = def.ref.img;
+  return arPaintToWorld(def, P, b[0] / iw, 1 - b[3] / ih, z).concat(arPaintToWorld(def, P, b[2] / iw, 1 - b[1] / ih, z));
 }
 
-function arLayers(def, sky, cliffs, aw, mist) {
-  const P = arRefPlace(def), meta = ASSETS['arena/cascata_layers.json'], L = def.layers, m = def.mist, ih = def.ref.img[1];
-  const sr = arLayerRect(def, P, meta.sky, L.sky), cr = arLayerRect(def, P, meta.cliffs, L.cliffs);
-  // Mist: painting rows mist.rows projected at its depth, as wide as the cliffs' rect there.
-  const [, ytop] = arPaintToWorld(def, P, .5, 1 - m.rows[0] / ih, L.mist), [, ybot] = arPaintToWorld(def, P, .5, 1 - m.rows[1] / ih, L.mist);
-  const mw = (cr[2] - cr[0]) * (CFG.cam.distMax - L.mist) / (CFG.cam.distMax - L.cliffs), mr = [-mw / 2, ybot, mw / 2, ytop];
-  const mc = new THREE.Color().fromArray(meta.mistColor);
-  mc.r = Math.min(1, mc.r + m.lift); mc.g = Math.min(1, mc.g + m.lift); mc.b = Math.min(1, mc.b + m.lift);
-  const T = def.terrace, v4 = r => new THREE.Vector4(...r), U = v => ({value: v});
-  ARENA.waterMat = new THREE.ShaderMaterial({vertexShader: AR_BG_VERT, fragmentShader: AR_BG_FRAG, depthTest: false,
-    depthWrite: false, uniforms: {uSky: U(sky), uCliffs: U(cliffs), uAW: U(aw), uMist: U(mist),
-      uCam: U(new THREE.Vector3()), uTan: U(new THREE.Vector2()), uZ: U(new THREE.Vector3(L.sky, L.cliffs, L.mist)),
-      uSkyRect: U(v4(sr)), uCliffRect: U(v4(cr)), uMistRect: U(v4(mr)),
-      uScale: U(new THREE.Vector2(1 / (meta.cliffs.u1 - meta.cliffs.u0), 1 / (meta.cliffs.v1 - meta.cliffs.v0))),
-      uTime: U(0), uContrast: U(def.contrast), uLift: U(def.lift), uFlow: U(def.flow), uStreak: U(def.streak),
-      uWobble: U(def.wobble), uSkyOff: U(0), uMistColor: U(mc), uMistDrift: U(m.drift), uMistOpacity: U(m.opacity),
-      uMistRep: U(Math.max(1, Math.round(mw / 30))), uWater: U(new THREE.Vector3(def.water.rate, def.water.len, def.water.mix)),
-      uSpray: U(new THREE.Vector2(def.water.spray, def.water.sprayRate)), uFoam: U(arFoamRect(def, meta.cliffs)),
-      uCrest: U(new THREE.Vector2(...def.water.crest.map(r => meta.cliffs.v0 + (1 - r / def.ref.img[1]) * (meta.cliffs.v1 - meta.cliffs.v0)))), uCover: U(T.back - T.lip[0] + .05), uGround: U(new THREE.Color(0x4a3f3a))}});
-  const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ARENA.waterMat);
-  bg.frustumCulled = false; bg.name = 'far';
-  AR.bgScene.add(bg);
-  ARENA.layers = {bg, rects: {sky: sr, cliffs: cr, mist: mr}};
+// One far mesh at depth z: a quad per entry of quads ({rect: the plane's rect, f: the quad in the plane's uv, uv: in
+// the atlas}), with atlas uv and plane uv per vertex.
+function arFarMesh(name, quads, z, mat, order) {
+  const p = [], uv = [], au = [], idx = [];
+  for (const q of quads) {
+    const [x0, y0, x1, y1] = q.rect, f = q.f, o = p.length / 3, X = k => x0 + (x1 - x0) * k, Y = k => y0 + (y1 - y0) * k;
+    p.push(X(f[0]), Y(f[1]), z, X(f[2]), Y(f[1]), z, X(f[2]), Y(f[3]), z, X(f[0]), Y(f[3]), z);
+    uv.push(q.uv[0], q.uv[1], q.uv[2], q.uv[1], q.uv[2], q.uv[3], q.uv[0], q.uv[3]);
+    au.push(f[0], f[1], f[2], f[1], f[2], f[3], f[0], f[3]);
+    idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('aU', new THREE.Float32BufferAttribute(au, 2));
+  g.setIndex(idx);
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.name = name; mesh.renderOrder = order; mesh.frustumCulled = false;
+  ARENA.far.add(mesh);
+  return mesh;
 }
 
-// The spray's rect (painting px [x0, x1, row0, row1]) in cliffs-layer uv (v from the bottom): x0, v0, x1, v1.
-function arFoamRect(def, b) {
-  const [iw, ih] = def.ref.img, [x0, x1, r0, r1] = def.water.foam, U = x => b.u0 + x / iw * (b.u1 - b.u0), V = r => b.v0 + (1 - r / ih) * (b.v1 - b.v0);
-  return new THREE.Vector4(U(x0), V(r1), U(x1), V(r0));
+// A far material of kind (AR_FAR_FRAG), with the shared uniforms and its own. core = for the opaque cores (drawn
+// first, near to far, writing depth); otherwise blended, far to near, and only where nothing nearer is (depth Less:
+// not over its own core either).
+function arFarMat(kind, uni, core) {
+  const d = AR.def, U = v => ({value: v});
+  const m = new THREE.ShaderMaterial({vertexShader: AR_FAR_VERT, fragmentShader: AR_FAR_HEAD + AR_FAR_FRAG[kind],
+    transparent: !core, depthWrite: !!core, uniforms: Object.assign({uC: U(AR.tex[0]), uM: U(AR.tex[1]), uMist: U(AR.tex[2]),
+      uTime: U(0), uContrast: U(d.contrast), uLift: U(d.lift)}, uni)});
+  if (!core) m.depthFunc = THREE.LessDepth;
+  AR.mats.push(m);
+  return m;
 }
 
-// Draws the far layers through the camera as it is now (with any shake), before the 3D scene.
-function arenaDrawBack() {
-  const u = ARENA.waterMat.uniforms, t = Math.tan(camera.fov * Math.PI / 360);
-  u.uCam.value.copy(camera.position); u.uTan.value.set(t * camera.aspect, t);
-  renderer.render(AR.bgScene, AR.bgCam);
+// A plane group's quads: its strips, or the opaque cores of its strips.
+function arQuads(pls, cores) {
+  return pls.flatMap(pl => pl.strips.flatMap(st => cores ? st.cores.map(c => ({rect: pl.rect, f: c.f, uv: c.uv}))
+    : [{rect: pl.rect, f: st.f, uv: st.uv}]));
+}
+
+function arLayers(def, col, msk, mist) {
+  const P = arRefPlace(def), meta = ASSETS['arena/cascata_layers.json'], k = CFG.cam, [iw, ih] = def.ref.img, U = v => ({value: v});
+  AR.tex = [col, msk, mist];
+  ARENA.far = new THREE.Group(); ARENA.far.name = 'far';
+  const planes = meta.planes.map(p => ({name: p.name, z: def.layers[p.name], box: p.box, strips: p.strips,
+    rect: arBoxRect(def, P, p.box, def.layers[p.name])}));
+  const at = st => new THREE.Vector4(st.uv[0], st.uv[1], st.uv[2] - st.uv[0], st.uv[3] - st.uv[1]);
+  // One pair of meshes per depth: the opaque cores (renderOrder after the near scene, nearest first) and the whole
+  // strips blended over them (renderOrder = depth: far to near); the sky is opaque, cores only.
+  const byZ = new Map();
+  for (const pl of planes) { if (!byZ.has(pl.z)) byZ.set(pl.z, []); byZ.get(pl.z).push(pl); }
+  const zs = [...byZ.keys()].sort((a, b) => b - a);
+  for (const z of zs) {
+    const pls = byZ.get(z), name = pls.map(p => p.name).join('+'), rank = 10 + zs.indexOf(z);
+    if (name === 'sky') {
+      AR.skyK = iw / (pls[0].box[2] - pls[0].box[0]);
+      const st = pls[0].strips[0];
+      arFarMesh('sky', [{rect: pls[0].rect, f: st.f, uv: st.uv}], z, arFarMat('sky', {uAt: U(at(st)), uSkyOff: U(0)}, true), rank);
+      continue;
+    }
+    const W = def.water, uni = name === 'falls' ? () => ({uBox: U(new THREE.Vector4(...pls[0].box)), uAt: U(at(pls[0].strips[0])),
+      uFoam: U(new THREE.Vector4(...W.foam)), uWater: U(new THREE.Vector3(W.rate, W.len, W.mix)),
+      uSpray: U(new THREE.Vector2(W.spray, W.sprayRate)), uCrest: U(new THREE.Vector2(...W.crest)),
+      uPaint: U(new THREE.Vector2(iw, ih)), uFlow: U(def.flow), uStreak: U(def.streak), uWobble: U(def.wobble)}) : () => ({});
+    const kind = name === 'falls' ? 'water' : 'plane';
+    arFarMesh(name + '.core', arQuads(pls, true), z, arFarMat(kind, uni(), true), rank);
+    const edge = arFarMesh(name, arQuads(pls, false), z, arFarMat(kind, uni()), Math.round(z));
+    if (name === 'falls') ARENA.waterMat = edge.material;
+  }
+  // Mist banks: painting rows projected at their depth, wide enough for the widest view there.
+  const mc = new THREE.Color().fromArray(meta.mistColor), lift = def.mistLift, mists = [];
+  mc.r = Math.min(1, mc.r + lift); mc.g = Math.min(1, mc.g + lift); mc.b = Math.min(1, mc.b + lift);
+  for (const m of def.mists) {
+    const [, ytop] = arPaintToWorld(def, P, .5, 1 - m.rows[0] / ih, m.z), [, ybot] = arPaintToWorld(def, P, .5, 1 - m.rows[1] / ih, m.z);
+    const half = (k.distMax - m.z) * Math.tan(k.fov * Math.PI / 360) * def.view.aspect + k.xMax + 2, rect = [-half, ybot, half, ytop];
+    const mat = arFarMat('mist', {uColor: U(mc), uRep: U(Math.max(1, Math.round(2 * half / 30))), uDrift: U(m.drift), uOpacity: U(m.opacity)});
+    arFarMesh('mist' + m.z, [{rect, f: [0, 0, 1, 1], uv: [0, 0, 1, 1]}], m.z, mat, Math.round(m.z));
+    mists.push({z: m.z, rect});
+  }
+  planes.sort((a, b) => b.z - a.z);
+  ARENA.layers = {planes: planes.map(p => ({name: p.name, z: p.z, rect: p.rect, box: p.box})), mists};
 }
 
 // --- Geometry helpers ---
@@ -484,9 +519,11 @@ function arClothSync() {
 
 // Once per drawn frame: water, clouds, mist (time only) and the banner (fixed 1/60 s steps of the drawn time).
 function arenaStep(nowMs, S) {
-  const d = AR.def, t = nowMs / 1000, u = ARENA.waterMat.uniforms;
-  u.uTime.value = t;
-  u.uSkyOff.value = d.skyDrift * Math.sin(t * 6.2831853 / d.skyPeriod);
+  const d = AR.def, t = nowMs / 1000;
+  for (const m of AR.mats) {
+    m.uniforms.uTime.value = t;
+    if (m.uniforms.uSkyOff) m.uniforms.uSkyOff.value = d.skyDrift * AR.skyK * Math.sin(t * 6.2831853 / d.skyPeriod);
+  }
   if (!AR.cloth) return;
   if (AR.last < 0 || nowMs < AR.last || nowMs - AR.last > 1000) AR.last = nowMs;   // first frame, a reset or a long pause
   let n = Math.floor((nowMs - AR.last) * .06);
@@ -495,8 +532,8 @@ function arenaStep(nowMs, S) {
 
 // Draw calls and triangles of the arena group as it is (visible meshes; instanced meshes count once).
 function arStats() {
-  let draws = 1, tris = 2;   // the far layers' quad
-  ARENA.group.traverse(o => {
+  let draws = 0, tris = 0;
+  for (const grp of [ARENA.group, ARENA.far]) grp.traverse(o => {
     if (!o.isMesh || !o.visible) return;
     const g = o.geometry, n = g.index ? g.index.count : g.attributes.position.count;
     draws++; tris += n / 3 * (o.isInstancedMesh ? o.count : 1);

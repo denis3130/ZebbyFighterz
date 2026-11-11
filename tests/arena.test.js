@@ -24,7 +24,7 @@ T.test('no holes at the camera extremes', () => {
       view(...VIEWS[k]);
       for (const [sx, sy] of [[0, 0], [.15, .15], [-.15, -.15], [.15, -.15], [-.15, .15]]) {
         V.camera.position.x = V.cam.x + sx; V.camera.position.y = V.cam.y + sy; V.camera.updateMatrixWorld();
-        V.renderer.clear(); V.arenaDrawBack(); V.renderer.render(V.scene, V.camera);
+        V.renderer.clear(); V.renderer.render(V.scene, V.camera);
         for (const [u, v] of EDGE) { const p = readAt(u, v); T.ok(!(p[0] > 240 && p[1] < 20 && p[2] > 240), k + ' shake ' + sx + ',' + sy + ' hole at ' + u + ',' + v); }
       }
     }
@@ -32,20 +32,21 @@ T.test('no holes at the camera extremes', () => {
 });
 
 T.test('depth: near moves more than far', () => {
-  const V = __VF, z = V.ARENA.waterMat.uniforms.uZ.value, d = AD();
-  T.eq([z.x, z.y, z.z].join(), [d.layers.sky, d.layers.cliffs, d.layers.mist].join(), 'layer depths');
+  const V = __VF, d = AD(), pl = V.ARENA.layers.planes;
+  T.eq(pl.map(p => p.name).join(), 'LF,FL,FR,UL,UR,falls,haze,sky', 'planes nearest first');
+  for (const p of pl) T.eq(p.z, d.layers[p.name], p.name + ' depth');
   view(-1200, 1200, 0);
-  const pts = [[d.column.x, 2, d.column.z], [0, 5, d.layers.cliffs], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
+  const pts = [[d.column.x, 2, d.column.z], [0, 5, d.layers.LF], [0, 5, d.layers.UL], [0, 5, d.layers.falls], [0, 5, d.layers.haze], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
   const a = at(); V.camera.position.x += 1; V.camera.updateMatrixWorld(); const b = at(); view(-1200, 1200, 0);
   const m = a.map((x, i) => Math.abs(b[i] - x));
-  T.ok(m[0] > m[1] && m[1] > m[2] && m[2] > 0, 'screen shift column > cliffs > sky: ' + m.map(x => x.toFixed(1)));
+  T.ok(m.every((x, i) => i === 0 || (x < m[i - 1] && x > 0)), 'screen shift column > forest > high cliffs > falls > haze > sky: ' + m.map(x => x.toFixed(1)));
 });
 
 T.test('water flows, stone does not', () => {
   const V = __VF, d = AD(), P = V.arRefPlace(d); V.ARENA.leaves.visible = false; V.F3D.forEach(f => f.root.visible = false);
   try {
     view(-1200, 1200, 0);
-    const w = V.arPaintToWorld(d, P, 900 / 1672, 1 - 420 / 941, d.layers.cliffs), ws = V.toScreen(w[0], w[1], d.layers.cliffs);
+    const w = V.arPaintToWorld(d, P, 900 / 1672, 1 - 420 / 941, d.layers.falls), ws = V.toScreen(w[0], w[1], d.layers.falls);
     const st = V.toScreen(V.cam.x + .8, 0, 1.2), u = [ws.x / innerWidth, ws.y / innerHeight], su = [st.x / innerWidth, st.y / innerHeight];
     T.ok(u[0] > 0 && u[0] < 1 && u[1] > 0 && u[1] < 1, 'waterfall on screen');
     V.renderFrame(V.G.S, 3000); const a = readAt(...u), s = readAt(...su);
@@ -102,9 +103,9 @@ T.test('arena within 25 draws and 25000 triangles', () => {
   T.ok(s.draws <= 25, s.draws + ' draws'); T.ok(s.tris <= 25000, s.tris + ' triangles');
 });
 
-T.test('far layers without mipmaps (none on WebGL1 for them, and not needed)', () => {
+T.test('far planes without mipmaps (none on WebGL1 for them, and not needed)', () => {
   const u = __VF.ARENA.waterMat.uniforms;
-  for (const k of ['uSky', 'uCliffs', 'uAW']) { const t = u[k].value; T.eq(t.generateMipmaps, false, k); T.eq(t.minFilter, THREE.LinearFilter, k); }
+  for (const k of ['uC', 'uM']) { const t = u[k].value; T.eq(t.generateMipmaps, false, k); T.eq(t.minFilter, THREE.LinearFilter, k); }
 });
 
 T.test('render does not change the sim', () => { const h = __VF.simHash(__VF.G.S); __VF.renderFrame(__VF.G.S, 0); __VF.arenaStep(5000, __VF.G.S); T.eq(__VF.simHash(__VF.G.S), h); });
