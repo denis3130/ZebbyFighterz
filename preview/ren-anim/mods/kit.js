@@ -517,11 +517,12 @@ rkAddMove('ps', {
 
 // --- The viewer: the plays, the game's speed, a floor grid, the fighter carried along his steps ---
 VW_PLAYS.length = 0;
-VW_PLAYS.push(['Guardia elastica', [['idle', 2 * RK.loop]]],
+// (short labels on the buttons, so all seven fit on a phone; the full name shows top right while it plays)
+VW_PLAYS.push(['Guardia', [['idle', 2 * RK.loop]]],
   ['Passo radente', [['idle', 40], ['pr', RK.len.pr], ['idle', 50]]],
-  ['Palmo a scatto', [['idle', 40], ['palm', RK.len.palm], ['idle', 50]]],
-  ['Gomito spezzaguardia', [['idle', 40], ['elbow', RK.len.elbow], ['idle', 50]]],
-  ['Deviazione circolare', [['idle', 40], ['dev', RK.len.dev], ['idle', 50]]],
+  ['Palmo', [['idle', 40], ['palm', RK.len.palm], ['idle', 50]]],
+  ['Gomito', [['idle', 40], ['elbow', RK.len.elbow], ['idle', 50]]],
+  ['Deviazione', [['idle', 40], ['dev', RK.len.dev], ['idle', 50]]],
   ['Calcio a frusta', [['idle', 40], ['kick', RK.len.kick], ['idle', 50]]],
   ['Passo spezzato', [['idle', 40], ['ps', RK.len.ps], ['idle', 50]]]);
 Object.assign(VW_NAMES, {idle: 'Guardia elastica', pr: 'Passo radente', palm: 'Palmo a scatto'});
@@ -563,6 +564,10 @@ RN.hooks.boot.push(VW => {
     b.innerHTML = '<span>Sfondo: ' + (v === 'neutro' ? 'neutro' : 'cascata') + '</span>';
   };
   b.addEventListener('click', () => set(RK.show === 'neutro' ? 'cascata' : 'neutro')); row.appendChild(b); set('neutro');
+  // every move's button in view on a phone too: the row wraps instead of scrolling sideways (the viewer's phone style
+  // scrolls it, with no bar: the last buttons were out of sight), then the picture fits the space left above it
+  const css = document.createElement('style'); css.textContent = '#moves{flex-wrap:wrap!important;overflow-x:visible!important}'; document.head.appendChild(css);
+  dispatchEvent(new Event('resize'));
 });
 RN.hooks.applied.push((it, F) => { if (rkRoot(F.act)) it.root.position.x = rkX(F, F.af) / 1000; });   // (the sash's simulation: where the body is)
 RN.hooks.draw.push((VW, dt) => {
