@@ -25,6 +25,9 @@ uniform vec3 uCam, uZ, uMistColor, uGround;
 uniform vec2 uTan, uScale;
 uniform vec4 uSkyRect, uCliffRect, uMistRect;
 uniform float uTime, uContrast, uLift, uFlow, uStreak, uWobble, uSkyOff, uMistDrift, uMistOpacity, uMistRep, uCover;
+uniform vec4 uFoam;
+uniform vec3 uWater;
+uniform vec2 uSpray, uCrest;
 varying vec2 vS;
 float arHash(vec2 p){ p = 50. * fract(p * .3183099 + vec2(.71, .113)); return fract(p.x * p.y * (p.x + p.y)); }
 float arNoise(vec2 p){
@@ -49,8 +52,27 @@ void main(){
   if (a > .004) {
     float m = aw.g;
     vec2 p = uc * uScale;
-    vec3 cc = texture2D(uCliffs, uc + vec2(0., sin(p.x * 90. + mod(uTime * 3., 6.2831853)) * uWobble * m / uScale.y)).rgb;
-    if (m > .004) cc += m * (arNoise(vec2(p.x * 140., p.y * 6. + mod(uTime * uFlow * 6., 64.))) - .5) * uStreak / uContrast;
+    vec2 sh = uc + vec2(0., sin(p.x * 90. + mod(uTime * 3., 6.2831853)) * uWobble * m / uScale.y);
+    vec3 cc = texture2D(uCliffs, sh).rgb;
+    if (m > .004) {
+      // The painted water slides down: two copies, half a cycle apart, each sampled from higher up as its cycle runs;
+      // each fades out as it jumps back (weights 1 - |2ph - 1| and the rest), so no seam ever shows.
+      // A copy counts only where it samples water too (near the crest it would pull down the sky above).
+      float ph = fract(uTime * uWater.x), wa = 1. - abs(2. * ph - 1.);
+      vec2 sa = sh + vec2(0., ph * uWater.y), sb = sh + vec2(0., fract(ph + .5) * uWater.y);
+      float ka = wa * texture2D(uAW, sa).g, kb = (1. - wa) * texture2D(uAW, sb).g;
+      vec3 fl = texture2D(uCliffs, sa).rgb * ka + texture2D(uCliffs, sb).rgb * kb + cc * (1. - ka - kb);
+      cc = mix(cc, fl, m * uWater.z * smoothstep(uCrest.x, uCrest.y, uc.y));
+      cc += m * (arNoise(vec2(p.x * 140., p.y * 6. + mod(uTime * uFlow * 6., 64.))) - .5) * uStreak / uContrast;
+    }
+    // Spray at the foot: rising, boiling puffs of white, fading out to the rect's edges.
+    vec2 f = (uc - uFoam.xy) / (uFoam.zw - uFoam.xy);
+    if (f.x > 0. && f.x < 1. && f.y > 0. && f.y < 1.) {
+      float e = smoothstep(0., .18, f.x) * smoothstep(1., .82, f.x) * smoothstep(1., .45, f.y) * smoothstep(0., .12, f.y);
+      float t = mod(uTime * uSpray.y, 64.);
+      float n = arNoise(vec2(f.x * 26., f.y * 7. - t)) * .6 + arNoise(vec2(f.x * 61. + 7., f.y * 16. - t * 1.7)) * .4;
+      cc = mix(cc, vec3(.93, .98, 1.) / uContrast, smoothstep(.42, .78, n) * e * uSpray.x);
+    }
     c = mix(c, cc, a);
   }
   c = (c - .5) * uContrast + .5 + uLift;
@@ -133,11 +155,19 @@ function arLayers(def, sky, cliffs, aw, mist) {
       uScale: U(new THREE.Vector2(1 / (meta.cliffs.u1 - meta.cliffs.u0), 1 / (meta.cliffs.v1 - meta.cliffs.v0))),
       uTime: U(0), uContrast: U(def.contrast), uLift: U(def.lift), uFlow: U(def.flow), uStreak: U(def.streak),
       uWobble: U(def.wobble), uSkyOff: U(0), uMistColor: U(mc), uMistDrift: U(m.drift), uMistOpacity: U(m.opacity),
-      uMistRep: U(Math.max(1, Math.round(mw / 30))), uCover: U(T.back - T.lip[0] + .05), uGround: U(new THREE.Color(0x4a3f3a))}});
+      uMistRep: U(Math.max(1, Math.round(mw / 30))), uWater: U(new THREE.Vector3(def.water.rate, def.water.len, def.water.mix)),
+      uSpray: U(new THREE.Vector2(def.water.spray, def.water.sprayRate)), uFoam: U(arFoamRect(def, meta.cliffs)),
+      uCrest: U(new THREE.Vector2(...def.water.crest.map(r => meta.cliffs.v0 + (1 - r / def.ref.img[1]) * (meta.cliffs.v1 - meta.cliffs.v0)))), uCover: U(T.back - T.lip[0] + .05), uGround: U(new THREE.Color(0x4a3f3a))}});
   const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ARENA.waterMat);
   bg.frustumCulled = false; bg.name = 'far';
   AR.bgScene.add(bg);
   ARENA.layers = {bg, rects: {sky: sr, cliffs: cr, mist: mr}};
+}
+
+// The spray's rect (painting px [x0, x1, row0, row1]) in cliffs-layer uv (v from the bottom): x0, v0, x1, v1.
+function arFoamRect(def, b) {
+  const [iw, ih] = def.ref.img, [x0, x1, r0, r1] = def.water.foam, U = x => b.u0 + x / iw * (b.u1 - b.u0), V = r => b.v0 + (1 - r / ih) * (b.v1 - b.v0);
+  return new THREE.Vector4(U(x0), V(r1), U(x1), V(r0));
 }
 
 // Draws the far layers through the camera as it is now (with any shake), before the 3D scene.
