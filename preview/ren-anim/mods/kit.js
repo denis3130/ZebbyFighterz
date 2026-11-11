@@ -138,7 +138,6 @@ const RK_PA = {
   head: rkMono([[0, 0], [5, 2], [9, -1], [28, 0]]),
   guard: rkMono([[0, 0], [3, 0], [8, 1], [14, 1], [24, 0]]),   // the rear hand up by the head
   back: rkMono([[12, 0], [16, .6], [28, 1]]),                  // the striking hand's way back to the guard
-  flat: [[0, 0], [4, .7], [7, 1], [13, 1], [22, 0]],           // the fist opening into a palm, then closing again
   phase: [[0, 'Caricamento'], [5, 'Spinta'], [10, 'Impatto'], [13, 'Recupero']],
 };
 RB.styleFor.palm = (y, F) => {
@@ -220,16 +219,74 @@ RB.post.push((md, p, F, S, y) => {
   if (RK.g.headYaw) mdBoneTurn(p, ix.Head, MD_Y, RK.g.headYaw);   // the eyes on the opponent
 });
 
-// --- Hands: the lead a closed fist and the rear half closed (Denis, 12/11); in the palm the striking (lead) hand opens,
-// fingers straight and together, the thumb tucked, and closes again in the recovery ---
+// --- Hands: the lead a closed fist and the rear half closed (Denis, 12/11). In the palm the lead fist snaps open as it
+// is drawn back: the thumb first, out of the way, then the fingers, index to little finger, each from its knuckle out
+// (the knuckle a little past straight, then back: the snap); on the impact the fingers press straight; in the recovery
+// the hand closes the other way round, little finger first, each from its tip, the thumb last over them. ---
+const RK_HAND = {
+  open: {at: 2.2, len: 2.4, finger: .25, joint: .45, snap: .16},   // frames: start, length, delay per finger / per joint; snap: the knuckle past straight
+  press: {at: 9.5, len: 3, k: .07},                             // on the impact the knuckles press a little past straight
+  close: {at: 12.6, len: 4.2, finger: .45, joint: .35},        // (closed before the hand turns back to point forward)
+  thumb: {open: [1.2, 2.6], close: [16.5, 3.5], lie: [.95, .3], tip: .15},   // when it moves (start, length); open, it lies along the
+                                                                // index (lie: shares along the hand and toward the index), its tip a little bent
+  together: .7,                                                 // the open fingers brought toward the middle one (share of their spread)
+  fist: 1, rear: .55,                                           // the guard's lead fist and the half closed rear hand
+};
+RK.hand = RK_HAND;   // (tests)
+const RK_FINGER = {Index: 0, Middle: 1, Ring: 2, Pinky: 3};
+const rkBump = (u) => u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u) ** 2;
+// How closed lead-hand finger bone n ('LeftHandIndex2') is at frame f of the palm: 1 fist .. 0 straight (< 0 past it);
+// for the thumb, 1 fist .. 0 lying along the index.
+function rkFingerK(n, f) {
+  const m = /(Thumb|Index|Middle|Ring|Pinky)(\d)/.exec(n), h = RK_HAND, joint = +m[2] - 1;
+  if (m[1] === 'Thumb') {
+    const t = h.thumb;
+    return f < 12 ? 1 - rkEase((f - t.open[0]) / t.open[1]) : rkEase((f - t.close[0]) / t.close[1]);
+  }
+  const j = RK_FINGER[m[1]];
+  if (f < 12.5) {   // (the press is over and every finger open: the closing starts from there)
+    const o = h.open, u = (f - o.at - o.finger * j - o.joint * joint) / o.len;
+    let k = 1 - rkEase(u);
+    if (!joint) k -= o.snap * rkBump((u - .55) / .9) + h.press.k * rkBump((f - h.press.at) / h.press.len);
+    return k;
+  }
+  const c = h.close;
+  return rkEase((f - c.at - c.finger * (3 - j) - c.joint * (2 - joint)) / c.len);
+}
+// The open lead thumb: its first bone turned (from the rest pose, where it points half out of the palm) to lie along
+// the side of the index finger, in the palm's plane. Found once per model from the hand's own bones.
+function rkThumbLie(it) {
+  if (it.rkThumb) return it.rkThumb;
+  const T = THREE, b = n => it.fingers.find(x => x.name === n), i1 = b('LeftHandIndex1'), p1 = b('LeftHandPinky1'), m1 = b('LeftHandMiddle1'), t2 = b('LeftHandThumb2');
+  const along = m1.position.clone().normalize(), side = i1.position.clone().sub(p1.position); side.addScaledVector(along, -side.dot(along)).normalize();
+  const want = along.multiplyScalar(RK_HAND.thumb.lie[0]).addScaledVector(side, RK_HAND.thumb.lie[1]).normalize();
+  return it.rkThumb = new T.Quaternion().setFromUnitVectors(t2.position.clone().normalize(), want);
+}
+// The open lead fingers together (a palm strike, not a spread hand): each finger's first bone turned toward the
+// middle finger's direction by RK_HAND.together of the angle between them (in the hand's frame; their rest pose spreads
+// them). Once per model.
+function rkFingerTogether(it, n) {
+  if (!it.rkTogether) {
+    const b = x => it.fingers.find(y => y.name === x), mid = b('LeftHandMiddle2').position.clone().normalize();
+    it.rkTogether = {};
+    for (const f of ['Index', 'Ring', 'Pinky']) {
+      const d = b('LeftHand' + f + '2').position.clone().normalize(), to = d.clone().lerp(mid, RK_HAND.together).normalize();
+      it.rkTogether['LeftHand' + f + '1'] = new THREE.Quaternion().setFromUnitVectors(d, to);
+    }
+  }
+  return it.rkTogether[n];
+}
 RN.hooks.applied.push((it, F) => {
   if (!it.fingers || !RN.on || !RK_OWN[F.act]) return;
-  const kL = 1, kR = .55, flat = F.act === 'palm' ? rkKey(RK_PA.flat, rkF(F, 'palm')) : 0;
+  const palm = F.act === 'palm', f = palm ? rkF(F, 'palm') : 0;
   for (let i = 0; i < it.fingers.length; i++) {
-    const n = it.fingers[i].name, left = /^Left/.test(n);
-    let k = left ? kL : kR;
-    if (left && flat) k += ((/Thumb/.test(n) ? .45 : 0) - k) * flat;
-    it.fingers[i].quaternion.copy(MD_Q1).slerp(it.fist[i], k);
+    const b = it.fingers[i], n = b.name, left = /^Left/.test(n);
+    const k = !left ? RK_HAND.rear : palm ? rkFingerK(n, f) : RK_HAND.fist;
+    const tog = left && palm && rkFingerTogether(it, n);
+    if (tog) b.quaternion.copy(tog).slerp(it.fist[i], k);   // (the open end: fingers together)
+    else if (left && palm && /Thumb1/.test(n)) b.quaternion.copy(rkThumbLie(it)).slerp(it.fist[i], k);   // (the open end: along the index)
+    else if (left && palm && /Thumb/.test(n)) b.quaternion.copy(MD_Q1).slerp(it.fist[i], RK_HAND.thumb.tip + (1 - RK_HAND.thumb.tip) * k);
+    else b.quaternion.copy(MD_Q1).slerp(it.fist[i], k);
   }
 });
 
