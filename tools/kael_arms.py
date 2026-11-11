@@ -46,11 +46,14 @@ import sheet_scan
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 REF = os.path.join(ROOT, 'docs', 'ref', 'personaggi')
 SIDE_YAW, SIDE_S = 30., 800.   # deg (the bust's three-quarter panels); px/m, a first guess of their scale
-# (name, sheet, the arms it paints, yaw (None: the scan's camera), the x range of its near arm's skin (px), purple tattoos)
-VIEWS = (('front', 'kael_nero.png', ('Left', 'Right'), None, None, False),
+# (name, sheet, the arms it paints, yaw (None: the scan's camera, of the sheet's panel PANEL[name], default its first), the x range of its near
+# arm's skin (px), purple tattoos). The front: the bust sheet's front panel (11/11: Denis's body sheets, purple tattoos; it was kael_nero.png's,
+# black ones)
+VIEWS = (('front', 'kael_busto_3viste.png', ('Left', 'Right'), None, None, True),
          ('back', 'kael_retro.png', ('Left', 'Right'), None, None, True),
          ('his right side', 'kael_busto_3viste.png', ('Right',), -SIDE_YAW, (0, 300), True),
          ('his left side', 'kael_busto_3viste.png', ('Left',), SIDE_YAW, (1474, 1774), True))
+PANEL = {'front': 1}
 ARM_W, HAND_W = .5, .2
 HOLE, HOLE_CELL, HOLE_SKIN = .02, .004, .6   # m: the neighbourhood, its cells; the share of skin in it
 SPECK, SPECK_SKIN = 400, .7                   # texels: a small bit in the texture; the share of skin around it
@@ -60,8 +63,10 @@ EDGE_IN = 3                                   # px: a drawing's arm's colours ou
 CLOSE = 7                                     # px: the drawing's lines and tattoos inside its skin (a closing)
 FIT = {'turn': (-12., 12., 1.), 'scale': (.85, 1.15, .02), 'shift': 40, 'fine': (1., .25, .02, .005)}   # deg, x, px
 FACE, FLAT, SHARP = (.3, .6), (.1, .45), 40.  # n . d: the paint's weight; the flat light's (as Ren's FLAT_BODY)
+TAT_VIEW = (.05,)                             # see the shoulders' tattoos in main()
 BASE = (246., 187., 146.)                     # the drawings' skin in light
-TATTOO, TATTOO_EDGE = (14., 13., 15.), 2      # the front's tattoo black; px of soft edge around the purple ones
+TATTOO, TATTOO_EDGE = None, 2                 # the tattoos' colour (None: as the sheets draw them, purple with their black outline; it was
+                                              # kael_nero.png's black, (14, 13, 15)); px of soft edge around the purple ones
 
 
 def smooth(e0, e1, x):
@@ -151,7 +156,8 @@ def main(pkg, debug=None):
     Sk = ndimage.uniform_filter(Sk, k); Al = ndimage.uniform_filter(Al, k)
     gi = tuple(np.clip(g, 0, np.array(shp) - 1).T)
     share = np.where(arm, Sk[gi] / np.maximum(Al[gi], 1e-6), 0)
-    hole = arm & (cl == 0) & (share > HOLE_SKIN) & (up > fo)
+    hole = arm & np.isin(cl, (0, 1)) & (share > HOLE_SKIN) & (up > fo)   # (dark or purple: Meshy's purple tattoo strokes too, which stayed
+    # beside the drawn bolt in pieces; 11/11)
     # (and in the texture, the small dark or purple bits that skin surrounds: Meshy's dashes by the bracers' bands)
     A2 = np.zeros((TS, TS), bool); A2[ys, xs] = arm; K2 = np.zeros((TS, TS), bool); K2[ys, xs] = skinish | hole
     lab, n = ndimage.label(A2 & ~K2); sz = np.bincount(lab.ravel()); small = np.zeros(n + 1, bool)
@@ -184,12 +190,12 @@ def main(pkg, debug=None):
     inc = sparse.csr_matrix((np.ones(I.size), (np.repeat(np.arange(nt), 3), wid[I].ravel())), shape=(nt, wid.max() + 1))
     adj = (inc @ inc.T).tocsr()   # (triangles sharing a corner, by its place: the UV pieces' seams split the vertices)
     scan = json.load(open(os.path.join(ROOT, 'docs', 'meshy', 'kael_scan.json')))
-    sheets = {}
+    sheets = {}; tat_dec = np.zeros(len(R), bool)
     Sc = np.full((len(VIEWS), len(R)), -np.inf); Co = np.zeros((len(VIEWS), len(R), 3)); dirs = []
     for vi, (vname, sheet, arms, yaw, near, purple) in enumerate(VIEWS):
         if sheet not in sheets: sheets[sheet] = drawing(sheet, purple)
         D, dc, tat, dreg = sheets[sheet]; H, W = D.shape[:2]
-        yaw = scan[sheet][0]['yaw'] if yaw is None else yaw; t = np.radians(yaw)
+        sp = scan[sheet][PANEL.get(vname, 0)]; yaw = sp['yaw'] if yaw is None else yaw; t = np.radians(yaw)
         r, d = np.array([np.cos(t), 0, -np.sin(t)]), np.array([np.sin(t), 0, np.cos(t)]); dirs.append((d, arms))
         dbg = D.copy() if debug else None
         for s in arms:
@@ -201,7 +207,7 @@ def main(pkg, debug=None):
                 lab, n = ndimage.label(Mm); return seen, lab == (np.argmax(np.bincount(lab.ravel())[1:]) + 1)
             lab, n = ndimage.label(dreg)
             if near is None:   # (the scan's camera; its arm: the drawing's piece the model's arm is most over)
-                cam = (scan[sheet][0]['s'], scan[sheet][0]['cx'], scan[sheet][0]['by']); seen, Mm = model_mask(cam)
+                cam = (sp['s'], sp['cx'], sp['by']); seen, Mm = model_mask(cam)
                 ov = np.bincount(lab[ndimage.binary_dilation(Mm, iterations=30)], minlength=n + 1); ov[0] = 0
                 Dm = lab == int(np.argmax(ov))
             else:              # (a three-quarter panel: its near arm, the biggest piece of skin there; the camera on it)
@@ -222,9 +228,11 @@ def main(pkg, debug=None):
                 vname, s.lower(), np.degrees(th), sc, tu, tv, 100 * iou, 100 * (Mm & Dm).sum() / (Mm | Dm).sum()))
             # the drawing's colour there: as drawn inside its arm, the nearest of its arm's colours outside it
             Dc = D.copy()
-            if purple:   # (its tattoos black, their soft edges too)
+            if purple and TATTOO is not None:   # (its tattoos black, their soft edges too)
                 tb = ndimage.binary_dilation(tat & Dm, iterations=TATTOO_EDGE) & Dm & (dc != 1)
                 Dc[tb | (tat & Dm)] = TATTOO
+            tz = ndimage.binary_dilation(tat & Dm, iterations=TATTOO_EDGE + 2)   # (the tattoo with its outline)
+            if purple and near is None: Dc[tz & Dm] = BASE   # (the shoulders' tattoos from their three-quarter panel alone: below)
             Din = ndimage.binary_erosion(Dm, iterations=EDGE_IN)   # (not its edge's soft blend into the outline)
             _, (iy, ix) = ndimage.distance_transform_edt(~Din, return_indices=True); Dc = np.where(Dm[..., None], Dc, Dc[iy, ix])
             # the texels of this arm this view sees, facing it
@@ -243,6 +251,19 @@ def main(pkg, debug=None):
             fx = np.clip(qu - x0, 0, 1)[:, None]; fy = np.clip(qv - y0, 0, 1)[:, None]
             Co[vi, sel] = (Dc[y0, x0] * (1 - fx) * (1 - fy) + Dc[y0, x0 + 1] * fx * (1 - fy) + Dc[y0 + 1, x0] * (1 - fx) * fy + Dc[y0 + 1, x0 + 1] * fx * fy)
             Sc[vi, sel] = face[sel]
+            if purple and near is not None and tz.any():   # (the tattoo as a decal from this panel, where it draws it: every texel of this arm
+                # it sees there, also at a slant (facing it over TAT_VIEW[0]), takes it over every other view; drawn by the front and the back
+                # views too, the bolts met off by a few px: in pieces with black strokes; Denis, 11/11)
+                st = (sd[s][R] > ARM_W) & vis & (face > TAT_VIEW[0]) & (up[R] > fo[R])
+                du, dv = pu[st] - cm[0], pv[st] - cm[1]
+                qu2 = cm[0] + tu + sc * (co * du - si * dv); qv2 = cm[1] + tv + sc * (si * du + co * dv)
+                xi, yi = np.clip(qu2.round().astype(int), 0, W - 1), np.clip(qv2.round().astype(int), 0, H - 1)
+                inn = tz[yi, xi]; ti = np.nonzero(st)[0][inn]
+                x0 = np.clip(np.floor(qu2[inn]).astype(int), 0, W - 2); y0 = np.clip(np.floor(qv2[inn]).astype(int), 0, H - 2)
+                fx = np.clip(qu2[inn] - x0, 0, 1)[:, None]; fy = np.clip(qv2[inn] - y0, 0, 1)[:, None]
+                Co[vi, ti] = (D[y0, x0] * (1 - fx) * (1 - fy) + D[y0, x0 + 1] * fx * (1 - fy) + D[y0 + 1, x0] * (1 - fx) * fy + D[y0 + 1, x0 + 1] * fx * fy)
+                Sc[vi, ti] = 10.; tat_dec[ti] = True
+                print('  the tattoo: %d texels' % len(ti))
             print('  %d texels it sees (%d facing it well)' % (int(sel.sum()), int((face[sel] > FACE[1]).sum())))
             if debug:
                 e = Mm & ~ndimage.binary_erosion(Mm, iterations=2); dbg[e] = (255, 0, 0)
@@ -251,6 +272,12 @@ def main(pkg, debug=None):
         if debug:
             os.makedirs(debug, exist_ok=True)
             Image.fromarray(dbg.astype(np.uint8)).save(os.path.join(debug, 'arms_%s.png' % vname.replace(' ', '_')))
+    # (the shoulders' tattoos from one view: the three-quarter panel of their side, where they are drawn whole, wherever it sees the shoulder
+    # and the upper arm well (TAT_VIEW: facing it over [0], the upper arm's bones over the forearm's). Chosen with the front and the back by
+    # how much they faced, the front's bolt and the side's met off by a few px: the tattoo in pieces with black strokes; Denis, 11/11)
+    for vi in range(len(VIEWS)):   # (the decal's texels: that view alone)
+        own = Sc[vi] >= 10.
+        Sc[:, own] = np.where(np.arange(len(VIEWS))[:, None] == vi, Sc[:, own], -np.inf)
     # each texel: the view it faces most (a narrow change to the next), over the skin in light where none faces it
     smax = Sc.max(0); seen_any = np.isfinite(smax)
     w = np.where(np.isfinite(Sc), np.exp(SHARP * (Sc - np.where(seen_any, smax, 0))), 0)

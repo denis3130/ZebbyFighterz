@@ -43,11 +43,14 @@ USE = {'retro': 'dark', 'gambe_fronte': 'shaft', 'gambe_dx': 'shaft', 'gambe_sx'
 SHAFT = (.195, .285)                             # m: the boots' shafts (bind pose's height), between their purple strap and the trousers' cuff
 ARM_SKIN = .45                                  # the arms' (shoulders' to hands') share of a texel's bones over this: its skin not repainted
 RECOLOUR = {(46, 45, 48): 'plum', (14, 13, 15): 'black'}   # tools/kael_fix.py's suit tones (lit, folds) -> the drawings'
-TAT = (.006, .5, 1, 20, .25, .003, 3, 30.)     # see the tattoos in main(): rim (m), its skin share, edge (texels); the least piece (texels), its inside's share;
+TAT = (.006, .5, 1, 20, .25, .003, 0, 12.)     # see the tattoos in main(): rim (m), its skin share, edge (texels); the least piece (texels), its inside's share;
                                                # the dark strokes beside them within [5] m, [6] rounds
+TAT_ZONE = (1.38, .14, 60)                     # the tattoos are the deltoids': a piece's middle over [0] m and over [1] m from the body's middle,
+                                               # at least [2] texels
 UPPER, BACK_FACING = .3, .5                    # the shoulders' and upper arms' bones' share; the back sheet: the least facing
 SPECK = (8., 1., 60.)                          # mm2: specks of a colour (cloth, lines) taken by what is around them; on the boots' shafts
 HAND = (.5, .5, .3, .5)                        # see the hands and the elbows in main()
+SASH_TOP = 1.16                                # m (bind pose): above it the purple pieces are flat purple
 BIG = (4, 200.)                                # the bracers', gloves' and boots' pieces: rounds of smoothing, the least piece (mm2)
 MAT = (25, 45, 40, 30., 150.)                        # Meshy's purple: blue over green by [0], blue over [1], red under blue plus [2]; pieces under [3] mm2 as around them
 SMOOTH = (2, 1)                                # rounds of the pieces' smoothing (wide), of the colours' borders (near)
@@ -133,13 +136,17 @@ def main(pkg, debug=None):
     CL = np.zeros((TS, TS), np.uint8); CL[ys, xs] = sheet_scan.classes(cur); RI = -np.ones((TS, TS), np.int64); RI[ys, xs] = np.arange(len(ks))
     lab, nl = ndimage.label(UP & (CL == 3), structure=np.ones((3, 3)))
     ui_ = np.nonzero(use & upper)[0]; tr = cKDTree(pos[ui_]); skin_u = sheet_scan.classes(cur[ui_]) == 1
-    tat = np.zeros((TS, TS), bool); nt = 0
+    tat = np.zeros((TS, TS), bool); shade = np.zeros((TS, TS), bool); nt = 0
     for i, sl in enumerate(ndimage.find_objects(lab), 1):
         me = lab[sl] == i
         if me.sum() < TAT[3] or ndimage.binary_erosion(me).sum() < TAT[4] * me.sum(): continue   # (not the muscles' thin lines: no inside)
         rows = RI[sl][me]; near = np.unique(np.concatenate(tr.query_ball_point(pos[rows][::max(1, len(rows) // 200)], TAT[0])))
         near = near[~np.isin(ui_[near], rows)]
-        if len(near) and skin_u[near].mean() >= TAT[1]: tat[sl] |= me; nt += 1
+        if len(near) and skin_u[near].mean() >= TAT[1]:
+            pm = pos[rows].mean(0)
+            if pm[1] > TAT_ZONE[0] and abs(pm[0]) > TAT_ZONE[1] and me.sum() >= TAT_ZONE[2]: tat[sl] |= me; nt += 1
+            else: shade[sl] |= me   # (not on a deltoid, or a crumb: a dark blotch of the armpits', the elbows' or the biceps' shadows, made purple it was a
+            # purple island in the skin's shadow by the armpit; Denis, 11/11, circling it: the skin round it)
     # (and the dark strokes beside them (TAT[5] m) on the shoulders' and upper arms' skin: the tattoos' thin parts, left black, made the right
     # shoulder's tattoo a mix of purple shards and black strokes; Denis, 11/11, circling it)
     tr_t = np.nonzero(tat[ys, xs] & use)[0]
@@ -152,7 +159,10 @@ def main(pkg, debug=None):
             tat[ys[gr], xs[gr]] = True; tr_t = np.r_[tr_t, gr]; cd = cd[~np.isfinite(dd)]
     edge = tat & ~ndimage.binary_erosion(tat, iterations=TAT[2])
     tt = tat[ys, xs] & use; cur[tt] = PAL['purple']; te = edge[ys, xs] & use; cur[te] = PAL['purpleS']
-    print('body: %d pieces of the arms\' tattoos (%d texels) to the drawings\' purple' % (nt, int(tt.sum())))
+    shade = ndimage.binary_dilation(shade, iterations=TAT[2] + 1) & UP & (CL != 1) & ~tat   # (and its rim, a dark hook round it)
+    sd = np.nonzero(shade[ys, xs] & use & ~tt & ~te)[0]; sk_ = np.nonzero(use & upper & ~shade[ys, xs] & (sheet_scan.classes(cur) == 1))[0]
+    if len(sd) and len(sk_): cur[sd] = cur[sk_[cKDTree(pos[sk_]).query(pos[sd])[1]]]   # (the skin's colour nearest to each: its light or its shadow)
+    print('body: %d pieces of the arms\' tattoos (%d texels) to the drawings\' purple; %d texels of dark blotches off the deltoids to the skin\'s colour round them' % (nt, int(tt.sum()), len(sd)))
     print('body: %d texels painted from the views, %d recoloured to the palette' % (int(painted.sum()), int((use & ~painted).sum())))
     # 3. the flat colours, one piece's colours never over another's (Denis, 11/11, on the first repaint: "ci sei quasi alcuni colori si
     # sovrappongono ancora sul vestito"): kael_fix.py painted the folds black over the purple pieces as over the suit, and its purples
@@ -201,12 +211,21 @@ def main(pkg, debug=None):
     lab[big & on_p] = names.index('purple'); lab[sh_ & on_s] = names.index('plum')
     lab[on_p & pv] = names.index('purple')   # (the back sheet's shadows paint the suit, not the purple pieces: on them they were dark streaks
     # across the trousers' purple stripes behind)
+    # (as the bust sheet draws them (Denis, 11/11, circling the fists, the bracers and the chest): the gloves and the bracers' cloth flat plum,
+    # no black; the purple pieces above the sash flat purple, no shadow (their dark streaks); the sash and its tails keep their large folds)
+    gb = ((hw_ > HAND[1]) | (fa_ > .5)) & on_s & ~fing; lab[gb] = i_pl
+    lab[on_p & (pos[u_, 1] > SASH_TOP)] = i_pu
+    # (the shoulders' tattoos flat purple, as the sheets draw them: their dark purple blotches purple; and on the purple pieces by the shoulders
+    # (the collar's point over the right one) no skin: the arm's paint had put a notch of skin in its edge)
+    ua_sk = upper[u_] & (mat == 2); lab[ua_sk & (lab == i_ps)] = i_pu
+    is_sk2 = (lab == names.index('skin')) | (lab == names.index('skinS'))
+    flap = upper[u_] & (mat == 1) & is_sk2; lab[flap] = i_pu; keep &= ~flap
+    print('body: shoulders: %d texels of the tattoos\' purple, %d of skin on the collar\'s point to purple' % (int((ua_sk & (lab == i_pu)).sum()), int(flap.sum())))
     n1 = int((on_p & (lab == i_bk)).sum()) + int((on_p & (lab == i_pl)).sum()); n2 = int((on_s & ((lab == i_pu) | (lab == i_ps))).sum())
     lab[on_p & (lab == i_bk)] = i_ps; lab[on_p & (lab == i_pl)] = i_pu
     lab[on_s & (lab == i_pu)] = i_pl; lab[on_s & (lab == i_ps)] = i_bk
     print('body: %d texels of the suit\'s colours on the purple pieces, %d of the purples on the suit, to their own piece\'s' % (n1, n2))
-    # (the bracers' and the gloves' black only in large folds (SPECK[2]); in small ones they were blotches, Denis circling them
-    # pieces they were blotches, Denis circling them)
+    # (the bracers' and the gloves' black only in large folds (SPECK[2]); in small ones they were blotches, Denis circling them)
     lab[(lab == len(names)) & (mat == 1)] = i_ps; lab[(lab == len(names)) & (mat == 0)] = i_bk   # (no ink of its own: the lines are the outline's)
     # (the purple shards on the shoulders' and upper arms' skin, up to TAT[7] mm2, the tattoos' frayed bits among them: skin. By the right
     # shoulder's tattoo, under the collar's point, they were a fringe of purple slivers; Denis, 11/11, circling it)
