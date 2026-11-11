@@ -150,8 +150,9 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
   - **ciocche nascoste secondo la vista** (`side_hide`, nel gioco `mdHeadHide` in `src/e_model.js`): per ognuna delle
     4 immagini di lato, le ciocche di Meshy che da lì stanno davanti al viso dove l'immagine disegna pelle hanno un
     segno per vertice (`hv` nel pacchetto, `aHide`); lo shader le lascia fuori, con il loro contorno, quando la
-    telecamera è dove era quell'immagine (peso lineare tra un'immagine e la vicina, per l'angolo attorno alla testa
-    visto dall'osso Head: segue la testa anche nelle mosse; di fronte non si nasconde niente). Triangoli interi: i loro
+    telecamera è dove era quell'immagine (per l'angolo attorno alla testa visto dall'osso Head: segue la testa anche
+    nelle mosse; di fronte non si nasconde niente; dal 11/11 un insieme per lato e dissolvenza, vedi sotto "ciocche
+    nascoste, ora intere e senza scatti"). Triangoli interi: i loro
     vertici sono separati da quelli dei vicini (con le quote per vertice si tagliava anche la pelle accanto). Il viso
     dietro di loro è lo strato più arretrato tra quelli girati verso la telecamera (per colore il bianco degli occhi
     passava per capelli);
@@ -182,6 +183,71 @@ controlli), "si ok, usa queste 4". **Non pubblicata: le immagini vanno a Denis e
     righe scure che Meshy ha dipinto tra le ciocche hanno il contorno sottile dei capelli (`hairish`);
   - resta: sopra e davanti all'orecchio, visti di tre quarti, i capelli di Meshy sono più disordinati che
     nell'immagine (lì profilo e tre quarti disegnano cose diverse sugli stessi punti).
+- **Nuca, ciocca davanti, lobi e orecchini** (11/11, Denis cerchiandoli sulle immagini della guardia: "migliora le parti
+  cerchiate"). Per trovare le cause: quale passaggio ha dipinto ogni punto della texture (vedi "Come cercare un
+  difetto" qui sotto) e un controllo indipendente zona per zona, anche in movimento con la telecamera del gioco.
+  Cause e correzioni (`tools/kael_fringe.py`, `tools/kael_head.py`, `src/e_model.js`):
+  - **nuca e capelli dietro le orecchie**: `side_paint` dipingeva dalle immagini di profilo fino a dietro la testa;
+    lì i profili vedono i capelli di taglio (strisce) e disegnano il collo dove il modello ha le punte dei capelli
+    (pezzi color pelle sulle ciocche). Ora arriva fino a 105° attorno alla testa e sfuma in 15° (`SIDE_PAINT[3:5]`);
+    i capelli dietro l'orecchio non prendono mai la pelle delle immagini (`BEHIND_EAR`); l'immagine di dietro dà alla
+    nuca solo la sua pelle, non il bordo tra punte e collo;
+  - **macchie nere e strisce sul collo**: erano le righe di contorno delle immagini (il bordo della figura) e i
+    campioni presi di striscio. Ora una riga scura si prende solo da un'immagine che vede quel punto di fronte e non
+    dal bordo della figura (`LINE_RULE`), il collo solo da immagini che lo vedono bene (`NECK_FACING`), niente righe
+    scure sotto e dietro le orecchie (`UNDER_EAR`), e la pelle del collo non prende i capelli né i loro contorni
+    disegnati più in basso che nel modello (`NECK_SKIN`). La pelle del collo rimasta color capelli prende la pelle
+    vicina (`skin_fill` ora anche attorno al collo); sotto la mascella resta l'ombra nera del disegno;
+  - **"secondo orecchino" dipinto sul collo**: le immagini disegnano gli orecchini, che finivano dipinti sulla pelle
+    dietro quelli veri. Ora ogni immagine ha la maschera dei suoi orecchini (`jewel_mask`: i cristalli viola vicino
+    alla scatola dell'orecchino vero, con gancio e perlina sopra) e lì non dipinge;
+  - **punte dei capelli chiare e a pezzi**: un terzo dei capelli della nuca non è visto da nessuna immagine e restava
+    in due toni piatti lungo i bordi dei triangoli. Ora prende il colore dei capelli dipinti più vicini
+    (`HAIR_FILL`); il contorno della punta disegnata non viene più stampato a metà ciocca;
+  - **ripiano tra collo e colletto**: i triangoli che uniscono il collo al colletto allargato non erano dipinti da
+    nessun passaggio (pezzetto lilla). Ora hanno il colore della fodera e niente contorno (`COLLAR_SHELF`);
+  - **ciocca grande davanti alla fronte** (quella davanti al suo sopracciglio sinistro, 3 cm staccata dal viso):
+    aveva chiazze color pelle (presa dall'immagine di lato, dove dietro la ciocca non c'è niente), era tagliata per il
+    lungo (`face` toglieva le ciocche entro 4,6 cm dal centro e lei sta a cavallo: guscio aperto, nero lungo il
+    taglio, l'interno visto da destra), tagliata a moncone dalle viste di sinistra e a strisce (le righe dei capelli
+    del profilo dipinte di traverso). Ora `free_locks` trova le ciocche che pendono davanti al viso (pezzi di capelli
+    oltre 6 mm davanti al viso visto di fronte): quella libera (meno di metà dentro i 4,6 cm e oltre 2 cm staccata
+    vista di lato) resta intera, non viene dipinta dalle immagini (due lavanda puliti) e i suoi texel color pelle
+    prendono il colore dei capelli vicini (`LOCK_FILL`, anche per le altre ciocche in piedi);
+  - **ciocche nascoste, ora intere e senza scatti**: prima ogni immagine di lato aveva il suo insieme e lo shader li
+    scambiava di colpo a metà strada (a -47°, tra la guardia e la parata: una ciocca accanto all'occhio scattava a
+    ogni parata e lampeggiava camminando all'indietro); le ciocche erano tagliate dove l'immagine smette di
+    disegnare pelle (monconi sopra l'occhio, pezzi segati visti da dietro) e spariva il gancio dell'orecchino
+    sinistro. Ora c'è **un insieme per lato** (`hv` a 2 valori: nascosto dal suo lato destro, dal sinistro), le
+    ciocche davanti al viso si nascondono **intere o per niente** (`HIDE_WHOLE`), con loro i "piedi" appoggiati sulla
+    pelle accanto (`HIDE_FOOT`) e i pezzetti che resterebbero in aria, mai gli orecchini. La prova dei buchi non vale
+    per le ciocche intere né per i pezzetti sospesi (oltre il bordo del viso dietro non c'è niente, ma non è un buco). Nel gioco (`mdHeadHide`) il lato destro si nasconde quando la telecamera è oltre
+    -12,5° attorno alla testa, il sinistro oltre +11°, con 4° di gioco (isteresi) e una dissolvenza a puntini in
+    circa 6 fotogrammi (`mdHideShader`, `MD_HIDE`); un salto di oltre 40° in un fotogramma cambia subito;
+  - **macchia lilla nell'orecchio**: nelle scatole degli orecchini (`BUST['ears']`) anche le righe scure dell'orecchio
+    contavano come orecchino: dipinte color argento, e i triangoli vicini saltati dalla pittura dalle immagini. Ora
+    orecchino è solo ciò che pende dal lobo (`EAR_HANG`), più i pezzi del gancio lungo il suo asse (`EAR_AXIS`);
+    dentro l'orecchio si usa solo il profilo dove lo vede (i due disegni dell'orecchio non cadono nello stesso punto);
+  - **orecchini**: una luce sola li lasciava scuri da dietro e dal lato sinistro: ora ognuno è illuminato dal suo
+    lato esterno, davanti e dietro uguale. Sopra la punta del cristallo tutto è gancio e perlina, color argento
+    (`EAR_APEX`), qualunque colore avesse dato Meshy;
+  - **segni sulle guance e all'attaccatura**: i pezzetti di capelli rimasti appoggiati al viso fanno parte del viso,
+    dipinti come pelle e senza contorno (`SCRAP`); `skin_fill` in alto sulla fronte riempie solo triangoli con un
+    vertice di pelle (prima riempiva di pelle le righe scure tra i capelli alla radice della ciocca); la riga sotto il
+    mento dell'immagine di fronte non viene più dipinta sul sotto della mascella (`JAW_UNDER`: era una seconda riga);
+  - provato e lasciato: togliere i resti delle ciocche tolte sopra la fronte (i triangoli oltre 12 mm davanti al piano
+    della fronte): di profilo il ciuffetto sporgeva meno, ma da destra si apriva una chiazza di pelle tra i capelli;
+  - resta: il ciuffetto sfrangiato in alto davanti alla fronte visto di profilo (i resti delle ciocche tolte sopra
+    l'occhio destro); vicino alla coda delle sopracciglia, con le ciocche nascoste, qualche trattino lilla (la ciocca
+    dell'immagine di fronte e la coda del sopracciglio dei profili dipinte sugli stessi punti); la ciocca grande, vista di fronte e da destra, arriva fino alla guancia (da
+    sinistra è nascosta): se Denis vuole si può accorciare con la punta sopra il sopracciglio come l'altra, ma è un
+    cambio di forma e serve il suo ok.
+- **Come cercare un difetto** (strumenti di lavoro, non nel repository): registrare quale passaggio di
+  `tools/kael_head.py` ha scritto per ultimo ogni texel (avvolgendo `paint`, `side_paint`, `skin_fill` e confrontando
+  la texture prima e dopo), poi disegnare la testa in software da qualunque angolo colorando ogni pixel per passaggio o
+  per classe di Meshy (pelle, capelli, misto): si vede subito se una macchia viene da Meshy, dai capelli dipinti
+  dalle immagini, dal viso, dai lati o dal riempimento. Contare i texel "triangolo di capelli ma color pelle" per
+  passaggio dice quale regola correggere.
 - Provato e lasciato (`tools/kael_hair_fit.py`, `MODE`): rimodellare i capelli sulle sagome delle 6 immagini. Punto per
   punto alza la sovrapposizione al 86-90% ma fa una zazzera senza punte; tutta la criniera insieme ('radial', 'sweep')
   e le punte allungate ('spikes') guadagnano solo 1-3% e fanno punte sfrangiate. La forma resta quella di Meshy:

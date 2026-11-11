@@ -94,6 +94,11 @@ EAR_LINE, HAIR_LINE_W = .3, .4
 # from the highlight to the darkest (EAR_TONES) by its facets' light from EAR_LIGHT (over EAR_STEPS, dark to light); the
 # bead's and the hook's silver, lit and shaded
 EAR_RINGS, EAR_LIGHT, EAR_STEPS = 4, (-.35, .6, .7), (-.1, .35, .8)
+EAR_HANG = (.1, .02)   # (see main: the earrings' pieces; bust units, .1 = 16 mm)
+EAR_AXIS = (.037, .08, .12)   # (see main: the hook's own pieces within [0] of the earring's axis, taken over its top [1], from [2] under its top; bust units)
+EAR_APEX = (.015, .009, .003, .004)   # (see main: the crystal's point: within [0] m over the earring's widest, the last height narrower than [2] before it is [3] wide again, the bead)
+COLLAR_SHELF = (25, 20, 36)  # (see main: the triangles between the neck and the collar's rim, in the collar's dark lining)
+HAIR_FILL = (.008, 30)       # (see main: the hair no image paints takes the nearest painted hair's fill, within [0] m; fill: lighter than the ink plus [1])
 EAR_TONES = ((232, 164, 245), (156, 75, 198), (107, 50, 143), (76, 36, 109))
 EAR_SILVER = ((205, 200, 222), (140, 134, 160))
 FRINGE = (.02, .008, .004, 3, .002)
@@ -129,7 +134,7 @@ def paint(out, Q, I, ys, xs, ks, pos, nor, sel):
     """The texels sel (of the texel table ys, xs, ks, pos, nor) painted from the images (PAINT): each from the views that
     see it (the head's front-most surface there, within PAINT['seen'] m; facing the camera over PAINT['min']; on the
     image's figure, its outer line left out), weighted by how much it faces each (to the power PAINT['pow']: nearly the
-    best view alone, no doubled lines). Returns how many."""
+    best view alone, no doubled lines). Returns how many and which."""
     from cel_light import view_depth
     cams = json.load(open(os.path.join(ROOT, PAINT['cams'])))
     idx = np.nonzero(sel)[0]; acc = np.zeros((len(idx), 3)); wsum = np.zeros(len(idx))
@@ -142,6 +147,9 @@ def paint(out, Q, I, ys, xs, ks, pos, nor, sel):
         th = np.radians(cam['yaw']); facing = nor[idx] @ np.array([np.sin(th), 0, np.cos(th)])
         px = D[vi, ui]; Lp = px.mean(1)
         hair_px = (is_hair(px) | (Lp < PAINT['ink'])) & ~is_skin(px) & ~is_purple(px)   # (the image's hair there, or its lines: not its skin)
+        # (nor the line where its hair ends on its skin: the model's tips over the neck are longer than the drawn ones, the drawn
+        # tip's outline was stamped across them and the lock went on under it, pale: a lock ending twice)
+        near_skin = ndimage.binary_dilation(is_skin(D) & F, iterations=3); hair_px &= ~((Lp < PAINT['ink']) & near_skin[vi, ui])
         vis = (dep >= Z[vi, ui] - PAINT['seen']) & (facing > PAINT['min']) & (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1) & F[vi, ui] & hair_px
         x0, y0 = np.clip(np.floor(u).astype(int), 0, W - 2), np.clip(np.floor(v).astype(int), 0, H - 2); fx, fy = (u - x0)[:, None], (v - y0)[:, None]
         col = (D[y0, x0] * (1 - fx) + D[y0, x0 + 1] * fx) * (1 - fy) + (D[y0 + 1, x0] * (1 - fx) + D[y0 + 1, x0 + 1] * fx) * fy
@@ -149,7 +157,7 @@ def paint(out, Q, I, ys, xs, ks, pos, nor, sel):
         acc += w[:, None] * col; wsum += w
     ok = wsum > 0
     out[ys[idx[ok]], xs[idx[ok]]] = acc[ok] / wsum[ok, None]
-    return int(ok.sum())
+    return int(ok.sum()), idx[ok]
 
 
 def placement():
@@ -260,6 +268,29 @@ def main(bust):
     for _ in range(EAR_RINGS):
         cw = np.zeros(wb_.max() + 1, bool); cw[TW_[jewel].ravel()] = True
         jewel |= grow_e & cw[TW_].any(1)
+    # (only what hangs from the lobe: the pieces reaching EAR_HANG[0] under it, the crystal's, and of them what is under the
+    # lobe plus EAR_HANG[1] (bust units). The ears' own dark lines in the boxes were taken for earrings: painted silver, a
+    # lavender patch in the ear, and with their neighbours left out of the painting from the images)
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import connected_components
+    jk = np.nonzero(jewel)[0]
+    Aj = csr_matrix((np.ones(3 * len(jk)), (np.repeat(np.arange(len(jk)), 3), TW_[jk].ravel())), shape=(len(jk), wb_.max() + 1))
+    _, labj = connected_components(Aj @ Aj.T, directed=False); lowj = np.full(labj.max() + 1, np.inf); np.minimum.at(lowj, labj, C[jk, 1])
+    hang = (lowj[labj] < BUST['lobe'] - EAR_HANG[0]) & (Pb[Ib[jk], 1].max(1) < BUST['lobe'] + EAR_HANG[1])
+    print('earrings: %d triangles (%d more in their boxes were the ears\' lines or loose pieces: left to the head)' % (int(hang.sum()), int((~hang).sum())))
+    jewel[:] = False; jewel[jk[hang]] = True
+    # (and the hook's own pieces: the triangles not skin's within EAR_AXIS[0] of each earring's axis (its top EAR_AXIS[1]'s), from
+    # EAR_AXIS[2] under its top to the lobe: hair's colour, they were left to the head, painted from the images, black too, and one
+    # hidden with the locks from the 3/4, coming and going as the camera turned)
+    n_hook = 0
+    for sgn in (-1, 1):
+        sj = jewel & ((C[:, 0] - BUST['neck'][0]) * sgn > 0)
+        if not sj.any(): continue
+        vj = np.unique(Ib[sj]); ty = Pb[vj, 1].max(); up = vj[Pb[vj, 1] > ty - EAR_AXIS[1]]; ax, az_ = Pb[up, 0].mean(), Pb[up, 2].mean()
+        near = ((np.hypot(C[:, 0] - ax, C[:, 2] - az_) < EAR_AXIS[0]) & (C[:, 1] > ty - EAR_AXIS[2]) & (Pb[Ib, 1].max(1) < BUST['lobe'] + EAR_HANG[1])
+                & ~is_skin(tc) & ~jewel & ((C[:, 0] - BUST['neck'][0]) * sgn > 0))
+        n_hook += int(near.sum()); jewel |= near
+    print('earrings: %d more triangles by their hooks\' axes' % n_hook)
     ear_t = jewel
     keep = (P[Ib, 1] > CUT_Y).all(1)
     It = Ib[keep]; used = np.unique(It); remap = -np.ones(len(P), np.int64); remap[used] = np.arange(len(used))
@@ -392,21 +423,63 @@ def main(bust):
         out[ys[hair_t], xs[hair_t]] = np.array(HAIR[0], float); out[ys[hair_t[hs]], xs[hair_t[hs]]] = np.array(HAIR[1], float)
         print('shade: skin %d texels in shadow (%d under the locks, %d the face\'s own, %d turned away); hair %.0f%% in shadow' % (
             len(k), int(under.sum()), int(jaw.sum()), int(away.sum()), 100 * hs.mean()))
+    free_t = piece_t = None
     if PAINT:   # the head painted from Denis's six head images, see PAINT
-        n_p = paint(out, Q, It, ys, xs, ks, pos, nor, body[ys, xs] & ~ear_v[It[ks]].any(1) & ~collar_v[It[ks]].any(1))   # (the hair: on the face the image's bangs fell on the model's skin)
+        hair_x = body[ys, xs] & ~ear_v[It[ks]].any(1) & ~collar_v[It[ks]].any(1)
+        if FACE == 'paint' and SIDES:   # (not the locks hanging free before the face: no image draws them where they are, kael_fringe.free_locks())
+            from kael_fringe import free_locks
+            free_t, piece_t = free_locks(Q, It, hair_v, json.load(open(os.path.join(ROOT, PAINT['cams']))), FACE_MID); hair_x &= ~free_t[ks]
+        n_p, got = paint(out, Q, It, ys, xs, ks, pos, nor, hair_x)   # (the hair: on the face the image's bangs fell on the model's skin)
+        # (the hair no image paints, a third of the nape's: the model's tips hang lower than the drawn ones and the images draw the neck
+        # there, the locks' flanks face no image. It kept the two flat tones by the geometry, their borders along the triangles' edges,
+        # pale ends under the drawn tips. Now each takes the nearest painted hair's fill colour, within HAIR_FILL[0] m; else the shadow's)
+        painted = np.zeros(len(ys), bool); painted[got] = True; unp = np.nonzero(hair_x & ~painted)[0]
+        fill = got[out[ys[got], xs[got]].mean(1) > PAINT['ink'] + HAIR_FILL[1]]
+        if len(unp) and len(fill):
+            dd, jj = cKDTree(pos[fill]).query(pos[unp], distance_upper_bound=HAIR_FILL[0]); nr = np.isfinite(dd)
+            out[ys[unp[nr]], xs[unp[nr]]] = out[ys[fill[jj[nr]]], xs[fill[jj[nr]]]]; out[ys[unp[~nr]], xs[unp[~nr]]] = np.array(HAIR[1], float)
+            print('hair: %d texels no image paints as the nearest painted hair (%d too far: the shadow\'s lavender)' % (int(nr.sum()), int((~nr).sum())))
         print('painted from the images: %d texels (%.0f%% of the head\'s)' % (n_p, 100 * n_p / len(ys)))
-    keep_t, card, sides_t = np.ones(len(It), bool), None, None
+    keep_t, card, sides_t, face_t = np.ones(len(It), bool), None, None, None
     if FACE:   # the face from the images, Meshy's locks over it out, the front image's bangs a sheet (tools/kael_fringe.py)
         from kael_fringe import face as face_paint
         cams_ = json.load(open(os.path.join(ROOT, PAINT['cams'])))
-        keep_t, card, sides_t = face_paint(out, Q, Nq, UV, It, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, FACE_MID, eye_m, chin_m, cams_, is_skin, is_hair, sheet=FACE == 'sheet', paint_bangs=FACE in ('paint', 'all'), paint_all=FACE == 'all', pressed=None if press_w is None else press_w > .05, sides=FACE == 'paint' and SIDES, bary=bary)
+        keep_t, card, sides_t, face_t = face_paint(out, Q, Nq, UV, It, ys, xs, ks, pos, nor, vc, hair_v, ear_v, collar_v, FACE_MID, eye_m, chin_m, cams_, is_skin, is_hair, sheet=FACE == 'sheet', paint_bangs=FACE in ('paint', 'all'), paint_all=FACE == 'all', pressed=None if press_w is None else press_w > .05, sides=FACE == 'paint' and SIDES, bary=bary, free=free_t, piece=piece_t)
     # the earrings in the drawing's purples (EAR_TONES: by how much each facet faces EAR_LIGHT), the bead and the hook in
     # its silver (EAR_SILVER: lit, shaded); their lines black
+    # the shelf between the neck and the collar's rim: the bust's collar is pushed out to Kael's, the neck's skin is not, and the
+    # triangles joining them (one or two corners the collar's) lie nearly flat between them. No step paints them (each leaves the
+    # collar's out): they kept Meshy's blend of skin and cloth, skin's shards through the collar's black line from behind, a streaked
+    # shelf with lavender spikes as the head tips (Denis, 11/11, circling the nape: the lavender bit by the collar). Now the collar's
+    # dark lining, and their corners not the collar's without outline (it drew black teeth through them)
+    sh_t = collar_v[It].any(1) & ~collar_v[It].all(1); k = np.nonzero(sh_t[ks])[0]; out[ys[k], xs[k]] = np.array(COLLAR_SHELF, float)
+    shelf_v = np.zeros(len(Q), bool); shelf_v[It[sh_t].ravel()] = True; shelf_v &= ~collar_v
+    print('collar: %d triangles between the neck and its rim in its lining\'s colour (%d texels), %d of their corners without outline' % (int(sh_t.sum()), len(k), int(shelf_v.sum())))
     jt = np.nonzero(ear_v[It[ks]].all(1))[0]
     if len(jt):
         fn = np.cross(Q[It[:, 1]] - Q[It[:, 0]], Q[It[:, 2]] - Q[It[:, 0]]); fn /= np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12)
-        el = np.array(EAR_LIGHT, float); el /= np.linalg.norm(el); lt = fn[ks[jt]] @ el; cj = T[ys[jt], xs[jt]]
-        pur = is_purple(cj) & (cj.max(1) >= 70); sil = ~is_purple(cj) & (cj.max(1) >= 70)
+        # (each earring by its own side's light, from the front and from behind: with one light for both, his left one was dark
+        # seen from his left and both flat dark from behind; Denis's back image draws them as from the front)
+        el = np.array(EAR_LIGHT, float); el /= np.linalg.norm(el); sg = np.where(pos[jt, 0] > FACE_MID, -1., 1.)
+        nx = fn[ks[jt], 0] * sg; lt = nx * el[0] + fn[ks[jt], 1] * el[1] + np.abs(fn[ks[jt], 2]) * el[2]; cj = T[ys[jt], xs[jt]]
+        # (the bead and the hook by their height, over the crystal's top: by Meshy's colours the bead was the crystal's purple with
+        # black crumbs. The crystal's top, per earring: EAR_APEX)
+        hook = np.zeros(len(jt), bool)
+        for sgn in (-1, 1):
+            ev = ear_v & ((Q[:, 0] - FACE_MID) * sgn > 0)
+            if not ev.any(): continue
+            ey = Q[ev, 1]; hs = np.arange(ey.min(), ey.max() + 1e-9, .001); wd = np.full(len(hs), np.nan)
+            for a, h in enumerate(hs):
+                m_ = ev & (np.abs(Q[:, 1] - h) < .0015)
+                if m_.sum() > 1: wd[a] = max(np.ptp(Q[m_, 0]), np.ptp(Q[m_, 2]))
+            a = int(np.nanargmax(wd)); b = min(len(hs), a + int(EAR_APEX[0] * 1000) + 1); apex, thin = ey.max(), False
+            for c in range(a + 1, b):   # (its vertices are few, rings at its widest and at its point: up from its widest, past its point (thin), to where the bead widens)
+                if np.isnan(wd[c]): continue
+                if wd[c] < EAR_APEX[2]: thin = True; apex = hs[c]
+                elif thin and wd[c] >= EAR_APEX[3]: break
+            hook |= ((pos[jt, 0] - FACE_MID) * sgn > 0) & (pos[jt, 1] > apex)
+            print('earring %s: the crystal up to %.4f m (its widest %.1f mm), the bead and the hook over it' % ('left' if sgn > 0 else 'right', apex, 1000 * np.nanmax(wd)))
+        pur = is_purple(cj) & (cj.max(1) >= 70) & ~hook; sil = (~is_purple(cj) & (cj.max(1) >= 70)) | hook
         tone = np.digitize(lt, EAR_STEPS)   # (0 darkest .. 3 highlight)
         tones = np.array(EAR_TONES, float)[::-1]
         out[ys[jt[pur]], xs[jt[pur]]] = tones[tone[pur]]
@@ -418,23 +491,33 @@ def main(bust):
     # the package (as tools/ren_head.py's)
     It = It[keep_t]   # (without Meshy's locks over the face, FACE)
     src = np.arange(len(Q)); hmask = None
-    if sides_t:   # (Meshy's locks hidden from the side images, per image: their triangles' corners split from the rest's, each copy with the views it is hidden from; src/e_model.js mdHeadHide)
-        from kael_fringe import HIDE_ORDER
+    if sides_t:   # (Meshy's locks hidden from his right side and from his left: their triangles' corners split from the rest's, each copy with the side(s) it is hidden from; src/e_model.js mdHeadHide)
+        from kael_fringe import HIDE_VIEWS
         tm = np.zeros(len(It), np.int64)
-        for b_, view in enumerate(HIDE_ORDER): tm |= sides_t[view][keep_t].astype(np.int64) << b_
-        pair = It.astype(np.int64) * 16 + tm[:, None]; up, inv_ = np.unique(pair.ravel(), return_inverse=True)
-        src = up // 16; hmask = up % 16; It = inv_.reshape(-1, 3)
-        print('hidden from the side images: %s triangles; %d corners split from their neighbours\' (%d vertices in use)' % (
-            ', '.join('%s %d' % (v_, int((tm >> b_ & 1).sum())) for b_, v_ in enumerate(HIDE_ORDER)), len(src) - len(np.unique(src)), len(src)))
+        for b_, side in enumerate(('dx', 'sx')):
+            assert all((sides_t[v_] == sides_t[HIDE_VIEWS[side][0]]).all() for v_ in HIDE_VIEWS[side])   # (one set per side: kael_fringe.side_hide)
+            tm |= sides_t[HIDE_VIEWS[side][0]][keep_t].astype(np.int64) << b_
+        pair = It.astype(np.int64) * 4 + tm[:, None]; up, inv_ = np.unique(pair.ravel(), return_inverse=True)
+        src = up // 4; hmask = up % 4; It = inv_.reshape(-1, 3)
+        print('hidden from his right side %d triangles, from his left %d; %d corners split from their neighbours\' (%d vertices in use)' % (
+            int((tm & 1).sum()), int((tm >> 1 & 1).sum()), len(src) - len(np.unique(src)), len(src)))
+    scrap_v = np.zeros(len(Q), bool)
+    if face_t is not None and face_t.any():   # (the vertices all of whose kept hair triangles are the face's: tools/kael_fringe.py face(), its scraps and gap covers)
+        Io = src[It]; ft = face_t[keep_t]; hk = hair_v[Io].sum(1) >= 2; other = np.zeros(len(Q), bool); other[Io[hk & ~ft].ravel()] = True   # (Io: It's corners before the split)
+        scrap_v[Io[ft].ravel()] = True; scrap_v &= ~other
     Q, Nq, UV, top, tw, ear_v, hair_v, collar_v, vc = Q[src], Nq[src], UV[src], top[src], tw[src], ear_v[src], hair_v[src], collar_v[src], vc[src]
+    shelf_v, scrap_v = shelf_v[src], scrap_v[src]
     if press_w is not None: press_w = press_w[src]
     # (the hair's outline: its vertices and those of the dark lines Meshy painted between its locks, neither hair's colour nor skin's:
     # at the full width and not pushed back, their outline was black shards along the locks, over the brow from the side)
     hairish = hair_v | (~is_skin(vc) & ~ear_v & ~collar_v & (Q[:, 1] > JAW_Y))
+    hairish &= ~scrap_v   # (the hair's scraps lying on the face, painted as its skin: no hair's rim round them)
     line_w = np.where(ear_v, EAR_LINE, np.where(hairish, HAIR_LINE_W, 1.))
+    line_w[shelf_v] = 0.
     if press_w is not None: line_w = line_w * (1 - np.clip(press_w, 0, 1)) ** 2   # (the pressed temples: their lines the profiles' own, painted)
     lb, n_over = face_back(Q, It, is_skin(vc) & ~hair_v & (Q[:, 1] > JAW_Y), hair_v)
     if PAINT: lb = np.maximum(lb, np.where(hairish, HAIR_BACK, 0.))   # (the hair's outline pushed back: only the mane's outer edge drawn, the lines inside it the images')
+    lb = np.where(scrap_v, 0., lb)
     print('outline: the hair\'s %.2f of the width, the earrings\' %.2f; %d hair vertices over the face pushed back %.0f mm (%d with the smoothing)' % (
         HAIR_LINE_W, EAR_LINE, n_over, 1000 * FRINGE[0], int((lb > 0).sum())))
     pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
@@ -449,11 +532,11 @@ def main(bust):
     if len(cv): flat_v[cv] = flat_c
     flat_v = flat_v[src]
     put('lb', lb.astype(np.float32)); put('flat', flat_v.astype(np.float32)); put('line', line_w.astype(np.float32))
-    if hmask is not None:   # (hidden from each side image: src/e_model.js mdHeadHide, by the camera's angle around the head between the images')
-        from kael_fringe import PRESS_WIN, HIDE_ORDER
-        put('hv', np.stack([(hmask >> b_ & 1) for b_ in range(4)], 1).astype(np.float32))
+    if hmask is not None:   # (hidden from his right side, from his left: src/e_model.js mdHeadHide, by the camera's angle around the head, switching midway between the front image's and each 3/4's)
         cams_ = json.load(open(os.path.join(ROOT, PAINT['cams'])))
-        jo['hideAz'] = [round(float(FACE_MID), 5), PRESS_WIN[4]] + [cams_[v_]['yaw'] for v_ in ('profilo_dx', '34_dx', 'fronte', '34_sx', 'profilo_sx')]
+        put('hv', np.stack([(hmask >> b_ & 1) for b_ in range(2)], 1).astype(np.float32))
+        from kael_fringe import PRESS_WIN
+        jo['hideAz'] = [round(float(FACE_MID), 5), PRESS_WIN[4], (cams_['34_dx']['yaw'] + cams_['fronte']['yaw']) / 2, (cams_['fronte']['yaw'] + cams_['34_sx']['yaw']) / 2]
     open(os.path.join(KAEL_PKG, 'kael_head.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_head.json'), 'w'), separators=(',', ':'))
     for ext in ('json', 'bin', 'png'):
         fp = os.path.join(KAEL_PKG, 'kael_fringe.' + ext)

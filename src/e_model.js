@@ -122,7 +122,7 @@ function modelBuild(key) {
     const hm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
     // flat light: the sheet's own shading is in its texture (the hit flash's emissive kept); per vertex where the head
     // says so (aFlat: its collar's outside lit as the body, one teal with the vest)
-    const hideU = head.geo.attributes.aHide ? {value: new THREE.Vector4()} : null;
+    const hideU = head.geo.attributes.aHide ? {value: new THREE.Vector2()} : null;
     const headFlat = (perV, hu) => sh => {
       if (perV) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
       sh.fragmentShader = (perV ? 'varying float vFlat;\n' : '') + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
@@ -241,29 +241,45 @@ function mdLineMat(o) {   // (perBack: a per-vertex extra push back, m, in the a
 }
 
 // The head's locks the side images do not draw (tools/kael_fringe.py side_hide: Kael's, over his temples and cheeks; the
-// front image draws them by his eyes): left out of shader sh as the camera is where an image's was (aHide: per vertex,
-// 1 where hidden from the profile on his right, the 3/4 on his right, on his left, the profile on his left; hu.value: how
-// much the camera is at each, mdHeadHide) over a half. Whole triangles (their corners are split from the rest's).
+// front image draws them by his eyes): left out of shader sh as the camera is on their side of the head (aHide: per
+// vertex, 1 where hidden from his right, from his left; hu.value: how far each side's are hidden, 0 to 1, mdHeadHide),
+// dissolved through a 4x4 pattern of the screen's pixels as that goes from 0 to 1 (all at once at a half, a lock by
+// his eye flicked on in one frame). Whole triangles (their corners are split from the rest's).
 function mdHideShader(sh, hu) {
   sh.uniforms.uHide = hu;
-  sh.vertexShader = 'attribute vec4 aHide;\nuniform vec4 uHide;\nvarying float vHide;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvHide = dot(aHide, uHide);');
-  sh.fragmentShader = 'varying float vHide;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\n\tif (vHide > .5) discard;');
+  sh.vertexShader = 'attribute vec2 aHide;\nuniform vec2 uHide;\nvarying float vHide;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvHide = dot(aHide, uHide);');
+  sh.fragmentShader = 'varying float vHide;\nfloat mdB2(vec2 a) { a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); }\n'
+    + sh.fragmentShader.replace('void main() {', 'void main() {\n\tif (vHide > mdB2(.5 * gl_FragCoord.xy) * .25 + mdB2(gl_FragCoord.xy) + .03125) discard;');
 }
 
 // Before the head is drawn: where the camera is around it, seen from the Head bone (its bind frame: the package's, x his
-// left, z his front): a = (camera's x - az[0], z - az[1]) degrees around; az[2..6] the images' (the profile on his right,
-// the 3/4 there, the front, the 3/4 on his left, the profile there, ascending): hu.value the share of each side image,
-// linear between the two the camera is between (the front's: nothing hidden), the nearest beyond them. hmesh: the head
-// (its bind matrices), skel, hb the Head bone.
-const MD_HV = [new THREE.Matrix4(), new THREE.Matrix4(), new THREE.Vector3()], MD_HW = [0, 0, 0, 0, 0];
+// left, z his front): a = (camera's x - az[0], z - az[1]) degrees around. His right side's locks are hidden as a is
+// under az[2] (midway between the front image's angle and the right 3/4's), his left side's as it is over az[3]: each
+// with MD_HIDE[0] degrees of play either way (at rest on the angle, walking, a lock blinked) and eased MD_HIDE[1] of the
+// way a frame (hu.value: 0 shown to 1 hidden, the shader's dissolve); at once on the first frame, when the angle jumps
+// over MD_HIDE[2] degrees in one (a cut) and with window.__HIDE_SNAP (the tools' stills). Per camera (its own state: a
+// second view of the fighter does not pull the first's). hmesh: the head (its bind matrices), skel, hb the Head bone.
+const MD_HIDE = [4, .3, 40];
+const MD_HV = [new THREE.Matrix4(), new THREE.Matrix4(), new THREE.Vector3()];
 function mdHeadHide(hmesh, skel, hb, az, hu) {
-  const hi = skel.bones.indexOf(hb), A = az.slice(2);
+  const hi = skel.bones.indexOf(hb), per = new WeakMap();
   return (renderer, scene, camera) => {
-    const M = MD_HV[0].multiplyMatrices(hmesh.matrixWorld, hmesh.bindMatrixInverse).multiply(MD_HV[1].multiplyMatrices(hb.matrixWorld, skel.boneInverses[hi])).multiply(hmesh.bindMatrix);
-    const c = MD_HV[2].setFromMatrixPosition(camera.matrixWorld).applyMatrix4(M.invert()), a = Math.atan2(c.x - az[0], c.z - az[1]) * 180 / Math.PI, w = MD_HW.fill(0);
-    if (a <= A[0]) w[0] = 1; else if (a >= A[4]) w[4] = 1;
-    else for (let k = 0; k < 4; k++) if (a <= A[k + 1]) { const t = (a - A[k]) / (A[k + 1] - A[k]); w[k] = 1 - t; w[k + 1] = t; break; }
-    hu.value.set(w[0], w[1], w[3], w[4]);   // (w[2]: the front's)
+    let st = per.get(camera);
+    if (!st) per.set(camera, st = {frame: -1, a: null, on: [0, 0], e: [0, 0]});
+    if (st.frame !== renderer.info.render.frame) {   // (once a frame: the head and its outline both come here)
+      st.frame = renderer.info.render.frame;
+      const M = MD_HV[0].multiplyMatrices(hmesh.matrixWorld, hmesh.bindMatrixInverse).multiply(MD_HV[1].multiplyMatrices(hb.matrixWorld, skel.boneInverses[hi])).multiply(hmesh.bindMatrix);
+      const c = MD_HV[2].setFromMatrixPosition(camera.matrixWorld).applyMatrix4(M.invert()), a = Math.atan2(c.x - az[0], c.z - az[1]) * 180 / Math.PI;
+      const cut = st.a === null || Math.abs((a - st.a + 540) % 360 - 180) > MD_HIDE[2] || (typeof window !== 'undefined' && window.__HIDE_SNAP);
+      st.a = a;
+      if (cut) { st.on[0] = a < az[2] ? 1 : 0; st.on[1] = a > az[3] ? 1 : 0; st.e[0] = st.on[0]; st.e[1] = st.on[1]; }
+      else {
+        if (a < az[2] - MD_HIDE[0]) st.on[0] = 1; else if (a > az[2] + MD_HIDE[0]) st.on[0] = 0;
+        if (a > az[3] + MD_HIDE[0]) st.on[1] = 1; else if (a < az[3] - MD_HIDE[0]) st.on[1] = 0;
+        for (let k = 0; k < 2; k++) { st.e[k] += (st.on[k] - st.e[k]) * MD_HIDE[1]; if (Math.abs(st.on[k] - st.e[k]) < .02) st.e[k] = st.on[k]; }
+      }
+    }
+    hu.value.set(st.e[0], st.e[1]);
   };
 }
 
@@ -562,7 +578,7 @@ function mdHeadData(md, key) {
   if (j.lb) geo.setAttribute('aBack', new THREE.BufferAttribute(f32(j.lb), 1));   // (the hair over the face: its outline further back)
   if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
   if (j.line) geo.setAttribute('aLine', new THREE.BufferAttribute(f32(j.line), 1));   // (its outline's width per vertex: Kael's earrings' thin)
-  if (j.hv) geo.setAttribute('aHide', new THREE.BufferAttribute(f32(j.hv), 4));   // (the locks hidden when seen as each side image is: mdHeadHide)
+  if (j.hv) geo.setAttribute('aHide', new THREE.BufferAttribute(f32(j.hv), 2));   // (the locks hidden when seen from his right, from his left: mdHeadHide)
   md.head = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
     noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null, fringe: mdFringeData(md, key)};
   return {j, geo, hide: md.head.hide, lining: md.head.lining, noline: md.head.noline, jpg, fringe: md.head.fringe};
