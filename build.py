@@ -1,8 +1,8 @@
-import sys, os, json, base64
+import sys, os, json, base64, re
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, 'src')
 ASSET_DIR = os.path.join(ROOT, 'assets')
-MIME = {'.jpg': 'image/jpeg', '.png': 'image/png'}
+MIME = {'.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
 
 def assets(extra=()):
     """{path relative to assets/: value} for the files under assets/ (empty if there is no folder): jpg/png as a data
@@ -25,6 +25,8 @@ def assets(extra=()):
 
 def build(out, js, wrap=False, head_file='head.html', extra=(), char=None, drop=()):
     head = open(os.path.join(SRC, head_file), encoding='utf-8').read()
+    # <!--include:NAME--> in the head = the style sheet src/NAME pasted there (the interface's u_style.css)
+    head = re.sub(r'<!--include:([\w.-]+)-->', lambda m: '<style>\n' + open(os.path.join(SRC, m.group(1)), encoding='utf-8').read() + '</style>', head)
     if char:   # a character viewer's page: its character's key and name where the head has {{char}}, {{Char}}, {{CHAR}}
         head = head.replace('{{char}}', char).replace('{{Char}}', char.capitalize()).replace('{{CHAR}}', char.upper())
     code = '\n'.join(open(os.path.join(SRC, f), encoding='utf-8').read() for f in js)

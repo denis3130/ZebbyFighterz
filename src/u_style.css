@@ -1,0 +1,7 @@
+/* Voidrise interface (docs/superpowers/specs/2026-11-11-voidrise-interfaccia-design.md): dark violet dusk, gold and
+   orange accents, serif type. Pasted into the page by build.py where head.html says <!--include:u_style.css-->. */
+:root{
+  --u-bg:#14121b;--u-panel:rgba(20,17,28,.74);--u-line:rgba(216,166,87,.38);--u-gold:#d8a657;--u-gold2:#f3d6a0;
+  --u-orange:#f08a32;--u-ink:#efe8dc;--u-dim:#a59db3;--u-violet:#8f6ad8;--u-teal:#2f8f86;--u-red:#d4513f;
+  --u-display:'Cinzel',Georgia,serif;--u-serif:'Cormorant Garamond',Georgia,serif;
+}
