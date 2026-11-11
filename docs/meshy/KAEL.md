@@ -544,6 +544,12 @@ il nodo in vita resta di Meshy (Denis: "no il nodo in vita no solo togli meglio 
   schiena; poi le linee nere dove le disegna il foglio: tra pelle e stoffa o viola (bordo dei guanti, scalfi, collo),
   attorno a fascia, polsini e bordo del colletto, tra le pieghe della fascia; non attorno alle strisce del gilet né ai
   tatuaggi. Le dita hanno il loro contorno dal contorno del gioco (dipinte negli incavi erano cunei neri).
+- **Pollice in più tolto** (Denis: "noto che kael ha due pollici, rimuovi completamente quello in piu"; versione
+  `busto_k5.glb`): Meshy aveva fatto su ogni mano due pollici dalla stessa base, uno verso l'esterno (quello del foglio)
+  e uno in avanti (che avevo preso per la nocca). Quello in avanti (10 cm di superficie dalla punta, più vicino alla sua
+  punta che a quella del pollice vero: 70 e 61 vertici) è appiattito nel palmo (`remove_extra_thumbs`: i suoi vertici su
+  una membrana tesa sul suo bordo, l'anello attorno lisciato, normali rifatte); lì il guanto, e sulle mani solo la pelle
+  attaccata alle dita o alla punta del pollice. Il pollice vero resta com'era.
 - Prossimi passi: metterlo sulle ossa di Kael al posto del suo busto e delle braccia (come la testa,
   `tools/kael_head.py`), la testa sopra, le gambe di adesso sotto; poi le code della fascia come nastri.
 
