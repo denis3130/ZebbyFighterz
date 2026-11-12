@@ -197,7 +197,7 @@ RB.post.push((md, p, F, S, y) => {
     const sR = W.p[ix.RightArm], armR = sR.distanceTo(W.p[ix.RightForeArm]) + W.p[ix.RightForeArm].distanceTo(W.p[ix.RightHand]);
     const A = {W, ix, O, C1, c, l, sL, sR, armL, armR, G: {L: {p: G.lp, f: G.lf, n: G.lpn, e: G.le}, R: {p: G.rp, f: G.rf, n: G.rpn, e: G.re}}};
     const R = rkMoveArms(mv, A, rkF(F, act));
-    T = {lp: R.L.p, lf: R.L.f, lpn: R.L.n, le: R.L.e, rp: R.R.p, rf: R.R.f, rpn: R.R.n, re: R.R.e};
+    T = {lp: R.L.p, lf: R.L.f, lpn: R.L.n, le: R.L.e, ls: R.L.s || 0, rp: R.R.p, rf: R.R.f, rpn: R.R.n, re: R.R.e, rs: R.R.s || 0};
   } else if (act === 'pr') {
     const r = rkKey(RK_PR.lead, rkF(F, 'pr'));
     T = Object.assign({}, G, {lp: G.lp.clone().addScaledVector(RB_UP, -.015 * r)});   // (the arm already straight: the fist dips a little with the push)
@@ -221,8 +221,8 @@ RB.post.push((md, p, F, S, y) => {
     const Hm = c([-.1, .1, .27]).add(C1), rp = G.rp.clone().multiplyScalar((1 - cv) * (1 - cv)).addScaledVector(Hm, 2 * (1 - cv) * cv).addScaledVector(Hp, cv * cv);   // (up in front of the chest, not through it)
     T = {lp, lf, lpn, le, rp, rf: nmix(G.rf, Hf, cv), rpn: nmix(G.rpn, Hpn, cv), re: nmix(G.re, He, cv)};
   }
-  rsArm(md, p, W, 'L', T.lp, T.le, T.lf, T.lpn, 1);
-  rsArm(md, p, rbFK(md, p, RB.W), 'R', T.rp, T.re, T.rf, T.rpn, 1);
+  rsArm(md, p, W, 'L', T.lp, T.le, T.lf, T.lpn, 1, T.ls);
+  rsArm(md, p, rbFK(md, p, RB.W), 'R', T.rp, T.re, T.rf, T.rpn, 1, T.rs);
   if (br) mdBoneTurn(p, ix.Spine01, MD_X, -2 * br);   // the chest opens on the breath in
   if (RK.g.headYaw) mdBoneTurn(p, ix.Head, MD_Y, RK.g.headYaw);   // the eyes on the opponent
   if (mv && mv.kickLeg) rkKickLeg(md, p, mv.kickLeg, rkF(F, act));
@@ -385,7 +385,7 @@ function rkMoveArms(m, A, f) {
     if (i + 1 < keys.length && f > keys[i][0]) {
       const b = pose(keys[i + 1][1]), u = rkEase((f - keys[i][0]) / (keys[i + 1][0] - keys[i][0]), keys[i + 1][2]), via = keys[i + 1][3];
       const p = via ? a.p.clone().multiplyScalar((1 - u) * (1 - u)).addScaledVector(pose(via).p, 2 * u * (1 - u)).addScaledVector(b.p, u * u) : a.p.clone().lerp(b.p, u);
-      r = {p, f: a.f.clone().lerp(b.f, u).normalize(), n: a.n.clone().lerp(b.n, u).normalize(), e: a.e.clone().lerp(b.e, u).normalize()};
+      r = {p, f: a.f.clone().lerp(b.f, u).normalize(), n: a.n.clone().lerp(b.n, u).normalize(), e: a.e.clone().lerp(b.e, u).normalize(), s: (a.s || 0) + ((b.s || 0) - (a.s || 0)) * u};
     }
     T[s] = r;
   }
@@ -421,15 +421,19 @@ rkAddMove('elbow', {
   },
   feet: {R: {x: [[0, 0], [3.6, 0], [8.6, .18]], bumps: [[2.4, 9.8, .02]], heel: [[0, 0], [3, 0], [6, 6], [8.6, 0], [12, 8], [16, 8], [22, 0]]},
     L: {x: [[0, 0], [9, 0], [13.4, .18]], bumps: [[8.4, 14, .025]]}},
-  arms: {L: [[0, 'guard'], [9, 'eUp'], [14, 'eHit', 'snap'], [17, 'eHit'], [25, 'eBack'], [34, 'guard']],
+  arms: {L: [[0, 'guard'], [9, 'eUp'], [14, 'eHit', 'snap'], [17, 'eHit'], [23, 'eTuck'], [33, 'guard']],
     R: [[0, 'guard'], [8, 'rChest'], [13, 'rHead', undefined, 'rFront'], [18, 'rHead'], [30, 'guard', undefined, 'rFront']]},
   poses: {
     rFront: A => ({p: A.c([-.06, .12, .32]).add(A.C1)}),   // (in front of the chest: the rear hand's way up and down)
     eUp: A => ({p: A.l([.18, .17, -.04]).add(A.sL), f: RB_UP.clone().addScaledVector(RB_LINE, .15).normalize(), n: RB_LINE.clone(), e: A.l([0, -1, .25]).normalize()}),   // (the sheet's entry: the lead hand open by the face, palm forward)
-    // (the sheet's impact: the upper arm level and forward, the elbow the front of him, the forearm folded back flat
-    // across the chest, the fist before the sternum: seen from the side camera the forearm lies across, not end-on)
-    eHit: A => ({p: A.l([-.15, .03, -.15]).add(A.sL), f: A.l([-1, 0, -.4]).normalize(), n: A.l([0, -1, 0]), e: A.l([1, .3, 0]).normalize()}),
-    eBack: A => ({p: A.l([.3, -.05, -.02]).add(A.sL), f: A.l([1, 0, 0]), n: A.l([0, 0, -1]), e: A.l([0, -1, .3]).normalize()}),
+    // (the sheet's impact: the upper arm level, the elbow pointing at the opponent at shoulder height, the forearm
+    // folded back flat in front of the chest, the wrist straight (the fist continues the forearm), the palm down and a
+    // little toward the chest: seen from the side camera the forearm lies across the chest)
+    eHit: A => ({p: A.l([-.08, .04, -.16]).add(A.sL), f: A.l([-1, .05, -.23]).normalize(), n: A.l([0, -1, .3]).normalize(), e: A.l([.77, .12, -.63]).normalize(), s: 1}),
+    // (the way back, the entry the other way round: the elbow drops in front of the ribs and the fist comes up before
+    // the face, the forearm turning from across the chest to upright, the wrist straight; then the arm straightens
+    // forward into the guard, as a jab would)
+    eTuck: A => ({p: A.l([.16, .1, -.02]).add(A.sL), f: A.l([.3, 1, 0]).normalize(), n: A.l([0, 0, -1]), e: A.l([.2, -1, .3]).normalize(), s: 1}),
     rChest: A => ({p: A.c([.02, .02, .22]).add(A.C1), f: A.c([1, .3, 0]).normalize(), n: A.c([0, 0, -1]), e: A.c([-.5, -1, -.3]).normalize()}),
     rHead: A => ({p: A.c([-.17, .2, .12]).add(A.C1), f: RB_UP.clone().addScaledVector(RB_LINE, .1).normalize(), n: RB_LINE.clone(), e: A.c([-.3, -1, -.1]).normalize()}),
   },

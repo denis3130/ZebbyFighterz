@@ -60,8 +60,9 @@ function rsOut(md, W, pt, extra) {
 }
 
 // Arm s ('L' | 'R') of pose p (W its forward kinematics) toward wrist target tgt, elbow hint eh, fingers' way fd and
-// palm's way pn (model space, unit), by weight w (0 = the clip's arm).
-function rsArm(md, p, W, s, tgt, eh, fd, pn, w) {
+// palm's way pn (model space, unit), by weight w (0 = the clip's arm). straight (0..1, optional): how much the hand's
+// way is the forearm's own instead of fd (1: a straight wrist, the fist continuing the forearm, wherever it points).
+function rsArm(md, p, W, s, tgt, eh, fd, pn, w, straight) {
   if (w <= 0) return;
   const n = s === 'L' ? 'Left' : 'Right', ix = md.index, iS = ix[n + 'Shoulder'], iA = ix[n + 'Arm'], iF = ix[n + 'ForeArm'], iH = ix[n + 'Hand'];
   const T = THREE, A = W.p[iA].clone(), E = W.p[iF].clone(), H = W.p[iH].clone(), qU = W.q[iA].clone(), qL = W.q[iF].clone(), qHl = new T.Quaternion().fromArray(p.q, iH * 4);
@@ -102,7 +103,7 @@ function rsArm(md, p, W, s, tgt, eh, fd, pn, w) {
     nL.premultiply(new T.Quaternion().setFromAxisAngle(ax, .6 * th * w));
   }
   // the hand: fingers along fd, palm toward pn (as a basis), from the forearm's hand by w
-  const f = fd.clone().normalize(), pnn = pn.clone().addScaledVector(f, -pn.dot(f)).normalize();
+  const f = fd.clone().normalize().lerp(ax, straight || 0).normalize(), pnn = pn.clone().addScaledVector(f, -pn.dot(f)).normalize();
   const lf = new T.Vector3(0, 1, 0), lp = palmLoc.clone().addScaledVector(lf, -palmLoc.dot(lf)).normalize();
   const Mw = new T.Matrix4().makeBasis(f, pnn, new T.Vector3().crossVectors(f, pnn)), Ml = new T.Matrix4().makeBasis(lf, lp, new T.Vector3().crossVectors(lf, lp));
   const qWant = new T.Quaternion().setFromRotationMatrix(Mw.multiply(Ml.transpose()));
