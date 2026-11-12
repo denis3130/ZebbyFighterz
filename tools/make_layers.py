@@ -54,7 +54,8 @@ SKY = [(0, 175), (170, 165), (230, 148), (280, 130), (330, 110), (370, 85), (400
        (1560, 150), (1600, 165), (1640, 175), (1672, 180)]
 FOAM_Y, FOAM_H, FOAM_MIN = 700, 120, .4  # the water's flow fades from FOAM_Y down into the spray (to FOAM_MIN)
 MIST_ROWS = (600, 700)
-DEPTH = {'base': -8, 'hillsL': -17, 'hillsR': -17, 'falls': -34, 'fallsL': -34.5, 'fallsR': -34.5, 'mountain': -90,
+DEPTH = {'base': -8, 'hillsL': -17, 'hillsR': -17, 'mist': -25, 'falls': -34, 'fallsL': -34.5, 'fallsR': -34.5,
+         'mountain': -90,
          'skyL': -300, 'sky': -300, 'skyR': -300}   # = CFG.arenas.cascata.layers
 # the start camera (CFG.cam, CFG.arenas.cascata.ref): for the sky dome's colours by elevation
 FOV, DIST0, FOOT_SCREEN = 30, 6.5, .86
@@ -65,8 +66,9 @@ END_FADE = 260  # px: the far end of what goes on past the painting dissolves in
 # Denis's layers (docs/ref/cascata_livelli), drawn on the painting's canvas at 1674 x 940 (scaled to W0 x H0; the
 # points below are in the painting's px).
 LAYERS = os.path.join(ROOT, 'docs', 'ref', 'cascata_livelli')
-LAYER_FILES = {'sky': 'livello4_cielo.png', 'mountain': 'livello3_montagna.png', 'falls': 'livello2_cascata.png',
+LAYER_FILES = {'sky': 'livello4_cielo.png', 'falls': 'livello2_cascata.png', 'mist': 'livello1b_nebbia.png',
                'hills': 'livello1_colline.png'}
+MTN_FILE = 'livello3_montagna.png'   # (a whole mountain on its own picture: placed with MTN_PLACE)
 # 4, sky: its canvas (painting px) as far as the free camera looks, about 60 degrees to each side and 40 up; past the
 # painting its light goes on smoothly (its mean per row, deeper blue above, its own glow spread out), its clouds go on
 # no further (they thin out towards its sides and top, SKY_EDGE) and whole clouds of it are scattered there (SKY_SPRITES); it fades into
@@ -79,10 +81,15 @@ SKY_SPRITE_P = [.35, .2, .3, .15]
 SKY_STAMPS = 30
 SKY_RES, SKY_OUT_RES = .5, .2
 DEEP = np.array([.11, .33, .80])   # the deep blue high up (the sky's darkest, top middle)
-# 3, the big mountain on the left (with the sun on it): filled in under it and going on past the painting's left side
-# down into the mist (MTN_OUT), quilted from its own painting.
-MTN_X = (-900, 1000)
-MTN_OUT = [(-900, 690), (-760, 640), (-620, 585), (-480, 525), (-340, 460), (-200, 395), (-90, 342)]
+# 3, the big mountain on the left (with the sun on it): a whole mountain, down to its rocks at its foot, on its own
+# picture: scaled and placed (scale, x, y of its top left, painting px) where Denis's first mountain was, with the
+# same peak and slopes (Denis, 12/11: "sì, va bene così").
+MTN_PLACE = (.94, -256, 36)
+MTN_FOOT = (600, 760, 845)   # painting rows: its foot into the mist from the first to the second, gone by the third
+# 1b, the mist between the waterfall and the hills (Denis's, 12/11): the walls' feet in the mist as in the painting;
+# past the painting's sides it goes on (its brush strokes quilted, its light and its veil per row) and thins out over
+# MIST_OUT px.
+MIST_X, MIST_ROWS, MIST_OUT, MIST_EDGE = (-1500, 3170), (200, 900), 900, (40, 110)
 # 2, the waterfall between its two rock walls: inside FALLS_WATER the whole fall flows (near the rock only what looks
 # like water); its left wall goes on down past the painting's left side (FALLS_OUT_L), its right wall (the temple's
 # mountain) goes on down into the mist past the right side (FALLS_OUT_R: the island `fallsR`, a hair behind).
@@ -90,26 +97,37 @@ FALLS_WATER = [(675, 238), (1250, 236), (1252, 330), (1235, 420), (1215, 500), (
                (1178, 941), (470, 941), (520, 880), (585, 820), (592, 700), (605, 600), (625, 520), (660, 450),
                (672, 330)]
 FALLS_OUT_L = [(-500, 1000), (-380, 968), (-260, 925), (-140, 872), (-40, 826)]
-FALLS_OUT_R = [(1740, 226), (1820, 262), (1880, 252), (1960, 300), (2060, 352), (2140, 340), (2240, 410), (2380, 470),
-               (2520, 520), (2700, 600), (2900, 670), (3100, 750), (3170, 775)]
+FALLS_OUT_R = [(1740, 226), (1820, 262), (1880, 252), (1960, 300), (2060, 352), (2140, 340), (2240, 405), (2330, 440),
+               (2420, 400), (2500, 392), (2600, 450), (2720, 520), (2860, 600), (3010, 680), (3170, 760)]
 FALLS_X, FALLS_R_X = (-500, W0), (1250, 3170)
 FALLS_SMEAR = (941, 1000)
 # 1, hills: each low hill goes on outwards and down into the mist (its new ridge), on its canvas (x from, to), its
 # blocks from its own painting (x0, x1, y0, y1); its bottom edge (row 724, cut straight) is pulled down under the
 # floor's edge; under the waterfall the two hills' mists overlap, each fading out over `gap`.
-HILLS = {'hillsL': {'X': (-1500, 960), 'region': [(-1500, -20), (842, -20), (842, 700), (960, 700), (960, BOT),
-                                                  (-1500, BOT)], 'side': -1, 'gap': (842, 960),
-                    'out': [(-1500, 760), (-1200, 720), (-900, 680), (-600, 640), (-330, 600), (-120, 572)],
+HILLS_SPLIT = 844
+HILLS = {'hillsL': {'X': (-1500, HILLS_SPLIT), 'region': [(-1500, -20), (HILLS_SPLIT, -20), (HILLS_SPLIT, BOT),
+                                                          (-1500, BOT)], 'side': -1,
+                    'out': [(-1500, 700), (-1320, 662), (-1150, 640), (-1000, 606), (-880, 590), (-760, 612),
+                            (-600, 640), (-450, 622), (-300, 598), (-150, 572)],
                     'src': (40, 840, 430, 718), 'seed': 3},
-         'hillsR': {'X': (720, 3170), 'region': [(846, -20), (3170, -20), (3170, BOT), (720, BOT), (720, 700),
-                                                 (846, 700)], 'side': 1, 'gap': (846, 720),
+         'hillsR': {'X': (HILLS_SPLIT, 3170), 'region': [(HILLS_SPLIT, -20), (3170, -20), (3170, BOT), (HILLS_SPLIT, BOT)],
+                    'side': 1,
                     'out': [(1780, 318), (1920, 352), (2100, 412), (2330, 492), (2600, 575), (2900, 660),
                             (3170, 730)],
                     'src': (850, 1672, 296, 718), 'seed': 7}}
 HILLS_SMEAR = (716, 736)   # (rows: from its bottom edge to just under the floor's edge)
-MIST_LEVEL = {'hillsL': 590, 'hillsR': 560, 'mountain': 470, 'fallsL': 700, 'fallsR': 560}   # where each one's
+HILLS_EDGE = 110           # px: at the painting's sides Denis's hills thin out in their mist: painted on behind that
+MIST_LEVEL = {'hillsL': 590, 'hillsR': 560, 'fallsL': 700, 'fallsR': 560}
+MIST_BODY = 90      # px: below a new ridge at least this much shows before its mist   # where each one's
 # foot starts to sink into its mist
-MTN_SCALE, FALLS_SCALE, FALLS_R_SCALE, BASE_SCALE, HILLS_SCALE, MOUNTAIN_SCALE = .85, .9, .6, .4, .8, .75
+# The mist band at the hills' feet, in front of all of them (for the free camera, under and past the layers): the
+# painting's own rows BASE_ROWS, its waterfall foam taken out (FOAM_CUT); cloud tops at BASE_TOP (lower under the
+# waterfall), BASE_RAMP px from clear to solid: its top at the floor's edge (in the painting the layers' own mist
+# shows); it goes on sideways over BASE_X (quilted from itself) and fades out at its ends.
+BASE_ROWS, BASE_TOP, BASE_TOP_FALLS, BASE_RAMP = (540, 760), 712, 716, 50
+BASE_X, BASE_BOT = (-5500, 7150), 1150
+FOAM_CUT = [(680, 560), (1215, 560), (1215, 760), (680, 760)]
+MTN_SCALE, FALLS_SCALE, FALLS_R_SCALE, BASE_SCALE, HILLS_SCALE, MOUNTAIN_SCALE, MIST_SCALE = .85, .9, .6, .4, .8, .75, .5
 
 
 def poly_alpha(polys, w, h, ox=0, oy=0):
@@ -419,6 +437,8 @@ def build_mountain(name, rgb, a, inside, kn, sky_y, fol, X, ridge_pts, painted, 
     syn = ~known & filled
     m_hi, m_lo = MISTS[name]
     lvl = MIST_LEVEL[name] + 25 * np.sin(cx / 170. + 1.2 + seed) + 12 * np.sin(cx / 53. + .3 + seed)
+    lvl = lvl + (np.maximum(lvl, ridge + MIST_BODY) - lvl) * np.clip(ramp, 0, 1)   # (past the painting a low new
+    # ridge keeps some body above its mist; under the painting's own hills, below the floor's edge, all mist)
     wisp = vnoise(Hc, Wc, 45, seed + 4) * .65 + vnoise(Hc, Wc, 17, seed + 5) * .35
     t_ = np.clip((rows - lvl[None, :] + (wisp - .5) * 110) / 150., 0, 1)
     mo = t_ * t_ * (3 - 2 * t_) * .92
@@ -469,6 +489,8 @@ def smear_down(rgba, y0, y1):
         a_new = np.maximum(a_cur, a_up)
         L[y, :, :3] = (cur[:, :3] * a_cur + up[:, :3] * np.clip(a_new - a_cur, 0, 1)) / np.maximum(a_new, 1e-6)
         L[y, :, 3:4] = a_new
+    a0 = L[y0 - 1, :, 3]                                             # (solid where the bottom row is mostly solid)
+    L[y0:y1, :, 3] = np.maximum(L[y0:y1, :, 3], np.clip(a0 * 1.5, 0, 1)[None, :])
     return L
 
 
@@ -480,7 +502,10 @@ def top_edge(alpha, thr=.5, none=720):
 
 def build_hills(L1, log):
     """Layer 1, the two low hills in front of the waterfall: as Denis drew them inside the painting (their bottom
-    pulled under the floor's edge), each going on outwards and down into the mist (quilted from its own painting)."""
+    pulled under the floor's edge), each going on outwards and down into the mist (quilted from its own painting).
+    Where his hills thin out in their mist at the painting's sides, the hill going on is painted behind his pixels
+    (laid over it): no seam and nothing see-through there. The two meet under the waterfall at HILLS_SPLIT (same depth:
+    no gap between them)."""
     L1 = smear_down(L1, *HILLS_SMEAR)
     rgb, a = L1[..., :3], L1[..., 3]
     ys, xs = np.mgrid[0:H0, 0:W0]
@@ -491,26 +516,34 @@ def build_hills(L1, log):
     out = []
     for name, h in HILLS.items():
         x0, x1, y0, y1 = h['src']
-        kn = ys < HILLS_SMEAR[1]                      # the painting's canvas, down to its pulled bottom: as drawn,
-        # but for a margin at its outer side, below the ridge, where Denis's hill is only mist fading out: painted on
-        # again from the hill itself (no see-through strip at the painting's edge)
-        edge_x = xs < 70 if h['side'] < 0 else xs >= W0 - 40
-        kn &= ~(edge_x & (ys >= top[None, :] - 30) & (a < .97))
-        valid = kn & (ys >= top[None, :] - 40) & (ys < 718) & (a > .02) | (kn & (ys >= top[None, :] - 40) & (ys < top[None, :]))
-        src = side_by_side([src_tile(rgb, a, valid, top, fol, (x0, x1, y0, y1))])
+        left = h['side'] < 0
         xs_in = np.arange(max(0, h['X'][0]), min(W0, h['X'][1]))
-        inner = [(int(x), float(top[x])) for x in xs_in[::8]
-                 if (x < h['gap'][0] if h['side'] < 0 else x > h['gap'][0]) and top[x] < 700]
+        inner = [(int(x), float(top[x])) for x in xs_in[::8] if top[x] < 700 and
+                 (x >= HILLS_EDGE if left else x < W0 - HILLS_EDGE)]    # (its ridge where it is solid)
         ridge = sorted(h['out'] + inner)
-        it = build_mountain(name, rgb, a, h['region'], kn, top, fol, h['X'], ridge, (0, W0), h['side'], src,
+        rline = np.interp(np.arange(W0), *zip(*ridge))
+        kn = ys < HILLS_SMEAR[1]                      # the painting's canvas, down to its pulled bottom: as drawn,
+        edge_x = xs < HILLS_EDGE if left else xs >= W0 - HILLS_EDGE   # but at its outer side, below its ridge,
+        under = edge_x & (ys >= rline[None, :] - 30) & (a < .97)        # painted on behind Denis's thin mist
+        kn &= ~under
+        valid = kn & (ys >= top[None, :] - 40) & (ys < 718) & (a > .02) | (kn & (ys >= top[None, :] - 40) & (ys < top[None, :]))
+        src = side_by_side([src_tile(rgb, a, valid, rline, fol, (x0, x1, y0, y1))])
+        it = build_mountain(name, rgb, a, h['region'], kn, rline, fol, h['X'], ridge, (0, W0), h['side'], src,
                             h['seed'], log)
         it['scale'] = HILLS_SCALE
-        # under the waterfall the two hills' mists overlap, each fading out (no straight edge under the gap)
-        g0, g1 = h['gap']
-        cxs = np.arange(it['box'][0], it['box'][2])
-        f = np.clip((g1 - cxs) / (g1 - g0), 0, 1)
-        f = np.where((cxs - g0) * np.sign(g1 - g0) > 0, f * f * (3 - 2 * f), 1.)
-        it['m'] = it['m'] * f[None, :]
+        # Denis's own pixels at the outer edge laid over the hill painted on behind them
+        bx0, by0, bx1 = it['box'][0], it['box'][1], it['box'][2]
+        p0, p1 = max(0, bx0), min(W0, bx1)                   # the painting's columns on this canvas
+        c0, c1 = p0 - bx0, p1 - bx0
+        hh = min(H0 - by0, it['m'].shape[0])
+        aD = a[by0:by0 + hh, p0:p1] * under[by0:by0 + hh, p0:p1]
+        seg_m = it['m'][:hh, c0:c1]; seg_c = it['rgb'][:hh, c0:c1] / 255
+        out_a = aD + seg_m * (1 - aD)
+        out_c = (rgb[by0:by0 + hh, p0:p1] * aD[..., None] + seg_c * (seg_m * (1 - aD))[..., None]) / \
+            np.maximum(out_a, 1e-4)[..., None]
+        sel = under[by0:by0 + hh, p0:p1]
+        it['rgb'][:hh, c0:c1] = np.where(sel[..., None], out_c * 255, it['rgb'][:hh, c0:c1])
+        it['m'][:hh, c0:c1] = np.where(sel, out_a, seg_m)
         out.append(it)
     return out
 
@@ -626,6 +659,7 @@ def build_sky_layer(L4, log):
         placed.append((X, Y, w_, h_))
     log('  sky: %d clouds scattered' % len(placed))
     sky = np.clip(sky, 0, 1)
+    light = np.median(lo[:, ox:ox + W2], 1)                            # its light per row (for the sky dome)
     # into the dome: the canvas' sides and top over SKY_FADE px, its foot over SKY_FOOT
     f2 = SKY_FADE / 2
     fx = np.clip(np.minimum(np.arange(Wc), Wc - 1 - np.arange(Wc)) / f2, 0, 1)
@@ -638,35 +672,77 @@ def build_sky_layer(L4, log):
                                 ('skyR', (W0, X1), SKY_OUT_RES)):
         c0, c1 = (p0 - X0) // 2, (p1 - X0) // 2
         out.append({'name': name, 'box': [p0, SKY_TOP, p1, SKY_FOOT[1]], 'rgb': sky[:, c0:c1] * 255, 'm': m[:, c0:c1],
-                    'water': None, 'scale': res * 2})
+                    'water': None, 'scale': res * 2, 'light': light})
     return out
 
 
-def build_mountain_layer(L3, log):
-    """Layer 3, the big mountain on the left with the sun on it: as Denis drew it, filled in under it (its slopes going
-    on down behind the waterfall's left wall and the hills: no sky shows between them) and going on past the
-    painting's left side down into the mist, quilted from its own painting."""
-    rgb, a = L3[..., :3].astype(np.float64), L3[..., 3].astype(np.float64)
-    ys, xs = np.mgrid[0:H0, 0:W0]
-    on = a > .5
-    cols = on.any(0)
-    top = np.where(cols, on.argmax(0), H0).astype(np.float64)
-    bottom = np.where(cols, H0 - 1 - on[::-1].argmax(0), 0).astype(np.float64)
-    under = cols[None, :] & (ys > bottom[None, :])                    # under it: to be painted on
-    kn = ~under & ~(~cols[None, :] & (xs < MTN_OUT[-1][0] + 120))     # (left of it, past its cut side: too)
-    kn &= ~((xs < 40) & (ys > top[None, :]))
-    fol = foliage(rgb)
-    MISTS['mountain'] = MISTS.get('hillsL') or (np.array([.62, .82, .93]), np.array([.55, .78, .92]))
-    xs_in = np.nonzero(cols)[0]
-    inner = [(int(x), float(top[x])) for x in xs_in[::8]]
-    ridge = sorted(MTN_OUT + inner)
-    src = side_by_side([src_tile(rgb, a, on & (dist_to(~on) > 3), top, fol, (int(xs_in.min()), int(xs_in.max()) + 1,
-                                                                            0, H0))])
-    xe = int(xs_in.max())
-    region = [(MTN_X[0], -20), (xe, -20), (xe, BOT), (MTN_X[0], BOT)]
-    it = build_mountain('mountain', rgb, a, region, kn, top, fol, MTN_X, ridge, (0, W0), -1, src, 13, log)
-    it['scale'] = MOUNTAIN_SCALE
-    return [it]
+def build_mountain_layer(log, mist_row):
+    """Layer 3, the big mountain on the left with the sun on it: Denis's whole mountain (its own picture, down to the
+    rocks at its foot) placed with MTN_PLACE; nothing painted on (it has its own outline all round)."""
+    sc, px, py = MTN_PLACE
+    im = Image.open(os.path.join(LAYERS, MTN_FILE)).convert('RGBA')
+    w, h = round(im.size[0] * sc), round(im.size[1] * sc)
+    L = np.asarray(im.resize((w, h), Image.LANCZOS), np.float32) / 255
+    a = np.clip((L[..., 3] - .03) / .94, 0, 1)
+    rows = np.nonzero((a > .003).any(1))[0]; cols = np.nonzero((a > .003).any(0))[0]
+    y0, y1, x0, x1 = rows.min(), rows.max() + 1, cols.min(), cols.max() + 1
+    col = unpremultiply(L[y0:y1, x0:x1, :3] * a[y0:y1, x0:x1, None], a[y0:y1, x0:x1])
+    am = a[y0:y1, x0:x1].copy()
+    # its foot sinks into the mist (painting rows MTN_FOOT: from clear to mist, then fading out), with soft wisps
+    hh, ww = am.shape
+    prow = py + y0 + np.arange(hh)[:, None]
+    wisp = vnoise(hh, ww, 45, 41) * .65 + vnoise(hh, ww, 17, 42) * .35
+    f0, f1, f2 = MTN_FOOT
+    t_ = np.clip((prow - f0 + (wisp - .5) * 90) / (f1 - f0), 0, 1)
+    mo = t_ * t_ * (3 - 2 * t_) * .95
+    mist = mist_row(prow[:, 0])[:, None, :] * (.95 + .1 * wisp[..., None])
+    col = col * (1 - mo[..., None]) + mist * mo[..., None]
+    fa = np.clip((f2 - prow + (wisp - .5) * 40) / (f2 - f1), 0, 1)
+    am *= fa * fa * (3 - 2 * fa)
+    log('  mountain: %d x %d px at x %d, row %d' % (x1 - x0, y1 - y0, px + x0, py + y0))
+    return [{'name': 'mountain', 'box': [px + x0, py + y0, px + x1, py + y1], 'rgb': col * 255, 'm': am,
+             'water': None, 'scale': MOUNTAIN_SCALE / sc}]
+
+
+def build_mist_layer(Lm, log):
+    """Layer 1b, the mist between the waterfall and the hills: as Denis painted it inside the painting; at its sides,
+    where his mist thins out at the painting's edge, and past them (only the free camera sees there) it goes on: its
+    veil (alpha) per row as it is MIST_EDGE px in, thinning out over MIST_OUT px with soft billows, its colours as
+    more of itself (extend_band: its light smooth, its brush strokes quilted)."""
+    rgb, a = Lm[..., :3].astype(np.float64), Lm[..., 3].astype(np.float64)
+    X0, X1 = MIST_X
+    r0, r1 = MIST_ROWS
+    e0, e1 = MIST_EDGE
+    xs_f = np.arange(W0)[None, :]
+    inner = (xs_f >= e1) & (xs_f < W0 - e1)
+    known = (a > .25) & inner
+    band = extend_band(rgb, known, MIST_X, (r0, r1), 23, log, 'mist')
+    Wc, Hc = X1 - X0, r1 - r0
+    rows_f = min(H0, r1) - r0
+    sm = lambda v: np.convolve(np.pad(v, 15, mode='edge'), np.ones(31) / 31, 'valid')
+    left = sm(a[r0:r0 + rows_f, e1:e1 + 60].mean(1)); right = sm(a[r0:r0 + rows_f, W0 - e1 - 60:W0 - e1].mean(1))
+    xs = np.arange(Wc) + X0
+    fl = (1 - np.clip(-xs / MIST_OUT, 0, 1)) ** 1.5; fr = (1 - np.clip((xs - W0) / MIST_OUT, 0, 1)) ** 1.5
+    nz = vnoise(Hc, Wc, 120, 29) * .6 + vnoise(Hc, Wc, 45, 31) * .4
+    ext = np.where(xs[None, :] < W0 / 2, left[:, None] * fl[None, :], right[:, None] * fr[None, :])
+    ext = ext * (.75 + .5 * nz[:rows_f])
+    # in the painting: Denis's mist, blending into the going-on one over its outer MIST_EDGE px
+    w = np.clip(np.minimum(xs - e0, W0 - 1 - e0 - xs) / (e1 - e0), 0, 1)[None, :]
+    m = np.zeros((Hc, Wc))
+    af = np.zeros((rows_f, Wc)); af[:, -X0:-X0 + W0] = a[r0:r0 + rows_f]
+    m[:rows_f] = af * w + ext * (1 - w)
+    rr = np.arange(Hc) + r0
+    m *= np.clip((MIST_ROWS[1] - 40 - rr) / 60., 0, 1)[:, None]      # its ragged bottom (under the floor) fades out
+    m = np.clip(m, 0, 1)
+    rgbc = band * 255
+    cf = np.zeros((rows_f, Wc, 3)); cf[:, -X0:-X0 + W0] = rgb[r0:r0 + rows_f] * 255
+    kf = np.zeros((rows_f, Wc), bool); kf[:, -X0:-X0 + W0] = a[r0:r0 + rows_f] > .02
+    wk = (w * kf)[..., None]
+    rgbc[:rows_f] = cf * wk + rgbc[:rows_f] * (1 - wk)
+    on = np.nonzero((m > .003).any(1))[0]
+    y0 = max(0, on.min() - 2)
+    return [{'name': 'mist', 'box': [X0, r0 + y0, X1, r1], 'rgb': rgbc[y0:], 'm': m[y0:].astype(np.float32),
+             'water': None, 'scale': MIST_SCALE}]
 
 
 def build_falls_layer(L2, log):
@@ -733,11 +809,13 @@ def main(preview):
     lay = load_layers()
     islands = build_hills(lay['hills'], log)
     islands += build_falls_layer(lay['falls'], log)
-    islands += build_mountain_layer(lay['mountain'], log)
+    islands += build_mist_layer(lay['mist'], log)
+    mprof = mist_profile(lay['mist'])
+    islands += build_mountain_layer(log, lambda r: mprof[np.clip(np.round(r).astype(int), 0, len(mprof) - 1)])
     sky = build_sky_layer(lay['sky'], log)
     islands.append(build_base(rgb8, unknown, log))
     islands += sky
-    dome = dome_colours(sky[1], mist_profile(rgb8))
+    dome = dome_colours(sky[1], mprof)
     write_atlas(islands, rgb8, dome, preview)
     log('done in %.0f s' % (time.time() - t_all))
 
@@ -797,35 +875,34 @@ def build_base(rgb8, unknown, log):
     return {'name': 'base', 'box': [x0, b0, x1, BASE_BOT], 'rgb': wide, 'm': m, 'water': None, 'scale': BASE_SCALE}
 
 
-def mist_profile(rgb8):
-    """The painting's distant mist, row by row (rows 400 down): the mean of its light, low-saturation blue pixels."""
-    c = rgb8 / 255
-    mx, mn = c.max(2), c.min(2)
-    mist = (mx > .55) & (mx - mn < .45) & (c[..., 2] >= c[..., 0]) & (np.arange(H0)[:, None] >= 400) & \
-        (np.arange(H0)[:, None] < FLOOR_Y)
+def mist_profile(Lm):
+    """Denis's mist (layer 1b), row by row: the mean colour where it is thick, carried up and down from its last rows."""
+    c, a = Lm[..., :3].astype(np.float64), Lm[..., 3]
     prof = np.full((H0 + 400, 3), np.nan)
-    for r in range(400, FLOOR_Y):
-        if mist[r].sum() > 40:
-            prof[r] = c[r][mist[r]].mean(0)
+    for r in range(H0):
+        m = a[r] > .5
+        if m.sum() > 40:
+            prof[r] = c[r][m].mean(0)
     rows = np.arange(H0 + 400)
     ok = ~np.isnan(prof[:, 0])
     return np.stack([np.interp(rows, rows[ok], prof[ok, i]) for i in range(3)], 1)
 
 
-def dome_colours(sky, mist, n=64, e0=-.7, e1=1., h0=430, h1=500):
-    """The sky dome's colour for each elevation (radians) from e0 to e1: what the painting shows at that elevation from
-    the start camera (a row of the painting is one elevation, whatever the depth): the sky's mean colour on that row
-    above row h0, the distant mist below row h1, blended between."""
+def dome_colours(sky, mist, n=64, e0=-.7, e1=1., h0=520, h1=760):
+    """The sky dome's colour for each elevation (radians) from e0 to e1: what the start camera sees at that elevation
+    (a row of the painting is one elevation, whatever the depth): the sky's light on that row (its smooth colour, not
+    its clouds) above row h0, Denis's mist below row h1, blended smoothly between."""
     px, py, su, sv = ref_place()
     t = math.tan(math.radians(FOV / 2))
+    light = sky['light']
     out = []
     for e in np.linspace(e0, e1, n):
         row = H0 * (1 - (py + sv * (math.tan(e) / t + 1) / 2))
-        r = int(np.clip(round((row - sky['box'][1]) * sky['rgb'].shape[0] / (sky['box'][3] - sky['box'][1])), 0,
-                        sky['rgb'].shape[0] - 1))
-        cs = sky['rgb'][r].mean(0) / 255
+        r = int(np.clip(round((row - sky['box'][1]) * len(light) / (sky['box'][3] - sky['box'][1])), 0, len(light) - 1))
+        cs = light[r]
         cm = mist[int(np.clip(round(row), 0, len(mist) - 1))]
         k = float(np.clip((row - h0) / (h1 - h0), 0, 1))
+        k = k * k * (3 - 2 * k)
         out.append([round(float(v), 4) for v in cs * (1 - k) + cm * k])
     return {'e0': e0, 'e1': e1, 'colors': out}
 

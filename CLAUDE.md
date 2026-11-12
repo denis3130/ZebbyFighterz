@@ -14,7 +14,7 @@ Rispondi sempre a Denis **in italiano**, con messaggi brevi e chiari (spesso usa
   - Servono `pip install playwright` e un browser Chromium (il runner usa Chrome o Chromium di sistema se c'è).
   - `three.min.js` (r128) è nel repository: i test lo usano al posto del CDN.
 - Leggi per primo `docs/HANDOFF.md`: stato, decisioni e prossimo passo.
-- Arene 3D: `src/d_arena.js`, `CFG.arenas`, strati da `tools/make_layers.py` (dai 4 livelli di Denis in `docs/ref/cascata_livelli/`: 3 lontano, 2 cascata, 1 colline, 0 pavimento), inquadrature `tools/arena_shots.py`, tempi `tools/frame_ms.py` (vedi `docs/HANDOFF.md`, "Arene 3D").
+- Arene 3D: `src/d_arena.js`, `CFG.arenas`, strati da `tools/make_layers.py` (dai livelli di Denis in `docs/ref/cascata_livelli/`: 4 cielo, 3 montagna, 2 cascata, 1b nebbia, 1 colline, 0 pavimento), inquadrature `tools/arena_shots.py`, tempi `tools/frame_ms.py` (vedi `docs/HANDOFF.md`, "Arene 3D").
 - Lottatori Meshy: `docs/meshy/REN.md` (task, crediti, come rifare il pacchetto `assets/ren/` con `tools/meshy_pack.py`); disegno e pose in `src/e_model.js`, tabella azione → clip in `CFG.clips`. Foglio delle pose: `python3 tools/pose_sheet.py out.png`.
 - Meshy, animazioni: `is_free` del catalogo non vale per la API, ogni azione costa 3 crediti.
 

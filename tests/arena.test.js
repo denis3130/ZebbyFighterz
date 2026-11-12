@@ -50,11 +50,16 @@ T.test('the sky dome: no hole anywhere the free camera looks', () => {
     for (const [yaw, pitch] of [[0, 1.5], [0, -1.5], [Math.PI, 0], [Math.PI / 2, .3], [-Math.PI / 2, -.3]]) {   // anywhere at all
       freeCam(0, 2, 6, yaw, pitch); shot('turned ' + yaw.toFixed(2) + ',' + pitch);
     }
-    // above the horizon the dome is the painting's sky (blue), below it its mist (pale)
+    // the dome alone: above the horizon the sky's blue, below it the mist (lighter)
+    const shown = V.ARENA.far.children.map(m => m.visible);
+    V.ARENA.far.children.forEach(m => { m.visible = m.name === 'dome'; }); V.ARENA.group.visible = false;
     freeCam(0, 2, 6, Math.PI, .6); V.renderer.clear(); V.renderer.render(V.scene, V.camera);
-    const up = readAt(.5, .5); T.ok(up[2] > up[0] + 40, 'sky above: ' + up);
-    freeCam(0, 2, 6, Math.PI, -.04); V.renderer.clear(); V.renderer.render(V.scene, V.camera);   // past the floor's front
-    const lo = readAt(.5, .5); T.ok(lo[0] > 150 && lo[2] >= lo[0] - 10, 'mist below: ' + lo);
+    const up = readAt(.5, .5);
+    freeCam(0, 2, 6, Math.PI, -.6); V.renderer.clear(); V.renderer.render(V.scene, V.camera);
+    const lo = readAt(.5, .5);
+    V.ARENA.far.children.forEach((m, i) => { m.visible = shown[i]; }); V.ARENA.group.visible = true;
+    T.ok(up[2] > up[0] + 40, 'sky above: ' + up);
+    T.ok(lo[0] > 110 && lo[0] + lo[1] + lo[2] > up[0] + up[1] + up[2] + 40, 'mist below: ' + lo + ' (sky ' + up + ')');
   } finally {
     V.renderer.setClearColor(0x000000, 1); V.camera.rotation.set(0, 0, 0); V.F3D.forEach(f => f.root.visible = true);
     V.ARENA.leaves.visible = true; view(-1200, 1200, 0);
@@ -78,13 +83,13 @@ T.test('the floor goes on past the free camera views (sides and front)', () => {
 
 T.test('depth: near moves more than far', () => {
   const V = __VF, d = AD(), pl = V.ARENA.layers.planes;
-  T.eq(pl.map(p => p.name).join(), 'base,hillsL,hillsR,falls,farL,far,farR,sky', 'planes nearest first');
+  T.eq(pl.map(p => p.name).join(), 'base,hillsL,hillsR,mist,falls,fallsL,fallsR,mountain,skyL,sky,skyR', 'planes nearest first');
   for (const p of pl) T.eq(p.z, d.layers[p.name], p.name + ' depth');
   view(-1200, 1200, 0);
-  const pts = [[d.props.column.x, 2, d.props.column.z], [0, 5, d.layers.base], [0, 5, d.layers.hillsL], [0, 5, d.layers.falls], [0, 5, d.layers.far], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
+  const pts = [[d.props.column.x, 2, d.props.column.z], [0, 5, d.layers.base], [0, 5, d.layers.hillsL], [0, 5, d.layers.mist], [0, 5, d.layers.falls], [0, 5, d.layers.mountain], [0, 10, d.layers.sky]], at = () => pts.map(p => V.toScreen(...p).x);
   const a = at(); V.camera.position.x += 1; V.camera.updateMatrixWorld(); const b = at(); view(-1200, 1200, 0);
   const m = a.map((x, i) => Math.abs(b[i] - x));
-  T.ok(m.every((x, i) => i === 0 || (x < m[i - 1] && x > 0)), 'screen shift column > base mist > hills > falls > far mountains > sky: ' + m.map(x => x.toFixed(1)));
+  T.ok(m.every((x, i) => i === 0 || (x < m[i - 1] && x > 0)), 'screen shift column > base mist > hills > mist > falls > mountain > sky: ' + m.map(x => x.toFixed(1)));
 });
 
 T.test('water flows, stone does not', () => {
