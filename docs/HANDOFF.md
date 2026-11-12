@@ -191,7 +191,7 @@ all'incavo come nel foglio (`busto_k7.glb`); poi ("fallo piu piccolo") lungo il 
 disegna i suoi guanti dove mancano": pugni di Ren come sono, guanto su dorso e palmo, pollice e la sua base in pelle
 (`busto_k8.glb`; KAEL.md, "Pugni di Ren con i guanti di Kael"); poi ("non è la mano di ren quella su kael") anche la
 pittura, la luce e il contorno di Ren sulla pelle delle mani (`busto_k9.glb`; KAEL.md, "La mano di Ren anche nella pittura e
-nella luce"). È nella versione 20 da pubblicare.
+nella luce"); poi le mani al 90% (scelte da Denis fra 90, 100 e 115%: `HAND_MUL`). È nella versione 20 da pubblicare.
 
 **Stato al 12/11/2026 (ultima chat, spostata su ZebbyFighterz su richiesta di Denis)**: ramo `tappa2-ren-meshy`, tutto
 salvato e caricato. L'anteprima di Kael pubblicata è la **versione 19**. Pronta ma **non pubblicata** la versione 20 (mani di

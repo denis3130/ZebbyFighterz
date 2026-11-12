@@ -684,6 +684,10 @@ Denis ("manda anteprima").
   delle dita), le sue normali lisciate per la luce (`HAND_REN_NORMALS` in `tools/kael_bust_attach.py`), la luce del
   gioco a tre toni (in `src/e_model.js` i due toni restano solo sul guanto) e il contorno solo sul bordo come il resto
   del corpo (`HAND_LINE` 1,1). Il guanto di Kael resta com'era (prugna, due toni, bordo d'inchiostro).
+- **Grandezza delle mani** (Denis: "ora ridimensionala per kael"): misurate, la mano di Ren su Kael era già della sua
+  grandezza (ossa come quelle della mano di Kael di prima: polso-nocche 10,5-11,7 cm, nocche 7 cm; palmo largo quanto la
+  polsiera come nel foglio). Mostrate tre grandezze (90, 100, 115%), Denis: "secondo me meglio 90%": `HAND_MUL` 0,9
+  in `tools/kael_bust_attach.py` (scala 0,975 a sinistra e 1,038 a destra, dove le braccia di Meshy le davano diverse).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,
