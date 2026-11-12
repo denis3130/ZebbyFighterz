@@ -10,6 +10,8 @@
 - **Più vita** (tutto da JavaScript): cielo che si muove piano, raggi di luce, personaggi che entrano dal loro lato, aura del colore dell'eroe; VS che «sbatte» (volti dai lati, scritta che cade con lampo, tremolio e scintille); risultati con «Vittoria» che arriva da grande e scintille; luccichio dorato sul logo; luce che ripassa sul pulsante col fuoco; aure che lampeggiano nella selezione. Scintille su `#uiFx`, acceso solo finché vivono.
 - **HUD della lotta e tasti touch** nello stile dell'interfaccia (riferimento 02): ritratti obliqui con cornice d'oro, nomi con le grazie, barre sottili, tempo nell'esagono, «N COLPI» con pennellata, scritte dorate, tasti in vetro scuro con anello d'oro. Stessi id: le prove del gioco non cambiano.
 - Corretto: l'arco e il taglio del logo del menu finivano sopra la testa di Ren sui telefoni.
+- **Revisione indipendente** del giro (12/11): corretti il ritratto di Kael nell'HUD (ritaglio specchiato), il centro della scritta VS, la luce di Ren che sbordava sul lato di Kael nell'intro, una prova delle scintille che passava per il motivo sbagliato, la pennellata del fuoco che riavviava una transizione a ogni fotogramma, il logo rifatto dopo un «Salta» tardivo, l'ancora dei volti rimasta vecchia, il lavoro nascosto sotto l'intro, la cache delle immagini e i bordi tagliati dei personaggi; l'intro ora aspetta se il telefono chiede di essere girato. Il punto principale era la fluidità: vedi «Misure».
+- **Fluidità**: i livelli che si muovono ogni fotogramma stanno sulla scheda grafica (`will-change`, solo quelli che la scena mostra); le scie e le luci dell'intro sono immagini pronte disegnate sul canvas; il VS dopo l'entrata sta fermo; le scritte dei round non hanno più il filtro d'ombra (costava fotogrammi a ogni inizio round). Il contatore FPS ora si vede sopra ogni schermata.
 
 ## Dove siamo (U1 finita, 11/11/2026)
 Il percorso completo funziona su touch, mouse, tastiera e controller:
@@ -23,6 +25,7 @@ Il percorso completo funziona su touch, mouse, tastiera e controller:
 - Test dell'interfaccia (oltre a quelli del gioco in `docs/HANDOFF.md`, adattati ai nuovi percorsi con le stesse intenzioni: `menu`, `touch`, `orient`, `hud`, `round`, `play_check`):
 ```
 for f in ui_base ui_save ui_nav ui_comp ui_layers ui_intro ui_title ui_menu ui_select ui_flow ui_results ui_life ui_hud; do python3 tests/run.py tests/$f.test.js || break; done
+python3 tests/run.py tests/ui_fps.test.js --viewport 844x390   # FPS nel ciclo vero (solo da confrontare tra versioni)
 for v in 640x360 844x390 1280x720 1920x1080; do python3 tests/run.py tests/ui_layout.test.js --viewport $v || break; done
 python3 tests/run.py tests/ui_touch.test.js --viewport 844x390 --touch --mobile
 python3 tests/run.py tests/ui_perf.test.js --viewport 844x390
@@ -37,7 +40,13 @@ python3 tests/run.py tests/ui_perf.test.js --viewport 844x390
 - L'intro è una funzione pura del tempo (`introAt(ms)`): due canvas (dietro e davanti ai lottatori, al massimo 1,5 pixel per pixel CSS) per scie, anelli, fulmini, scintille e sassi, tutti da numeri con seme. La vita dei menu è in `u3_layers.js` (`lyMotion`, `layersBurst`, `uiFocusLife`, `uiLogoLife`), quella del VS e dei risultati in `u5_play.js` (`vsLife`, `rsLife`).
 - L'HUD della lotta nel nuovo stile è una sezione in fondo a `u_style.css` che sovrascrive solo l'aspetto di quello di `head.html`.
 
-## Misure (Chromium headless con SwiftShader, 844x390: solo di riferimento, non è un telefono)
+## Misure del giro di miglioramenti (12/11, stesso browser simulato, 844x390, prima = la versione U1 pubblicata l'11/11, alternate)
+- FPS nel ciclo vero (`tests/ui_fps.test.js`): intro **34** contro 27; menu **37-39** contro 29; VS dopo l'entrata **41-44** contro 38,5 (entrata 12-14 contro 14); lotta, primi 5 s **21-23** contro 22-24 (dentro il rumore; a regime 27 in entrambe).
+- Un `tick` nei menu: 0,06 ms (come prima). Un fotogramma dell'intro all'impatto: 0,2-0,3 ms di JavaScript.
+- Il K.O. arriva negli stessi fotogrammi di prima (1040 con hitstop, 988 senza): le lotte non sono più lunghe.
+- Immagini dell'interfaccia: 1,34 MB (WebP), 1,83 MB dentro la pagina.
+
+## Misure U1 (Chromium headless con SwiftShader, 844x390: solo di riferimento, non è un telefono)
 - Prima dell'interfaccia: un `tick` nei menu 0,20 ms; in lotta 2,36 ms; serie del gioco 21 comandi verdi.
 - Dopo: un `tick` nei menu **0,05-0,09 ms** in qualità alta, 0,00-0,01 in bassa; un fotogramma dell'intro all'impatto 0,07-0,10 ms di JavaScript; in lotta 2,1-2,7 ms.
 - Serie completa finale (gioco + interfaccia): **38 comandi, 453 prove, 0 errori**, più `play_check`; il KO arriva negli stessi fotogrammi di prima (1040 con hitstop contro 988 senza).
