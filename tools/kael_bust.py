@@ -82,7 +82,9 @@ MUSCLE = (20, 6, .008, .002)   # the arms' muscles' lines (muscle_lines): the sm
 FINGER_LINE = (.985, 2., 0.)   # the fingers' lines (finger_lines): the sides' ink over [0], their shadow over [1] (2: none); the joints' creases within [2] GLB units (0: none, they read as dashes across the fingers)
 THUMB_RING = float(os.environ.get('KAEL_THUMB_RING', 0.))   # GLB units: the thumb bare from a ring square to it so far past its web (the sheet's glove: the thumb out of it where it leaves the palm; Denis, 12/11: "il pollice è ancora fatto male": bare along the surface from its tip up to its web, its outer side's skin ran on down its base, in the fist a long blade)
 REN_PAINT = int(os.environ.get('KAEL_REN_PAINT', 1))   # the hands' skin in Ren's own paint (1) or the palette's flat skin with lines (0)
-THUMB_W = float(os.environ.get('KAEL_THUMB_W', .1))   # the thumb bare with its base as in Ren's fist: where his skin follows the thumb's bones by more than this (0: from the ring, THUMB_RING)
+THUMB_W = float(os.environ.get('KAEL_THUMB_W', .5))   # the thumb bare with its base as in Ren's fist: where his skin follows the thumb's bones by more than this (0: from the ring, THUMB_RING)
+THUMB_W_VSMOOTH = int(os.environ.get('KAEL_THUMB_W_VSMOOTH', 4))   # rounds of smoothing of those weights over the mesh before the cut
+THUMB_W_SMOOTH = int(os.environ.get('KAEL_THUMB_W_SMOOTH', 0))   # and over the texels (tried 60: the teeth stayed; 200: the glove took most of the thumb)
 THUMB_SPAN = float(os.environ.get('KAEL_THUMB_SPAN', .03))   # GLB units: the thumb's skin along the surface from its tip up to its web and this much more (where the ring is nearer, the ring its edge)
 DORSAL = (.035, .025)   # the glove's edge on the back of the hand this much nearer the wrist (GLB units, 1.5 cm), blended over the hand's half thickness [1]
 GLOVE_M, THUMB_M, SMOOTH, REN_LINE, REN_SMALL, GLOVE_SMOOTH = .02, .005, 30, (110, 110), 5., 4   # Ren's hands: the glove's edge under the webs, the thumb bare up to [1] short of its web; the distance's smoothing; his lines: ink, shadow under these lightnesses (the same: no painted shadow, the game's light draws it; Ren's painted wrinkles were brown blotches on the fists), their bits under [4] mm2 skin; the glove's edge smoothed [5] times (the glove plain plum: the light's black on it came out in blotches)
@@ -633,7 +635,14 @@ def main(src, dst, png=None, fit=False):
     import kael_bust_attach as KA
     R_ = KA.package(KA.REN[0]); RL_, rsi_, rsw_ = KA.look(KA.REN[1], len(R_['P'])); an_ = R_['names'] + [f['n'] for f in RL_['fingers']]
     rth = (rsw_ * np.isin(rsi_, [k for k, n in enumerate(an_) if 'Thumb' in n])).sum(1)
-    vt = np.where(rid >= 0, rth[np.maximum(rid, 0)], 0.); thumbw = (vt[I[ks]] * bary).sum(1)
+    vt = np.where(rid >= 0, rth[np.maximum(rid, 0)], 0.)
+    if THUMB_W_VSMOOTH:   # (smoothed over the surface first: on Ren's big triangles the weights' line broke into teeth)
+        wv_, Pw_, W_, E_, G_ = _graph(P, I); vw = np.zeros(len(Pw_)); np.maximum.at(vw, wv_, vt); dg = np.bincount(E_.ravel(), minlength=len(Pw_)).astype(float)
+        for _ in range(THUMB_W_VSMOOTH):
+            acc = np.bincount(E_[:, 0], vw[E_[:, 1]], len(Pw_)) + np.bincount(E_[:, 1], vw[E_[:, 0]], len(Pw_)); vw = np.where(dg > 0, .5 * vw + .5 * acc / np.maximum(dg, 1), vw)
+        vt = np.where(rid >= 0, vw[wv_], 0.)
+    thumbw = (vt[I[ks]] * bary).sum(1)
+    for _ in range(THUMB_W_SMOOTH): thumbw = np.where(newh, (np.where(okw, thumbw[jw], 0).sum(1) + thumbw) / (okw.sum(1) + 1), thumbw)   # (and over the texels)
     glove = glove_texels(pos, newh, planes, jw, okw, thumbw) | (s_ == 2)
     g2 = glove.astype(np.int64)
     for _ in range(GLOVE_SMOOTH): g2 = KF._mode(g2, jw, okw, 2, keep=~newh | (s_ == 2))
