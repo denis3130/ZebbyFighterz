@@ -82,5 +82,9 @@ Tutte ritagliate o ricavate dai 5 riferimenti dell'interfaccia, ingrandite 4 vol
 - Acquisto del Premium dagli store (Google Play, App Store, Steam) con controllo delle ricevute su un server; online e classifica globale; negozio; altre lingue; musica e suoni; scelta simultanea dei personaggi con due dispositivi; scontro speculare (seconda copia del modello e colore alternativo); intro con i modelli 3D; Astra e Raigon giocabili.
 - Il VS non ha un pulsante «Indietro» a schermo (come nel riferimento): Esc / B tornano all'arena; dura 2,5 s.
 
+## Animazioni con ComfyUI (12/11, scelta di Denis)
+Denis genera le animazioni sul suo PC (RTX 3060 12 GB) con ComfyUI, partendo da immagini che manda lui: intro col pugno vero
+(primo e ultimo fotogramma), personaggi vivi nei menu e sfondi in ciclo. Guida, prompt e impostazioni: `docs/comfy/ANIMAZIONI.md`.
+
 ## Prossimo passo
 Denis prova la pagina sul telefono (percorso intero fino ai risultati) e dice cosa cambiare. Poi U2 (HUD della lotta e pausa completa) o le immagini definitive, a sua scelta.
