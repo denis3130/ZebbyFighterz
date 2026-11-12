@@ -58,7 +58,7 @@
 .ub.f::before{animation:uShine .7s var(--u-ease) .05s 1}
 .ub.f.shine::before{animation:uShine2 .8s var(--u-ease) 1}
 @keyframes uShine2{0%{opacity:0;transform:translateX(0)}30%{opacity:1}100%{opacity:0;transform:translateX(480%)}}
-.ub.f::after{opacity:var(--br,1)}
+.ub.f::after,.ub.main.f::after{opacity:var(--br,1);transition:none}   /* --br breathes from JS: no transition restarted every frame */
 @keyframes uShine{0%{opacity:0;transform:translateX(0)}30%{opacity:1}100%{opacity:0;transform:translateX(480%)}}
 .ub:active{transform:skewX(-16deg) scale(.95)}
 .ub.lock{color:var(--u-dim)}
@@ -80,7 +80,7 @@
 .uitem::after{content:'';position:absolute;z-index:-1;left:45%;width:calc(var(--u)*28);top:30%;height:50%;opacity:0;transition:opacity .2s;
   background:linear-gradient(90deg,rgba(240,138,50,0),rgba(240,138,50,.55) 45%,rgba(255,170,80,.8) 70%,rgba(255,200,130,0));clip-path:var(--u-brush)}
 .uitem.f{font-size:max(26px,calc(var(--u)*8));color:#fff7ea;text-shadow:0 0 18px rgba(240,138,50,.35)}
-.uitem.f::before{opacity:1}.uitem.f::after{opacity:var(--br,1)}
+.uitem.f::before{opacity:1}.uitem.f::after{opacity:var(--br,1);transition:none}
 .uitem.lock{color:rgba(165,157,179,.75)}
 .uitem.lock .uico{font-size:.62em;color:var(--u-gold)}
 /* --- card with a picture: italic label at the bottom; with the focus an orange frame, glow and a slow zoom --- */
@@ -187,6 +187,10 @@
 #uiLayers #lyRays,#uiLayers #lyGlow{transition:transform .7s var(--u-ease)}   /* their opacity follows JS every frame: no transition on it */
 /* the layers that move every frame (lyMotion) are their own GPU layers: moved by the GPU, never redrawn */
 #lySky,#lyClouds,#lyArena,#lyRays,#lyFog2,#lyRival,#lyFog1,#lyGlow,#lyHero{will-change:transform,opacity}
+/* ...but only those the scene shows (each GPU layer costs memory on a phone) */
+#uiLayers[data-scene="intro"] .ly,#uiLayers[data-scene="off"] .ly,#lyArena:not(.on),#uiLayers:not([data-scene="menu"]) #lyGlow,#uiLayers[data-scene="vs"] #lyRays,
+#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]):not([data-scene="results"]) #lyHero,
+#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]) #lyRival{will-change:auto}
 #lyRays{left:6%;right:-12%;top:-24%;height:112%;opacity:0;transform-origin:60% 0;
   background:repeating-linear-gradient(114deg,rgba(255,200,146,0) 0 5%,rgba(255,200,146,.17) 6.4% 7.6%,rgba(255,200,146,0) 9.2% 13%,rgba(255,214,170,.1) 14% 14.8%,rgba(255,200,146,0) 16% 21%);
   -webkit-mask-image:radial-gradient(ellipse 72% 62% at 58% 0%,#000 18%,transparent 78%);mask-image:radial-gradient(ellipse 72% 62% at 58% 0%,#000 18%,transparent 78%)}
@@ -222,8 +226,8 @@
 .inSky{inset:-6%;opacity:0;background:center 40%/cover no-repeat}
 .inSplit{inset:-6%;opacity:0}
 .inWarm,.inCool{position:absolute;inset:0}
-.inWarm{background:linear-gradient(90deg,rgba(255,120,40,.42),rgba(255,120,40,.1) 40%,rgba(255,120,40,0) 60%)}
-.inCool{background:linear-gradient(270deg,rgba(130,80,255,.42),rgba(130,80,255,.1) 40%,rgba(130,80,255,0) 60%)}
+.inWarm{background:radial-gradient(ellipse 70% 90% at 22% 52%,rgba(255,130,48,.5),rgba(255,120,40,.16) 55%,rgba(255,120,40,0) 80%)}
+.inCool{background:radial-gradient(ellipse 70% 90% at 78% 52%,rgba(140,90,255,.5),rgba(130,80,255,.16) 55%,rgba(130,80,255,0) 80%)}
 #sc-intro canvas{inset:0;width:100%;height:100%}
 .inPanel{position:absolute;pointer-events:none}
 .inF{position:absolute;display:block;opacity:0;background:center/100% 100% no-repeat}
@@ -367,10 +371,10 @@
 #sc-vs.on{display:block}
 .vsStage{position:absolute;inset:0;pointer-events:none}
 .vsStage,.vsF,.vsMark,.vsLines,.vsFlash,.selFig,.selAura{will-change:transform,opacity}   /* moved every frame (vsLife, selLife): GPU layers */
+#sc-vs.settled .vsF,#sc-vs.settled .vsMark,#sc-vs.settled .vsLines,#sc-vs.settled .vsFlash{will-change:auto}   /* once still, painted once (their masks and the mark's shadow no longer composited every frame) */
 /* speed lines toward the middle while the faces slam in; the flash of the VS mark's crash (both from JS, vsLife) */
-.vsLines{position:absolute;inset:-6% -10%;opacity:0;
-  background:repeating-linear-gradient(98deg,rgba(255,232,204,0) 0 26px,rgba(255,232,204,.22) 26px 28px,rgba(255,232,204,0) 28px 64px,rgba(255,190,120,.16) 64px 65px,rgba(255,232,204,0) 65px 90px);
-  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 45%,transparent 30%,#000 75%);mask-image:radial-gradient(ellipse 60% 55% at 50% 45%,transparent 30%,#000 75%)}
+.vsLines{position:absolute;inset:-6% -10%;opacity:0;   /* (behind the faces, which cover the middle: no mask needed) */
+  background:repeating-linear-gradient(98deg,rgba(255,232,204,0) 0 26px,rgba(255,232,204,.22) 26px 28px,rgba(255,232,204,0) 28px 64px,rgba(255,190,120,.16) 64px 65px,rgba(255,232,204,0) 65px 90px)}
 .vsFlash{position:absolute;inset:0;opacity:0;pointer-events:none;background:radial-gradient(circle at 50% 44%,#fff8ec,rgba(255,224,176,.55) 32%,rgba(255,200,140,0) 72%)}
 /* each face (--ax: where it is in its picture, set in vsScreen) at a quarter of the width from its side; the picture fades
    only past the face, toward the VS mark, and toward the bottom, under the names */
@@ -381,7 +385,7 @@
 .vsF.r{background-position:calc(75vw - var(--ax,.61) * var(--fh)) 0;transform-origin:75vw 45%;
   -webkit-mask-image:linear-gradient(270deg,#000 calc(25vw + var(--fh) * .3),transparent calc(25vw + var(--fh) * .56)),linear-gradient(180deg,#000 calc(var(--fh) * .62),transparent calc(var(--fh) * .97));-webkit-mask-composite:source-in;
   mask-image:linear-gradient(270deg,#000 calc(25vw + var(--fh) * .3),transparent calc(25vw + var(--fh) * .56)),linear-gradient(180deg,#000 calc(var(--fh) * .62),transparent calc(var(--fh) * .97));mask-composite:intersect}
-.vsMark{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);pointer-events:none}
+.vsMark{position:absolute;left:50%;top:44%;translate:-50% -50%;pointer-events:none}   /* (translate, not transform: its scale from JS then grows around its centre) */
 .vsMark b{display:block;font-family:var(--u-display);font-weight:600;font-size:calc(var(--u)*26);line-height:1;letter-spacing:-.04em;
   background:linear-gradient(180deg,#fff3d8,#e7c27e 45%,#a87632);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 14px rgba(0,0,0,.6))}
 .vsMark i{position:absolute;left:-10%;right:-10%;top:48%;height:5px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange) 45%,#ffd9a0 55%,rgba(240,138,50,0));transform:rotate(-58deg);clip-path:var(--u-brush)}
@@ -437,15 +441,22 @@
    elongated hexagon, «N COLPI» in big serif italics over an orange brush stroke, gold banners, dark glass buttons with a
    thin gold ring and serif captions. Only the look changes: the same elements and ids as the game's (head.html). --- */
 #hud{--hp-h:max(9px,calc(var(--u)*2.7))}
-#hud::before{content:'';position:absolute;left:0;right:0;top:0;height:max(70px,calc(var(--u)*24));pointer-events:none;
+#hudTop{z-index:0}
+#hudTop::before{content:'';position:absolute;z-index:-1;left:-50vw;right:-50vw;top:calc(-1 * (env(safe-area-inset-top) + var(--u)*2.4));height:max(70px,calc(var(--u)*24));pointer-events:none;
   background:linear-gradient(180deg,rgba(10,8,14,.62),rgba(10,8,14,.28) 55%,rgba(10,8,14,0))}   /* the names and bars stay readable on a bright arena */
+/* behind a banner, a dark band across the screen (no filter on the banner itself: a blurred shadow on big text costs a phone
+   frames at the start of every round) */
+#hud::before{content:'';position:absolute;left:0;right:0;top:calc(36% - var(--u)*4);height:max(70px,calc(var(--u)*24));opacity:0;pointer-events:none;
+  background:linear-gradient(90deg,rgba(10,8,14,0),rgba(10,8,14,.5) 28%,rgba(10,8,14,.5) 72%,rgba(10,8,14,0));
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 28%,#000 72%,transparent);mask-image:linear-gradient(180deg,transparent,#000 28%,#000 72%,transparent)}
+#hud:has(#banner.on)::before{opacity:1}
 #hudTop{gap:calc(var(--u)*1.2);top:calc(env(safe-area-inset-top) + var(--u)*2.4)}
 .hs{gap:calc(var(--u)*1.4)}
 .face{width:max(46px,calc(var(--u)*14));height:max(34px,calc(var(--u)*10.4));padding:1.5px;clip-path:polygon(16% 0,100% 0,84% 100%,0 100%);
   background:linear-gradient(160deg,#f6dca6,#c99a52 55%,#8a6232);box-shadow:none}
 .hs.r .face{clip-path:polygon(0 0,84% 0,100% 100%,16% 100%)}
 .face i{clip-path:polygon(16% 0,100% 0,84% 100%,0 100%);background-color:#1b1724}
-.hs.r .face i{clip-path:polygon(0 0,84% 0,100% 100%,16% 100%)}
+.hs.r .face i{clip-path:polygon(16% 0,100% 0,84% 100%,0 100%)}   /* head.html mirrors Kael's picture (scaleX(-1)): its clip is mirrored with it */
 .nm{font-family:var(--u-display);font-style:normal;font-weight:600;font-size:max(11px,calc(var(--u)*2.9));letter-spacing:.18em;color:#fbe7c0;margin:0 calc(var(--u)*1.6) calc(var(--u)*.8);
   text-shadow:0 1px 4px rgba(0,0,0,.9)}
 .bar{height:var(--hp-h);background:linear-gradient(180deg,rgba(10,8,14,.82),rgba(24,20,30,.82));border:1px solid rgba(232,196,140,.8);transform:skewX(-24deg);
@@ -477,7 +488,7 @@
 /* the banners (ROUND 1, COMBATTI!, K.O., TEMPO!, the winner): gold serif capitals with a line of light under */
 #banner{top:36%;transform:none;font-family:var(--u-display);font-style:normal;font-weight:700;font-size:max(36px,calc(var(--u)*15));letter-spacing:.12em;
   background:linear-gradient(180deg,#fff7e2 10%,#f2c97c 55%,#b47634);-webkit-background-clip:text;background-clip:text;color:transparent;
-  text-shadow:none;filter:drop-shadow(0 4px 14px rgba(0,0,0,.75)) drop-shadow(0 0 10px rgba(240,150,60,.35))}
+  text-shadow:none;filter:none;-webkit-text-stroke:1px rgba(48,28,12,.6)}
 #banner::after{content:'';display:block;width:min(60vw,calc(var(--u)*110));height:max(5px,calc(var(--u)*1.6));margin:calc(var(--u)*1.2) auto 0;
   background:linear-gradient(90deg,rgba(240,138,50,0),rgba(240,138,50,.85) 45%,rgba(255,214,150,.95) 55%,rgba(240,138,50,0));clip-path:var(--u-brush)}
 @keyframes hudBannerS{0%{opacity:0;transform:scale(1.8)}100%{opacity:1;transform:scale(1)}}

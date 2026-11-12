@@ -63,8 +63,9 @@ function introBuild(r) {
 function inSize() {
   const w = innerWidth, h = innerHeight, dpr = Math.min(window.devicePixelRatio || 1, 1.5), E = INTRO.el;
   if (w === INTRO.w && h === INTRO.h && dpr === INTRO.dpr) return;
-  INTRO.w = w; INTRO.h = h; INTRO.dpr = dpr;
-  for (const c of [E.back, E.front]) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  INTRO.w = w; INTRO.h = h; INTRO.dpr = dpr; INTRO.bdpr = Math.min(dpr, 1);   // the back canvas only has soft lights and silhouettes
+  E.back.width = Math.round(w * INTRO.bdpr); E.back.height = Math.round(h * INTRO.bdpr);
+  E.front.width = Math.round(w * dpr); E.front.height = Math.round(h * dpr);
   const G = inGeo(), C = CFG.ui.intro;
   Object.assign(E.panel.style, {width: G.pw.toFixed(1) + 'px', height: G.ph.toFixed(1) + 'px', left: (G.cx - C.hit[0] * G.pw).toFixed(1) + 'px', top: (G.cy - C.hit[1] * G.ph).toFixed(1) + 'px'});
 }
@@ -101,13 +102,24 @@ function inPiece(el, box, side, p, op) {
 }
 
 // --- drawing helpers (canvas, CSS pixels) ---
-function inGlow(c, x, y, r, col, a, core) {     // a soft round light; core = share of the radius at full strength
-  if (a <= .003 || r <= .5) return;
-  const g = c.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, col); if (core) g.addColorStop(core, col); g.addColorStop(1, inA(col, 0));
-  c.globalAlpha = Math.min(1, a); c.fillStyle = g; c.fillRect(x - r, y - r, 2 * r, 2 * r);
+// A soft round light (core = share of the radius at full strength), drawn from a sprite made once per colour and core:
+// a scaled picture costs a phone much less than a gradient computed for every pixel.
+const IN_GLOW = {};
+function inGlowSprite(col, core) {
+  const k = col + '/' + (core || 0);
+  if (IN_GLOW[k]) return IN_GLOW[k];
+  const c = IN_GLOW[k] = document.createElement('canvas'), g = c.getContext('2d'), r = 128;
+  c.width = c.height = 2 * r;
+  const gr = g.createRadialGradient(r, r, 0, r, r, r);
+  gr.addColorStop(0, col); if (core) gr.addColorStop(core, col); gr.addColorStop(1, inA(col, 0));
+  g.fillStyle = gr; g.fillRect(0, 0, 2 * r, 2 * r);
+  return c;
 }
-function inHalf(c, G, side, fn) { c.save(); c.beginPath(); c.rect(side ? G.cx : -G.w, -G.h, G.w * 2, G.h * 3); c.clip(); fn(); c.restore(); }   // only one side of the hit
+function inGlow(c, x, y, r, col, a, core) {
+  if (a <= .003 || r <= .5) return;
+  c.globalAlpha = Math.min(1, a); c.drawImage(inGlowSprite(col, core), x - r, y - r, 2 * r, 2 * r);
+}
+function inHalf(c, G, side, fn) { c.save(); c.beginPath(); c.rect(side ? G.cx : G.cx - 2 * G.w, -G.h, G.w * 2, G.h * 3); c.clip(); fn(); c.restore(); }   // only one side of the hit
 function inOrb(c, x, y, h, col, k, e) {         // a charged fist: a white core in a coloured glow (k = charge, about 0..1.6)
   if (k <= 0) return;
   const f = .88 + .24 * inR(e, 5), a = Math.min(1, k);
@@ -209,7 +221,7 @@ function introAt(t) {
   const out = 1 - inK(t, T.title, T.title + 500);
   inOp(E.sky, lit * out);
   inBg(E.stage, out);   // the dark under everything, gone as the title's scene shows through
-  inOp(E.split, t >= T.hit && t < T.white ? .7 * inOut(inK(t, T.freeze, T.hold + 300)) : 0);
+  inOp(E.split, t >= T.hit && t < T.white ? .78 * inOut(inK(t, T.freeze, T.hold + 300)) * (.88 + .24 * inR(Math.floor(t / 50), 4)) : 0);   // the two energies' light, flickering
   inOp(E.vig, out);
   E.titleBg.style.opacity = inK(t, T.title, T.title + 500).toFixed(3);
   // white: the flash of the hit, after the impact frame a fading glare, the white-out, fading into the logo
@@ -219,7 +231,7 @@ function introAt(t) {
 
   // --- the canvases ---
   const n = INTRO.q, bc = E.bc, fc = E.fc, dpr = INTRO.dpr, fx = inFx(t), e50 = Math.floor(t / 50);
-  for (const c of [bc, fc]) { c.setTransform(dpr, 0, 0, dpr, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, G.w, G.h); c.lineJoin = c.lineCap = 'round'; }
+  for (const c of [bc, fc]) { const k = c === bc ? INTRO.bdpr : dpr; c.setTransform(k, 0, 0, k, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, G.w, G.h); c.lineJoin = c.lineCap = 'round'; }
   bc.globalCompositeOperation = fc.globalCompositeOperation = 'lighter';
   const fR = inAt(G, C.fist.ren[0] - pR.g, C.fist.ren[1] + pR.y), fK = inAt(G, C.fist.kael[0] + pK.g, C.fist.kael[1] + pK.y);
   // the afterimages, behind the fighters: where each fighter was a few ms ago, as a silhouette in his colour
@@ -265,8 +277,6 @@ function introAt(t) {
   } else if (t < T.white) {
     const burst = inIn(inK(t, T.burst, T.white)), hold = inK(t, T.freeze, T.hold);
     // behind: the split light of the two energies, the upper halves of the shock rings, rocks rising in the hold
-    inGlow(bc, G.cx - G.w * .3, G.cy, G.w * .75, IN_COL[0], (.16 + .16 * hold) * (.9 + .2 * inR(e50, 4)));
-    inGlow(bc, G.cx + G.w * .3, G.cy, G.w * .75, IN_COL[1], (.16 + .16 * hold) * (.9 + .2 * inR(e50, 5)));
     const ring = (i, half, c) => {
       const k = inK(fx, i * 80, i * 80 + 650); if (k <= 0 || k >= 1) return;
       const rx = G.w * (.03 + (.62 + .2 * i) * inOut(k)), ry = rx * (i === 1 ? .92 : .3);
@@ -341,13 +351,16 @@ function introEnd(whole) {
   if (SV) { SV.introSeen = true; saveWrite(); }
   navReset('title', whole ? {fromIntro: true} : {});
 }
-function introSkip() { introEnd(false); }
+function introSkip() { introEnd(INTRO.t >= IN_T.logo + 600); }   // once the logo has formed, the title keeps it still
 
 function introScreens() {
   navRegister({id: 'intro', scene: 'intro', build: introBuild,
     enter() { INTRO.t = 0; INTRO.last = 0; INTRO.scene = null; INTRO.q = IN_QN[LY.q] || 1; introAt(0); },
     leave() { INTRO.scene = null; },
-    frame(now) { const dt = INTRO.last ? Math.min(100, now - INTRO.last) : 0; INTRO.last = now; introAt(INTRO.t + dt); },
+    frame(now) {
+      if (MN.rot) { INTRO.last = now; return; }   // «Gira il telefono» covers it: the intro waits
+      const dt = INTRO.last ? Math.min(100, now - INTRO.last) : 0; INTRO.last = now; introAt(INTRO.t + dt);
+    },
     any() { if (!SV || !SV.introSeen) return false; introSkip(); return true; },
     back() { return false; }});
   titleScreens();

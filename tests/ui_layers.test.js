@@ -42,3 +42,11 @@ T.test('the characters are sharp cut-outs: transparent around the figure, tall e
     T.ok(clear > 64 * 64 * .04, k + ' has no transparent surroundings (' + clear + ')');
     if (__VF.CFG.ui.art[k]) T.near(img.naturalWidth / img.naturalHeight, __VF.CFG.ui.art[k][0], .01);
   } });
+T.test('a picture without a face entry drops the previous picture\'s anchor', () => { const A = __VF.CFG.ui.art, k = A.kael_full;
+  __VF.UI.SV.name = 'Denis'; __VF.navReset('menu'); __VF.layersSet('menu', {hero: 'ren'}); T.ok($('lyHero').style.getPropertyValue('--ax') !== '');
+  delete A.kael_full; __VF.layersSet('menu', {hero: 'kael'}); const v = $('lyHero').style.getPropertyValue('--ax'); A.kael_full = k; __VF.layersSet('menu', {hero: 'ren'}); T.eq(v, ''); });
+T.test('only the layers a scene shows are GPU layers (memory on a phone)', () => {
+  const wc = id => getComputedStyle($(id)).willChange;
+  __VF.UI.SV.introSeen = true; __VF.navReset('intro'); for (const id of ['lySky', 'lyClouds', 'lyHero', 'lyRays', 'lyGlow', 'lyArena']) T.eq(wc(id), 'auto', 'intro ' + id);
+  __VF.navReset('menu'); T.ok(wc('lySky') !== 'auto' && wc('lyHero') !== 'auto', 'menu moves its sky and hero'); T.eq(wc('lyArena'), 'auto', 'no arena in the menu');
+  __VF.navGo('vsopts'); T.eq(wc('lyGlow'), 'auto', 'the glow is the menu\'s only'); __VF.navReset('menu'); });

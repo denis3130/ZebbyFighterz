@@ -23,7 +23,7 @@ No picture of «La Grande Cascata» exists in the references: its card shows a s
 No near ruins layer (ruins.webp) yet: the references paint each scene in one piece; the final art brings it.
 Prints each file's size; fails if they add up to more than BUDGET_KB (the page keeps the interface under 3 MB as base64).
 """
-import os, sys
+import hashlib, os, sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
@@ -56,6 +56,7 @@ CUTS = {
     'ren_win': (U3, (836, 525, 1241, 852), 1200),
 }
 KEEP_SHARE = .15
+EDGE_FADE = .06
 INTRO = (U0, (0, 0, 836, 412))
 INTRO_CUT, INTRO_LAP, INTRO_H = 1752, 8, 1240
 INTRO_FADE = {'left': .03, 'right': .04, 'bottom': .06}
@@ -91,8 +92,13 @@ def noise_band(size, scale, alpha, tint, seed):
 
 
 def hd(sheet, box):
-    """The reference box 4x sharper (Real-ESRGAN anime), cached in CACHE."""
-    key = '%s_%d_%d_%d_%d' % ((os.path.basename(sheet)[:2],) + tuple(box))
+    """The reference box 4x sharper (Real-ESRGAN anime), cached in CACHE (the key holds the box and a hash of the reference
+    picture and of the models, so a changed reference or model makes a new one)."""
+    h = hashlib.sha1(open(os.path.join(REF, sheet), 'rb').read())
+    for m in ('realesrgan-x4plus-anime.bin', 'isnet-anime.onnx'):
+        p = os.path.join(MODELS, m)
+        h.update(('%s:%d' % (m, os.path.getsize(p) if os.path.exists(p) else 0)).encode())
+    key = '%s_%d_%d_%d_%d_%s' % ((os.path.basename(sheet)[:2],) + tuple(box) + (h.hexdigest()[:10],))
     p = os.path.join(CACHE, key + '_x4.png')
     if not os.path.exists(p):
         if not os.path.exists(os.path.join(MODELS, 'realesrgan-x4plus-anime.bin')):
@@ -152,10 +158,18 @@ def keep_main(a):
 
 
 def cut_figure(name, sheet, box, height):
-    """A character from a reference: 4x sharper, cut out, only the figure, cropped to it, height px tall."""
+    """A character from a reference: 4x sharper, cut out, only the figure, cropped to it, height px tall. Where the figure
+    runs into the left or right edge of the reference's box (cut by it), it fades out over EDGE_FADE of the width, so no
+    straight vertical cut shows in the middle of a screen (the top and bottom cuts sit on the screen's edges)."""
     up, key = hd(sheet, box)
     px = cut_out(up, key)
     px[..., 3] = keep_main(px[..., 3])
+    a = px[..., 3].astype(np.float32)
+    W = a.shape[1]
+    x = np.arange(W)[None, :] / W
+    if (a[:, 0] > 128).mean() > .05: a *= np.clip(x / EDGE_FADE, 0, 1)
+    if (a[:, -1] > 128).mean() > .05: a *= np.clip((1 - x) / EDGE_FADE, 0, 1)
+    px[..., 3] = (a + .5).astype(np.uint8)
     ys, xs = np.where(px[..., 3] > 3)
     img = Image.fromarray(px[ys.min():ys.max() + 1, xs.min():xs.max() + 1], 'RGBA')
     return img.resize((round(img.width * height / img.height), height), Image.LANCZOS)

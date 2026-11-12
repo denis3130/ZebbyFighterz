@@ -198,25 +198,27 @@ function arenaScreen() {
 // «Caricamento…» follows the real loading. It stays CFG.ui.vs.minMs (its clock runs on shown frames only, so a hidden
 // page does not start the fight); once loaded, a tap or a key after CFG.ui.vs.tapAfterMs starts at once. Loading
 // failed: the reason, «Riprova» and «Indietro».
-const VS = {t: 0, last: 0, ready: false, err: false, started: false, tok: 0, p: null, el: null, burst: false};
+const VS = {t: 0, last: 0, ready: false, err: false, started: false, tok: 0, p: null, el: null, burst: false, settled: false};
 // The VS's entrance (a pure function of the screen's clock t, ms): the two faces slam in from the sides, the VS mark
 // crashes down on them with a flash, a shake and a burst of sparks, the names rise; then the faces push in slowly and the
 // seam of light between them flickers. Driven from the frame, no CSS animation.
 function vsLife(t) {
+  if (t >= 1000) { if (VS.settled) return; VS.settled = true; t = 1000; } else VS.settled = false;   // after its entrance the VS stands still
+  NAV.screens.vs.root.classList.toggle('settled', VS.settled);
   const E = VS.el, k = x => Math.max(0, Math.min(1, x)), back = x => 1 + 2.7 * Math.pow(x - 1, 3) + 1.7 * Math.pow(x - 1, 2);   // ease out with an overshoot
-  const kl = k(t / 260), kr = k((t - 60) / 260), push = (1 + .035 * k((t - 300) / 3000)).toFixed(4);
+  const kl = k(t / 260), kr = k((t - 60) / 260), push = (1 + .02 * Math.sin(Math.PI * k((t - 390) / 500))).toFixed(4);   // the faces flinch as the mark crashes
   E.l.style.translate = (-26 * (1 - back(kl))).toFixed(2) + 'vw 0'; E.l.style.opacity = Math.min(1, kl * 3).toFixed(3); E.l.style.scale = push;
   E.r.style.translate = (26 * (1 - back(kr))).toFixed(2) + 'vw 0'; E.r.style.opacity = Math.min(1, kr * 3).toFixed(3); E.r.style.scale = push;
   const km = k((t - 220) / 170), hit = t - 390;
   E.mark.style.opacity = km > 0 ? '1' : '0';
-  E.mark.style.scale = (1 + 2.2 * (1 - km * km) + (hit > 0 ? .04 * Math.sin(t / 300) * k(hit / 600) : 0)).toFixed(3);
+  E.mark.style.scale = (1 + 2.2 * (1 - km * km)).toFixed(3);
   E.flash.style.opacity = hit >= 0 ? (.75 * (1 - k(hit / 240))).toFixed(3) : '0';
   const sh = hit >= 0 ? 14 * (1 - k(hit / 380)) : 0, e = Math.floor(t / 33);
   E.stage.style.translate = sh ? ((uiRand(e, 1) - .5) * sh).toFixed(1) + 'px ' + ((uiRand(e, 2) - .5) * sh).toFixed(1) + 'px' : '0px 0px';
   if (hit >= 0 && !VS.burst) { VS.burst = true; const b = E.mark.getBoundingClientRect(); layersBurst(b.left + b.width / 2, b.top + b.height / 2, 48, '#ffc46a', 1.4); }
   E.lines.style.opacity = (.75 * k(t / 120) * (1 - k((t - 380) / 520))).toFixed(3);
   E.lines.style.translate = (-(t * .8) % 90).toFixed(1) + 'px 0';
-  E.seam.style.opacity = hit > 0 ? (.5 + .5 * uiRand(Math.floor(t / 70), 3)).toFixed(3) : '0';
+  E.seam.style.opacity = hit < 0 ? '0' : t < 1000 ? (.5 + .5 * uiRand(Math.floor(t / 70), 3)).toFixed(3) : '.85';
   const kn = k((t - 450) / 300);
   for (const s of E.sides) { s.style.opacity = kn.toFixed(3); s.style.translate = '0 ' + (16 * (1 - kn)).toFixed(1) + 'px'; }
 }
@@ -240,7 +242,7 @@ function vsScreen() {
       VS.el = {stage: q('.vsStage'), lines: q('.vsLines'), l: q('.vsF.l'), r: q('.vsF.r'), mark: q('.vsMark'), seam: q('.vsMark i'), flash: q('.vsFlash'), sides: [...r.querySelectorAll('.vsSide')]};
     },
     enter(p) {
-      VS.p = p; VS.t = 0; VS.last = 0; VS.started = false; VS.burst = false;
+      VS.p = p; VS.t = 0; VS.last = 0; VS.started = false; VS.burst = false; VS.settled = false;
       const r = this.root, lines = CFG.ui.lines[p.chars[0] + '>' + p.chars[1]] || ['', ''];
       ['l', 'r'].forEach((s, i) => {
         const c = p.chars[i];

@@ -6,7 +6,7 @@ Object.assign(CFG, {
     repeat: [350, 130],                                                   // controller direction held in the menus: ms before the first repeat, then between repeats
     // the characters' pictures (assets/ui): width / height, and where the face is (share of the width, of the height); the
     // title and the results put each face in its place with these, so new art only needs new numbers here
-    art: {ren_full: [1.0883, .36, .25], kael_full: [.5817, .62, .2], ren_vs: [1.2673, .52, .45], kael_vs: [1.0191, .6, .45], ren_win: [1.225, .78, .18]},
+    art: {ren_full: [1.0867, .36, .25], kael_full: [.5817, .62, .2], ren_vs: [1.2664, .52, .45], kael_vs: [1.0182, .6, .45], ren_win: [1.2242, .78, .18]},
     intro: {len: 5200, firstSkipAfter: 0,                                 // the opening sequence lasts 5.2 s; «Salta» is there from the start
       // the clash panel (tools/make_ui_assets.py prints these): width / height, the point where the fists meet, the box of
       // each half in it (fractions), the charged fists (Ren's is hidden behind Kael's in the picture: his glow covers it);

@@ -39,6 +39,7 @@ function lyChar(id, c, pose) {
   // heights, --ay = its height share)
   const A = CFG.ui.art[key.slice(3, -5)];
   if (A) { el.style.setProperty('--ax', (A[0] * A[1]).toFixed(4)); el.style.setProperty('--ay', A[2]); }
+  else { el.style.removeProperty('--ax'); el.style.removeProperty('--ay'); }   // (the CSS's own default then applies)
   return true;
 }
 // scene: 'menu' | 'title' | 'intro' | 'select' | 'vs' | 'results' | 'off' (CSS places the layers per scene); o = {hero, rival,
@@ -148,6 +149,10 @@ function uiLogoLife(d, now) {
 }
 // Embers: small warm sparks rising and swaying, drawn added to the scene. Their number follows the quality.
 function layersFrame(now) {
+  if (LY.scene === 'intro') {   // the layers are hidden under the intro: nothing to move or draw
+    if (LY.parts.length) { LY.parts.length = 0; if (LY.ctx) LY.ctx.clearRect(0, 0, LY.w, LY.h); }
+    LY.last = now; return;
+  }
   if (LY.q !== 'bassa') lyMotion(now);
   const n = CFG.ui.q.parts[LY.q] || 0, c = LY.ctx;
   if (!c) return;

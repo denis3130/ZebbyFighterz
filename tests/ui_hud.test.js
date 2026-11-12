@@ -11,4 +11,13 @@ T.test('the time sits in a hexagon with a gold edge, the portraits are slanted',
 T.test('health bars are thin with a gold edge, the touch buttons dark glass with a gold ring', () => {
   const b = document.querySelector('#hs0 .bar').getBoundingClientRect(); T.ok(b.height <= Math.max(14, innerHeight * .04), 'thin ' + b.height);
   const ring = cs('tP', 'borderTopColor'); T.ok(/rgba?\(226, 196, 150/.test(ring), ring); });
-T.test('a dark band behind the top of the HUD keeps it readable on a bright arena', () => { T.ok(/gradient/.test(cs('hud', 'backgroundImage', '::before')), 'band'); __VF.menu.toTitle(); });
+T.test('each portrait slants like its gold frame (Kael\'s picture is mirrored: its clip must be too)', () => {
+  const pts = c => c.replace(/^polygon\(|\)$/g, '').split(',').map(p => p.trim().split(/\s+/).map(parseFloat));
+  for (const id of ['hs0', 'hs1']) {
+    const frame = pts(cs(document.querySelector('#' + id + ' .face'), 'clipPath')), pic = document.querySelector('#' + id + ' .face i');
+    const flip = new DOMMatrix(cs(pic, 'transform')).a < 0, seen = pts(cs(pic, 'clipPath')).map(([x, y]) => [flip ? 100 - x : x, y]);
+    const key = a => a.map(p => p.join(' ')).sort().join(','); T.eq(key(seen), key(frame), id); } });
+T.test('a dark band behind the top of the HUD keeps it readable on a bright arena', () => { T.ok(/gradient/.test(cs('hudTop', 'backgroundImage', '::before')), 'band'); });
+T.test('the banners cost no filter (a blurred shadow on big text cost frames at every round start); a band shows behind them', () => {
+  __VF.startMatch('versus', {seed: 1}); __VF.frame(2); T.ok($('banner').classList.contains('on')); T.eq(cs('banner', 'filter'), 'none');
+  T.eq(+cs('hud', 'opacity', '::before'), 1, 'band behind the banner'); __VF.frame(160); T.ok(!$('banner').classList.contains('on')); T.eq(+cs('hud', 'opacity', '::before'), 0); __VF.menu.toTitle(); });

@@ -17,7 +17,7 @@ T.test('the VS slams in: faces from the sides, the mark crashes with a flash, a 
   const r = $('sc-vs'), q = s => r.querySelector(s), V = __VF.UI.VS;
   __VF.vsLife(40); T.ok(parseFloat(st(q('.vsF.l'), 'translate')) < -20, 'left face coming'); T.ok(+st(q('.vsF.r'), 'opacity') === 0, 'right face not yet'); T.eq(+st(q('.vsMark'), 'opacity'), 0);
   __VF.vsLife(300); T.ok(+st(q('.vsMark'), 'scale') > 1.3, 'mark falling ' + st(q('.vsMark'), 'scale'));
-  const n = __VF.UI.LY.bursts.length; V.burst = false; __VF.vsLife(420); T.ok(+st(q('.vsFlash'), 'opacity') > .5, 'flash'); T.ok(st(q('.vsStage'), 'translate') !== '0px 0px' || true);
+  const n = __VF.UI.LY.bursts.length; V.burst = false; __VF.vsLife(420); T.ok(+st(q('.vsFlash'), 'opacity') > .5, 'flash');
   T.eq(__VF.UI.LY.bursts.length, n + 1, 'sparks'); T.ok(+st(q('.vsSide.l'), 'opacity') < .1, 'names not yet');
   let m = 0; for (const t of [400, 433, 466, 499, 532]) { __VF.vsLife(t); m = Math.max(m, Math.abs(parseFloat(st(q('.vsStage'), 'translate')) || 0)); } T.ok(m > .5, 'shake ' + m);
   __VF.vsLife(2000); T.near(parseFloat(st(q('.vsF.l'), 'translate')) || 0, 0, .05); T.eq(+st(q('.vsFlash'), 'opacity'), 0); T.eq(+st(q('.vsSide.r'), 'opacity'), 1); T.near(+st(q('.vsMark'), 'scale'), 1, .05);
@@ -30,7 +30,22 @@ T.test('the results crash in: «Vittoria» from large, the laurels open, a burst
 T.test('sparks show #uiFx only while they live, and never over a fight', () => {
   const fx = $('uiFx'), t = performance.now(); __VF.navReset('menu'); __VF.layersBurst(200, 150, 30, '#ffc46a'); __VF.uiFrame(t + 50); T.eq(st(fx, 'display'), 'block');
   __VF.uiFrame(t + 3000); T.eq(st(fx, 'display'), 'none'); T.eq(__VF.UI.LY.bursts.length, 0);
-  __VF.layersBurst(200, 150, 30); __VF.uiFrame(t + 3100); __VF.startMatch('versus', {seed: 3}); T.eq(st(fx, 'display'), 'none'); T.eq(__VF.UI.LY.bursts.length, 0); __VF.menu.toTitle(); });
+  __VF.layersBurst(200, 150, 30); __VF.uiFrame(performance.now() + 50); T.eq(st(fx, 'display'), 'block', 'sparks alive');
+  __VF.startMatch('versus', {seed: 3}); T.eq(st(fx, 'display'), 'none', 'hidden by the fight'); T.eq(__VF.UI.LY.bursts.length, 0); __VF.menu.toTitle(); });
+T.test('the VS mark stays centred on its place while it crashes down and after', () => {
+  __VF.CFG.ui.vs.minMs = 1e9; __VF.navReset('menu'); __VF.navGo('vs', {mode: 'versus', chars: ['ren', 'kael'], arena: 'cascata', dev: 'kb'});
+  const m = $('sc-vs').querySelector('.vsMark');
+  for (const t of [230, 300, 1000, 2400]) { __VF.vsLife(t); const r = m.getBoundingClientRect();
+    T.near(r.left + r.width / 2, innerWidth / 2, 3); T.near(r.top + r.height / 2, innerHeight * .44, 3); }
+  __VF.CFG.ui.vs.minMs = 2500; __VF.navReset('menu'); });
+T.test('after its entrance the VS stands still (no style written every frame)', () => {
+  __VF.CFG.ui.vs.minMs = 1e9; __VF.navReset('menu'); __VF.navGo('vs', {mode: 'versus', chars: ['ren', 'kael'], arena: 'cascata', dev: 'kb'});
+  const r = $('sc-vs'), els = [...r.querySelectorAll('.vsF,.vsMark,.vsMark i,.vsStage,.vsLines,.vsFlash,.vsSide')];
+  const snap = () => els.map(e => [e.style.opacity, e.style.translate, e.style.scale].join(' ')).join('|');
+  __VF.vsLife(1200); const a = snap(); __VF.vsLife(1900); __VF.vsLife(2600); T.eq(snap(), a); __VF.CFG.ui.vs.minMs = 2500; __VF.navReset('menu'); });
+T.test('the focused entry\'s breathing restarts no CSS transition every frame', () => {
+  __VF.navReset('menu'); const f = __VF.UI.NAV.focus, t = performance.now(); __VF.uiFrame(t + 10); __VF.uiFrame(t + 300); __VF.uiFrame(t + 600);
+  T.eq(document.getAnimations().filter(a => a instanceof CSSTransition && a.effect.target === f && a.effect.pseudoElement === '::after').length, 0); });
 T.test('the logo has a light that sweeps across its word, laid exactly over it', () => {
   __VF.navReset('title'); const lg = document.querySelector('#sc-title .ulogo'), a = lg.querySelector('.ulogoTx').getBoundingClientRect(), b = lg.querySelector('.ulogoSh .ulogoTx').getBoundingClientRect();
   T.near(b.left, a.left, .6); T.near(b.top, a.top, .6); T.near(b.width, a.width, .6);

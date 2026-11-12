@@ -46,5 +46,15 @@ T.test('its clock runs on the frames shown: a long gap (hidden page) does not ju
 T.test('a pure function of the time: the same moment draws the same picture', () => { inFresh();
   const snap = () => { __VF.introAt(2600); return inEl('.inFront').toDataURL().length + ':' + inEl('.inStage').style.transform + ':' + inEl('.inF.k:not(.g)').style.transform; };
   const a = snap(); __VF.introAt(900); __VF.introAt(4000); T.eq(snap(), a); });
+T.test('each energy keeps to its side of the hit: orange left, violet right', () => { inFresh(); __VF.introAt(2600);
+  const c = inEl('.inFront'), g = c.getContext('2d', {willReadFrequently: true}), d = __VF.UI.INTRO.dpr, cx = innerWidth / 2, cy = innerHeight * __VF.CFG.ui.intro.hitY, off = innerHeight * .2;
+  const px = (x, y) => g.getImageData(Math.round(x * d), Math.round(y * d), 1, 1).data;   // above the hit's line (its lens streak is blue-white)
+  for (const k of [.14, .2]) { const y = cy - innerHeight * .08, L = px(cx - innerHeight * k, y), R = px(cx + innerHeight * k, y);
+    T.ok(L[0] > L[2], 'left orange ' + L.join()); T.ok(R[2] > R[0], 'right violet ' + R.join()); } });
+T.test('a skip once the logo has formed keeps it still on the title', () => { inFresh(); __VF.introAt(4800); uiClick('Salta'); T.eq(__VF.UI.NAV.cur, 'title'); T.ok($('sc-title').classList.contains('keep')); });
+T.test('the intro waits while the phone asks to be turned', () => { inFresh(); const I = __VF.UI.INTRO, t = performance.now(); __VF.uiFrame(t); __VF.uiFrame(t + 16);
+  __VF.MN.rot = true; const a = I.t; __VF.uiFrame(t + 32); __VF.uiFrame(t + 48); T.eq(I.t, a); __VF.MN.rot = false; __VF.uiFrame(t + 64); T.ok(I.t > a); });
+T.test('nothing moves in the hidden menu layers under the intro', () => { inFresh(); const t = performance.now(); __VF.layersFrame(t); const a = $('lySky').style.translate;
+  __VF.layersFrame(t + 900); T.eq($('lySky').style.translate, a); T.eq(__VF.UI.LY.parts.length, 0); });
 T.test('the intro never touches the fight state', () => { __VF.navReset('intro'); __VF.introAt(2000); T.eq(__VF.G.S, null); });
 T.test('no endless CSS animation during the intro', () => { __VF.navReset('intro'); __VF.introAt(1400); T.eq(document.getAnimations().filter(a => a.playState === 'running' && a.effect.getComputedTiming().iterations === Infinity).length, 0); });
