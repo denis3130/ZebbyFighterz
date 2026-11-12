@@ -186,7 +186,8 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 ## Prossimo passo
 **Pollice di Kael (12/11, dopo "il pollice è ancora fatto male")**: nel pugno il pollice era una lama dritta (la posa del
 pugno di Ren). Ora si chiude sulle dita (`thumb_fist` in `tools/kael_bust_attach.py`) e il guanto lo scopre da un anello
-all'incavo come nel foglio (`busto_k7.glb`); vedi `docs/meshy/KAEL.md`, "Il pollice". È nella versione 20 da pubblicare.
+all'incavo come nel foglio (`busto_k7.glb`); poi ("fallo piu piccolo") lungo il 70% e spesso l'85% dall'incavo; vedi
+`docs/meshy/KAEL.md`, "Il pollice" e "Pollice più piccolo". È nella versione 20 da pubblicare.
 
 **Stato al 12/11/2026 (ultima chat, spostata su ZebbyFighterz su richiesta di Denis)**: ramo `tappa2-ren-meshy`, tutto
 salvato e caricato. L'anteprima di Kael pubblicata è la **versione 19**. Pronta ma **non pubblicata** la versione 20 (mani di

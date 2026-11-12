@@ -681,9 +681,10 @@ def main(src, dst, png=None, fit=False):
     im = Image.fromarray(out.round().astype(np.uint8)); bio = io.BytesIO(); im.save(bio, 'PNG', optimize=True)
     if png: im.save(png)
     glbio.write(dst, m, P, N, UV, I, img=bio.getvalue(), mime='image/png'); print('written', dst)
-    # (beside it, for tools/kael_bust_attach.py: each vertex's in Ren's package (-1 Kael's), its place, and per hand the fit laying Ren's on it)
+    # (beside it, for tools/kael_bust_attach.py: each vertex's in Ren's package (-1 Kael's), its place, and per hand the fit laying Ren's on it and its thumb's web)
     side = dst[:-4] + '_hands.npz'
-    np.savez(side, rid=rid, pos=P, **{'%s_%s' % (h['side'], k): np.asarray(v) for h in hands for k, v in h['sim'].items()})
+    webs = {('Right' if q['sd'] < 0 else 'Left') + '_web': q['web'] for q in planes}   # (where each thumb leaves the palm: tools/kael_bust_attach.py THUMB_SCALE)
+    np.savez(side, rid=rid, pos=P, **webs, **{'%s_%s' % (h['side'], k): np.asarray(v) for h in hands for k, v in h['sim'].items()})
     print('written', side)
 
 

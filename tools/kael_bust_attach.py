@@ -66,6 +66,7 @@ HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip)
 HAND_NSMOOTH = 6                         # rounds of smoothing of the hands' normals (the light's bands clean)
 HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
 THUMB_BASE = dict(zip(('Right', 'Left'), (float(v) for v in os.environ.get('KAEL_THUMB_BASE', '25,40').split(','))))   # degrees, per hand: the thumb's first bone turned at most so far in the fist (Ren's 55-60 turned it all from its base: the skin between it and the palm stretched into a blade toward the wrist), its middle joint bending instead
+THUMB_SCALE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SCALE', '.7,.85').split(','))   # the thumb past its web: so long, so thick (Ren's as long as the index finger; Denis, 12/11: "fallo più piccolo"; all of it at .7 a pencil beside the fingers)
 THUMB_SIDE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SIDE', '20,.012').split(','))   # the thumb's tip held within [1] m of the index finger's side, with that push (the left one stood out past it, a hitchhiker's thumb)
 THUMB_FIST = (1., 1., .002, 50., 1.)    # the thumb folded in the fist (thumb_fist): the pulls of its last joint to the index finger's middle bone and of its tip to the middle finger's, its skin so far (m) out of the fingers' with that push, the pull to its first turns
 HAND_FLAT = 0.                           # the hands' share of flat light (the game's toon light: the fists' volume reads, as Ren's)
@@ -404,6 +405,22 @@ def main(bust):
             return np.array([w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2, w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2, w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2, w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2])
         fist = qmul(qmul(qc, qr), qc * [-1, -1, -1, 1])
         fingers.append(dict(n=f['n'], p=f['p'], t=[round(float(v), 5) for v in Rk.T @ (p_w - par)], fist=[round(float(v), 5) for v in fist / np.linalg.norm(fist)]))
+    # (the thumbs THUMB_SCALE as long and as thick from where they leave the palm (their web, tools/kael_bust.py) to their tips, the bones
+    # with them: Ren's are long, as long as the index finger; Denis, 12/11, circling them in the fist: "fallo più piccolo")
+    if THUMB_SCALE != (1., 1.):
+        for side, sd in SIDES:
+            j = J[sd]; Rk = Wm[names.index(side + 'Hand')][:3, :3]; th = [side + 'HandThumb%d' % k for k in (1, 2, 3)]
+            fd = {f['n']: f for f in fingers}; T1 = j['Hb2'] + Rk @ np.array(fd[th[0]]['t']); T2 = T1 + Rk @ np.array(fd[th[1]]['t']); T3 = T2 + Rk @ np.array(fd[th[2]]['t'])
+            ax = (T2 - T1) / np.linalg.norm(T2 - T1); web = X2[np.argmin(np.linalg.norm(Pb - side_f[side + '_web'], axis=1))]
+            c = T1 + ((web - T1) @ ax) * ax   # (the scale's centre: the web on the thumb's axis)
+            w = (tw * np.isin(top, [allnames.index(n) for n in th])).sum(1) * ((X2[:, 0] >= 0) == (sd > 0))
+            sm = lambda u: (lambda v: v * v * (3 - 2 * v))(np.clip(u, 0, 1)); f_ = lambda P: 1 + (THUMB_SCALE[0] - 1) * sm(((P - c) @ ax) / .01)   # (its length)
+            g_ = lambda P: 1 + (THUMB_SCALE[1] - 1) * sm(((P - c) @ ax) / .01)   # (its thickness)
+            D = X2 - c; al = D @ ax; kl = 1 + (f_(X2) - 1) * w; kt = 1 + (g_(X2) - 1) * w
+            X2 = c + np.outer(al * kl, ax) + (D - np.outer(al, ax)) * kt[:, None]
+            T2n = c + (T2 - c) * f_(T2[None])[0]; T3n = c + (T3 - c) * f_(T3[None])[0]
+            fd[th[1]]['t'] = [round(float(v), 5) for v in Rk.T @ (T2n - T1)]; fd[th[2]]['t'] = [round(float(v), 5) for v in Rk.T @ (T3n - T2n)]
+            print('%s thumb past its web (%.1f mm from its first joint): %.2f as long, %.2f as thick' % (side, 1000 * (web - T1) @ ax, *THUMB_SCALE))
     # (the thumbs folded over the fingers in the fist: thumb_fist)
     like = None
     for side, sd in SIDES[::-1]:   # (the right first: the left's laid as the right's)

@@ -662,6 +662,11 @@ Denis ("manda anteprima").
     ricerca da molte partenze (niente di meglio, 4-12 minuti a prova).
   - Controllato con `fistcam` da 8 lati per mano e dai lati fissi del personaggio in guardia, pugni 1 e forte,
     calcio, accovacciato, presa (mani aperte), colpito, salto.
+- **Pollice più piccolo** (Denis, cerchiando i pollici nell'immagine prima/dopo: "fallo piu piccolo"): il pollice di
+  Ren è lungo quanto l'indice. Ora dall'incavo alla punta è lungo il 70% e spesso l'85% (`THUMB_SCALE` in
+  `tools/kael_bust_attach.py`, ossa comprese, così nel pugno si piega come prima); l'incavo di ogni mano lo scrive
+  `tools/kael_bust.py` in `busto_k7_hands.npz`. Provato e lasciato: tutto al 70% (sottile come una matita accanto alle
+  dita). Pugno: destra 28/32/34°, sinistra 40/5/68°.
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,
