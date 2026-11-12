@@ -83,6 +83,7 @@ FINGER_LINE = (.985, 2., 0.)   # the fingers' lines (finger_lines): the sides' i
 THUMB_RING = float(os.environ.get('KAEL_THUMB_RING', 0.))   # GLB units: the thumb bare from a ring square to it so far past its web (the sheet's glove: the thumb out of it where it leaves the palm; Denis, 12/11: "il pollice è ancora fatto male": bare along the surface from its tip up to its web, its outer side's skin ran on down its base, in the fist a long blade)
 REN_PAINT = int(os.environ.get('KAEL_REN_PAINT', 1))   # the hands' skin in Ren's own paint (1) or the palette's flat skin with lines (0)
 THUMB_W = float(os.environ.get('KAEL_THUMB_W', .5))   # the thumb bare with its base as in Ren's fist: where his skin follows the thumb's bones by more than this (0: from the ring, THUMB_RING)
+ELBOW_D = float(os.environ.get('KAEL_ELBOW_D', .12))   # GLB units (5 cm): the elbows' skin so near the bracers' bands painted clean
 THUMB_W_VSMOOTH = int(os.environ.get('KAEL_THUMB_W_VSMOOTH', 4))   # rounds of smoothing of those weights over the mesh before the cut
 THUMB_W_SMOOTH = int(os.environ.get('KAEL_THUMB_W_SMOOTH', 0))   # and over the texels (tried 60: the teeth stayed; 200: the glove took most of the thumb)
 THUMB_SPAN = float(os.environ.get('KAEL_THUMB_SPAN', .03))   # GLB units: the thumb's skin along the surface from its tip up to its web and this much more (where the ring is nearer, the ring its edge)
@@ -692,7 +693,14 @@ def main(src, dst, png=None, fit=False):
     cj = json.load(open(CAMS)); lab = arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cj['cams'], cj['arms'], names, cols, ix, jw, okw, ok, newh)
     # (the arms' muscles traced: muscle_lines on the upper arms' and the elbows' skin, not the hands, the tattoos)
     armsk = (np.abs(pos[:, 0]) > .2) & (np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6 < .80) & ~newh & ~tat & np.isin(lab, [ix['skin'], ix['skinS']])
-    ml = armsk & muscle_lines(P, I, ks, bary); lab[ml] = ix['ink']
+    # (the elbows clean: the skin within ELBOW_D of the bracers' purple bands without the muscles' lines and the sheet's
+    # shadow blotches (Denis circled them: with the elbow bent, black ticks and brown dirt))
+    brc = (mat == 2) & ~tat & ~newh & (np.abs(pos[:, 0]) > .3) & (np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6 < .80)
+    elbow = np.zeros(len(ks), bool)
+    if brc.any(): elbow[armsk] = cKDTree(pos[brc]).query(pos[armsk])[0] < ELBOW_D
+    ml = armsk & ~elbow & muscle_lines(P, I, ks, bary); lab[ml] = ix['ink']
+    lab[elbow & (lab == ix['skinS'])] = ix['skin']
+    print('elbows: %d texels of skin clean by the bracers (%d bracer texels)' % (int(elbow.sum()), int(brc.sum())))
     print('arms: %d texels of the muscles\' lines' % int(ml.sum()))
     lab = finish(P, I, ks, bary, pos, nor, lab, tat, area, names, ix, jw, okw, ok, newh, [h['ring'] for h in hands])
     if os.environ.get('KAEL_BUST_DUMP'): np.savez(os.environ['KAEL_BUST_DUMP'], newh=newh, glove=glove, ys=ys, xs=xs, ks=ks, bary=bary, pos=pos, nor=nor, mat=mat, lab=lab, tat=tat, mey=mey, area=area)

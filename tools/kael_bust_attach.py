@@ -60,15 +60,17 @@ HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
 ARM_LINE = (float(os.environ.get('KAEL_ARM_PUSH', .3)), .7)   # the arms' outline: its push back (of the body's) and its width
-HAND_LINE, BODY_LINE_BACK = (1., 1.), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width (Ren's hands: the body's, the silhouette only; tried (.10, .65): lines drawn inside them)
+HAND_LINE, BODY_LINE_BACK = tuple(float(v) for v in os.environ.get('KAEL_HAND_LINE', '1,1').split(',')), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width (Ren's hands: the body's, the silhouette only; tried (.10, .65): lines drawn inside them)
 FINGER_THICK = 1.                        # the fingers' thickness about their bones (tried 1.25: the fingers merged into a lump, the fist a skin blob, the open hand a mitten)
 HAND_MUL = float(os.environ.get('KAEL_HAND_MUL', .9))   # the hands this much bigger than HAND_RATIO makes them (Denis, 12/11, choosing among 90, 100, 115%: "meglio 90%")
 HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip) over the bracer's, as the sheet draws them (Denis, 12/11: "dimensioni delle mani falle come si deve")
 HAND_REN_NORMALS = 1                     # Ren's hands lit by Ren's own smoothed normals (his look's), as on him
-HAND_NSMOOTH = 0                         # rounds of smoothing of the hands' normals (the light's bands clean)
+HAND_NSMOOTH = int(os.environ.get('KAEL_HAND_NSMOOTH', 6))                         # rounds of smoothing of the hands' normals (the light's bands clean)
 HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
 THUMB_BASE = dict(zip(('Right', 'Left'), (float(v) for v in os.environ.get('KAEL_THUMB_BASE', '25,40').split(','))))   # degrees, per hand: the thumb's first bone turned at most so far in the fist (Ren's 55-60 turned it all from its base: the skin between it and the palm stretched into a blade toward the wrist), its middle joint bending instead
-THUMB_FOLD = int(os.environ.get('KAEL_THUMB_FOLD', 0))   # the thumbs folded by thumb_fist (1) or Ren's fists as they are (0; Denis, 12/11: "taglia i pugni di ren e attaccali a kael")
+CUFF = (1.15, -.10, .02)   # the cuffs' rims: no vertex further from the forearm's axis than [0] times its 5 mm slice's median, from [1] to [2] m along the forearm from the wrist
+THUMB_IP = float(os.environ.get('KAEL_THUMB_IP', 40.))   # degrees: the thumb's last joint bent at least so far in the fist (left free, the right's came out straight: a skin blade across the fingers)
+THUMB_FOLD = int(os.environ.get('KAEL_THUMB_FOLD', 1))   # the thumbs folded by thumb_fist (1) or Ren's fists as they are (0; Denis, 12/11: "taglia i pugni di ren e attaccali a kael"; then, circling the fists in guard, the wedge his thumb's base made in the glove: folded again)
 THUMB_SCALE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SCALE', '1,1').split(','))   # the thumb past its web: so long, so thick (Ren's as long as the index finger; Denis, 12/11: "fallo più piccolo"; all of it at .7 a pencil beside the fingers)
 THUMB_SIDE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SIDE', '20,.012').split(','))   # the thumb's tip held within [1] m of the index finger's side, with that push (the left one stood out past it, a hitchhiker's thumb)
 THUMB_FIST = (1., 1., .002, 50., 1.)    # the thumb folded in the fist (thumb_fist): the pulls of its last joint to the index finger's middle bone and of its tip to the middle finger's, its skin so far (m) out of the fingers' with that push, the pull to its first turns
@@ -196,7 +198,7 @@ def thumb_fist(side, fingers, X, NX, top, tw, allnames, H, Rk, like=None):
         pen = np.maximum(0, THUMB_FIST[2] - s) * (d < .03)
         side_ = np.sum(np.maximum(0, Vq[thv][t3v] @ Fr[2] - zi) ** 2)   # (its tip not standing out past the index finger's side)
         return (THUMB_SIDE[0] * side_ + THUMB_FIST[0] * np.sum((P[th[2]] - cI) ** 2) + THUMB_FIST[1] * np.sum((Vq[tip] - cM) ** 2) + THUMB_FIST[3] * np.sum(pen ** 2)
-                + THUMB_FIST[4] * np.sum((x - x0) ** 2) * 1e-4 + .05 * max(0., np.linalg.norm(x[:3]) - np.radians(THUMB_BASE[side])) ** 2)
+                + THUMB_FIST[4] * np.sum((x - x0) ** 2) * 1e-4 + .05 * max(0., np.linalg.norm(x[:3]) - np.radians(THUMB_BASE[side])) ** 2 + .05 * max(0., np.radians(THUMB_IP) - x[4]) ** 2)
     x0 = x0.copy(); a_ = np.linalg.norm(x0[:3]); x0[:3] *= min(1., np.radians(THUMB_BASE[side]) / max(a_, 1e-9))
     best = min((minimize(cost, x0 + dx, method='Powell', options=dict(maxiter=4000, xtol=1e-4, ftol=1e-10)) for dx in (np.zeros(5), np.r_[0, 0, 0, .5, 0], np.r_[0, 0, 0, .9, .3])), key=lambda r: r.fun)
     q = quats(best.x); Vq, _, P = pose(q)
@@ -370,6 +372,18 @@ def main(bust):
         for g, (Rm, piv, piv2) in enumerate(((j['Ru'], j['Ab'], j['Ab']), (j['Rf'], j['Eb'], j['Eb2']), (j['Rh'], j['Hb'], j['Hb2'])), 1):
             w = np.where(s_, G[:, g], 0.)[:, None]; X2 += w * ((X - piv) @ Rm.T + piv2); N2 += w * (NX @ Rm.T)
     N2 /= np.maximum(np.linalg.norm(N2, axis=1, keepdims=True), 1e-9)
+    # (the cuffs' rims round: by the wrist Meshy left flaps standing out of the band (the left's to 8.5 cm from the forearm's
+    # axis, the band's 3.5; Denis circled it): per 5 mm slice along the forearm, the vertices further out than CUFF[0] times
+    # the slice's median brought in to it)
+    for side, sd in SIDES:
+        j = J[sd]; ax = (j['Hb2'] - j['Eb2']) / np.linalg.norm(j['Hb2'] - j['Eb2']); D = X2 - j['Hb2']; t = D @ ax; rad = D - np.outer(t, ax); r = np.linalg.norm(rad, axis=1)
+        s_ = ((X2[:, 0] >= 0) == (sd > 0)) & ~isR & (t > CUFF[1]) & (t < CUFF[2]) & (r < .12); moved = 0
+        for a in np.arange(CUFF[1], CUFF[2], .005):
+            m = s_ & (t >= a) & (t < a + .005)
+            if m.sum() < 5: continue
+            rm = np.median(r[m]); far = m & (r > CUFF[0] * rm)
+            X2[far] = j['Hb2'] + np.outer(t[far], ax) + rad[far] * (CUFF[0] * rm / r[far])[:, None]; moved += far.sum()
+        print('%s cuff: %d vertices brought in to %.2f of their slice\'s median' % (side, moved, CUFF[0]))
     if HAND_NSMOOTH:   # (the hands' light's normals smoothed: the game's light on Ren's low hands, scaled up, fell in blotches on the glove)
         hn = isR.copy(); hn[Ib[isR[Ib].any(1)].ravel()] = True
         N2 = smooth(N2, wv, A, deg, HAND_NSMOOTH, hn); N2 /= np.maximum(np.linalg.norm(N2, axis=1, keepdims=True), 1e-9)

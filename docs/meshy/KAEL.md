@@ -47,8 +47,8 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
 9. `python3 tools/kael_body.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_arms.py`): il corpo nei colori dei fogli del
    corpo (vedi "Corpo dai fogli del corpo"); scrive `kael_painted.png`, che le pagine prendono al posto del JPEG.
 10. Testa e busto da Meshy (pezzi a parte, sopra il corpo): `python3 tools/kael_head.py meshy/head/kael_k1_face.glb` (vedi
-    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k10.glb` (vedi
-    "Busto sulle ossa" e "Base del pollice nel guanto"; prima `tools/kael_bust.py`, che scrive anche `busto_k10_hands.npz`).
+    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k11.glb` (vedi
+    "Busto sulle ossa" e "Zone cerchiate in guardia"; prima `tools/kael_bust.py`, che scrive anche `busto_k11_hands.npz`).
 11. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
@@ -695,6 +695,20 @@ Denis ("manda anteprima").
   4 volte sulla superficie prima del taglio (`THUMB_W_VSMOOTH`): sui triangoli grandi di Ren il bordo veniva a
   dentini. Provati e lasciati: soglia 0,7 (scoperta solo la punta), lisciare sui pixel (60: dentini; 200: il guanto
   prendeva quasi tutto il pollice), lisciare 10 volte (pollice scoperto più corto).
+- **Zone cerchiate in guardia sulla versione 20** (Denis, due foto dall'anteprima: "in questi punti è fatto molto male";
+  versione `busto_k11.glb`):
+  - pugni: di lato sporgeva un cuneo scuro (la base del pollice di Ren, girata di 60° e stirata, nel guanto): il
+    pollice di nuovo piegato da `thumb_fist` (base al massimo 25/40°, ultima nocca almeno 40°: `THUMB_IP`; le altre dita
+    restano quelle di Ren); il guanto nella luce del gioco a tre toni (in `src/e_model.js` `MD_GLOVE.two` spento: i due
+    toni a taglio netto facevano chiazze scure) con le normali lisciate (`HAND_NSMOOTH` 6: le faccette della mano di Ren);
+  - polso: dalla fascia viola del polsino sinistro pendeva un lembo di Meshy (fino a 8,5 cm dall'asse del braccio,
+    la fascia 3,5): per fette di 5 mm lungo l'avambraccio, da 10 cm prima del polso, i punti oltre 1,15 volte la mediana
+    della fetta riportati a lei (`CUFF`);
+  - gomiti: col braccio piegato le righe dei muscoli diventavano tacche nere e le ombre del foglio macchie marroni:
+    entro 5 cm dalle fasce viola delle polsiere la pelle è pulita (`ELBOW_D` in `tools/kael_bust.py`);
+  - la punta accanto al pugno destro è l'ala della spalla destra del vestito (c'è nel foglio): in guardia sta dietro
+    il pugno. Non toccata (è il disegno): da chiedere a Denis.
+  - Provati e lasciati: righe interne sul guanto (sul prugna scuro non si vedono).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,
