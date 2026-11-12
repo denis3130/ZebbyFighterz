@@ -1981,10 +1981,10 @@ function modelBuild(key) {
     bm.onBeforeCompile = sh => {
       if (bf) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
       if (bg) sh.vertexShader = 'attribute vec2 aGlove;\nvarying vec2 vGlove;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGlove = aGlove;');
-      // (the hands in the sheet's two tones: where the game's light puts them in shadow, the glove its black and the skin its
-      // shadow's colour, elsewhere their own, flat; the rest of the bust flat. In the game's 3 bands the fist was a muddy block)
+      // (the gloves in the sheet's two tones: where the game's light puts them in shadow its black, elsewhere their plum, flat;
+      // the hands' skin Ren's, in his paint and the game's light as on him; the rest of the bust flat)
       const fl = (bf ? 'vFlat * ' : '') + MD_BUST_FLAT.toFixed(2);
-      const two = bg ? '\n\tif (vGlove.y > .99) { float lt = dot(outgoingLight, vec3(1.)) / max(dot(diffuseColor.rgb, vec3(1.)), .001);'
+      const two = bg ? '\n\tif (vGlove.y > .99 && vGlove.x < 0.) { float lt = dot(outgoingLight, vec3(1.)) / max(dot(diffuseColor.rgb, vec3(1.)), .001);'
         + ' vec3 sc = vGlove.x < 0. ? ' + c3(MD_GLOVE.shade) + ' : diffuseColor.rgb * ' + c3(MD_GLOVE.skinShade.map(v => v * 255)) + ';'
         + ' outgoingLight = (lt < ' + MD_GLOVE.cut.toFixed(2) + ' ? sc : diffuseColor.rgb) + totalEmissiveRadiance; }' : '';
       sh.fragmentShader = (bf ? 'varying float vFlat;\n' : '') + (bg ? 'varying vec2 vGlove;\n' : '') + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
