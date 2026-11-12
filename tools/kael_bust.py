@@ -76,8 +76,9 @@ KAEL_TIPS = {-1: ((-.941, -.57, .004), ((-.739, -.847, .057), (-.829, -.84, .059
              1: ((.933, -.588, .033), ((.823, -.84, .085), (.734, -.841, .073), (.654, -.795, .076), (.885, -.785, .092)))}   # per hand (-1 his right): the thumb's and the fingers' tips (GLB units)
 WRIST = (0., .05, .07)   # the glove's wrist pushed out by [0] from the seam, fading from [1] over [2] past the cut (GLB units)
 CUT_K, CUT_R, BLEND, GAP = .015, .022, .05, .006   # the cut: Kael's past his cuff's edge (GLB units), Ren's past his hand bone (m); the wrist's blend; the seam's width
+FINGER_LINE = (.985, 2., 0.)   # the fingers' lines (finger_lines): the sides' ink over [0], their shadow over [1] (2: none); the joints' creases within [2] GLB units (0: none, they read as dashes across the fingers)
 DORSAL = (.035, .025)   # the glove's edge on the back of the hand this much nearer the wrist (GLB units, 1.5 cm), blended over the hand's half thickness [1]
-GLOVE_M, THUMB_M, SMOOTH, REN_LINE, REN_SMALL, GLOVE_SMOOTH = .02, .005, 30, (110, 165), 5., 4   # Ren's hands: the glove's edge under the webs, the thumb bare up to [1] short of its web; the distance's smoothing; his lines: ink, shadow under these lightnesses (the same: no painted shadow, the game's light draws it; Ren's painted wrinkles were brown blotches on the fists), their bits under [4] mm2 skin; the glove's edge smoothed [5] times (the glove plain plum: the light's black on it came out in blotches)
+GLOVE_M, THUMB_M, SMOOTH, REN_LINE, REN_SMALL, GLOVE_SMOOTH = .02, .005, 30, (110, 110), 5., 4   # Ren's hands: the glove's edge under the webs, the thumb bare up to [1] short of its web; the distance's smoothing; his lines: ink, shadow under these lightnesses (the same: no painted shadow, the game's light draws it; Ren's painted wrinkles were brown blotches on the fists), their bits under [4] mm2 skin; the glove's edge smoothed [5] times (the glove plain plum: the light's black on it came out in blotches)
 CLOTH = (48, 33, 59)                              # the glove's colour as Meshy's dark cloth (then it is the vest's plum)
 LINE, LINE_FOLD, SASH, COLLAR_Y = .003, .0018, (-.32, -.10, .40), .70   # the borders' half widths (GLB units: 1.3 and 0.8 mm); the sash (y from, to, |x| under); the collar's trim over
 GLOVE_BLACK, EDGE_CLEAR, UNDER_CUFF = 15., .008, .045           # the glove's black: pieces over this (mm2) and none within [1] of its edge over the fingers
@@ -233,6 +234,38 @@ def ren_hands(P, N, UV, I, cloth_v):
     used = np.unique(I2); mp = -np.ones(len(P2), int); mp[used] = np.arange(len(used))
     for h in hands: h['rid'] = np.concatenate(Ids)[used]   # (each vertex's in Ren's package, -1 Kael's: tools/kael_bust_attach.py)
     return P2[used], N2[used], mp[I2], np.concatenate(UVs)[used], isR[used], src, hands
+
+
+def finger_lines(pos, nor, sel, hands):
+    """The fingers drawn as the sheet draws them (Denis, 12/11: "disegna meglio le dita delle mani"): per texel of sel (Ren's
+    hands' skin) its finger (the nearest of Ren's finger bones' chains, laid as his hand: tf), and on it a line along each side
+    (FINGER_LINE[0]: where the surface turns square to the hand's width, |n . side| over it: ink; over [1]: the skin's shadow)
+    where the fingers press together in a fist, and at the two joints a short crease (within [2] of the joint along the
+    finger, on the back the skin's shadow, on the palm ink). Returns (ink, shadow) masks."""
+    import kael_bust_attach as KA
+    R = KA.package(KA.REN[0]); L, _, _ = KA.look(KA.REN[1], len(R['P'])); names = R['names']; fq = {f['n']: f['fist'] for f in L['fingers']}
+    ink = np.zeros(len(pos), bool); sh = np.zeros(len(pos), bool)
+    for h in hands:
+        side = h['side']; sd = h['sd']; fw = KA.fingers_world(L['fingers'], names, R['Wm']); Rr = R['Wm'][names.index(side + 'Hand')][:3, :3]
+        on = sel & (np.sign(pos[:, 0]) == sd); idx = np.nonzero(on)[0]
+        if not len(idx): continue
+        best = np.full(len(idx), 9.); seg = np.zeros((len(idx), 3)); dors = np.zeros((len(idx), 3)); tj = np.zeros(len(idx)); jl = np.zeros(len(idx))
+        for f in ('Thumb', 'Index', 'Middle', 'Ring', 'Pinky'):
+            j = [fw[side + 'Hand' + f + str(k)] for k in (1, 2, 3)]; j.append(j[2] + (j[2] - j[1]) * .9)   # (the tip: the last bone's length on)
+            q = KA.qm(fq[side + 'Hand' + f + '1']); d0 = (j[1] - j[0]) / np.linalg.norm(j[1] - j[0]); cu = Rr @ q @ Rr.T @ d0; dv = -(cu - (cu @ d0) * d0)
+            Jb = h['tf'](np.array(j)); dvb = h['sim']['R'] @ dv
+            for k in range(3):
+                a, b = Jb[k], Jb[k + 1]; ab = b - a; L2 = ab @ ab; t = np.clip(((pos[idx] - a) @ ab) / L2, 0, 1); d = np.linalg.norm(pos[idx] - (a + np.outer(t, ab)), axis=1)
+                if f != 'Thumb' and k == 0: d = d + .004 * (t < .15)   # (the knuckles belong to the hand's back, not to a finger's side)
+                m = d < best; best[m] = d[m]; seg[m] = ab / np.sqrt(L2); dors[m] = dvb / np.linalg.norm(dvb)
+                tl = np.minimum(t * np.sqrt(L2), (1 - t) * np.sqrt(L2))   # (along the bone, to its nearer joint)
+                tj[m] = np.where(k == 0, (1 - t[m]) * np.sqrt(L2), np.where(k == 2, t[m] * np.sqrt(L2), tl[m])); jl[m] = (k > 0) | (t[m] > .5)
+        n = nor[idx]; lat = np.cross(seg, dors); lat /= np.maximum(np.linalg.norm(lat, axis=1, keepdims=True), 1e-9)
+        c = np.abs((n * lat).sum(1)); onf = best < .05
+        ink[idx[onf & (c > FINGER_LINE[0])]] = True; sh[idx[onf & (c > FINGER_LINE[1]) & (c <= FINGER_LINE[0])]] = True
+        crease = onf & jl.astype(bool) & (tj < FINGER_LINE[2]) & (c < .6); back = (n * dors).sum(1) > 0
+        sh[idx[crease & back]] = True; ink[idx[crease & ~back]] = True
+    return ink, sh
 
 
 def ren_dorsal(side):
@@ -588,6 +621,8 @@ def main(src, dst, png=None, fit=False):
     Lr = mey.mean(1)
     for _ in range(2): Lr = np.where(newh, (np.where(ok, Lr[j], 0).sum(1) + Lr) / (ok.sum(1) + 1), Lr)   # (his strokes a little softened: whole lines, not dashes)
     Lr = Lr[rh]; lab[rh] = np.where(Lr < REN_LINE[0], ix['ink'], np.where(Lr < REN_LINE[1], ix['skinS'], ix['skin'])); mat[rh] = 0; lab[glove] = ix['plum']; mat[glove] = 1; tat[newh] = False
+    f_ink, f_sh = finger_lines(pos, nor, rh, hands); lab[rh & f_sh & (lab == ix['skin'])] = ix['skinS']; lab[rh & f_ink] = ix['ink']
+    print('fingers: %d texels of their side lines and creases in ink, %d in the skin\'s shadow' % (int((rh & f_ink).sum()), int((rh & f_sh).sum())))
     print('pieces: skin %.1f%%, cloth %.1f%%, purple %.1f%%; tattoos: %d pieces' % (*(100 * np.bincount(mat, minlength=3) / len(mat)), int(tat_c.sum())))
     # the skin's shadow
     ao = occlusion(P, N, I)[cKDTree(P).query(pos)[1]]

@@ -621,6 +621,14 @@ Denis ("manda anteprima").
   macchie marroni della pittura di Ren, restano solo le pieghe più scure (tra le dita); l'ombra del guanto prugna scuro, non
   nera (i blocchi neri sembravano buchi).
   Pubblicato nell'anteprima di Kael (versione 19, "anteprima?").
+- **Dita e grandezza delle mani** (Denis: "disegna meglio le dita delle mani e dimensioni delle mani falle come si deve"):
+  - grandezza misurata sul disegno (`kael_nero.png`): la mano, dal fondo della polsiera alla punta del dito più lungo, è
+    lunga quanto tutta la polsiera (0,206 m contro 0,200 m). Sul modello la destra era l'85%, la sinistra il 99%: ora
+    ognuna è ingrandita attorno al polso fino a quel rapporto (`HAND_RATIO` in `tools/kael_bust_attach.py`: destra +15%,
+    sinistra +8%), con le ossa delle dita allo stesso modo (i pugni restano chiusi);
+  - dita: niente più macchie marroni della pittura di Ren, la pelle pulita come nel foglio; tra un dito e l'altro una
+    riga d'inchiostro dove la superficie gira di fianco (`finger_lines`, `FINGER_LINE` in `tools/kael_bust.py`), così le
+    dita del pugno si separano. Provate e lasciate: pieghe alle articolazioni (sembravano trattini sulle dita).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

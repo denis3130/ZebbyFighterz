@@ -58,7 +58,7 @@ SMOOTH, SEAM, SEAM_SMOOTH = 4, .03, 6
 HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
-HAND_SCALE = 1.                          # the hands' size (about the wrists)
+HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip) over the bracer's, as the sheet draws them (Denis, 12/11: "dimensioni delle mani falle come si deve")
 HAND_NSMOOTH = 6                         # rounds of smoothing of the hands' normals (the light's bands clean)
 HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
 HAND_FLAT = 0.                           # the hands' share of flat light (the game's toon light: the fists' volume reads, as Ren's)
@@ -238,12 +238,24 @@ def main(bust):
     G = np.zeros((len(X), 4)); np.add.at(G, (np.repeat(np.arange(len(X)), 4), gid[K['JN'][near]].ravel()), K['WG'][near].ravel())
     rr = rid[isR]; Gr = np.zeros((len(rr), 4)); np.add.at(Gr, (np.repeat(np.arange(len(rr)), 4), gid[rsi[rr]].ravel()), rsw[rr].ravel()); G[isR] = Gr
     G = smooth(G, wv, A, deg, SMOOTH); G /= G.sum(1, keepdims=True)
-    # (the hands HAND_SCALE times as large about the wrists, by their share of the hand: KAEL_HAND_SCALE to try)
-    hs = float(os.environ.get('KAEL_HAND_SCALE', HAND_SCALE))
-    if hs != 1:
-        for side, sd in SIDES:
-            s_ = (X[:, 0] >= 0) == (sd > 0); k_ = 1 + (hs - 1) * np.where(s_, G[:, 3], 0.)
-            X = np.where(s_[:, None], J[sd]['Hb'] + (X - J[sd]['Hb']) * k_[:, None], X)
+    # (the hands as long as the sheet draws them: from the cuff's bottom to the farthest fingertip HAND_RATIO of the bracer
+    # (from its top band's top to the cuff's bottom; the sheet's: 0.206 m to 0.200 m). Meshy's arms gave the right hand 0.85
+    # of that, the left 0.99: both scaled about the wrist to it, by their share of the hand)
+    hsc = {}
+    for side, sd in SIDES:
+        j = J[sd]; s_ = (X[:, 0] >= 0) == (sd > 0); ax = (j['Hb'] - j['Eb']) / np.linalg.norm(j['Hb'] - j['Eb'])
+        t = (X - j['Eb']) @ ax; r = np.linalg.norm((X - j['Eb']) - np.outer(t, ax), axis=1)
+        band = pur_b & s_ & ~isR & (r < .07) & (t > -.05) & (t < np.linalg.norm(j['Hb'] - j['Eb']) + .03)
+        top, bot = np.percentile(t[band], 1), np.percentile(t[band], 99.5); cb = j['Eb'] + ax * bot
+        hv = X[isR & s_]; tip = hv[np.argmax(np.linalg.norm(hv - cb, axis=1))]
+        want = HAND_RATIO * (bot - top); lo, hi = .5, 2.
+        for _ in range(40):   # (the scale about the wrist joint giving the tip that far from the cuff's bottom)
+            mid = (lo + hi) / 2; lo, hi = (mid, hi) if np.linalg.norm(j['Hb'] + (tip - j['Hb']) * mid - cb) < want else (lo, mid)
+        hsc[sd] = float(os.environ.get('KAEL_HAND_SCALE', lo))
+        print('%s hand: %.3f m from the cuff to the fingertip, the bracer %.3f m: scaled %.3f' % (side, np.linalg.norm(tip - cb), bot - top, hsc[sd]))
+    for side, sd in SIDES:
+        s_ = (X[:, 0] >= 0) == (sd > 0); k_ = 1 + (hsc[sd] - 1) * np.where(s_, G[:, 3], 0.)
+        X = np.where(s_[:, None], J[sd]['Hb'] + (X - J[sd]['Hb']) * k_[:, None], X)
     # the pose
     X2 = X * G[:, :1]; N2 = NX * G[:, :1]
     for side, sd in SIDES:
@@ -285,7 +297,7 @@ def main(bust):
     for f in RL['fingers']:
         side = 'Left' if f['n'].startswith('Left') else 'Right'; sd = dict(SIDES)[side]; j = J[sd]
         Rk = Wm[names.index(side + 'Hand')][:3, :3]; Rr = R['Wm'][names.index(side + 'Hand')][:3, :3]
-        place = lambda Y: (to_bust(Y[None], sd)[0] - j['Hb']) * hs @ j['Rh'].T + j['Hb2']
+        place = lambda Y: (to_bust(Y[None], sd)[0] - j['Hb']) * hsc[sd] @ j['Rh'].T + j['Hb2']
         p_w = place(rf[f['n']]); par = j['Hb2'] if f['p'] == side + 'Hand' else place(rf[f['p']])
         M = j['Rh'] @ sim[sd]['R']; C = Rk.T @ M @ Rr; qc = mq(C); qr = np.array(f['fist'])
         frames[side] = [round(float(v), 5) for v in qc]
