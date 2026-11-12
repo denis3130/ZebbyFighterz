@@ -47,8 +47,8 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
 9. `python3 tools/kael_body.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_arms.py`): il corpo nei colori dei fogli del
    corpo (vedi "Corpo dai fogli del corpo"); scrive `kael_painted.png`, che le pagine prendono al posto del JPEG.
 10. Testa e busto da Meshy (pezzi a parte, sopra il corpo): `python3 tools/kael_head.py meshy/head/kael_k1_face.glb` (vedi
-    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k7.glb` (vedi
-    "Busto sulle ossa" e "Il pollice"; prima `tools/kael_bust.py`, che scrive anche `busto_k7_hands.npz`).
+    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k8.glb` (vedi
+    "Busto sulle ossa" e "Pugni di Ren con i guanti di Kael"; prima `tools/kael_bust.py`, che scrive anche `busto_k8_hands.npz`).
 11. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
@@ -667,6 +667,17 @@ Denis ("manda anteprima").
   `tools/kael_bust_attach.py`, ossa comprese, così nel pugno si piega come prima); l'incavo di ogni mano lo scrive
   `tools/kael_bust.py` in `busto_k7_hands.npz`. Provato e lasciato: tutto al 70% (sottile come una matita accanto alle
   dita). Pugno: destra 28/32/34°, sinistra 40/5/68°.
+- **Pugni di Ren con i guanti di Kael** (Denis, 12/11: "è ancora fatto male [...] taglia i pugni di ren e attaccali a
+  kael poi disegna i suoi guanti dove mancano"; versione `busto_k8.glb`, gratis): tolte le due cose sopra, i pugni sono
+  quelli di Ren così come sono (`THUMB_FOLD` 0 e `THUMB_SCALE` 1,1 in `tools/kael_bust_attach.py`: i suoi giri delle
+  dita e il suo pollice, grande come la mano già scalata al foglio). Il guanto è disegnato dove manca, sul dorso e sul
+  palmo; il pollice resta pelle con la sua base, dove la pelle di Ren si muove con le ossa del pollice per più del 10%
+  (`THUMB_W` in `tools/kael_bust.py`): così il pugno si legge come quello di Ren (pollice tondo che chiude le dita) e
+  non come una lama (che era la pelle del pollice tagliata dal guanto lungo la base stirata). Differenza dal foglio:
+  nel foglio il guanto copre anche la base del pollice; qui resta pelle, come Denis ha chiesto. Tra pollice e indice,
+  da certi lati, si vede il palmo scuro del guanto (con soglie più basse resta, più piccolo). Controllato da 8 lati per
+  mano accanto a Ren e nelle mosse (guardia, pugni, accovacciato, presa, colpito). `thumb_fist` e `THUMB_SCALE`
+  restano nello strumento, spenti.
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

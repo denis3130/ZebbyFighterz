@@ -23,8 +23,8 @@ his legs below.
   and the wrist's bends fall where his do); Ren's own weights on Ren's hands, finger bones included; smoothed across the
   wrists' seams (SEAM m round them).
 - The finger bones: Ren's, laid as his hands were (the fit of tools/kael_bust.py, the place, the pose: in the hand bone as
-  Ren's, scaled), the fists' turns Ren's (src/e_model.js: the part's fingers in place of the look's), but the thumbs'
-  (thumb_fist: folded over the fingers; his stood out straight ahead of the index finger).
+  Ren's, scaled), the fists' turns Ren's (src/e_model.js: the part's fingers in place of the look's); thumb_fist and
+  THUMB_SCALE (the thumbs folded and made smaller) tried and off: Ren's fists as they are, Kael's glove drawn on them.
 - The glove's edge on the hands drawn by the game (src/e_model.js aGlove: per vertex its signed distance to the painted
   edge): in the fist the painted edge, bent over the knuckles, broke into teeth.
 - Light: flat (its paint has the sheet's shadows), but on the hands the game's (HAND_FLAT; Denis, 11/11, on the fists in
@@ -66,7 +66,8 @@ HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip)
 HAND_NSMOOTH = 6                         # rounds of smoothing of the hands' normals (the light's bands clean)
 HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
 THUMB_BASE = dict(zip(('Right', 'Left'), (float(v) for v in os.environ.get('KAEL_THUMB_BASE', '25,40').split(','))))   # degrees, per hand: the thumb's first bone turned at most so far in the fist (Ren's 55-60 turned it all from its base: the skin between it and the palm stretched into a blade toward the wrist), its middle joint bending instead
-THUMB_SCALE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SCALE', '.7,.85').split(','))   # the thumb past its web: so long, so thick (Ren's as long as the index finger; Denis, 12/11: "fallo più piccolo"; all of it at .7 a pencil beside the fingers)
+THUMB_FOLD = int(os.environ.get('KAEL_THUMB_FOLD', 0))   # the thumbs folded by thumb_fist (1) or Ren's fists as they are (0; Denis, 12/11: "taglia i pugni di ren e attaccali a kael")
+THUMB_SCALE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SCALE', '1,1').split(','))   # the thumb past its web: so long, so thick (Ren's as long as the index finger; Denis, 12/11: "fallo più piccolo"; all of it at .7 a pencil beside the fingers)
 THUMB_SIDE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SIDE', '20,.012').split(','))   # the thumb's tip held within [1] m of the index finger's side, with that push (the left one stood out past it, a hitchhiker's thumb)
 THUMB_FIST = (1., 1., .002, 50., 1.)    # the thumb folded in the fist (thumb_fist): the pulls of its last joint to the index finger's middle bone and of its tip to the middle finger's, its skin so far (m) out of the fingers' with that push, the pull to its first turns
 HAND_FLAT = 0.                           # the hands' share of flat light (the game's toon light: the fists' volume reads, as Ren's)
@@ -423,7 +424,7 @@ def main(bust):
             print('%s thumb past its web (%.1f mm from its first joint): %.2f as long, %.2f as thick' % (side, 1000 * (web - T1) @ ax, *THUMB_SCALE))
     # (the thumbs folded over the fingers in the fist: thumb_fist)
     like = None
-    for side, sd in SIDES[::-1]:   # (the right first: the left's laid as the right's)
+    for side, sd in (SIDES[::-1] if THUMB_FOLD else ()):   # (the right first: the left's laid as the right's)
         tq, like = thumb_fist(side, fingers, X2, N2, top, tw, allnames, J[sd]['Hb2'], Wm[names.index(side + 'Hand')][:3, :3], like)
         for f in fingers:
             if f['n'] in tq: f['fist'] = [round(float(v), 5) for v in tq[f['n']] / np.linalg.norm(tq[f['n']])]
