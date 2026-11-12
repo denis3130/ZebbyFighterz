@@ -23,7 +23,8 @@ his legs below.
   and the wrist's bends fall where his do); Ren's own weights on Ren's hands, finger bones included; smoothed across the
   wrists' seams (SEAM m round them).
 - The finger bones: Ren's, laid as his hands were (the fit of tools/kael_bust.py, the place, the pose: in the hand bone as
-  Ren's, scaled), the fists' turns Ren's (src/e_model.js: the part's fingers in place of the look's).
+  Ren's, scaled), the fists' turns Ren's (src/e_model.js: the part's fingers in place of the look's), but the thumbs'
+  (thumb_fist: folded over the fingers; his stood out straight ahead of the index finger).
 - The glove's edge on the hands drawn by the game (src/e_model.js aGlove: per vertex its signed distance to the painted
   edge): in the fist the painted edge, bent over the knuckles, broke into teeth.
 - Light: flat (its paint has the sheet's shadows), but on the hands the game's (HAND_FLAT; Denis, 11/11, on the fists in
@@ -65,9 +66,7 @@ HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip)
 HAND_NSMOOTH = 6                         # rounds of smoothing of the hands' normals (the light's bands clean)
 HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
 THUMB_BASE = dict(zip(('Right', 'Left'), (float(v) for v in os.environ.get('KAEL_THUMB_BASE', '25,40').split(','))))   # degrees, per hand: the thumb's first bone turned at most so far in the fist (Ren's 55-60 turned it all from its base: the skin between it and the palm stretched into a blade toward the wrist), its middle joint bending instead
-THUMB_TURN = float(os.environ.get('KAEL_THUMB_TURN', 0.))   # degrees: the thumb's middle joint turned at most so far beyond its bend (across toward the little finger: the first bone held by THUMB_BASE, its bends alone left the thumb arched beside the index finger)
-THUMB_OUT = float(os.environ.get('KAEL_THUMB_OUT', 1.))   # the thumb's places that many half thicknesses out of the middle bones' middles (0: pulled into them, held on their skin)
-THUMB_STARTS = int(os.environ.get('KAEL_THUMB_STARTS', 12))   # the thumb's fold searched from so many more starts
+THUMB_SIDE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SIDE', '20,.012').split(','))   # the thumb's tip held within [1] m of the index finger's side, with that push (the left one stood out past it, a hitchhiker's thumb)
 THUMB_FIST = (1., 1., .002, 50., 1.)    # the thumb folded in the fist (thumb_fist): the pulls of its last joint to the index finger's middle bone and of its tip to the middle finger's, its skin so far (m) out of the fingers' with that push, the pull to its first turns
 HAND_FLAT = 0.                           # the hands' share of flat light (the game's toon light: the fists' volume reads, as Ren's)
 COLLAR_CUT = (1.472, (.0085, -.005), .11)   # m: its collar over this height within [2] of the neck's axis [1] (the head's collar from 1.464 m)
@@ -175,27 +174,27 @@ def thumb_fist(side, fingers, X, NX, top, tw, allnames, H, Rk, like=None):
     seg = lambda n: Vp[share([n]) > .5]; I2, M2 = seg(side + 'HandIndex2'), seg(side + 'HandMiddle2')
     rad = lambda P: np.sqrt(np.mean(np.sum((P - P.mean(0)) ** 2, 1)) / 2)   # (about a segment's half thickness)
     out_ = (I2.mean(0) + M2.mean(0)) / 2 - Vp.mean(0); out_ /= np.linalg.norm(out_); r_ = (rad(I2) + rad(M2)) / 2 + rad(V[share(th[2:]) > .5])
-    cI = I2.mean(0) + out_ * r_ * THUMB_OUT; cM = M2.mean(0) + out_ * r_ * THUMB_OUT
+    cI = I2.mean(0) + out_ * r_; cM = M2.mean(0) + out_ * r_
     ax_ = rest[side + 'HandMiddle1'] / np.linalg.norm(rest[side + 'HandMiddle1']); zz = rest[side + 'HandIndex1'] - rest[side + 'HandPinky1']; zz -= (zz @ ax_) * ax_; zz /= np.linalg.norm(zz)
     yy = np.cross(zz, ax_) * (1 if side == 'Right' else -1); Fr = np.array([ax_, yy, zz])   # (the hand's own frame: a left hand's the right's mirrored)
     if like is not None: cI = I2.mean(0) + Fr.T @ like[0]; cM = M2.mean(0) + Fr.T @ like[1]
+    zi = (Vp[share([n for n in others if 'Index' in n]) > .5] @ Fr[2]).max() + THUMB_SIDE[1]   # (the index finger's side, in the hand's frame)
+    t3v = t3[thv]
     q3 = np.array(fl[th[2]]['fist']); ax = q3[:3] / np.linalg.norm(q3[:3])
     rv = lambda r: (lambda a: np.r_[np.sin(a / 2) * r / max(a, 1e-12), np.cos(a / 2)])(np.linalg.norm(r))
-    def quats(x):   # (x: the first bone's turn, the middle joint's (its bend about the joint's axis, and THUMB_TURN its own turn), the last joint's bend)
-        q = dict(q0); q[th[0]] = rv(x[:3]); q[th[1]] = rv(x[3] * ax + x[5:8]); q[th[2]] = rv(x[4] * ax)
+    def quats(x):   # (x: the first bone's turn, the middle and the last joints' bends about the joint's axis)
+        q = dict(q0); q[th[0]] = rv(x[:3]); q[th[1]] = rv(x[3] * ax); q[th[2]] = rv(x[4] * ax)
         return q
-    w0 = q0[th[0]]; a0 = 2 * np.arccos(np.clip(w0[3], -1, 1)); x0 = np.r_[w0[:3] / max(np.linalg.norm(w0[:3]), 1e-12) * a0, 0., 2 * np.arccos(np.clip(q3[3], -1, 1)), 0., 0., 0.]
+    w0 = q0[th[0]]; a0 = 2 * np.arccos(np.clip(w0[3], -1, 1)); x0 = np.r_[w0[:3] / max(np.linalg.norm(w0[:3]), 1e-12) * a0, 0., 2 * np.arccos(np.clip(q3[3], -1, 1))]
     def cost(x):
         q = quats(x); Vq, _, P = pose(q)
         d, i = tree.query(Vq[thv]); s = ((Vq[thv] - Fp[i]) * Fn[i]).sum(1)
         pen = np.maximum(0, THUMB_FIST[2] - s) * (d < .03)
-        return (THUMB_FIST[0] * np.sum((P[th[2]] - cI) ** 2) + THUMB_FIST[1] * np.sum((Vq[tip] - cM) ** 2) + THUMB_FIST[3] * np.sum(pen ** 2)
-                + THUMB_FIST[4] * np.sum((x - x0) ** 2) * 1e-4 + .05 * max(0., np.linalg.norm(x[:3]) - np.radians(THUMB_BASE[side])) ** 2 + .05 * max(0., np.linalg.norm(x[5:8]) - np.radians(THUMB_TURN)) ** 2)
+        side_ = np.sum(np.maximum(0, Vq[thv][t3v] @ Fr[2] - zi) ** 2)   # (its tip not standing out past the index finger's side)
+        return (THUMB_SIDE[0] * side_ + THUMB_FIST[0] * np.sum((P[th[2]] - cI) ** 2) + THUMB_FIST[1] * np.sum((Vq[tip] - cM) ** 2) + THUMB_FIST[3] * np.sum(pen ** 2)
+                + THUMB_FIST[4] * np.sum((x - x0) ** 2) * 1e-4 + .05 * max(0., np.linalg.norm(x[:3]) - np.radians(THUMB_BASE[side])) ** 2)
     x0 = x0.copy(); a_ = np.linalg.norm(x0[:3]); x0[:3] *= min(1., np.radians(THUMB_BASE[side]) / max(a_, 1e-9))
-    # (from several starts: from its first turns, bent more, and turned at random about each joint (seeded: the same every
-    # time): from beside the index finger a search alone could not take it across, its skin kept out of the fingers')
-    rng = np.random.default_rng(7); starts = [np.zeros(8), np.r_[0, 0, 0, .5, 0, 0, 0, 0], np.r_[0, 0, 0, .9, .3, 0, 0, 0]] + [np.r_[rng.normal(0, .5, 3), rng.uniform(0, 1.2), rng.uniform(-.3, .5), rng.normal(0, .4, 3)] for _ in range(THUMB_STARTS)]
-    best = min((minimize(cost, x0 + dx, method='Powell', options=dict(maxiter=4000, xtol=1e-4, ftol=1e-10)) for dx in starts), key=lambda r: r.fun)
+    best = min((minimize(cost, x0 + dx, method='Powell', options=dict(maxiter=4000, xtol=1e-4, ftol=1e-10)) for dx in (np.zeros(5), np.r_[0, 0, 0, .5, 0], np.r_[0, 0, 0, .9, .3])), key=lambda r: r.fun)
     q = quats(best.x); Vq, _, P = pose(q)
     d, i = tree.query(Vq[thv]); s = ((Vq[thv] - Fp[i]) * Fn[i]).sum(1)
     deg = lambda qq: np.degrees(2 * np.arccos(np.clip(abs(qq[3]), -1, 1)))

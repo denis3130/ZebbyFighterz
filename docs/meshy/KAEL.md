@@ -47,8 +47,8 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
 9. `python3 tools/kael_body.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_arms.py`): il corpo nei colori dei fogli del
    corpo (vedi "Corpo dai fogli del corpo"); scrive `kael_painted.png`, che le pagine prendono al posto del JPEG.
 10. Testa e busto da Meshy (pezzi a parte, sopra il corpo): `python3 tools/kael_head.py meshy/head/kael_k1_face.glb` (vedi
-    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k6.glb` (vedi
-    "Busto sulle ossa"; prima `tools/kael_bust.py`, che scrive anche `busto_k6_hands.npz`).
+    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k7.glb` (vedi
+    "Busto sulle ossa" e "Il pollice"; prima `tools/kael_bust.py`, che scrive anche `busto_k7_hands.npz`).
 11. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
@@ -641,6 +641,27 @@ Denis ("manda anteprima").
   interno al 30% (`ARM_LINE`: gomito, deltoide sul braccio); e i muscoli ricalcati nella pittura (`muscle_lines` in
   `tools/kael_bust.py`): una riga sottile d'inchiostro al centro di ogni solco tra i muscoli (dove la superficie sta sotto la
   sua versione lisciata, e più che attorno), sulla pelle del braccio, non sui tatuaggi né sulle mani.
+- **Il pollice** (Denis, 12/11: "il pollice è ancora fatto male"; versione `busto_k7.glb`, gratis). Nel pugno di lato
+  il pollice sembrava una lama: lunga, piatta, a punta verso il polso. Misurato: la forma del pollice è quella di Ren
+  (spessa come le altre dita, non si schiaccia), il guaio era la posa. Il pugno di Ren gira tutto il pollice dalla base
+  (55-60°) e non piega la nocca di mezzo (1°): il pollice resta dritto e sporge davanti all'indice, e la pelle tra la
+  base e il palmo si stira in una punta. Succede anche su Ren, ma lì pelle e colori lo nascondono (Ren non è stato
+  toccato). Ora:
+  - `thumb_fist` in `tools/kael_bust_attach.py` calcola i giri del pollice nel pugno di Kael: la base gira al massimo
+    25° (la sinistra 40°, `THUMB_BASE`), le due nocche si piegano attorno al loro asse, il pollice va sopra le ossa di
+    mezzo di indice e medio, la sua pelle resta fuori da quella delle dita, e la punta non sporge oltre il fianco
+    dell'indice (`THUMB_SIDE`). Risultato: destra 27/43/51°, sinistra 33/8/109° (Ren 60/1/74 e 55/1/73);
+  - le mani di Ren non sono uguali (nella sinistra la prima articolazione del pollice è all'incavo, 8 cm dal polso;
+    nella destra a 5,5 cm): la sinistra viene messa come la destra (stesso punto rispetto a indice e medio, nel
+    sistema della mano specchiato);
+  - il guanto (`tools/kael_bust.py`, `THUMB_RING`, `THUMB_SPAN`): il pollice è scoperto da un anello dritto
+    all'incavo tra pollice e indice, come nel foglio (prima la pelle scendeva lungo la base fino al polso).
+  - Provati e lasciati: anello più su (il pollice aperto restava scoperto solo in punta e sul palmo compariva una
+    macchia di pelle); base libera di girare (tornava la lama, e a sinistra un buco nero tra pollice e dita);
+    pollice "appoggiato" a tutte le dita (la punta si alzava di più); seconda nocca che ruota oltre a piegarsi, e
+    ricerca da molte partenze (niente di meglio, 4-12 minuti a prova).
+  - Controllato con `fistcam` da 8 lati per mano e dai lati fissi del personaggio in guardia, pugni 1 e forte,
+    calcio, accovacciato, presa (mani aperte), colpito, salto.
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

@@ -366,7 +366,7 @@ def glove_texels(pos, newh, planes, jw, okw):
         tj = q['thumb']; ax = (tj[1] - tj[0]) / np.linalg.norm(tj[1] - tj[0]); ring = q['web'] + THUMB_RING * ax
         bare = (d[sel] < L + THUMB_SPAN) & ((pos[sel] - ring) @ ax > 0)   # (the ring its edge: along the surface only so far past the web, the index finger's skin not)
         g[sel] = ((pos[sel] - q['c']) @ q['n'] + GLOVE_M + DORSAL[0] * back < 0) & ~bare
-        print('glove: the thumb bare up to %.3f from its tip, from a ring %.3f past its web (%d texels gloved by the ring)' % (L, THUMB_RING, int(((d[sel] < L) & ~bare).sum())))
+        print('glove: the thumb bare up to %.3f from its tip, from a ring %.3f past its web (%d texels of its base gloved by the ring)' % (L, THUMB_RING, int(((d[sel] < L + THUMB_SPAN) & ~bare).sum())))
     return g
 
 

@@ -184,6 +184,10 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Per dopo (annotate, non fatte): i fogli del corpo che Denis ha mandato l'8/11 (`docs/ref/personaggi/ren_busto_3viste.png`, `ren_gambe_3viste.png`: destra, fronte, sinistra; `ren_retro.png`: tutto il corpo da dietro; il foglio della testa che ha rimandato è identico a `ren_testa_3viste.png`) per rifare o ridipingere il corpo dai lati e da dietro (fasce con il polsino scuro, stivali, pantaloni, code della fascia arancione), oggi dipinto solo dalla vista di fronte di `ren.png`; l'ombra nera sotto il mento come nel foglio (una V spessa sul collo, sotto la mascella; nel foglio c'è in tutte e tre le viste), da proporre a Denis prima di farla; in guardia la testa alzata di 20° invece di 12° (`headUp` del look: provato in una copia, con 20° si vedono entrambi gli occhi sopra il pugno, a 28° sembra guardare in alto; è una scelta di posa, da decidere con Denis); stesso metodo delle 3 viste per Kael, se Denis fa il suo foglio; se Denis vuole punte dei capelli ancora più lunghe, un'altra prova Meshy (30 crediti; alleggerire il modello non le arrotonda: a 60.000 e a 16.000 triangoli la sagoma è la stessa).
 
 ## Prossimo passo
+**Pollice di Kael (12/11, dopo "il pollice è ancora fatto male")**: nel pugno il pollice era una lama dritta (la posa del
+pugno di Ren). Ora si chiude sulle dita (`thumb_fist` in `tools/kael_bust_attach.py`) e il guanto lo scopre da un anello
+all'incavo come nel foglio (`busto_k7.glb`); vedi `docs/meshy/KAEL.md`, "Il pollice". È nella versione 20 da pubblicare.
+
 **Stato al 12/11/2026 (ultima chat, spostata su ZebbyFighterz su richiesta di Denis)**: ramo `tappa2-ren-meshy`, tutto
 salvato e caricato. L'anteprima di Kael pubblicata è la **versione 19**. Pronta ma **non pubblicata** la versione 20 (mani di
 Kael grandi come nel disegno, dita pulite con le righe tra le dita, contorno nero interno su mani e braccia, muscoli delle
@@ -191,8 +195,8 @@ braccia ricalcati: vedi `docs/meshy/KAEL.md`, "Dita e grandezza delle mani", "Ri
 e i muscoli delle braccia ricalcati"). Denis l'ha vista in immagini ("bravo ancora un po'"); **si pubblica quando scrive
 "anteprima"** (`bash mk.sh`, i 22 test, poi Artifact con `viewer_kael.html` sull'URL dell'anteprima di Kael in `CLAUDE.md`).
 Per rifare il busto: `python3 tools/kael_bust.py meshy/meshy_output/20261111_kael-busto/busto_k1_30k.glb
-meshy/meshy_output/20261111_kael-busto/busto_k6.glb --png meshy/meshy_output/20261111_kael-busto/busto_k6.png` poi
-`python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k6.glb` (la cartella `meshy/meshy_output` non
+meshy/meshy_output/20261111_kael-busto/busto_k7.glb --png meshy/meshy_output/20261111_kael-busto/busto_k7.png` poi
+`python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k7.glb` (la cartella `meshy/meshy_output` non
 è nel repository: i GLB si riscaricano da Meshy con il task del busto in `docs/meshy/KAEL.md`). Dopo: le code viola della
 fascia come nastri che si muovono (come quelli di Ren). Regole di Denis per Kael: niente agenti per il corpo, niente nuove
 versioni o forme senza il suo ok, occhi e sopracciglia non si toccano, Meshy solo col suo ok (saldo 970).
