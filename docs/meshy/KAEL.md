@@ -629,6 +629,13 @@ Denis ("manda anteprima").
   - dita: niente più macchie marroni della pittura di Ren, la pelle pulita come nel foglio; tra un dito e l'altro una
     riga d'inchiostro dove la superficie gira di fianco (`finger_lines`, `FINGER_LINE` in `tools/kael_bust.py`), così le
     dita del pugno si separano. Provate e lasciate: pieghe alle articolazioni (sembravano trattini sulle dita).
+- **Righe nere e ombre delle mani** (Denis: "ancora non ci siamo", poi "disegna bene le ombreggiature o linee nere per farlo
+  sembrare vero"). Il contorno nero del gioco è spinto 2 cm indietro dalla telecamera: disegnava solo la sagoma della mano, e
+  dove un dito sta davanti a un altro, il pollice sopra le dita o il pugno sopra il palmo non c'era nessuna riga, il pugno
+  sembrava un blocco. Sulle mani ora la spinta è il 15% (3 mm) e la riga il 60% della larghezza (`HAND_LINE` in
+  `tools/kael_bust_attach.py`, per vertice `lb` e `line`, `aBack`/`aLine` nel gioco): le righe tra le dita, attorno al
+  pollice e sulle file delle nocche si vedono come in un disegno; con le ombre a due toni del foglio. Provato e lasciato:
+  dita più grosse (`FINGER_THICK` 1,25: si fondevano in un grumo).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

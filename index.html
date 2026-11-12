@@ -1985,7 +1985,7 @@ function modelBuild(key) {
       if (bg) sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n\tif (vGlove.y > .99) { if (vGlove.x < 0.) diffuseColor.rgb = ' + c3(MD_GLOVE.c) + '; if (abs(vGlove.x) < ' + MD_GLOVE.w.toFixed(4) + ') diffuseColor.rgb = ' + c3(MD_GLOVE.ink) + '; }');
     };
     bm.customProgramCacheKey = () => 'bust' + (bf ? 'V' : '') + (bg ? 'G' : '');
-    const bmesh = new THREE.SkinnedMesh(bust.geo, bm), bline = new THREE.SkinnedMesh(bust.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: ol.back}));
+    const bmesh = new THREE.SkinnedMesh(bust.geo, bm), bline = new THREE.SkinnedMesh(bust.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: ol.back, per: bust.geo.attributes.aLine ? ' * aLine' : '', perBack: !!bust.geo.attributes.aBack}));   // (per vertex: the hands' outline drawn inside them, thinner)
     bmesh.frustumCulled = bline.frustumCulled = false; body.add(bmesh, bline);
     bmesh.bind(skel, mesh.matrixWorld); bline.bind(skel, mesh.matrixWorld);
     bust.mesh = bmesh; bust.mat = bm;
