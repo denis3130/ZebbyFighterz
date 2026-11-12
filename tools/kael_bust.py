@@ -25,6 +25,8 @@ sheet's flat palette, piece by piece, and the skin's shadow (Denis chose "Ombre 
     in fragments; then the shoulders' leftover bits (under LEFT mm2) skin;
   * Kael's own hands (beyond the wrist cuffs, HAND_D; since 11/11 only what the cut leaves of them, Ren's below): the
     fingers clean skin, the glove plum with its large shadows black, its edges smoothed, no purple past the cuff.
+- The arms' muscles traced (muscle_lines): thin ink lines in the middle of the valleys between the muscles, as the sheet
+  traces them (Denis, 12/11: "ricalca anche i muscoli delle braccia").
 - Ren's hands in place of Kael's (Denis, 11/11: "ora rendi quelle mani simili come quelli di ren"; ren_hands()): Kael's
   hand cut past his cuff, Ren's (assets/ren, past his wrist band) laid on it by a similarity fit on the wrist and the five
   tips, its wrist blended onto the cut and the two rings zipped (the seam's triangles turned as their neighbours), the
@@ -76,6 +78,7 @@ KAEL_TIPS = {-1: ((-.941, -.57, .004), ((-.739, -.847, .057), (-.829, -.84, .059
              1: ((.933, -.588, .033), ((.823, -.84, .085), (.734, -.841, .073), (.654, -.795, .076), (.885, -.785, .092)))}   # per hand (-1 his right): the thumb's and the fingers' tips (GLB units)
 WRIST = (0., .05, .07)   # the glove's wrist pushed out by [0] from the seam, fading from [1] over [2] past the cut (GLB units)
 CUT_K, CUT_R, BLEND, GAP = .015, .022, .05, .006   # the cut: Kael's past his cuff's edge (GLB units), Ren's past his hand bone (m); the wrist's blend; the seam's width
+MUSCLE = (20, 6, .008, .002)   # the arms' muscles' lines (muscle_lines): the smoothing for the valleys, for their middle; the thresholds
 FINGER_LINE = (.985, 2., 0.)   # the fingers' lines (finger_lines): the sides' ink over [0], their shadow over [1] (2: none); the joints' creases within [2] GLB units (0: none, they read as dashes across the fingers)
 DORSAL = (.035, .025)   # the glove's edge on the back of the hand this much nearer the wrist (GLB units, 1.5 cm), blended over the hand's half thickness [1]
 GLOVE_M, THUMB_M, SMOOTH, REN_LINE, REN_SMALL, GLOVE_SMOOTH = .02, .005, 30, (110, 110), 5., 4   # Ren's hands: the glove's edge under the webs, the thumb bare up to [1] short of its web; the distance's smoothing; his lines: ink, shadow under these lightnesses (the same: no painted shadow, the game's light draws it; Ren's painted wrinkles were brown blotches on the fists), their bits under [4] mm2 skin; the glove's edge smoothed [5] times (the glove plain plum: the light's black on it came out in blotches)
@@ -234,6 +237,23 @@ def ren_hands(P, N, UV, I, cloth_v):
     used = np.unique(I2); mp = -np.ones(len(P2), int); mp[used] = np.arange(len(used))
     for h in hands: h['rid'] = np.concatenate(Ids)[used]   # (each vertex's in Ren's package, -1 Kael's: tools/kael_bust_attach.py)
     return P2[used], N2[used], mp[I2], np.concatenate(UVs)[used], isR[used], src, hands
+
+
+def muscle_lines(P, I, ks, bary):
+    """The arms' muscles traced as the sheet traces them (Denis, 12/11: "ricalca anche i muscoli delle braccia"): per texel how
+    far its surface lies under the surface smoothed MUSCLE[0] times along the normal (h: the valleys between the muscles), and
+    how much more than around it (h minus h smoothed MUSCLE[1] times: the valley's middle). Lines where h is over MUSCLE[2]
+    and that over MUSCLE[3] (GLB units)."""
+    from scipy.sparse import coo_matrix
+    wv, Pw, W, E, _ = _graph(P, I); nw = len(Pw)
+    fn = np.cross(Pw[W[:, 1]] - Pw[W[:, 0]], Pw[W[:, 2]] - Pw[W[:, 0]]); Nw = np.zeros((nw, 3)); np.add.at(Nw, W.ravel(), np.repeat(fn, 3, 0)); Nw /= np.linalg.norm(Nw, axis=1, keepdims=True) + 1e-12
+    A = coo_matrix((np.ones(2 * len(E)), (np.r_[E[:, 0], E[:, 1]], np.r_[E[:, 1], E[:, 0]])), shape=(nw, nw)).tocsr(); deg = np.asarray(A.sum(1)).ravel()
+    def sm(X, n):
+        for _ in range(n): X = .5 * X + .5 * (A @ X) / (deg[:, None] if X.ndim > 1 else deg)
+        return X
+    h = sm(((sm(Pw.copy(), MUSCLE[0]) - Pw) * Nw).sum(1), 2); hr = h - sm(h, MUSCLE[1])
+    ht = (h[wv][I[ks]] * bary).sum(1); hrt = (hr[wv][I[ks]] * bary).sum(1)
+    return (ht > MUSCLE[2]) & (hrt > MUSCLE[3])
 
 
 def finger_lines(pos, nor, sel, hands):
@@ -639,6 +659,10 @@ def main(src, dst, png=None, fit=False):
         json.dump({'_': 'tools/kael_bust.py --fit: the three views\' cameras (orthographic: u = cx + s (x cos yaw - z sin yaw), v = by - s y, GLB units) and per near arm a turn (a, degrees), scale (k) and shift (tx, ty px) about (cx, cy) laying its skin on the drawing\'s',
                    'cams': cams, 'arms': fits}, open(CAMS, 'w'), indent=1)
     cj = json.load(open(CAMS)); lab = arms(P, I, ys, xs, ks, pos, nor, mat, lab, tat, area, cj['cams'], cj['arms'], names, cols, ix, jw, okw, ok, newh)
+    # (the arms' muscles traced: muscle_lines on the upper arms' and the elbows' skin, not the hands, the tattoos)
+    armsk = (np.abs(pos[:, 0]) > .2) & (np.abs(pos[:, 0]) * .8 - pos[:, 1] * .6 < .80) & ~newh & ~tat & np.isin(lab, [ix['skin'], ix['skinS']])
+    ml = armsk & muscle_lines(P, I, ks, bary); lab[ml] = ix['ink']
+    print('arms: %d texels of the muscles\' lines' % int(ml.sum()))
     lab = finish(P, I, ks, bary, pos, nor, lab, tat, area, names, ix, jw, okw, ok, newh, [h['ring'] for h in hands])
     if os.environ.get('KAEL_BUST_DUMP'): np.savez(os.environ['KAEL_BUST_DUMP'], newh=newh, glove=glove, ys=ys, xs=xs, ks=ks, bary=bary, pos=pos, nor=nor, mat=mat, lab=lab, tat=tat, mey=mey, area=area)
     out = np.zeros((TS, TS, 3)); cov = np.zeros((TS, TS), bool); out[ys, xs] = cols[lab]; cov[ys, xs] = True

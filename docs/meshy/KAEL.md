@@ -636,6 +636,11 @@ Denis ("manda anteprima").
   `tools/kael_bust_attach.py`, per vertice `lb` e `line`, `aBack`/`aLine` nel gioco): le righe tra le dita, attorno al
   pollice e sulle file delle nocche si vedono come in un disegno; con le ombre a due toni del foglio. Provato e lasciato:
   dita più grosse (`FINGER_THICK` 1,25: si fondevano in un grumo).
+- **Ancora un po', e i muscoli delle braccia ricalcati** (Denis: "bravo ancora un po' e ricalca anche i muscoli delle
+  braccia e dove vedi che serve"): righe delle mani più marcate (spinta 10%, larghezza 65%); sulle braccia il contorno
+  interno al 30% (`ARM_LINE`: gomito, deltoide sul braccio); e i muscoli ricalcati nella pittura (`muscle_lines` in
+  `tools/kael_bust.py`): una riga sottile d'inchiostro al centro di ogni solco tra i muscoli (dove la superficie sta sotto la
+  sua versione lisciata, e più che attorno), sulla pelle del braccio, non sui tatuaggi né sulle mani.
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

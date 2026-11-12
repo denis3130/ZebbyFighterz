@@ -58,7 +58,8 @@ SMOOTH, SEAM, SEAM_SMOOTH = 4, .03, 6
 HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
-HAND_LINE, BODY_LINE_BACK = (.15, .6), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width
+ARM_LINE = (float(os.environ.get('KAEL_ARM_PUSH', .3)), .7)   # the arms' outline: its push back (of the body's) and its width
+HAND_LINE, BODY_LINE_BACK = (.10, .65), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width
 FINGER_THICK = 1.                        # the fingers' thickness about their bones (tried 1.25: the fingers merged into a lump, the fist a skin blob, the open hand a mitten)
 HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip) over the bracer's, as the sheet draws them (Denis, 12/11: "dimensioni delle mani falle come si deve")
 HAND_NSMOOTH = 6                         # rounds of smoothing of the hands' normals (the light's bands clean)
@@ -394,7 +395,11 @@ def main(bust):
     # fingers, the fist over the palm. The body's outline is pushed 2 cm back from the camera: only the hand's silhouette was
     # drawn and the fist read as one block. On the hands, by their share, HAND_LINE[0] of that push and HAND_LINE[1] of its width)
     hw = np.clip(G[:, 3], 0, 1) * hv_all
-    put('lb', (hw * (HAND_LINE[0] - 1) * BODY_LINE_BACK)[used].astype(np.float32)); put('line', (1 + hw * (HAND_LINE[1] - 1))[used].astype(np.float32))
+    # (and on the arms ARM_LINE: where the deltoid lies over the biceps, the triceps over the elbow, the forearm over the upper arm,
+    # their lines drawn as the sheet traces the muscles; Denis, 12/11: "ricalca anche i muscoli delle braccia")
+    aw = np.clip(G[:, 1] + G[:, 2], 0, 1) * (1 - hw)
+    push = 1 + hw * (HAND_LINE[0] - 1) + aw * (ARM_LINE[0] - 1); width = 1 + hw * (HAND_LINE[1] - 1) + aw * (ARM_LINE[1] - 1)
+    put('lb', ((push - 1) * BODY_LINE_BACK)[used].astype(np.float32)); put('line', width[used].astype(np.float32))
     jo['bones'] = {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}; jo['fingers'] = fingers; jo['fistFrame'] = frames
     open(os.path.join(KAEL_PKG, 'kael_bust.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_bust.json'), 'w'), separators=(',', ':'))
     BT.save(os.path.join(KAEL_PKG, 'kael_bust.png'), optimize=True)
