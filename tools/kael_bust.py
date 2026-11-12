@@ -35,7 +35,7 @@ sheet's flat palette, piece by piece, and the skin's shadow (Denis chose "Ombre 
   than REN_LINE, softened a little; bits under REN_SMALL mm2 left out), and the sheet's fingerless glove (glove_of(),
   glove_texels()): plain plum over the palm up to a straight edge GLOVE_M under the fingers' webs (the webs found where
   the fingers part going down from the tips), on the back of the hand DORSAL nearer the wrist (Denis, 11/11, on the fists:
-  "sono deformi": the edge lay on the knuckles' fold and broke into a crown of points in the fist; now the knuckles are bare), the thumb bare up to its web (along the surface from its tip), the edge
+  "sono deformi": the edge lay on the knuckles' fold and broke into a crown of points in the fist; now the knuckles are bare), the thumb bare from a ring square to it where it leaves the palm (THUMB_RING; up to its web along the surface from its tip its skin ran down its base to the wrist: in the fist a long blade), the edge
   smoothed; under the cuffs, where Kael's hand was, Meshy's black and small purple islands the glove's plum.
 - The gloves and the black borders (Denis: "sistema i pollici che sono buggati e dipingi meglio i bordi neri delle
   dita e del resto"; finish()): what is left of Kael's own hands the glove's plum; on the shoulders the tattoos Meshy
@@ -80,6 +80,8 @@ WRIST = (0., .05, .07)   # the glove's wrist pushed out by [0] from the seam, fa
 CUT_K, CUT_R, BLEND, GAP = .015, .022, .05, .006   # the cut: Kael's past his cuff's edge (GLB units), Ren's past his hand bone (m); the wrist's blend; the seam's width
 MUSCLE = (20, 6, .008, .002)   # the arms' muscles' lines (muscle_lines): the smoothing for the valleys, for their middle; the thresholds
 FINGER_LINE = (.985, 2., 0.)   # the fingers' lines (finger_lines): the sides' ink over [0], their shadow over [1] (2: none); the joints' creases within [2] GLB units (0: none, they read as dashes across the fingers)
+THUMB_RING = float(os.environ.get('KAEL_THUMB_RING', 0.))   # GLB units: the thumb bare from a ring square to it so far past its web (the sheet's glove: the thumb out of it where it leaves the palm; Denis, 12/11: "il pollice è ancora fatto male": bare along the surface from its tip up to its web, its outer side's skin ran on down its base, in the fist a long blade)
+THUMB_SPAN = float(os.environ.get('KAEL_THUMB_SPAN', .03))   # GLB units: the thumb's skin along the surface from its tip up to its web and this much more (where the ring is nearer, the ring its edge)
 DORSAL = (.035, .025)   # the glove's edge on the back of the hand this much nearer the wrist (GLB units, 1.5 cm), blended over the hand's half thickness [1]
 GLOVE_M, THUMB_M, SMOOTH, REN_LINE, REN_SMALL, GLOVE_SMOOTH = .02, .005, 30, (110, 110), 5., 4   # Ren's hands: the glove's edge under the webs, the thumb bare up to [1] short of its web; the distance's smoothing; his lines: ink, shadow under these lightnesses (the same: no painted shadow, the game's light draws it; Ren's painted wrinkles were brown blotches on the fists), their bits under [4] mm2 skin; the glove's edge smoothed [5] times (the glove plain plum: the light's black on it came out in blotches)
 CLOTH = (48, 33, 59)                              # the glove's colour as Meshy's dark cloth (then it is the vest's plum)
@@ -311,6 +313,8 @@ def glove_of(P, I, isR, src_t, hands):
     ring = np.unique(W[src_t == 2]); ring = ring[~rv[ring]]; dg = dijkstra(G, indices=ring, min_only=True, limit=2.); dg[~np.isfinite(dg)] = 0
     ip, ic = G.indptr, G.indices; nbm = [ic[ip[v]:ip[v + 1]] for v in range(len(Pw))]
     out = []
+    import kael_bust_attach as KA
+    R = KA.package(KA.REN[0]); RL, _, _ = KA.look(KA.REN[1], len(R['P'])); fw = KA.fingers_world(RL['fingers'], R['names'], R['Wm'])
     deg = np.diff(ip).astype(float); free = rv.copy(); free[ring] = False
     for _ in range(SMOOTH):
         avg = np.add.reduceat(dg[ic], ip[:-1]) / np.maximum(deg, 1); dg = np.where(free, avg, dg)
@@ -337,7 +341,12 @@ def glove_of(P, I, isR, src_t, hands):
         # (the back of the hand: away from where the fingers curl in Ren's fists, in this space; the glove's edge there DORSAL
         # nearer the wrist: on the knuckles' fold it bent over the joints and broke into a crown of points in the fist)
         dv = h['sim']['R'] @ ren_dorsal(h['side']); dv -= (dv @ n) * n; dv /= np.linalg.norm(dv)
-        out.append(dict(sd=h['sd'], c=c, n=n, d=dv, tip=Pw[tips[0]], web=Pw[wt]))
+        # (the thumb's bones, Ren's laid on this hand: its edge a ring square to it, as the sheet's glove (the thumb out of it
+        # where it leaves the palm, its base gloved))
+        tj = h['tf'](np.array([fw[h['side'] + 'HandThumb%d' % k] for k in (1, 2, 3)]))
+        out.append(dict(sd=h['sd'], c=c, n=n, d=dv, tip=Pw[tips[0]], web=Pw[wt], thumb=tj))
+        ax_ = (tj[1] - tj[0]) / np.linalg.norm(tj[1] - tj[0])
+        print("glove: %s thumb: its web %.2f of its first bone's length past that bone's joint" % (h['side'], ((Pw[wt] - tj[0]) @ ax_) / np.linalg.norm(tj[1] - tj[0])))
         print("glove: %s hand: webs at %s along the surface, the thumb's at %.3f" % (h['side'], np.round(dg[wf], 3), dg[wt]))
     return out
 
@@ -354,8 +363,10 @@ def glove_texels(pos, newh, planes, jw, okw):
         d = dijkstra(G, indices=src, min_only=True, limit=.4); L = d[tree.query(q['web'])[1]] - THUMB_M
         sm = lambda x: (lambda u: u * u * (3 - 2 * u))(np.clip(x, 0, 1))
         back = sm(.5 + ((pos[sel] - q['c']) @ q['d']) / (2 * DORSAL[1]))   # (0 on the palm's surface, 1 on the back's)
-        g[sel] = ((pos[sel] - q['c']) @ q['n'] + GLOVE_M + DORSAL[0] * back < 0) & ~(d[sel] < L)
-        print('glove: the thumb bare up to %.3f from its tip' % L)
+        tj = q['thumb']; ax = (tj[1] - tj[0]) / np.linalg.norm(tj[1] - tj[0]); ring = q['web'] + THUMB_RING * ax
+        bare = (d[sel] < L + THUMB_SPAN) & ((pos[sel] - ring) @ ax > 0)   # (the ring its edge: along the surface only so far past the web, the index finger's skin not)
+        g[sel] = ((pos[sel] - q['c']) @ q['n'] + GLOVE_M + DORSAL[0] * back < 0) & ~bare
+        print('glove: the thumb bare up to %.3f from its tip, from a ring %.3f past its web (%d texels gloved by the ring)' % (L, THUMB_RING, int(((d[sel] < L) & ~bare).sum())))
     return g
 
 
