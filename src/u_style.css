@@ -187,35 +187,51 @@
   mask-image:linear-gradient(270deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);mask-composite:intersect}
 #uiLayers[data-scene="off"] .ly,#uiLayers[data-scene="off"] #uiParts{opacity:0}
 /* quality: 'bassa' keeps the scene still (no drift, no breathing, no embers) and drops the glows; 'media' has fewer embers */
-/* --- the intro (u4_intro.js): every value set per frame from JS; only the layout lives here --- */
-#uiLayers[data-scene="intro"] .ly{opacity:0}
-#uiLayers[data-scene="intro"] #lySky{opacity:.32}#uiLayers[data-scene="intro"] #lyFog1{opacity:.55}#uiLayers[data-scene="intro"] #lyShade{opacity:1}
+/* --- the intro (u4_intro.js): every value set per frame from JS; only the layout lives here. The stage is the camera
+   (zoom, tilt and shake around the hit); the two canvases draw the effects behind and in front of the fighters --- */
+#uiLayers[data-scene="intro"] .ly,#uiLayers[data-scene="intro"] #uiParts{opacity:0}
 #sc-intro{padding:0;align-items:stretch;justify-content:stretch;overflow:hidden;background:none}
-#sc-intro .inStage{position:absolute;inset:0;transform-origin:50% 55%}
-#sc-intro .inStage>i,#sc-intro .inRocks{position:absolute;display:block;pointer-events:none}
-.inLines{left:-10%;right:-10%;top:30%;height:42%;opacity:0;
-  background:repeating-linear-gradient(180deg,rgba(255,232,200,0) 0 9px,rgba(255,232,200,.55) 9px 10px,rgba(255,232,200,0) 10px 23px,rgba(240,160,90,.4) 23px 24px,rgba(255,232,200,0) 24px 37px);
-  -webkit-mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent)}
-.inRen,.inKael{left:50%;bottom:0;width:120vh;height:100%;margin-left:-60vh;opacity:0;background:center bottom/contain no-repeat;
-  -webkit-mask-image:radial-gradient(ellipse 46% 62% at 50% 52%,#000 58%,transparent 100%);mask-image:radial-gradient(ellipse 46% 62% at 50% 52%,#000 58%,transparent 100%)}
-.inClash{inset:0;opacity:0;background:center/cover no-repeat}
-.inRing{left:50%;top:48%;width:46vh;height:46vh;opacity:0;border-radius:50%;
-  background:radial-gradient(circle,rgba(255,255,255,0) 52%,rgba(255,236,200,.9) 60%,rgba(255,170,90,.5) 66%,rgba(255,170,90,0) 72%)}
-.inRocks{left:50%;top:48%;width:0;height:0}
-.inRocks i{position:absolute;left:-6px;top:-5px;width:12px;height:10px;opacity:0;background:#3a3040;border:1px solid #6b5a64;clip-path:polygon(10% 0,90% 20%,100% 70%,60% 100%,0 80%)}
-.inRocks i:nth-child(3n){width:18px;height:14px}.inRocks i:nth-child(4n){width:8px;height:7px;background:#5a4a50}
-#sc-intro .inFlash{position:absolute;inset:0;opacity:0;background:#fff7ec;pointer-events:none}
-.inLogo{position:absolute;left:50%;top:50%;transform:translate(-50%,-55%);opacity:0;pointer-events:none;font-size:calc(var(--u)*13)}
-.inWord{position:relative;display:block;font-family:var(--u-display);font-weight:500;letter-spacing:.2em;color:#f6efe3;text-shadow:0 0 22px rgba(0,0,0,.5);white-space:nowrap}
-.inWord b{display:inline-block;font-weight:500;opacity:0}
-.inArc{position:absolute;left:52%;top:-.42em;width:1.9em;height:1.9em;fill:none;stroke:var(--u-gold);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;filter:drop-shadow(0 0 5px rgba(216,166,87,.6))}
-.inCut{position:absolute;left:56%;bottom:-.08em;width:24%;height:2px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange));transform-origin:0 50%;box-shadow:0 0 8px rgba(240,138,50,.8)}
-#sc-intro .inSkip{position:absolute;right:calc(env(safe-area-inset-right) + var(--u)*5);bottom:calc(env(safe-area-inset-bottom) + var(--u)*5);min-width:calc(var(--u)*22)}
+#sc-intro .inStage{position:absolute;inset:0}
+#sc-intro .inStage>i,#sc-intro .inStage>canvas,#sc-intro>i{position:absolute;display:block;pointer-events:none}
+.inSky{inset:-16%;opacity:0;background:center 40%/cover no-repeat}
+.inShade{inset:-16%;z-index:-1;background:#07060b}
+#sc-intro .inStage{z-index:0}
+.inSky{z-index:0}
+.inWarm,.inCool{inset:-16%;opacity:0}
+.inWarm{background:linear-gradient(90deg,rgba(255,120,40,.42),rgba(255,120,40,.1) 40%,rgba(255,120,40,0) 60%)}
+.inCool{background:linear-gradient(270deg,rgba(130,80,255,.42),rgba(130,80,255,.1) 40%,rgba(130,80,255,0) 60%)}
+#sc-intro canvas{inset:0;width:100%;height:100%}
+.inPanel{position:absolute;pointer-events:none}
+.inF{position:absolute;display:block;opacity:0;background:center/100% 100% no-repeat}
+/* the afterimages: each fighter's silhouette in his energy's colour (the picture is the mask, set from JS) */
+.inF.g{-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+.inF.g.r{background-color:#ff8a33}.inF.g.k{background-color:#9b6bff}
+.inVig{inset:-16%;background:radial-gradient(ellipse 62% 64% at 50% 52%,rgba(7,6,11,0) 50%,rgba(7,6,11,.8))}
+/* the impact frame: black figures on white, nothing else */
+#sc-intro.imp .inStage{background:radial-gradient(ellipse at 50% 55%,#fffdf8 30%,#ffe7c4)}
+#sc-intro.imp .inSky,#sc-intro.imp .inShade,#sc-intro.imp .inWarm,#sc-intro.imp .inCool,#sc-intro.imp .inVig,#sc-intro.imp .inBack{opacity:0!important}
+#sc-intro.imp .inF{filter:brightness(0)}
+#sc-intro.imp .inF.g{opacity:0!important}
+#sc-intro .inFlash{inset:0;opacity:0;background:#fff7ec}
+/* under the logo the title's own darkening fades in (the same as #sc-title), so the switch to the title does not show */
+:root{--u-title-bg:radial-gradient(ellipse at 50% 44%,rgba(10,8,14,.45),rgba(10,8,14,0) 55%),linear-gradient(180deg,rgba(10,8,14,0) 52%,rgba(10,8,14,.78))}
+#sc-intro .inTitleBg{inset:0;opacity:0;background:var(--u-title-bg)}
+/* the logo: laid out exactly as the title's (same box, same padding, same logo), the letters animated one by one */
+.inLogoBox{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;
+  padding:calc(env(safe-area-inset-top) + var(--u)*4) calc(env(safe-area-inset-right) + var(--u)*6) calc(env(safe-area-inset-bottom) + var(--u)*4) calc(env(safe-area-inset-left) + var(--u)*7)}
+.inLogoBox .ulogo{align-self:center;margin-top:calc(var(--u)*-6);animation:none!important}
+.inLogoBox .ulogoTx b{display:inline-block;font-weight:inherit;opacity:0}
+.inLogoBox .ulogoArc path{stroke-dasharray:100;stroke-dashoffset:100}
+.inLogoBox .ulogoCut{clip-path:inset(0 100% 0 0)}
+.inHalo{position:absolute;left:50%;top:44%;width:calc(var(--u)*150);height:calc(var(--u)*60);transform:translate(-50%,-50%);opacity:0;
+  background:radial-gradient(ellipse closest-side,rgba(255,170,90,.32),rgba(255,140,60,.1) 55%,rgba(255,140,60,0))}
+#sc-title.keep .ulogo{animation:none}
+#sc-intro .inSkip{position:absolute;z-index:3;right:calc(env(safe-area-inset-right) + var(--u)*5);bottom:calc(env(safe-area-inset-bottom) + var(--u)*5);min-width:calc(var(--u)*22)}
 /* the title until Task 7 */
 #sc-title{align-items:center}
 .uprompt{margin-top:calc(var(--u)*6);font-style:italic;font-size:max(18px,calc(var(--u)*5));color:var(--u-ink);text-shadow:0 2px 8px #000}
 /* --- the title (u4_intro.js) --- */
-#sc-title{align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 44%,rgba(10,8,14,.45),rgba(10,8,14,0) 55%),linear-gradient(180deg,rgba(10,8,14,0) 52%,rgba(10,8,14,.78))}
+#sc-title{align-items:center;justify-content:center;background:var(--u-title-bg)}
 #sc-title .ulogo{align-self:center;margin-top:calc(var(--u)*-6)}
 .uprompt{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--u)*10);transform:translateX(-50%);display:flex;align-items:center;gap:calc(var(--u)*3);white-space:nowrap;
   font-style:italic;font-weight:600;font-size:max(18px,calc(var(--u)*5.2));color:#f6efe3;text-shadow:0 2px 10px #000}

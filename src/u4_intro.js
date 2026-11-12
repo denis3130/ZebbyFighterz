@@ -1,86 +1,337 @@
-// The opening (spec §3, «Intro»): a sequence of shots, not frame-by-frame animation. Ren rushes in from the left, Kael
-// from the right, the view closes in, their fists clash (white flash, shock ring, shake, flying rocks), a slow-motion
-// hold on the clash, a white-out, then the logo forms and the title follows. CFG.ui.intro.len ms in all.
-// introAt(ms) sets the whole scene for that time (a pure function of ms: no CSS animation, see u3_layers.js); the
-// screen's clock advances only on shown frames (a hidden page does not jump ahead). «Salta» skips at any time; after the
-// first viewing any key, button or tap does.
-const INTRO = {t: 0, last: 0, el: {}};
-const IN_SHOTS = [[0, 'dark'], [600, 'ren'], [2000, 'kael'], [3200, 'close'], [3700, 'impact'], [5000, 'white'], [5600, 'logo']];
-const IN_ROCKS = 12;
+// The opening (spec §3, «Intro»; redone for Denis: «che si avvicinino e si dessero quel pugno», no close-ups). Ren dashes
+// in from the left and Kael from the right, their fists charged; they face off, draw back and lunge; the fists meet:
+// a white flash, an impact frame (black figures on white), shock rings, lightning, sparks and rocks, a hard shake; a
+// slow-motion hold while the two energies (Ren's orange, Kael's violet) push against each other; the light swells into a
+// white-out; the logo slams in where the title has it, the title's scene shows through, and the title follows.
+// The fighters are the two halves of the reference clash (tools/make_ui_assets.py: intro_ren / intro_kael, placed in the
+// panel by CFG.ui.intro): at the hit they rebuild the reference picture. The effects are drawn on two canvases, behind and
+// in front of the fighters, at most 1.5 pixels per CSS pixel.
+// introAt(ms) sets the whole scene for that time, a pure function of ms (sparks, rocks and lightning come from seeded
+// numbers), with no CSS animation (see u3_layers.js); the screen's clock advances only on shown frames. «Salta» skips at
+// any time; after the first viewing any key, button or tap does.
+const INTRO = {t: 0, last: 0, el: {}, w: 0, h: 0, dpr: 1, q: 1, scene: null};
+const IN_SHOTS = [[0, 'dark'], [250, 'rush'], [1300, 'impact'], [1700, 'hold'], [3500, 'burst'], [3900, 'logo']];
+// the beats (ms): the dash in, face to face, the draw back, the hit, the end of the freeze, the impact frame, the hold,
+// the burst, the white-out, the letters, the title's scene showing through
+const IN_T = {in0: 250, in1: 650, face: 1000, pull: 1080, hit: 1300, imp0: 1350, imp1: 1440, freeze: 1420, hold: 1700, burst: 3500, white: 3900, logo: 4000, title: 4650};
+const IN_GHOSTS = [[34, .5], [68, .3], [102, .16]];    // afterimages: how many ms behind, opacity at full speed
+const IN_COL = ['#ff9a3c', '#a77bff'];                 // Ren's energy, Kael's
+const IN_QN = {alta: 1, media: .6, bassa: .3};          // share of the particles per quality
 const inK = (t, a, b) => Math.max(0, Math.min(1, (t - a) / (b - a)));   // progress of t through [a, b]
 const inOut = x => 1 - (1 - x) * (1 - x) * (1 - x);                    // ease out
 const inIn = x => x * x * x;                                            // ease in
+const inR = (i, k) => { const s = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return s - Math.floor(s); };   // seeded 0..1
+const inA = (hex, a) => 'rgba(' + parseInt(hex.slice(1, 3), 16) + ',' + parseInt(hex.slice(3, 5), 16) + ',' + parseInt(hex.slice(5, 7), 16) + ',' + a + ')';
 
 function introBuild(r) {
-  const h = '<div class="inStage"><i class="inLines"></i><i class="inRen"></i><i class="inKael"></i><i class="inClash"></i><i class="inRing"></i><div class="inRocks">' +
-    '<i></i>'.repeat(IN_ROCKS) + '</div></div><i class="inFlash"></i>' +
-    '<div class="inLogo"><svg class="inArc" viewBox="0 0 100 100" aria-hidden="true"><path d="M70 8a44 44 0 1 1-52 64" pathLength="100"/></svg><span class="inWord">' +
-    'VOIDRISE'.split('').map(c => '<b>' + c + '</b>').join('') + '</span><i class="inCut"></i></div>';
-  r.innerHTML = h;
+  const C = CFG.ui.intro, A = k => ASSETS['ui/' + k + '.webp'] || '';
+  const ghosts = s => IN_GHOSTS.map((g, i) => '<i class="inF g g' + i + ' ' + s + '"></i>').join('');
+  r.innerHTML = '<div class="inStage"><i class="inSky"></i><i class="inShade"></i><i class="inWarm"></i><i class="inCool"></i><canvas class="inBack"></canvas>' +
+    '<div class="inPanel">' + ghosts('r') + ghosts('k') + '<i class="inF r"></i><i class="inF k"></i></div><canvas class="inFront"></canvas><i class="inVig"></i></div>' +
+    '<i class="inTitleBg"></i><i class="inFlash"></i><div class="inLogoBox"><i class="inHalo"></i><div class="ulogo l"><svg class="ulogoArc" viewBox="0 0 100 100" aria-hidden="true">' +
+    '<path d="M70 8a44 44 0 1 1-52 64" pathLength="100"/></svg><span class="ulogoTx">' + 'VOIDRISE'.split('').map(c => '<b>' + c + '</b>').join('') +
+    '</span><i class="ulogoCut"></i></div></div>';
   const q = s => r.querySelector(s), E = INTRO.el;
-  E.stage = q('.inStage'); E.lines = q('.inLines'); E.ren = q('.inRen'); E.kael = q('.inKael'); E.clash = q('.inClash'); E.ring = q('.inRing');
-  E.rocks = [...r.querySelectorAll('.inRocks i')]; E.flash = q('.inFlash'); E.logo = q('.inLogo'); E.letters = [...r.querySelectorAll('.inWord b')];
-  E.arc = q('.inArc path'); E.cut = q('.inCut');
-  E.ren.style.backgroundImage = 'url(' + (ASSETS['ui/ren_full.webp'] || '') + ')';
-  E.kael.style.backgroundImage = 'url(' + (ASSETS['ui/kael_full.webp'] || '') + ')';
-  E.clash.style.backgroundImage = 'url(' + (ASSETS['ui/intro_clash.webp'] || '') + ')';
+  E.stage = q('.inStage'); E.sky = q('.inSky'); E.shade = q('.inShade'); E.warm = q('.inWarm'); E.cool = q('.inCool'); E.vig = q('.inVig');
+  E.back = q('.inBack'); E.front = q('.inFront'); E.bc = E.back.getContext('2d'); E.fc = E.front.getContext('2d'); E.panel = q('.inPanel');
+  E.ren = q('.inF.r:not(.g)'); E.kael = q('.inF.k:not(.g)'); E.gr = [...r.querySelectorAll('.inF.g.r')]; E.gk = [...r.querySelectorAll('.inF.g.k')];
+  E.titleBg = q('.inTitleBg'); E.flash = q('.inFlash'); E.logo = q('.inLogoBox'); E.halo = q('.inHalo'); E.letters = [...r.querySelectorAll('.ulogoTx b')];
+  E.arc = q('.ulogoArc path'); E.cut = q('.ulogoCut');
+  E.sky.style.backgroundImage = 'url(' + A('sky') + ')';
+  // each half in its place in the panel, turning around its fist
+  const put = (el, b, f, img) => { const w = b[2] - b[0], h = b[3] - b[1];
+    Object.assign(el.style, {left: b[0] * 100 + '%', top: b[1] * 100 + '%', width: w * 100 + '%', height: h * 100 + '%', backgroundImage: 'url(' + img + ')',
+      transformOrigin: ((f[0] - b[0]) / w * 100).toFixed(2) + '% ' + ((f[1] - b[1]) / h * 100).toFixed(2) + '%'}); };
+  [E.ren, ...E.gr].forEach(el => put(el, C.ren, C.fist.ren, A('intro_ren')));
+  [E.kael, ...E.gk].forEach(el => put(el, C.kael, C.fist.kael, A('intro_kael')));
+  // the afterimages are flat silhouettes in the fighter's colour: the picture as a mask
+  for (const [list, img] of [[E.gr, A('intro_ren')], [E.gk, A('intro_kael')]]) for (const el of list) {
+    el.style.backgroundImage = 'none'; el.style.webkitMaskImage = el.style.maskImage = 'url(' + img + ')';
+  }
+  E.stage.style.transformOrigin = '50% ' + C.hitY * 100 + '%';
+  INTRO.w = 0;
   const skip = cBtn({label: 'Salta', kind: 'small', act: () => introSkip()});
   skip.classList.add('inSkip');
   r.appendChild(skip);
 }
-const inSet = (el, op, tf) => { el.style.opacity = op.toFixed(3); if (tf !== undefined) el.style.transform = tf; };
+// The canvases and the panel follow the screen's size.
+function inSize() {
+  const w = innerWidth, h = innerHeight, dpr = Math.min(window.devicePixelRatio || 1, 1.5), E = INTRO.el;
+  if (w === INTRO.w && h === INTRO.h && dpr === INTRO.dpr) return;
+  INTRO.w = w; INTRO.h = h; INTRO.dpr = dpr;
+  for (const c of [E.back, E.front]) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const G = inGeo(), C = CFG.ui.intro;
+  Object.assign(E.panel.style, {width: G.pw.toFixed(1) + 'px', height: G.ph.toFixed(1) + 'px', left: (G.cx - C.hit[0] * G.pw).toFixed(1) + 'px', top: (G.cy - C.hit[1] * G.ph).toFixed(1) + 'px'});
+}
+// The panel on screen (px): its height and width, where the fists meet; inAt = a point of the panel (fractions) on screen.
+// On screens narrower than 16:9 (a tablet) the panel shrinks so both faces stay in view.
+function inGeo() { const C = CFG.ui.intro, ph = C.panelH * INTRO.h * Math.min(1, INTRO.w / INTRO.h / 1.75); return {ph, pw: ph * C.aspect, cx: INTRO.w / 2, cy: C.hitY * INTRO.h, w: INTRO.w, h: INTRO.h}; }
+const inAt = (G, u, v) => [G.cx + (u - CFG.ui.intro.hit[0]) * G.pw, G.cy + (v - CFG.ui.intro.hit[1]) * G.ph];
+// Effect time: ms after the hit, slowed down during the hold.
+const inFx = t => t < IN_T.hold ? t - IN_T.hit : IN_T.hold - IN_T.hit + .35 * (t - IN_T.hold);
 
-// The scene at time t (ms since the intro started).
+// Where a fighter (0 Ren, 1 Kael) is at time t: g = how far from the hit (panel widths), y = how much higher (panel heights,
+// negative = up), r = tilt (deg, around the fist). Kael comes in a little after Ren.
+function inPose(t, side) {
+  const T = IN_T, d = side ? 60 : 0, bob = x => .006 * Math.sin(x / (side ? 150 : 170));
+  if (t < T.in1 + d) { const k = inOut(inK(t, T.in0 + d, T.in1 + d)); return {g: .6 - .5 * k, y: -.05 * (1 - k), r: (side ? 6 : -6) * (1 - k)}; }   // the dash in
+  if (t < T.face) return {g: .1 - .015 * inK(t, T.in1 + d, T.face), y: bob(t - T.in1 - d), r: 0};                                                  // face to face
+  if (t < T.pull) return {g: .085 + .02 * inOut(inK(t, T.face, T.pull)), y: bob(T.face - T.in1 - d) * (1 - inK(t, T.face, T.pull)), r: 0};          // drawing back
+  if (t < T.hit) return {g: .105 * (1 - inIn(inK(t, T.pull, T.hit))), y: 0, r: 0};                                                                 // the lunge
+  if (t < T.freeze) return {g: 0, y: 0, r: 0};                                                                                                   // the hit
+  // the blast pushes them apart a little, they press in again, trembling while the energies push
+  const g = .014 * inOut(inK(t, T.freeze, T.freeze + 140)) * (1 - inOut(inK(t, T.freeze + 200, T.hold + 300)));
+  return {g: g + (t < T.white ? .0018 * (inR(Math.floor(t / 33), side + 7) - .5) * inK(t, T.freeze, T.hold) : 0), y: 0, r: 0};
+}
+// How fast the fighters move (0..1): drives the afterimages, the speed lines and the trails.
+function inSpeed(t, side) { return Math.min(1, Math.abs(inPose(t, side).g - inPose(t - 16, side).g) / 16 / .0012); }
+
+function inPiece(el, box, side, p, op) {
+  const w = box[2] - box[0], h = box[3] - box[1];
+  el.style.opacity = op.toFixed(3);
+  el.style.transform = 'translate(' + ((side ? p.g : -p.g) / w * 100).toFixed(3) + '%,' + (p.y / h * 100).toFixed(3) + '%) rotate(' + p.r.toFixed(2) + 'deg)';
+}
+
+// --- drawing helpers (canvas, CSS pixels) ---
+function inGlow(c, x, y, r, col, a, core) {     // a soft round light; core = share of the radius at full strength
+  if (a <= .003 || r <= .5) return;
+  const g = c.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, col); if (core) g.addColorStop(core, col); g.addColorStop(1, inA(col, 0));
+  c.globalAlpha = Math.min(1, a); c.fillStyle = g; c.fillRect(x - r, y - r, 2 * r, 2 * r);
+}
+function inHalf(c, G, side, fn) { c.save(); c.beginPath(); c.rect(side ? G.cx : -G.w, -G.h, G.w * 2, G.h * 3); c.clip(); fn(); c.restore(); }   // only one side of the hit
+function inOrb(c, x, y, h, col, k, e) {         // a charged fist: a white core in a coloured glow (k = charge, about 0..1.6)
+  if (k <= 0) return;
+  const f = .88 + .24 * inR(e, 5), a = Math.min(1, k);
+  inGlow(c, x, y, h * (.13 + .07 * k) * f, col, .5 * a);
+  inGlow(c, x, y, h * (.065 + .02 * k) * f, col, .9 * a, .25);
+  inGlow(c, x, y, h * (.048 + .012 * k), '#fff8ee', a, .5);
+}
+function inBolt(c, x, y, ang, len, seed, w, col, a) {   // a lightning bolt from (x, y), jagged, with a glow and a branch
+  const n = 8, ca = Math.cos(ang), sa = Math.sin(ang), pts = [[x, y]];
+  for (let i = 1; i <= n; i++) { const d = len * i / n, j = (inR(seed, i) - .5) * len * (i === n ? .08 : .26); pts.push([x + ca * d - sa * j, y + sa * d + ca * j]); }
+  const line = p => { c.beginPath(); c.moveTo(p[0][0], p[0][1]); for (const q of p) c.lineTo(q[0], q[1]); };
+  const br = 3 + Math.floor(inR(seed, 20) * 3), ba = ang + (inR(seed, 21) - .5) * 1.6, bl = len * .4, bp = [pts[br]];
+  for (let i = 1; i <= 4; i++) { const d = bl * i / 4, j = (inR(seed, 30 + i) - .5) * bl * .3; bp.push([pts[br][0] + Math.cos(ba) * d - Math.sin(ba) * j, pts[br][1] + Math.sin(ba) * d + Math.cos(ba) * j]); }
+  for (const p of [pts, bp]) {
+    line(p); c.globalAlpha = .32 * a; c.strokeStyle = col; c.lineWidth = w * 5; c.stroke();
+    c.globalAlpha = a; c.strokeStyle = '#fffdf6'; c.lineWidth = p === pts ? w : w * .6; c.stroke();
+  }
+}
+// A shock ring (an ellipse around the hit): its left half in Ren's colour, the right in Kael's; half = 'top' (behind the
+// fighters), 'bottom' (in front) or 'all'.
+function inRing(c, x, y, rx, ry, lw, a, half) {
+  const P = Math.PI, parts = half === 'top' ? [[P, 1.5 * P, 0], [1.5 * P, 2 * P, 1]] : half === 'bottom' ? [[0, .5 * P, 1], [.5 * P, P, 0]] : [[.5 * P, 1.5 * P, 0], [-.5 * P, .5 * P, 1]];
+  if (a <= .003) return;
+  for (const [a0, a1, s] of parts) {
+    c.beginPath(); c.ellipse(x, y, rx, ry, 0, a0, a1);
+    c.globalAlpha = a * .5; c.strokeStyle = IN_COL[s]; c.lineWidth = lw * 2.8; c.stroke();
+    c.globalAlpha = a; c.strokeStyle = '#fff6e6'; c.lineWidth = lw; c.stroke();
+  }
+}
+// Focus lines toward the hit: thin wedges coming in from beyond the edges, flickering with the epoch e.
+function inLines(c, G, e, n, a, col, r0) {
+  if (a <= .003) return;
+  const D = Math.hypot(G.w, G.h);
+  c.globalAlpha = Math.min(1, a); c.fillStyle = col; c.beginPath();
+  for (let i = 0; i < n; i++) {
+    if (inR(e, i) < .25) continue;
+    const ang = (i + inR(e, i + 50)) / n * 6.2832, ri = D * (r0 + .22 * inR(e, i + 100)), wd = D * (.003 + .009 * inR(e, i + 150)), ca = Math.cos(ang), sa = Math.sin(ang);
+    c.moveTo(G.cx + ca * ri, G.cy + sa * ri); c.lineTo(G.cx + ca * D - sa * wd, G.cy + sa * D + ca * wd); c.lineTo(G.cx + ca * D + sa * wd, G.cy + sa * D - ca * wd); c.closePath();
+  }
+  c.fill();
+}
+// Sparks: streaks along their path, Ren's colour on his side, Kael's on the other. born(i) / life(i) in effect ms.
+function inSparks(c, G, fx, list, w) {
+  for (const s of [0, 1]) {
+    c.beginPath();
+    for (const p of list) if (p.s === s) { c.moveTo(p.x0, p.y0); c.lineTo(p.x1, p.y1); }
+    c.globalAlpha = .55; c.strokeStyle = IN_COL[s]; c.lineWidth = w * 2.6; c.stroke();
+    c.globalAlpha = .95; c.strokeStyle = '#fff4e2'; c.lineWidth = w; c.stroke();
+  }
+}
+// The spark at age ms (effect time), thrown from (x, y) at angle ang and speed v (screen heights per s), falling.
+function inSpark(G, x, y, ang, v, age, life, flat) {
+  const pos = a => { const s = a / 1000, sp = v * G.h; return [x + Math.cos(ang) * sp * s, y + Math.sin(ang) * sp * s * flat + .45 * G.h * s * s]; };
+  const p1 = pos(age), p0 = pos(Math.max(0, age - 24));
+  return {x0: p0[0], y0: p0[1], x1: p1[0], y1: p1[1], s: p1[0] < G.cx ? 0 : 1, a: 1 - age / life};
+}
+function inRock(c, x, y, r, rot, seed, lit, a, lx, ly) {    // a rock: an irregular dark stone, lit on the side toward (lx, ly)
+  if (a <= .01) return;
+  const shape = (k, ox, oy) => { c.beginPath();
+    for (let i = 0; i < 7; i++) { const an = rot + (i + .4 * inR(seed, i + 9)) / 7 * 6.2832, rr = r * k * (.5 + .6 * inR(seed, i)); c[i ? 'lineTo' : 'moveTo'](x + ox + Math.cos(an) * rr, y + oy + Math.sin(an) * rr); }
+    c.closePath(); };
+  const d = Math.hypot(lx - x, ly - y) || 1;
+  c.globalAlpha = a; shape(1, 0, 0); c.fillStyle = '#1b1520'; c.fill();
+  c.globalAlpha = a * .7; shape(.6, (lx - x) / d * r * .3, (ly - y) / d * r * .3); c.fillStyle = lit; c.fill();
+}
+
+// --- the scene at time t (ms since the intro started) ---
 function introAt(t) {
   if (NAV.cur !== 'intro') return;
-  if (t >= CFG.ui.intro.len) { introEnd(); return; }
+  if (t >= CFG.ui.intro.len) { introEnd(true); return; }
   INTRO.t = t;
-  const E = INTRO.el, root = NAV.screens.intro.root;
+  inSize();
+  const E = INTRO.el, root = NAV.screens.intro.root, T = IN_T, C = CFG.ui.intro, G = inGeo(), H = G.h;
   let shot = IN_SHOTS[0][1];
   for (const [at, name] of IN_SHOTS) if (t >= at) shot = name;
   if (root.dataset.shot !== shot) { root.dataset.shot = shot; root.className = root.className.replace(/\bs-\w+/g, '').trim() + ' s-' + shot; }
-  // the two fighters rush in (vw from the centre), drift, then close in; gone at the impact (the clash picture takes over)
-  const ren = -70 + 52 * inOut(inK(t, 600, 1500)) + 4 * inK(t, 1500, 3200) + 8 * inIn(inK(t, 3200, 3700));
-  const kael = 70 - 52 * inOut(inK(t, 2000, 2900)) - 4 * inK(t, 2900, 3200) - 8 * inIn(inK(t, 3200, 3700));
-  const vis = t >= 600 && t < 3700 ? 1 : 0;
-  inSet(E.ren, vis * inK(t, 600, 750), 'translateX(' + ren.toFixed(2) + 'vw)');
-  inSet(E.kael, (t >= 2000 && t < 3700 ? 1 : 0) * inK(t, 2000, 2150), 'translateX(' + kael.toFixed(2) + 'vw) scaleX(-1)');
-  // speed lines while someone rushes in
-  const rush = Math.max(Math.sin(Math.PI * inK(t, 600, 1500)), Math.sin(Math.PI * inK(t, 2000, 2900)), .6 * Math.sin(Math.PI * inK(t, 3200, 3700)));
-  inSet(E.lines, .45 * rush, 'translateX(' + (-((t * 1.6) % 240)).toFixed(1) + 'px)');
-  // the view: closes in before the impact, shakes on it, a slow push during the hold
-  const zoom = 1 + .25 * inIn(inK(t, 3200, 3700)) - .25 * inK(t, 3700, 3720) + .06 * inK(t, 3700, 5000);
-  const sh = t >= 3700 && t < 4150 ? 18 * (1 - inK(t, 3700, 4150)) : 0;
-  E.stage.style.transform = 'translate(' + (sh * Math.sin(t * .11)).toFixed(2) + 'px,' + (sh * Math.cos(t * .093)).toFixed(2) + 'px) scale(' + zoom.toFixed(4) + ')';
-  // the clash picture, the shock ring, the rocks
-  inSet(E.clash, t >= 3700 && t < 5600 ? inK(t, 3700, 3820) : 0, 'scale(' + (1 + .06 * inK(t, 3700, 5000)).toFixed(4) + ')');
-  const rk = inK(t, 3700, 4250);
-  inSet(E.ring, t >= 3700 ? .9 * (1 - rk) : 0, 'translate(-50%,-50%) scale(' + (.15 + 3.2 * inOut(rk)).toFixed(3) + ')');
-  const slow = t < 3700 ? 0 : Math.min(t - 3700, 120) + .35 * Math.max(0, t - 3820);   // slow motion after the first instant
-  E.rocks.forEach((e, i) => {
-    const a = i * 2.39996 + .4, v = .9 + (i % 4) * .35, d = slow * v * .55;
-    inSet(e, t >= 3700 && t < 5000 ? 1 - inK(t, 4500, 5000) : 0, 'translate(' + (Math.cos(a) * d).toFixed(1) + 'px,' + (Math.sin(a) * d + .00045 * slow * slow).toFixed(1) + 'px) rotate(' + (slow * (i % 2 ? .6 : -.5)).toFixed(0) + 'deg)');
+  const imp = t >= T.imp0 && t < T.imp1;    // the impact frame
+  if (root.classList.contains('imp') !== imp) root.classList.toggle('imp', imp);
+  // the title's scene shows through at the end (the menus' layers fade in under the logo)
+  const scene = t >= T.title ? 'title' : 'intro';
+  if (INTRO.scene !== scene) { INTRO.scene = scene; layersSet(scene, scene === 'title' ? {hero: 'ren', rival: 'kael', pose: 'vs'} : {}); }
+
+  // the fighters and their afterimages
+  const pR = inPose(t, 0), pK = inPose(t, 1), on = t >= T.in0 && t < T.white ? 1 : 0, spR = inSpeed(t, 0), spK = inSpeed(t, 1);
+  inPiece(E.ren, C.ren, 0, pR, on); inPiece(E.kael, C.kael, 1, pK, on);
+  IN_GHOSTS.forEach(([lag, a], i) => {
+    inPiece(E.gr[i], C.ren, 0, inPose(t - lag, 0), on * a * spR);
+    inPiece(E.gk[i], C.kael, 1, inPose(t - lag, 1), on * a * spK);
   });
-  // white: the flash of the impact, the white-out before the logo, fading into it
-  const flash = t >= 3700 && t < 4000 ? 1 - inK(t, 3700, 3830) : t >= 5000 ? (t < 5600 ? inIn(inK(t, 5000, 5600)) : 1 - inOut(inK(t, 5600, 6050))) : 0;
-  inSet(E.flash, flash);
-  // the logo: letters one after the other, the crescent drawn, the orange cut
-  const lg = t >= 5600;
-  E.logo.style.opacity = lg ? '1' : '0';
-  E.letters.forEach((b, i) => { const k = inOut(inK(t, 5750 + i * 70, 6100 + i * 70)); inSet(b, k, 'translateY(' + ((1 - k) * 14).toFixed(1) + 'px)'); });
-  E.arc.style.strokeDashoffset = (100 - 100 * inOut(inK(t, 5900, 6600))).toFixed(1);
-  E.cut.style.transform = 'rotate(-22deg) scaleX(' + inOut(inK(t, 6400, 6750)).toFixed(3) + ')';
+  // the camera: closes in on the lunge, kicks on the hit, pushes slowly through the hold, rushes into the white; shakes
+  let z = 1 + .03 * inK(t, T.in1, T.face) - .01 * inOut(inK(t, T.face, T.pull)) + .16 * inIn(inK(t, T.pull, T.hit)), rot = 0, sh = 0;
+  if (t >= T.hit) {
+    z = 1.12 + .1 * (1 - inOut(inK(t, T.hit, T.hit + 260))) + .08 * inK(t, T.hold, T.burst) + .3 * inIn(inK(t, T.burst, T.white));
+    rot = -1.2 * inOut(inK(t, T.freeze, T.hold + 800));
+    sh = .024 * (1 - inK(t, T.hit, T.hit + 520)) + .0022 * inK(t, T.freeze, T.hold) + .018 * inIn(inK(t, T.burst, T.white));
+  }
+  if (t >= T.white) { z = 1; rot = 0; sh = 0; }
+  const e33 = Math.floor(t / 33);
+  E.stage.style.transform = 'translate(' + (sh * (inR(e33, 1) - .5) * 2 * H).toFixed(2) + 'px,' + (sh * (inR(e33, 2) - .5) * 2 * H).toFixed(2) + 'px) rotate(' + rot.toFixed(3) + 'deg) scale(' + z.toFixed(4) + ')';
+  // the sky: out of the dark, lit by the hold's energies (Ren's warm side, Kael's cold side), dimmed under the logo, then
+  // gone as the title's scene shows through
+  const lit = t < T.hit ? .42 * inK(t, 0, 500) : t < T.white ? .55 + .12 * inR(Math.floor(t / 50), 3) * inK(t, T.hold, T.hold + 1) : .45;
+  const out = 1 - inK(t, T.title, T.title + 500);
+  E.sky.style.opacity = (lit * out).toFixed(3);
+  E.shade.style.opacity = out.toFixed(3);
+  const split = t >= T.hit && t < T.white ? .7 * inOut(inK(t, T.freeze, T.hold + 300)) : 0;
+  E.warm.style.opacity = E.cool.style.opacity = split.toFixed(3);
+  E.vig.style.opacity = out.toFixed(3);
+  E.titleBg.style.opacity = inK(t, T.title, T.title + 500).toFixed(3);
+  // white: the flash of the hit, after the impact frame a fading glare, the white-out, fading into the logo
+  const flash = t >= T.hit && t < T.imp0 ? 1 : t >= T.imp1 && t < T.hold ? .7 * (1 - inOut(inK(t, T.imp1, T.imp1 + 200))) :
+    t >= T.burst && t < T.white ? inIn(inK(t, T.burst, T.white)) : t >= T.white ? 1 - inOut(inK(t, T.white, T.white + 450)) : 0;
+  E.flash.style.opacity = flash.toFixed(3);
+
+  // --- the canvases ---
+  const n = INTRO.q, bc = E.bc, fc = E.fc, dpr = INTRO.dpr, fx = inFx(t), e50 = Math.floor(t / 50);
+  for (const c of [bc, fc]) { c.setTransform(dpr, 0, 0, dpr, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, G.w, G.h); c.lineJoin = c.lineCap = 'round'; }
+  bc.globalCompositeOperation = fc.globalCompositeOperation = 'lighter';
+  const fR = inAt(G, C.fist.ren[0] - pR.g, C.fist.ren[1] + pR.y), fK = inAt(G, C.fist.kael[0] + pK.g, C.fist.kael[1] + pK.y);
+  if (t < T.hit) {
+    // behind: the two lights coming from the edges, the speed lines, each fighter's trail and aura
+    const come = inK(t, 0, 300) * (1 - inK(t, T.in0, T.in0 + 300));
+    inGlow(bc, 0, G.cy, H * (.25 + .3 * come), IN_COL[0], .7 * come); inGlow(bc, G.w, G.cy, H * (.25 + .3 * come), IN_COL[1], .7 * come);
+    const sp = Math.max(spR, spK);
+    if (sp > .02) for (let i = 0; i < 30 * n; i++) {     // speed streaks: soft lines of light flying outward from the middle
+      const s = i % 2, y = H * (.08 + .84 * inR(i, 61)), len = G.w * (.06 + .16 * inR(i, 63)), ph = (inR(i, 65) + t * (.0016 + .0016 * inR(i, 67))) % 1;
+      const x = s ? G.cx + ph * (G.w / 2 + len * 2) : G.cx - ph * (G.w / 2 + len * 2), th = .7 + 1.6 * inR(i, 69);
+      bc.save(); bc.translate(x, y); bc.scale(len / th, 1); inGlow(bc, 0, 0, th, s ? '#e4d6ff' : '#ffe0bc', (.25 + .45 * inR(i, 70)) * sp, .3); bc.restore();
+    }
+    const charge = t < T.in0 ? 0 : .6 + .4 * inK(t, T.in1, T.face) + .5 * inIn(inK(t, T.pull, T.hit));
+    for (const [s, f, spd] of [[0, fR, spR], [1, fK, spK]]) {
+      const dir = s ? 1 : -1, a = Math.min(1, .25 * charge + .7 * spd);
+      bc.save(); bc.translate(f[0] + dir * G.w * .2, f[1] - H * .06); bc.scale(3.2, 1); inGlow(bc, 0, 0, H * .3, IN_COL[s], .45 * a); bc.restore();   // the trail
+      inGlow(bc, f[0] + dir * H * .45, f[1] - H * .12, H * .5, IN_COL[s], (.16 + .1 * inR(e50, s)) * Math.min(1, charge));                                // the aura
+    }
+    // in front: focus lines closing on the fists as they lunge, the charged fists, small crackles around them
+    inLines(fc, G, Math.floor(t / 40), Math.round(40 * Math.max(n, .5)), .3 * inK(t, T.pull, T.hit), '#fff1e0', .4);
+    inOrb(fc, fR[0], fR[1], H, IN_COL[0], charge, Math.floor(t / 40));
+    inOrb(fc, fK[0], fK[1], H, IN_COL[1], charge, Math.floor(t / 40) + 9);
+    if (t > T.in1) for (let i = 0; i < 3; i++) {
+      const s = i % 2, f = s ? fK : fR, sd = e50 * 7 + i;
+      if (inR(sd, 1) < .5) inBolt(fc, f[0], f[1], inR(sd, 2) * 6.2832, H * (.06 + .08 * inR(sd, 3)) * charge, sd, 1.2, IN_COL[s], .8);
+    }
+  } else if (imp) {
+    // the impact frame: black focus lines on the white
+    fc.globalCompositeOperation = 'source-over';
+    inLines(fc, G, Math.floor(t / 30), Math.round(56 * Math.max(n, .5)), .92, '#140f18', .08);
+  } else if (t < T.white) {
+    const burst = inIn(inK(t, T.burst, T.white)), hold = inK(t, T.freeze, T.hold);
+    // behind: the split light of the two energies, the upper halves of the shock rings, rocks rising in the hold
+    inGlow(bc, G.cx - G.w * .3, G.cy, G.w * .75, IN_COL[0], (.16 + .16 * hold) * (.9 + .2 * inR(e50, 4)));
+    inGlow(bc, G.cx + G.w * .3, G.cy, G.w * .75, IN_COL[1], (.16 + .16 * hold) * (.9 + .2 * inR(e50, 5)));
+    const ring = (i, half, c) => {
+      const k = inK(fx, i * 80, i * 80 + 650); if (k <= 0 || k >= 1) return;
+      const rx = G.w * (.03 + (.62 + .2 * i) * inOut(k)), ry = rx * (i === 1 ? .92 : .3);
+      inRing(c, G.cx, G.cy, rx, ry, H * .016 * (1 - k) + 1, Math.pow(1 - k, 1.4), i === 1 ? 'all' : half);
+    };
+    ring(0, 'top', bc); ring(2, 'top', bc);
+    bc.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < 9 * n; i++) {
+      const s = (t - T.freeze) / 1000, y = H * (.8 + .35 * inR(i, 71)) - H * (.04 + .06 * inR(i, 72)) * s * 1.6, x = G.w * (.06 + .88 * inR(i, 73));
+      inRock(bc, x, y, H * (.008 + .016 * inR(i, 74)), s * (inR(i, 75) - .5) * 2, i + 300, IN_COL[x < G.cx ? 0 : 1], .8 * hold * (1 - burst), G.cx, G.cy);
+    }
+    bc.globalCompositeOperation = 'lighter';
+    // in front: the flying rocks and sparks of the hit, the stream of sparks of the hold, the lower halves of the rings,
+    // the round ring, the white focus lines fading, the energy sphere, lightning
+    const sparks = [];
+    for (let i = 0; i < 64 * n; i++) {
+      const life = 350 + 650 * inR(i, 21); if (fx > life) continue;
+      const sp = inSpark(G, G.cx, G.cy, inR(i, 22) * 6.2832, .55 + 1.5 * inR(i, 23), fx, life, .62); sparks.push(sp);
+    }
+    if (fx > 380) {
+      const j1 = Math.floor((fx - 380) / 26), j0 = Math.max(0, j1 - 30);
+      for (let j = j0; j <= j1; j++) {
+        if (inR(j, 30) > n) continue;
+        const born = 380 + j * 26, life = 300 + 420 * inR(j, 31), age = fx - born; if (age < 0 || age > life) continue;
+        const up = inR(j, 32) < .72, ang = (up ? -Math.PI / 2 : Math.PI / 2) + (inR(j, 33) - .5) * (up ? 2.4 : 1.6);
+        sparks.push(inSpark(G, G.cx + (inR(j, 34) - .5) * H * .05, G.cy, ang, .3 + .7 * inR(j, 35), age, life, 1));
+      }
+    }
+    inSparks(fc, G, fx, sparks, 1.6);
+    ring(0, 'bottom', fc); ring(1, 'all', fc); ring(2, 'bottom', fc);
+    fc.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < 16 * n; i++) {
+      const ang = inR(i, 41) * 6.2832, v = (.35 + .9 * inR(i, 42)) * H, s = fx / 1000, x = G.cx + Math.cos(ang) * v * s, y = G.cy + Math.sin(ang) * v * s * .7 + .3 * H * s * s;
+      inRock(fc, x, y, H * (.008 + .02 * inR(i, 43)), s * (inR(i, 44) - .5) * 9, i, IN_COL[Math.cos(ang) < 0 ? 0 : 1], 1 - inK(fx, 900, 1400), G.cx, G.cy);
+    }
+    fc.globalCompositeOperation = 'lighter';
+    inLines(fc, G, Math.floor(t / 40), Math.round(48 * Math.max(n, .5)), .5 * (1 - inK(t, T.imp1, T.hold + 200)) + .5 * burst, '#fff4e6', .1);
+    const R = H * (.075 + .012 * Math.sin(t / 47) + .008 * inR(e33, 9) + .03 * hold) * (1 + 7 * burst);
+    inHalf(fc, G, 0, () => inGlow(fc, G.cx, G.cy, R * 2.4, IN_COL[0], .75));
+    inHalf(fc, G, 1, () => inGlow(fc, G.cx, G.cy, R * 2.4, IN_COL[1], .75));
+    inGlow(fc, G.cx, G.cy, R, '#fffaf2', .95, .35);
+    fc.save(); fc.translate(G.cx, G.cy); fc.scale(1, .03); inGlow(fc, 0, 0, G.w * .6, '#d8e4ff', .55 + .3 * burst); fc.restore();   // the lens streak
+    fc.save(); fc.translate(G.cx, G.cy); fc.scale(.012, 1); inGlow(fc, 0, 0, H * 1.1, '#fff1dc', .35 * hold); fc.restore();          // the seam between the two energies
+    const bolts = Math.round((3 + 5 * hold) * Math.max(n, .5));
+    for (let i = 0; i < bolts; i++) {
+      const sd = e50 * 13 + i; if (inR(sd, 1) < .3) continue;
+      const s = inR(sd, 2) < .5 ? 0 : 1, ang = (s ? 0 : Math.PI) + (inR(sd, 3) - .5) * 2.6;
+      inBolt(fc, G.cx, G.cy, ang, H * (.18 + .4 * inR(sd, 4)) * (1 + burst), sd, 1.6, IN_COL[s], .95);
+    }
+  } else {
+    // the logo: embers rising over the dark
+    for (let i = 0; i < 30 * n; i++) {
+      const v = .04 + .05 * inR(i, 81), y = H * (1.05 - ((inR(i, 82) + (t - T.white) / 1000 * v) % 1.1)), x = G.w * inR(i, 83) + Math.sin(t / 700 + i) * H * .02;
+      inGlow(bc, x, y, H * (.006 + .006 * inR(i, 84)), '#ffb070', .7 * out);
+    }
+  }
+  // the logo: the letters slam in one after the other (a glow as each lands), the crescent is drawn, the orange cut
+  E.logo.style.opacity = t >= T.white ? '1' : '0';
+  E.halo.style.opacity = (inK(t, T.logo, T.logo + 300) * (1 - .5 * inK(t, T.logo + 500, T.logo + 1100))).toFixed(3);
+  E.letters.forEach((b, i) => {
+    const t0 = T.logo + i * 55, k = inK(t, t0, t0 + 170), g = 1 - inK(t, t0 + 120, t0 + 520);
+    b.style.opacity = Math.min(1, k * 1.6).toFixed(3);
+    b.style.transform = 'scale(' + (1 + 1.4 * (1 - inOut(k))).toFixed(3) + ')';
+    b.style.textShadow = k > 0 && g > 0 ? '0 0 ' + (4 + 18 * g).toFixed(1) + 'px rgba(255,190,110,' + (.9 * g).toFixed(2) + ')' : '';
+  });
+  E.arc.style.strokeDashoffset = (100 - 100 * inOut(inK(t, T.logo + 480, T.logo + 900))).toFixed(1);
+  E.cut.style.clipPath = 'inset(0 ' + (100 - 100 * inOut(inK(t, T.logo + 820, T.logo + 1020))).toFixed(1) + '% 0 0)';
 }
-function introEnd() {
+// The end: to the title (whole = it played to the end: the title keeps the logo still, as the intro left it).
+function introEnd(whole) {
   if (NAV.cur !== 'intro') return;
   if (SV) { SV.introSeen = true; saveWrite(); }
-  navReset('title');
+  navReset('title', whole ? {fromIntro: true} : {});
 }
-function introSkip() { introEnd(); }
+function introSkip() { introEnd(false); }
 
 function introScreens() {
   navRegister({id: 'intro', scene: 'intro', build: introBuild,
-    enter() { INTRO.t = 0; INTRO.last = 0; introAt(0); },
+    enter() { INTRO.t = 0; INTRO.last = 0; INTRO.scene = null; INTRO.q = IN_QN[LY.q] || 1; introAt(0); },
+    leave() { INTRO.scene = null; },
     frame(now) { const dt = INTRO.last ? Math.min(100, now - INTRO.last) : 0; INTRO.last = now; introAt(INTRO.t + dt); },
     any() { if (!SV || !SV.introSeen) return false; introSkip(); return true; },
     back() { return false; }});
@@ -105,7 +356,10 @@ function titleScreens() {
       r.appendChild(cLogo('l'));
       r.appendChild(uiEl('div', 'uprompt', '<i></i><span id="uPrompt"></span><i></i>'));
     },
-    enter() { document.getElementById('uPrompt').textContent = TITLE_PROMPT[NAV.dev] || TITLE_PROMPT.kb; },
+    enter(p) {   // from the end of the intro the logo is already in its place: no entrance (class keep)
+      NAV.screens.title.root.classList.toggle('keep', !!(p && p.fromIntro));
+      document.getElementById('uPrompt').textContent = TITLE_PROMPT[NAV.dev] || TITLE_PROMPT.kb;
+    },
     frame(now) { document.getElementById('uPrompt').style.opacity = (.8 + .2 * Math.cos(now / 520)).toFixed(3); },   // the prompt breathes (from JS, no CSS animation)
     any(dev) { if (dev === 'touch') mnFullscreen(); if (SV && SV.name) navReset('menu'); else navGo('name'); return true; },
     back() { return false; }});
