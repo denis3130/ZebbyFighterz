@@ -60,10 +60,11 @@ HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
 ARM_LINE = (float(os.environ.get('KAEL_ARM_PUSH', .3)), .7)   # the arms' outline: its push back (of the body's) and its width
-HAND_LINE, BODY_LINE_BACK = (.10, .65), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width
+HAND_LINE, BODY_LINE_BACK = (1., 1.), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width (Ren's hands: the body's, the silhouette only; tried (.10, .65): lines drawn inside them)
 FINGER_THICK = 1.                        # the fingers' thickness about their bones (tried 1.25: the fingers merged into a lump, the fist a skin blob, the open hand a mitten)
 HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip) over the bracer's, as the sheet draws them (Denis, 12/11: "dimensioni delle mani falle come si deve")
-HAND_NSMOOTH = 6                         # rounds of smoothing of the hands' normals (the light's bands clean)
+HAND_REN_NORMALS = 1                     # Ren's hands lit by Ren's own smoothed normals (his look's), as on him
+HAND_NSMOOTH = 0                         # rounds of smoothing of the hands' normals (the light's bands clean)
 HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
 THUMB_BASE = dict(zip(('Right', 'Left'), (float(v) for v in os.environ.get('KAEL_THUMB_BASE', '25,40').split(','))))   # degrees, per hand: the thumb's first bone turned at most so far in the fist (Ren's 55-60 turned it all from its base: the skin between it and the palm stretched into a blade toward the wrist), its middle joint bending instead
 THUMB_FOLD = int(os.environ.get('KAEL_THUMB_FOLD', 0))   # the thumbs folded by thumb_fist (1) or Ren's fists as they are (0; Denis, 12/11: "taglia i pugni di ren e attaccali a kael")
@@ -356,6 +357,11 @@ def main(bust):
             k_ = 1 + (FINGER_THICK - 1) * wf
             X[sel] = foot + (Q - foot) * k_[:, None]
         print('fingers: %.2f times as thick about their bones' % FINGER_THICK)
+    if HAND_REN_NORMALS:   # (Ren's hands lit by his look's smoothed normals, as on him: turned as his hands were laid on the bust)
+        Lb = open(REN[1][:-4] + 'bin', 'rb').read(); Ln = np.frombuffer(Lb, np.float32, RL['nor'][1], RL['nor'][0]).reshape(-1, 3).astype(float)
+        for side, sd in SIDES:
+            m_ = isR & ((X[:, 0] >= 0) == (sd > 0)); NX[m_] = Ln[rid[m_]] @ np.asarray(sim[sd]['R']).T
+        NX /= np.maximum(np.linalg.norm(NX, axis=1, keepdims=True), 1e-9)
     # the pose
     X2 = X * G[:, :1]; N2 = NX * G[:, :1]
     for side, sd in SIDES:

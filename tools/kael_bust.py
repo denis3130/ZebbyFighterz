@@ -81,6 +81,7 @@ CUT_K, CUT_R, BLEND, GAP = .015, .022, .05, .006   # the cut: Kael's past his cu
 MUSCLE = (20, 6, .008, .002)   # the arms' muscles' lines (muscle_lines): the smoothing for the valleys, for their middle; the thresholds
 FINGER_LINE = (.985, 2., 0.)   # the fingers' lines (finger_lines): the sides' ink over [0], their shadow over [1] (2: none); the joints' creases within [2] GLB units (0: none, they read as dashes across the fingers)
 THUMB_RING = float(os.environ.get('KAEL_THUMB_RING', 0.))   # GLB units: the thumb bare from a ring square to it so far past its web (the sheet's glove: the thumb out of it where it leaves the palm; Denis, 12/11: "il pollice è ancora fatto male": bare along the surface from its tip up to its web, its outer side's skin ran on down its base, in the fist a long blade)
+REN_PAINT = int(os.environ.get('KAEL_REN_PAINT', 1))   # the hands' skin in Ren's own paint (1) or the palette's flat skin with lines (0)
 THUMB_W = float(os.environ.get('KAEL_THUMB_W', .1))   # the thumb bare with its base as in Ren's fist: where his skin follows the thumb's bones by more than this (0: from the ring, THUMB_RING)
 THUMB_SPAN = float(os.environ.get('KAEL_THUMB_SPAN', .03))   # GLB units: the thumb's skin along the surface from its tip up to its web and this much more (where the ring is nearer, the ring its edge)
 DORSAL = (.035, .025)   # the glove's edge on the back of the hand this much nearer the wrist (GLB units, 1.5 cm), blended over the hand's half thickness [1]
@@ -660,7 +661,9 @@ def main(src, dst, png=None, fit=False):
     Lr = mey.mean(1)
     for _ in range(2): Lr = np.where(newh, (np.where(ok, Lr[j], 0).sum(1) + Lr) / (ok.sum(1) + 1), Lr)   # (his strokes a little softened: whole lines, not dashes)
     Lr = Lr[rh]; lab[rh] = np.where(Lr < REN_LINE[0], ix['ink'], np.where(Lr < REN_LINE[1], ix['skinS'], ix['skin'])); mat[rh] = 0; lab[glove] = ix['plum']; mat[glove] = 1; tat[newh] = False
-    f_ink, f_sh = finger_lines(pos, nor, rh, hands); lab[rh & f_sh & (lab == ix['skin'])] = ix['skinS']; lab[rh & f_ink] = ix['ink']
+    if not REN_PAINT:
+        f_ink, f_sh = finger_lines(pos, nor, rh, hands); lab[rh & f_sh & (lab == ix['skin'])] = ix['skinS']; lab[rh & f_ink] = ix['ink']
+    else: f_ink = f_sh = np.zeros(len(ks), bool)
     print('fingers: %d texels of their side lines and creases in ink, %d in the skin\'s shadow' % (int((rh & f_ink).sum()), int((rh & f_sh).sum())))
     print('pieces: skin %.1f%%, cloth %.1f%%, purple %.1f%%; tattoos: %d pieces' % (*(100 * np.bincount(mat, minlength=3) / len(mat)), int(tat_c.sum())))
     # the skin's shadow
@@ -685,6 +688,9 @@ def main(src, dst, png=None, fit=False):
     lab = finish(P, I, ks, bary, pos, nor, lab, tat, area, names, ix, jw, okw, ok, newh, [h['ring'] for h in hands])
     if os.environ.get('KAEL_BUST_DUMP'): np.savez(os.environ['KAEL_BUST_DUMP'], newh=newh, glove=glove, ys=ys, xs=xs, ks=ks, bary=bary, pos=pos, nor=nor, mat=mat, lab=lab, tat=tat, mey=mey, area=area)
     out = np.zeros((TS, TS, 3)); cov = np.zeros((TS, TS), bool); out[ys, xs] = cols[lab]; cov[ys, xs] = True
+    if REN_PAINT:   # (the hands' skin in Ren's own paint: his hands, his fists, as he has them; Denis, 12/11: "non è la mano di ren quella su kael")
+        rp = rh & (s_ == 1); out[ys[rp], xs[rp]] = mey[rp]
+        print("hands: %d texels in Ren's paint" % int(rp.sum()))
     _, (iy, jx) = ndimage.distance_transform_edt(~cov, return_indices=True); out[~cov] = out[iy[~cov], jx[~cov]]
     im = Image.fromarray(out.round().astype(np.uint8)); bio = io.BytesIO(); im.save(bio, 'PNG', optimize=True)
     if png: im.save(png)

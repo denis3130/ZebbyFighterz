@@ -47,8 +47,8 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
 9. `python3 tools/kael_body.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_arms.py`): il corpo nei colori dei fogli del
    corpo (vedi "Corpo dai fogli del corpo"); scrive `kael_painted.png`, che le pagine prendono al posto del JPEG.
 10. Testa e busto da Meshy (pezzi a parte, sopra il corpo): `python3 tools/kael_head.py meshy/head/kael_k1_face.glb` (vedi
-    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k8.glb` (vedi
-    "Busto sulle ossa" e "Pugni di Ren con i guanti di Kael"; prima `tools/kael_bust.py`, che scrive anche `busto_k8_hands.npz`).
+    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k9.glb` (vedi
+    "Busto sulle ossa" e "La mano di Ren anche nella pittura e nella luce"; prima `tools/kael_bust.py`, che scrive anche `busto_k9_hands.npz`).
 11. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
@@ -678,6 +678,12 @@ Denis ("manda anteprima").
   da certi lati, si vede il palmo scuro del guanto (con soglie più basse resta, più piccolo). Controllato da 8 lati per
   mano accanto a Ren e nelle mosse (guardia, pugni, accovacciato, presa, colpito). `thumb_fist` e `THUMB_SCALE`
   restano nello strumento, spenti.
+- **La mano di Ren anche nella pittura e nella luce** (Denis: "frate ma non è la mano di ren quella su kael"; versione
+  `busto_k9.glb`): la forma era quella di Ren, ma la pelle no: colori piatti nostri, luce a due toni, righe nere dentro
+  la mano. Ora come su Ren: la pelle delle mani nella sua pittura (`REN_PAINT` in `tools/kael_bust.py`, niente righe
+  delle dita), le sue normali lisciate per la luce (`HAND_REN_NORMALS` in `tools/kael_bust_attach.py`), la luce del
+  gioco a tre toni (in `src/e_model.js` i due toni restano solo sul guanto) e il contorno solo sul bordo come il resto
+  del corpo (`HAND_LINE` 1,1). Il guanto di Kael resta com'era (prugna, due toni, bordo d'inchiostro).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,
