@@ -4,6 +4,13 @@
 - Riferimenti visivi: **solo** `docs/ref/ui/00-…04-*.png` (stile scuro, oro e arancione, caratteri con le grazie). Denis: nessun'altra immagine, mai le schede in A-pose di `docs/ref/personaggi/`.
 - Ramo: `claude/cool-fermi-fkx4iq`, partito da `tappa2-ren-meshy` (la linea principale del gioco, Ren di Meshy acceso). Non è unito a nessun altro ramo.
 
+## Giro di miglioramenti (12/11/2026, dopo la prova di Denis: «è ancora fatta male», «immagini sgranate, poco vivo, la lotta stona», «la intro fa schifo»)
+- **Intro nuova** (5,2 s, senza primi piani, come ha scelto Denis): Ren e Kael arrivano dai lati coi pugni carichi, si guardano, caricano e affondano; impatto con lampo, fotogramma d'impatto (sagome nere sul bianco), anelli d'urto, fulmini, scintille, sassi e tremolio; spinta al rallentatore con le due energie (arancio e viola); esplosione bianca; il logo compare dove lo tiene il titolo e il titolo segue senza stacco. I due sono le metà dello scontro del riferimento 00 (`intro_ren`, `intro_kael`, posizioni in `CFG.ui.intro`).
+- **Immagini nitide**: ogni immagine presa dai riferimenti è ingrandita 4 volte (Real-ESRGAN anime) e ogni personaggio è scontornato (IS-Net anime) da `tools/make_ui_assets.py` (modelli: `bash tools/fetch_ui_models.sh`; risultati in cache in `~/.cache/voidrise-ui`). Titolo, VS e risultati mettono i volti al loro posto con la tabella `CFG.ui.art` (dove sta il volto in ogni immagine): con le immagini definitive basta cambiare quei numeri.
+- **Più vita** (tutto da JavaScript): cielo che si muove piano, raggi di luce, personaggi che entrano dal loro lato, aura del colore dell'eroe; VS che «sbatte» (volti dai lati, scritta che cade con lampo, tremolio e scintille); risultati con «Vittoria» che arriva da grande e scintille; luccichio dorato sul logo; luce che ripassa sul pulsante col fuoco; aure che lampeggiano nella selezione. Scintille su `#uiFx`, acceso solo finché vivono.
+- **HUD della lotta e tasti touch** nello stile dell'interfaccia (riferimento 02): ritratti obliqui con cornice d'oro, nomi con le grazie, barre sottili, tempo nell'esagono, «N COLPI» con pennellata, scritte dorate, tasti in vetro scuro con anello d'oro. Stessi id: le prove del gioco non cambiano.
+- Corretto: l'arco e il taglio del logo del menu finivano sopra la testa di Ren sui telefoni.
+
 ## Dove siamo (U1 finita, 11/11/2026)
 Il percorso completo funziona su touch, mouse, tastiera e controller:
 **intro** (Ren e Kael si scontrano, «Salta») → **titolo** («Tocca per iniziare» / «Premi un tasto» / «Premi A») → **nome** al primo avvio (tastiera a lettere per il controller) → **menu principale** (Gioca con Arcade, Online, Versus locale; Allenamento; Profilo, Pass, Impostazioni «In arrivo») → **Versus locale** (round 1/3/5, tempo 60/90/99/∞, salvati nella partita) → **selezione personaggi** (12 posti: Ren e Kael, Astra e Raigon bloccati dal pass, 8 «In arrivo»; G1 poi G2; niente scontro speculare) → **arena** (la Grande Cascata, con una foto della vera arena; le altre «In arrivo») → **VS** (volti, battute, caricamento vero) → **lotta vera** con i personaggi scelti → **risultati** (Vittoria/Pareggio, punteggio, XP voce per voce, livello) → Rivincita / Cambia personaggio / Menu.
@@ -15,18 +22,20 @@ Il percorso completo funziona su touch, mouse, tastiera e controller:
 - Build: `bash mk.sh` (deve stampare `SYNTAX_OK`). Immagini segnaposto: `python3 tools/make_ui_assets.py`.
 - Test dell'interfaccia (oltre a quelli del gioco in `docs/HANDOFF.md`, adattati ai nuovi percorsi con le stesse intenzioni: `menu`, `touch`, `orient`, `hud`, `round`, `play_check`):
 ```
-for f in ui_base ui_save ui_nav ui_comp ui_layers ui_intro ui_title ui_menu ui_select ui_flow ui_results; do python3 tests/run.py tests/$f.test.js || break; done
+for f in ui_base ui_save ui_nav ui_comp ui_layers ui_intro ui_title ui_menu ui_select ui_flow ui_results ui_life ui_hud; do python3 tests/run.py tests/$f.test.js || break; done
 for v in 640x360 844x390 1280x720 1920x1080; do python3 tests/run.py tests/ui_layout.test.js --viewport $v || break; done
 python3 tests/run.py tests/ui_touch.test.js --viewport 844x390 --touch --mobile
 python3 tests/run.py tests/ui_perf.test.js --viewport 844x390
 ```
 
 ## Architettura in poche righe
-- File nuovi in `src/`: `a1_ui_cfg.js` (numeri: `CFG.ui`, `CFG.prog`), `u_style.css` (stile, incollato da `build.py` con `<!--include:u_style.css-->`), `u0_save.js` (salvataggio), `u7_prog.js` (XP, livelli, statistiche), `u1_nav.js` (schermate, pila, fuoco 2D, input dei menu), `u2_comp.js` (componenti), `u3_layers.js` (scena a strati), `u4_intro.js` (intro, titolo, nome), `u5_play.js` (menu, Versus, selezione, arena, VS, risultati), `u9_bridge.js` (ponte verso la lotta).
+- File nuovi in `src/`: `a1_ui_cfg.js` (numeri: `CFG.ui` con `art` = dove stanno i volti nelle immagini e `intro` = lo scontro, `CFG.prog`), `u_style.css` (stile, incollato da `build.py` con `<!--include:u_style.css-->`), `u0_save.js` (salvataggio), `u7_prog.js` (XP, livelli, statistiche), `u1_nav.js` (schermate, pila, fuoco 2D, input dei menu), `u2_comp.js` (componenti), `u3_layers.js` (scena a strati), `u4_intro.js` (intro, titolo, nome), `u5_play.js` (menu, Versus, selezione, arena, VS, risultati), `u9_bridge.js` (ponte verso la lotta).
 - Toccati nel gioco: `c1_sim.js` (round e tempo nello stato: `S.need`, `S.timeS`, interi), `d_render.js` (`F3D_BY`, `renderCast`), `f_fx.js` (colori originali sul lottatore: `it.em0`, `fxRecast`), `g_hud.js` (volti dell'interfaccia), `h_menu.js` (pausa e ciclo sul nuovo sistema), `z_main.js` (avvio sull'intro, `uiFrame` nei menu, `uiEvents` nel passo, `G.opts`), `head.html`, `build.py` (`.webp`, include), `mk.sh`.
 - Una schermata è `{id, scene, layers, build, enter, leave, back, tab, onFocus, frame, any, guardMs}` registrata con `navRegister`; si naviga con `navGo` / `navBack` / `navReset`. Il fuoco va all'elemento `data-focus` più vicino nella direzione; tocco e clic confermano al rilascio, un doppio tocco non salta due schermate.
 - **Lezione**: niente animazioni CSS infinite nella pagina (rallentavano i fotogrammi della lotta anche quando erano nascoste: prova a raffica da 1,4 a 22-25 ms). Tutto il movimento dei menu (nuvole, nebbia, respiro, intro, contatori) è calcolato in JavaScript solo mentre un menu è aperto. Un test lo controlla.
 - I menu non disegnano più l'arena 3D (gli strati la coprono): la preparazione grafica si fa nel caricamento del VS (`bridgeWarm`), così i primi istanti della lotta non scattano.
+- L'intro è una funzione pura del tempo (`introAt(ms)`): due canvas (dietro e davanti ai lottatori, al massimo 1,5 pixel per pixel CSS) per scie, anelli, fulmini, scintille e sassi, tutti da numeri con seme. La vita dei menu è in `u3_layers.js` (`lyMotion`, `layersBurst`, `uiFocusLife`, `uiLogoLife`), quella del VS e dei risultati in `u5_play.js` (`vsLife`, `rsLife`).
+- L'HUD della lotta nel nuovo stile è una sezione in fondo a `u_style.css` che sovrascrive solo l'aspetto di quello di `head.html`.
 
 ## Misure (Chromium headless con SwiftShader, 844x390: solo di riferimento, non è un telefono)
 - Prima dell'interfaccia: un `tick` nei menu 0,20 ms; in lotta 2,36 ms; serie del gioco 21 comandi verdi.
@@ -37,18 +46,18 @@ python3 tests/run.py tests/ui_perf.test.js --viewport 844x390
 - **FPS veri sul telefono: da misurare** (`?fps=1` o pausa → «FPS: Sì»), sia nei menu sia in lotta.
 
 ## Immagini segnaposto da sostituire (`assets/ui/`, stessi nomi = nessun cambio di codice)
-Tutte ritagliate o ricavate dai 5 riferimenti dell'interfaccia. Le definitive vanno generate a pezzi separati in alta risoluzione (Blueprint Studio è installato e la rete è aperta, ma si collega solo in una sessione nuova e chiede l'accesso: prima di spendere crediti mostrare saldo e costo a Denis).
+Tutte ritagliate o ricavate dai 5 riferimenti dell'interfaccia, ingrandite 4 volte; i personaggi scontornati (per le definitive aggiornare anche `CFG.ui.art`). Le definitive vanno generate a pezzi separati in alta risoluzione (Blueprint Studio è installato e la rete è aperta, ma si collega solo in una sessione nuova e chiede l'accesso: prima di spendere crediti mostrare saldo e costo a Denis).
 
 | File | Ora | Definitiva |
 |---|---|---|
 | `sky.webp` | le rovine al tramonto dietro «Scegli l'arena» | cielo e rovine lontane |
 | `ruins.webp` | manca: lo strato vicino è vuoto | archi e pavimento in primo piano, trasparente |
 | `clouds.webp`, `fog1/2.webp` | disegnate in codice | possono restare |
-| `ren_full.webp`, `kael_full.webp` | Ren del menu, Kael delle impostazioni, col loro fondo sfumato | a mezzo busto, scontornati |
+| `ren_full.webp`, `kael_full.webp` | Ren del menu, Kael delle impostazioni, scontornati | a mezzo busto, scontornati |
 | `ren_vs.webp`, `kael_vs.webp` | i volti del VS (anche ai lati del titolo) | volti grandi scontornati |
 | `ren_win.webp` | Ren col pugno alzato di «Vittoria» | idem per Kael (manca: ora usa `kael_full`) |
 | `face_*.webp` | volti del VS e del pass | ritratti quadrati |
-| `intro_clash.webp` | il pugno contro pugno dell'intro | alta risoluzione, a strati se possibile |
+| `intro_ren.webp`, `intro_kael.webp` | le due metà del pugno contro pugno del riferimento 00 (il pugno di Ren è nascosto dietro quello di Kael: nella corsa lo copre la luce del pugno carico) | i due in corsa, a strati, col pugno di Ren intero |
 | `arena_*.webp`, `card_*.webp` | miniature dei riferimenti | anteprime delle arene vere |
 | `silhouette.webp` | disegnata in codice | sagoma «In arrivo» |
 
@@ -57,7 +66,9 @@ Tutte ritagliate o ricavate dai 5 riferimenti dell'interfaccia. Le definitive va
 - Ogni decisione presa durante il lavoro è nel registro dell'esecuzione (righe «Ruling»), riassunta a Denis alla consegna.
 
 ## Per dopo (annotato, non costruito)
-- U2: HUD della lotta nel nuovo stile (i pallini dei round sono ancora 2: con 5 round ne servono 3), tasti touch, pausa completa (Lista mosse, Impostazioni), «Gira il telefono» nel nuovo stile.
+- U2: i pallini dei round sono ancora 2 (con 5 round ne servono 3), pausa completa (Lista mosse, Impostazioni), «Gira il telefono» nel nuovo stile.
+- Titolo su schermi 4:3 (tablet): i volti vanno bene ma il logo si stringe tra loro; Kael non ha una posa di vittoria nei riferimenti (nei risultati usa quella delle impostazioni).
+- L'arena della lotta è luminosa e di giorno, l'interfaccia è al tramonto: l'HUD ora ha lo stesso stile, il resto dipende dalla grafica della lotta (l'altra sessione).
 - U3: Profilo, Statistiche, Classifica, Impostazioni (la qualità Auto/Bassa/Media/Alta è già nel codice). U4: Pass, Missioni, Archivio, Sblocco. U5: Arcade, Tutorial, schermate Online.
 - Acquisto del Premium dagli store (Google Play, App Store, Steam) con controllo delle ricevute su un server; online e classifica globale; negozio; altre lingue; musica e suoni; scelta simultanea dei personaggi con due dispositivi; scontro speculare (seconda copia del modello e colore alternativo); intro con i modelli 3D; Astra e Raigon giocabili.
 - Il VS non ha un pulsante «Indietro» a schermo (come nel riferimento): Esc / B tornano all'arena; dura 2,5 s.

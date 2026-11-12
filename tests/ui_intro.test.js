@@ -15,9 +15,10 @@ T.test('they come from the sides and meet: far apart at the start, the two halve
   __VF.introAt(800); const a = inTx(kael) - inTx(ren);
   __VF.introAt(1200); const b = inTx(kael) - inTx(ren); T.ok(b < a, 'closing in ' + a + ' ' + b);
   __VF.introAt(1310); T.near(inTx(ren), 0, .5); T.near(inTx(kael), 0, .5); T.ok(inOp('.inF.r:not(.g)') === 1 && inOp('.inF.k:not(.g)') === 1); });
-T.test('afterimages trail them while they dash, none while they stand', () => { inFresh();
-  __VF.introAt(420); T.ok(inOp('.inF.g.r') > .05 && inOp('.inF.g.k') > .05, 'dash ' + inOp('.inF.g.r') + ' ' + inOp('.inF.g.k'));
-  __VF.introAt(1390); T.ok(inOp('.inF.g.r') < .01, 'at the hit ' + inOp('.inF.g.r')); });
+T.test('afterimages (coloured silhouettes on the back canvas) trail them while they dash, none while they stand', () => new Promise(done => {
+  const I = __VF.UI.INTRO, go = () => { if (!I.spr[0] || !I.spr[1]) return setTimeout(go, 50);
+    inFresh(); __VF.introAt(420); T.ok(I.ghostA > .05, 'dash ' + I.ghostA); __VF.introAt(1390); T.eq(I.ghostA, 0, 'at the hit'); done(); };
+  go(); }));
 T.test('the hit flashes white, then the impact frame (black figures), then a hard shake', () => { inFresh();
   __VF.introAt(1300); T.ok(inOp('.inFlash') > .9, 'flash ' + inOp('.inFlash'));
   __VF.introAt(1400); T.ok(inRoot().classList.contains('imp'), 'impact frame'); T.ok(getComputedStyle(inEl('.inF.r:not(.g)')).filter.includes('brightness(0)'));

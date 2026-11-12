@@ -185,6 +185,8 @@
 #uiParts{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 /* light rays from the sky, behind the characters (their opacity and sway set from JS, per scene) */
 #uiLayers #lyRays,#uiLayers #lyGlow{transition:transform .7s var(--u-ease)}   /* their opacity follows JS every frame: no transition on it */
+/* the layers that move every frame (lyMotion) are their own GPU layers: moved by the GPU, never redrawn */
+#lySky,#lyClouds,#lyArena,#lyRays,#lyFog2,#lyRival,#lyFog1,#lyGlow,#lyHero{will-change:transform,opacity}
 #lyRays{left:6%;right:-12%;top:-24%;height:112%;opacity:0;transform-origin:60% 0;
   background:repeating-linear-gradient(114deg,rgba(255,200,146,0) 0 5%,rgba(255,200,146,.17) 6.4% 7.6%,rgba(255,200,146,0) 9.2% 13%,rgba(255,214,170,.1) 14% 14.8%,rgba(255,200,146,0) 16% 21%);
   -webkit-mask-image:radial-gradient(ellipse 72% 62% at 58% 0%,#000 18%,transparent 78%);mask-image:radial-gradient(ellipse 72% 62% at 58% 0%,#000 18%,transparent 78%)}
@@ -197,38 +199,39 @@
 /* the title: Ren's and Kael's profiles high at the sides, the logo between them, as in the reference */
 /* each face (--ax from u3_layers.js) at a fifth of the width from its side, the full height; the picture fades only past
    the face, toward the logo (the cut-out figures need no other fading) */
-#uiLayers[data-scene="title"] #lyHero,#uiLayers[data-scene="title"] #lyRival{inset:0;width:auto;height:auto;background-size:auto 100%;opacity:1;filter:none}
-#uiLayers[data-scene="title"] #lyHero{background-position:calc(20vw - var(--ax,.66) * 100vh) 0;transform-origin:20vw 45%;
-  -webkit-mask-image:linear-gradient(90deg,#000 calc(20vw + 22vh),transparent calc(20vw + 58vh));mask-image:linear-gradient(90deg,#000 calc(20vw + 22vh),transparent calc(20vw + 58vh))}
-#uiLayers[data-scene="title"] #lyRival{background-position:calc(80vw - var(--ax,.61) * 100vh) 0;transform-origin:80vw 45%;
-  -webkit-mask-image:linear-gradient(270deg,#000 calc(20vw + 22vh),transparent calc(20vw + 58vh));mask-image:linear-gradient(270deg,#000 calc(20vw + 22vh),transparent calc(20vw + 58vh))}
+/* --fh: the height of a face picture: the screen's height, less on screens narrower than 16:10 (a tablet), where the
+   picture then fades out before its bottom edge */
+#uiLayers,#sc-vs{--fh:min(100vh,62vw)}
+#uiLayers[data-scene="title"] #lyHero,#uiLayers[data-scene="title"] #lyRival{inset:0;width:auto;height:auto;background-size:auto var(--fh);opacity:1;filter:none;-webkit-mask-composite:source-in;mask-composite:intersect}
+#uiLayers[data-scene="title"] #lyHero{background-position:calc(20vw - var(--ax,.66) * var(--fh)) 0;transform-origin:20vw 45%;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(20vw + var(--fh) * .22),transparent calc(20vw + var(--fh) * .58)),linear-gradient(180deg,#000 calc(var(--fh) * .8),transparent calc(var(--fh) * .99));
+  mask-image:linear-gradient(90deg,#000 calc(20vw + var(--fh) * .22),transparent calc(20vw + var(--fh) * .58)),linear-gradient(180deg,#000 calc(var(--fh) * .8),transparent calc(var(--fh) * .99))}
+#uiLayers[data-scene="title"] #lyRival{background-position:calc(80vw - var(--ax,.61) * var(--fh)) 0;transform-origin:80vw 45%;
+  -webkit-mask-image:linear-gradient(270deg,#000 calc(20vw + var(--fh) * .22),transparent calc(20vw + var(--fh) * .58)),linear-gradient(180deg,#000 calc(var(--fh) * .8),transparent calc(var(--fh) * .99));
+  mask-image:linear-gradient(270deg,#000 calc(20vw + var(--fh) * .22),transparent calc(20vw + var(--fh) * .58)),linear-gradient(180deg,#000 calc(var(--fh) * .8),transparent calc(var(--fh) * .99))}
 #uiLayers[data-scene="off"] .ly,#uiLayers[data-scene="off"] #uiParts{opacity:0}
 /* quality: 'bassa' keeps the scene still (no drift, no breathing, no embers) and drops the glows; 'media' has fewer embers */
 /* --- the intro (u4_intro.js): every value set per frame from JS; only the layout lives here. The stage is the camera
    (zoom, tilt and shake around the hit); the two canvases draw the effects behind and in front of the fighters --- */
 #uiLayers[data-scene="intro"] .ly,#uiLayers[data-scene="intro"] #uiParts{opacity:0}
 #sc-intro{padding:0;align-items:stretch;justify-content:stretch;overflow:hidden;background:none}
-#sc-intro .inStage{position:absolute;inset:0}
+#sc-intro .inStage{position:absolute;inset:0;z-index:0;background:#07060b}
 #sc-intro .inStage>i,#sc-intro .inStage>canvas,#sc-intro>i{position:absolute;display:block;pointer-events:none}
-.inSky{inset:-16%;opacity:0;background:center 40%/cover no-repeat}
-.inShade{inset:-16%;z-index:-1;background:#07060b}
-#sc-intro .inStage{z-index:0}
-.inSky{z-index:0}
-.inWarm,.inCool{inset:-16%;opacity:0}
+/* what moves or fades every frame is its own GPU layer (moved, never redrawn); the margins cover the shake and the tilt */
+#sc-intro .inStage,.inSky,.inSplit,.inF{will-change:transform,opacity}
+.inSky{inset:-6%;opacity:0;background:center 40%/cover no-repeat}
+.inSplit{inset:-6%;opacity:0}
+.inWarm,.inCool{position:absolute;inset:0}
 .inWarm{background:linear-gradient(90deg,rgba(255,120,40,.42),rgba(255,120,40,.1) 40%,rgba(255,120,40,0) 60%)}
 .inCool{background:linear-gradient(270deg,rgba(130,80,255,.42),rgba(130,80,255,.1) 40%,rgba(130,80,255,0) 60%)}
 #sc-intro canvas{inset:0;width:100%;height:100%}
 .inPanel{position:absolute;pointer-events:none}
 .inF{position:absolute;display:block;opacity:0;background:center/100% 100% no-repeat}
-/* the afterimages: each fighter's silhouette in his energy's colour (the picture is the mask, set from JS) */
-.inF.g{-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
-.inF.g.r{background-color:#ff8a33}.inF.g.k{background-color:#9b6bff}
-.inVig{inset:-16%;background:radial-gradient(ellipse 62% 64% at 50% 52%,rgba(7,6,11,0) 50%,rgba(7,6,11,.8))}
+.inVig{inset:-6%;background:radial-gradient(ellipse 62% 64% at 50% 52%,rgba(7,6,11,0) 50%,rgba(7,6,11,.8))}
 /* the impact frame: black figures on white, nothing else */
-#sc-intro.imp .inStage{background:radial-gradient(ellipse at 50% 55%,#fffdf8 30%,#ffe7c4)}
-#sc-intro.imp .inSky,#sc-intro.imp .inShade,#sc-intro.imp .inWarm,#sc-intro.imp .inCool,#sc-intro.imp .inVig,#sc-intro.imp .inBack{opacity:0!important}
+#sc-intro.imp .inStage{background:radial-gradient(ellipse at 50% 55%,#fffdf8 30%,#ffe7c4)!important}
+#sc-intro.imp .inSky,#sc-intro.imp .inSplit,#sc-intro.imp .inVig,#sc-intro.imp .inBack{opacity:0!important}
 #sc-intro.imp .inF{filter:brightness(0)}
-#sc-intro.imp .inF.g{opacity:0!important}
 #sc-intro .inFlash{inset:0;opacity:0;background:#fff7ec}
 /* under the logo the title's own darkening fades in (the same as #sc-title), so the switch to the title does not show */
 :root{--u-title-bg:radial-gradient(ellipse at 50% 44%,rgba(10,8,14,.45),rgba(10,8,14,0) 55%),linear-gradient(180deg,rgba(10,8,14,0) 52%,rgba(10,8,14,.78))}
@@ -363,6 +366,7 @@
 #sc-vs{padding:0;display:none;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,rgba(14,12,22,0),rgba(14,12,22,.55))}
 #sc-vs.on{display:block}
 .vsStage{position:absolute;inset:0;pointer-events:none}
+.vsStage,.vsF,.vsMark,.vsLines,.vsFlash,.selFig,.selAura{will-change:transform,opacity}   /* moved every frame (vsLife, selLife): GPU layers */
 /* speed lines toward the middle while the faces slam in; the flash of the VS mark's crash (both from JS, vsLife) */
 .vsLines{position:absolute;inset:-6% -10%;opacity:0;
   background:repeating-linear-gradient(98deg,rgba(255,232,204,0) 0 26px,rgba(255,232,204,.22) 26px 28px,rgba(255,232,204,0) 28px 64px,rgba(255,190,120,.16) 64px 65px,rgba(255,232,204,0) 65px 90px);
@@ -370,13 +374,13 @@
 .vsFlash{position:absolute;inset:0;opacity:0;pointer-events:none;background:radial-gradient(circle at 50% 44%,#fff8ec,rgba(255,224,176,.55) 32%,rgba(255,200,140,0) 72%)}
 /* each face (--ax: where it is in its picture, set in vsScreen) at a quarter of the width from its side; the picture fades
    only past the face, toward the VS mark, and toward the bottom, under the names */
-.vsF{position:absolute;inset:0;background-repeat:no-repeat;background-size:auto 100%;pointer-events:none}
-.vsF.l{background-position:calc(25vw - var(--ax,.66) * 100vh) 0;transform-origin:25vw 45%;
-  -webkit-mask-image:linear-gradient(90deg,#000 calc(25vw + 30vh),transparent calc(25vw + 56vh)),linear-gradient(180deg,#000 62%,transparent 97%);-webkit-mask-composite:source-in;
-  mask-image:linear-gradient(90deg,#000 calc(25vw + 30vh),transparent calc(25vw + 56vh)),linear-gradient(180deg,#000 62%,transparent 97%);mask-composite:intersect}
-.vsF.r{background-position:calc(75vw - var(--ax,.61) * 100vh) 0;transform-origin:75vw 45%;
-  -webkit-mask-image:linear-gradient(270deg,#000 calc(25vw + 30vh),transparent calc(25vw + 56vh)),linear-gradient(180deg,#000 62%,transparent 97%);-webkit-mask-composite:source-in;
-  mask-image:linear-gradient(270deg,#000 calc(25vw + 30vh),transparent calc(25vw + 56vh)),linear-gradient(180deg,#000 62%,transparent 97%);mask-composite:intersect}
+.vsF{position:absolute;inset:0;background-repeat:no-repeat;background-size:auto var(--fh);pointer-events:none}
+.vsF.l{background-position:calc(25vw - var(--ax,.66) * var(--fh)) 0;transform-origin:25vw 45%;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(25vw + var(--fh) * .3),transparent calc(25vw + var(--fh) * .56)),linear-gradient(180deg,#000 calc(var(--fh) * .62),transparent calc(var(--fh) * .97));-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,#000 calc(25vw + var(--fh) * .3),transparent calc(25vw + var(--fh) * .56)),linear-gradient(180deg,#000 calc(var(--fh) * .62),transparent calc(var(--fh) * .97));mask-composite:intersect}
+.vsF.r{background-position:calc(75vw - var(--ax,.61) * var(--fh)) 0;transform-origin:75vw 45%;
+  -webkit-mask-image:linear-gradient(270deg,#000 calc(25vw + var(--fh) * .3),transparent calc(25vw + var(--fh) * .56)),linear-gradient(180deg,#000 calc(var(--fh) * .62),transparent calc(var(--fh) * .97));-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(270deg,#000 calc(25vw + var(--fh) * .3),transparent calc(25vw + var(--fh) * .56)),linear-gradient(180deg,#000 calc(var(--fh) * .62),transparent calc(var(--fh) * .97));mask-composite:intersect}
 .vsMark{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);pointer-events:none}
 .vsMark b{display:block;font-family:var(--u-display);font-weight:600;font-size:calc(var(--u)*26);line-height:1;letter-spacing:-.04em;
   background:linear-gradient(180deg,#fff3d8,#e7c27e 45%,#a87632);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 14px rgba(0,0,0,.6))}
@@ -400,8 +404,9 @@
 .arCards .ucardTx{font-size:max(12px,calc(var(--u)*3.1));overflow-wrap:anywhere}
 /* --- results (u5_play.js), as the reference: the winner large on the left, the column of the outcome on the right --- */
 /* the winner's face at 36% of the width, the full height; the picture fades only on its right, under the column */
-#uiLayers[data-scene="results"] #lyHero{inset:0;width:auto;height:auto;background-size:auto 100%;background-position:calc(36vw - var(--ax,.95) * 100vh) 0;transform-origin:36vw 30%;
-  -webkit-mask-image:linear-gradient(90deg,#000 calc(36vw + 12vh),transparent calc(36vw + 30vh));mask-image:linear-gradient(90deg,#000 calc(36vw + 12vh),transparent calc(36vw + 30vh))}
+#uiLayers[data-scene="results"] #lyHero{inset:0;width:auto;height:auto;background-size:auto var(--fh);background-position:calc(36vw - var(--ax,.95) * var(--fh)) 0;transform-origin:36vw 30%;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(36vw + var(--fh) * .12),transparent calc(36vw + var(--fh) * .3)),linear-gradient(180deg,#000 calc(var(--fh) * .8),transparent calc(var(--fh) * .99));-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,#000 calc(36vw + var(--fh) * .12),transparent calc(36vw + var(--fh) * .3)),linear-gradient(180deg,#000 calc(var(--fh) * .8),transparent calc(var(--fh) * .99));mask-composite:intersect}
 #uiLayers[data-scene="results"] #lyRival{opacity:0}
 #sc-results{display:none;padding:0;background:linear-gradient(90deg,rgba(14,12,22,0) 30%,rgba(14,12,22,.72) 58%,rgba(14,12,22,.85))}
 #sc-results.on{display:block}

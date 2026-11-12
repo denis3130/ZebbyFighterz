@@ -25,8 +25,9 @@ T.test('a fight still draws it', () => { __VF.startMatch('training', {seed: 1});
 // The cut-out characters (sharp, 4x): each face where its scene wants it, from the face table CFG.ui.art (title: a fifth of
 // the width from each side; results: the winner's at 36%), and the faces stay opaque (the fading starts past them).
 T.test('the title and the results place each face from the face table', () => {
+  const fh = Math.min(innerHeight, .62 * innerWidth);   // the face picture's height (--fh: less than the screen on a tablet)
   const at = (id, share) => { const el = $(id), s = getComputedStyle(el), ax = +s.getPropertyValue('--ax');
-    T.ok(ax > 0, id + ' --ax ' + ax); T.near(parseFloat(s.backgroundPositionX) + ax * innerHeight, share * innerWidth, 1.5); };
+    T.ok(ax > 0, id + ' --ax ' + ax); T.near(parseFloat(s.backgroundPositionX) + ax * fh, share * innerWidth, 1.5); };
   __VF.UI.SV.name = 'Denis'; __VF.navReset('title'); __VF.UI.LY.settle(); at('lyHero', .2); at('lyRival', .8);
   const A = __VF.CFG.ui.art.ren_vs; T.near(+getComputedStyle($('lyHero')).getPropertyValue('--ax'), A[0] * A[1], .001);
   __VF.G.state = 'end'; __VF.navReset('results', {mode: 'versus', chars: ['ren', 'kael'], winner: 0, wins: [2, 1], rounds: 3, hits: [9, 4], maxCombo: [4, 2], timeS: 90});
