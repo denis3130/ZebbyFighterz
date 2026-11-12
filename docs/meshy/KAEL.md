@@ -47,8 +47,8 @@ male"). Meglio Meshy dal disegno vestito, come Ren.
 9. `python3 tools/kael_body.py wip_assets/kael [CARTELLA_DEBUG]` (dopo `kael_arms.py`): il corpo nei colori dei fogli del
    corpo (vedi "Corpo dai fogli del corpo"); scrive `kael_painted.png`, che le pagine prendono al posto del JPEG.
 10. Testa e busto da Meshy (pezzi a parte, sopra il corpo): `python3 tools/kael_head.py meshy/head/kael_k1_face.glb` (vedi
-    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k9.glb` (vedi
-    "Busto sulle ossa" e "La mano di Ren anche nella pittura e nella luce"; prima `tools/kael_bust.py`, che scrive anche `busto_k9_hands.npz`).
+    "Testa da Meshy") e `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k10.glb` (vedi
+    "Busto sulle ossa" e "Base del pollice nel guanto"; prima `tools/kael_bust.py`, che scrive anche `busto_k10_hands.npz`).
 11. `bash mk.sh` (scrive anche `viewer_kael.html`), prova: `python3 tests/viewer_check.py --page=viewer_kael.html`.
 
 ## Cosa ho sistemato guardandolo (`tools/kael_fix.py`)
@@ -688,6 +688,13 @@ Denis ("manda anteprima").
   grandezza (ossa come quelle della mano di Kael di prima: polso-nocche 10,5-11,7 cm, nocche 7 cm; palmo largo quanto la
   polsiera come nel foglio). Mostrate tre grandezze (90, 100, 115%), Denis: "secondo me meglio 90%": `HAND_MUL` 0,9
   in `tools/kael_bust_attach.py` (scala 0,975 a sinistra e 1,038 a destra, dove le braccia di Meshy le davano diverse).
+- **Base del pollice nel guanto** (Denis, cerchiando la base del pollice nella presa e da accovacciato: "capisci cosa
+  intendo quando cerchio qualcosa?"; versione `busto_k10.glb`): la pelle lasciata alla base del pollice (pesi del
+  pollice sopra il 10%) usciva dal guanto a chiazze e strisce. Ora il pollice è scoperto dove si muove col pollice per
+  più di metà (`THUMB_W` 0,5): a mano aperta dall'incavo, come nel foglio, la base nel guanto. I pesi sono lisciati
+  4 volte sulla superficie prima del taglio (`THUMB_W_VSMOOTH`): sui triangoli grandi di Ren il bordo veniva a
+  dentini. Provati e lasciati: soglia 0,7 (scoperta solo la punta), lisciare sui pixel (60: dentini; 200: il guanto
+  prendeva quasi tutto il pollice), lisciare 10 volte (pollice scoperto più corto).
 
 
 `CFG.looks.kael` in `src/a0_cfg.js`: pugni sulle sue dita (aperti nello speciale e nella presa), contorno come Ren,

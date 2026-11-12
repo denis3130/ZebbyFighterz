@@ -191,7 +191,8 @@ all'incavo come nel foglio (`busto_k7.glb`); poi ("fallo piu piccolo") lungo il 
 disegna i suoi guanti dove mancano": pugni di Ren come sono, guanto su dorso e palmo, pollice e la sua base in pelle
 (`busto_k8.glb`; KAEL.md, "Pugni di Ren con i guanti di Kael"); poi ("non è la mano di ren quella su kael") anche la
 pittura, la luce e il contorno di Ren sulla pelle delle mani (`busto_k9.glb`; KAEL.md, "La mano di Ren anche nella pittura e
-nella luce"); poi le mani al 90% (scelte da Denis fra 90, 100 e 115%: `HAND_MUL`). È nella versione 20 da pubblicare.
+nella luce"); poi le mani al 90% (scelte da Denis fra 90, 100 e 115%: `HAND_MUL`); poi la base del pollice nel guanto (zone cerchiate,
+`busto_k10.glb`). È nella versione 20 da pubblicare.
 
 **Stato al 12/11/2026 (ultima chat, spostata su ZebbyFighterz su richiesta di Denis)**: ramo `tappa2-ren-meshy`, tutto
 salvato e caricato. L'anteprima di Kael pubblicata è la **versione 19**. Pronta ma **non pubblicata** la versione 20 (mani di
@@ -200,8 +201,8 @@ braccia ricalcati: vedi `docs/meshy/KAEL.md`, "Dita e grandezza delle mani", "Ri
 e i muscoli delle braccia ricalcati"). Denis l'ha vista in immagini ("bravo ancora un po'"); **si pubblica quando scrive
 "anteprima"** (`bash mk.sh`, i 22 test, poi Artifact con `viewer_kael.html` sull'URL dell'anteprima di Kael in `CLAUDE.md`).
 Per rifare il busto: `python3 tools/kael_bust.py meshy/meshy_output/20261111_kael-busto/busto_k1_30k.glb
-meshy/meshy_output/20261111_kael-busto/busto_k9.glb --png meshy/meshy_output/20261111_kael-busto/busto_k9.png` poi
-`python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k9.glb` (la cartella `meshy/meshy_output` non
+meshy/meshy_output/20261111_kael-busto/busto_k10.glb --png meshy/meshy_output/20261111_kael-busto/busto_k10.png` poi
+`python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k10.glb` (la cartella `meshy/meshy_output` non
 è nel repository: i GLB si riscaricano da Meshy con il task del busto in `docs/meshy/KAEL.md`). Dopo: le code viola della
 fascia come nastri che si muovono (come quelli di Ren). Regole di Denis per Kael: niente agenti per il corpo, niente nuove
 versioni o forme senza il suo ok, occhi e sopracciglia non si toccano, Meshy solo col suo ok (saldo 970).
