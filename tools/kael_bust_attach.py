@@ -62,6 +62,7 @@ GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 1
 ARM_LINE = (float(os.environ.get('KAEL_ARM_PUSH', .3)), .7)   # the arms' outline: its push back (of the body's) and its width
 HAND_LINE, BODY_LINE_BACK = (1., 1.), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width (Ren's hands: the body's, the silhouette only; tried (.10, .65): lines drawn inside them)
 FINGER_THICK = 1.                        # the fingers' thickness about their bones (tried 1.25: the fingers merged into a lump, the fist a skin blob, the open hand a mitten)
+HAND_MUL = float(os.environ.get('KAEL_HAND_MUL', 1.))   # the hands this much bigger than HAND_RATIO makes them
 HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip) over the bracer's, as the sheet draws them (Denis, 12/11: "dimensioni delle mani falle come si deve")
 HAND_REN_NORMALS = 1                     # Ren's hands lit by Ren's own smoothed normals (his look's), as on him
 HAND_NSMOOTH = 0                         # rounds of smoothing of the hands' normals (the light's bands clean)
@@ -334,7 +335,7 @@ def main(bust):
         want = HAND_RATIO * (bot - top); lo, hi = .5, 2.
         for _ in range(40):   # (the scale about the wrist joint giving the tip that far from the cuff's bottom)
             mid = (lo + hi) / 2; lo, hi = (mid, hi) if np.linalg.norm(j['Hb'] + (tip - j['Hb']) * mid - cb) < want else (lo, mid)
-        hsc[sd] = float(os.environ.get('KAEL_HAND_SCALE', lo))
+        hsc[sd] = float(os.environ.get('KAEL_HAND_SCALE', lo)) * HAND_MUL
         print('%s hand: %.3f m from the cuff to the fingertip, the bracer %.3f m: scaled %.3f' % (side, np.linalg.norm(tip - cb), bot - top, hsc[sd]))
     for side, sd in SIDES:
         s_ = (X[:, 0] >= 0) == (sd > 0); k_ = 1 + (hsc[sd] - 1) * np.where(s_, G[:, 3], 0.)
