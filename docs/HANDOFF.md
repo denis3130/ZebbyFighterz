@@ -192,10 +192,10 @@ disegna i suoi guanti dove mancano": pugni di Ren come sono, guanto su dorso e p
 (`busto_k8.glb`; KAEL.md, "Pugni di Ren con i guanti di Kael"); poi ("non è la mano di ren quella su kael") anche la
 pittura, la luce e il contorno di Ren sulla pelle delle mani (`busto_k9.glb`; KAEL.md, "La mano di Ren anche nella pittura e
 nella luce"); poi le mani al 90% (scelte da Denis fra 90, 100 e 115%: `HAND_MUL`); poi la base del pollice nel guanto (zone cerchiate,
-`busto_k10.glb`). È nella versione 20 da pubblicare.
+`busto_k10.glb`). Pubblicata nell'anteprima di Kael (versione 20, 12/11, Denis: "fammelo provare").
 
 **Stato al 12/11/2026 (ultima chat, spostata su ZebbyFighterz su richiesta di Denis)**: ramo `tappa2-ren-meshy`, tutto
-salvato e caricato. L'anteprima di Kael pubblicata è la **versione 19**. Pronta ma **non pubblicata** la versione 20 (mani di
+salvato e caricato. L'anteprima di Kael pubblicata ora è la **versione 20** (prima la 19). La versione 20 contiene (mani di
 Kael grandi come nel disegno, dita pulite con le righe tra le dita, contorno nero interno su mani e braccia, muscoli delle
 braccia ricalcati: vedi `docs/meshy/KAEL.md`, "Dita e grandezza delle mani", "Righe nere e ombre delle mani", "Ancora un po',
 e i muscoli delle braccia ricalcati"). Denis l'ha vista in immagini ("bravo ancora un po'"); **si pubblica quando scrive
