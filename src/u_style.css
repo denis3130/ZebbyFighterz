@@ -179,12 +179,13 @@
 /* per scene: only the menu shows the characters behind the interface; other screens draw their own */
 #uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]):not([data-scene="results"]) #lyHero,#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
 /* the title: Ren's and Kael's profiles high at the sides, the logo between them, as in the reference */
-#uiLayers[data-scene="title"] #lyHero{left:-3%;right:auto;top:0;bottom:auto;width:44%;height:94%;background-position:left top;background-size:auto 100%;opacity:.97;filter:none;
-  -webkit-mask-image:linear-gradient(90deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);-webkit-mask-composite:source-in;
-  mask-image:linear-gradient(90deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);mask-composite:intersect}
-#uiLayers[data-scene="title"] #lyRival{left:auto;right:-3%;top:0;bottom:auto;width:44%;height:94%;background-position:right top;background-size:auto 100%;opacity:.97;filter:none;
-  -webkit-mask-image:linear-gradient(270deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);-webkit-mask-composite:source-in;
-  mask-image:linear-gradient(270deg,#000 62%,transparent 98%),linear-gradient(180deg,#000 62%,transparent 100%);mask-composite:intersect}
+/* each face (--ax from u3_layers.js) at a fifth of the width from its side, the full height; the picture fades only past
+   the face, toward the logo (the cut-out figures need no other fading) */
+#uiLayers[data-scene="title"] #lyHero,#uiLayers[data-scene="title"] #lyRival{inset:0;width:auto;height:auto;background-size:auto 100%;opacity:1;filter:none}
+#uiLayers[data-scene="title"] #lyHero{background-position:calc(20vw - var(--ax,.66) * 100vh) 0;transform-origin:20vw 45%;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(20vw + 22vh),transparent calc(20vw + 58vh));mask-image:linear-gradient(90deg,#000 calc(20vw + 22vh),transparent calc(20vw + 58vh))}
+#uiLayers[data-scene="title"] #lyRival{background-position:calc(80vw - var(--ax,.61) * 100vh) 0;transform-origin:80vw 45%;
+  -webkit-mask-image:linear-gradient(270deg,#000 calc(20vw + 22vh),transparent calc(20vw + 58vh));mask-image:linear-gradient(270deg,#000 calc(20vw + 22vh),transparent calc(20vw + 58vh))}
 #uiLayers[data-scene="off"] .ly,#uiLayers[data-scene="off"] #uiParts{opacity:0}
 /* quality: 'bassa' keeps the scene still (no drift, no breathing, no embers) and drops the glows; 'media' has fewer embers */
 /* --- the intro (u4_intro.js): every value set per frame from JS; only the layout lives here. The stage is the camera
@@ -271,7 +272,7 @@
 @media (max-height:430px){
 #sc-menu{display:none;flex-direction:row;flex-wrap:wrap;align-content:flex-start;column-gap:calc(var(--u)*7)}
 #sc-menu.on{display:flex}
-#sc-menu .ulogo{flex-basis:100%;margin-bottom:calc(var(--u)*2)}
+#sc-menu .mmTop{flex-basis:100%}#sc-menu .ulogo{margin-bottom:calc(var(--u)*2)}
 .mmPlay{margin-top:0;align-self:flex-end}
 }
 /* --- local versus options --- */
@@ -373,8 +374,9 @@
 #sc-arena .uhead{margin-top:calc(var(--u)*9)}
 .arCards .ucardTx{font-size:max(12px,calc(var(--u)*3.1));overflow-wrap:anywhere}
 /* --- results (u5_play.js), as the reference: the winner large on the left, the column of the outcome on the right --- */
-#uiLayers[data-scene="results"] #lyHero{left:-4%;right:auto;width:58%;height:100%;background-position:left bottom;background-size:auto 100%;
-  -webkit-mask-image:linear-gradient(90deg,#000 62%,transparent 98%);mask-image:linear-gradient(90deg,#000 62%,transparent 98%)}
+/* the winner's face at 36% of the width, the full height; the picture fades only on its right, under the column */
+#uiLayers[data-scene="results"] #lyHero{inset:0;width:auto;height:auto;background-size:auto 100%;background-position:calc(36vw - var(--ax,.95) * 100vh) 0;transform-origin:36vw 30%;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(36vw + 12vh),transparent calc(36vw + 30vh));mask-image:linear-gradient(90deg,#000 calc(36vw + 12vh),transparent calc(36vw + 30vh))}
 #uiLayers[data-scene="results"] #lyRival{opacity:0}
 #sc-results{display:none;padding:0;background:linear-gradient(90deg,rgba(14,12,22,0) 30%,rgba(14,12,22,.72) 58%,rgba(14,12,22,.85))}
 #sc-results.on{display:block}

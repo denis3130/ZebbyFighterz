@@ -9,4 +9,7 @@ for (const [id, p] of SCREENS) T.test('layout ' + id + (p && p.step ? ' G2' : ''
     T.ok(r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1, name + ' off screen ' + JSON.stringify([r.left, r.top, r.right, r.bottom].map(Math.round)));
     T.ok(Math.min(r.width, r.height) >= 43.5 || el.classList.contains('uSlot'), name + ' too small ' + Math.round(r.width) + 'x' + Math.round(r.height)); }
   T.ok(document.scrollingElement.scrollWidth <= innerWidth, 'no sideways scroll'); T.ok(noOverflow(root), id + ': text clipped ' + noOverflow.last);
+  for (const lg of root.querySelectorAll('.ulogo')) {   // the logo's crescent and cut stay on its word (they once flew off over the hero)
+    const tx = lg.querySelector('.ulogoTx').getBoundingClientRect(), arc = lg.querySelector('.ulogoArc').getBoundingClientRect(), cut = lg.querySelector('.ulogoCut').getBoundingClientRect();
+    T.ok(arc.left >= tx.left && arc.left <= tx.right && cut.left >= tx.left && cut.left <= tx.right, id + ': logo pieces off its word ' + JSON.stringify([tx.left, tx.right, arc.left, cut.left].map(Math.round))); }
   __VF.G.state = 'title'; __VF.CFG.ui.vs.minMs = 0; });

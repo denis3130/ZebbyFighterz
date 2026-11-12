@@ -8,7 +8,9 @@ function playScreens() {
   navRegister({id: 'menu', scene: 'menu', layers: () => ({hero: (SV && SV.lastChar) || 'ren'}),
     build(r) {
       const soon = 'In arrivo nella prossima versione';
-      r.appendChild(cLogo('s'));
+      const top = uiEl('div', 'mmTop');   // the logo in its own row (on short screens the menu is a wrapping row: the logo keeps its own width)
+      top.appendChild(cLogo('s'));
+      r.appendChild(top);
       const list = uiEl('div', 'mmList');
       list.setAttribute('data-wrap', '');
       const vs = cItem({label: 'Versus locale', act0: 'vs', act: () => navGo('vsopts')});

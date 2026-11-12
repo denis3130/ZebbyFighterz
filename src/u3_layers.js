@@ -29,6 +29,10 @@ function lyChar(id, c, pose) {
   if (el.dataset.k === key) return;
   el.dataset.k = key; el.dataset.c = c || '';
   el.style.backgroundImage = key && ASSETS[key] ? 'url(' + ASSETS[key] + ')' : 'none';
+  // where the face is, for the scenes that place a face (CSS: --ax = its distance from the picture's left edge in picture
+  // heights, --ay = its height share)
+  const A = CFG.ui.art[key.slice(3, -5)];
+  if (A) { el.style.setProperty('--ax', (A[0] * A[1]).toFixed(4)); el.style.setProperty('--ay', A[2]); }
 }
 // scene: 'menu' | 'title' | 'intro' | 'select' | 'vs' | 'results' | 'off' (CSS places the layers per scene); o = {hero, rival,
 // pose, arena (an id: its card picture), arenaImg (a picture: the real arena's snapshot)}. The characters' pictures come only from Denis's interface references (docs/ref/ui/), never the A-pose sheets.
