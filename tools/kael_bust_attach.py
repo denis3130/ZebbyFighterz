@@ -58,6 +58,7 @@ SMOOTH, SEAM, SEAM_SMOOTH = 4, .03, 6
 HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
+FINGER_THICK = 1.                        # the fingers' thickness about their bones (tried 1.25: the fingers merged into a lump, the fist a skin blob, the open hand a mitten)
 HAND_RATIO = 1.03                        # the hands' length (cuff to fingertip) over the bracer's, as the sheet draws them (Denis, 12/11: "dimensioni delle mani falle come si deve")
 HAND_NSMOOTH = 6                         # rounds of smoothing of the hands' normals (the light's bands clean)
 HAND_SMOOTH = 0                          # rounds of smoothing of the weights on Ren's hands (tried 4: the fist opened, a hole by the thumb)
@@ -256,6 +257,24 @@ def main(bust):
     for side, sd in SIDES:
         s_ = (X[:, 0] >= 0) == (sd > 0); k_ = 1 + (hsc[sd] - 1) * np.where(s_, G[:, 3], 0.)
         X = np.where(s_[:, None], J[sd]['Hb'] + (X - J[sd]['Hb']) * k_[:, None], X)
+    # (the fingers FINGER_THICK times as thick about their bones, by their share on the finger bones (none on the hand's
+    # back and palm): Ren's are long and slender, the sheet's fuller; in the fist they read as thin rods in a mitten)
+    if FINGER_THICK != 1:
+        fb = np.array([n.startswith(('LeftHand', 'RightHand')) and n[-1].isdigit() for n in allnames])
+        for side, sd in SIDES:
+            sel = np.nonzero(isR & ((X[:, 0] >= 0) == (sd > 0)))[0]; r_ = rid[sel]
+            wf = (rsw[r_] * fb[rsi[r_]]).sum(1)
+            segs = []
+            for f in ('Thumb', 'Index', 'Middle', 'Ring', 'Pinky'):
+                jj = [rf[side + 'Hand' + f + str(k)] for k in (1, 2, 3)]; jj.append(jj[2] + (jj[2] - jj[1]) * .9)
+                jb = [J[sd]['Hb'] + (to_bust(q[None], sd)[0] - J[sd]['Hb']) * hsc[sd] for q in jj]
+                segs += [(jb[k], jb[k + 1]) for k in range(3)]
+            Q = X[sel]; best = np.full(len(sel), 9.); foot = np.zeros_like(Q)
+            for a, b in segs:
+                ab = b - a; t = np.clip(((Q - a) @ ab) / (ab @ ab), 0, 1); c = a + np.outer(t, ab); d = np.linalg.norm(Q - c, axis=1); m = d < best; best[m] = d[m]; foot[m] = c[m]
+            k_ = 1 + (FINGER_THICK - 1) * wf
+            X[sel] = foot + (Q - foot) * k_[:, None]
+        print('fingers: %.2f times as thick about their bones' % FINGER_THICK)
     # the pose
     X2 = X * G[:, :1]; N2 = NX * G[:, :1]
     for side, sd in SIDES:
