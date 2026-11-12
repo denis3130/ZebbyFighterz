@@ -45,6 +45,7 @@ function navFocus(el) {
   NAV.focus = el || null;
   if (!el) return;
   el.classList.add('f');
+  NAV.focusAt = performance.now(); NAV.shineK = 0;
   if (navIsField(el) && NAV.dev === 'kb' && document.activeElement !== el) { try { el.focus({preventScroll: true}); } catch (_) {} }   // typing goes to it
   const d = navDef();
   if (d && d.onFocus) d.onFocus(el);

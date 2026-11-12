@@ -55,7 +55,7 @@ function playScreens() {
 // large on the side that is choosing (G1 left, G2 right) with name and stats; the other side shows the pick already made
 // (G1's, while G2 chooses) or the fighter waiting. Confirm a playable fighter to go on; a locked or coming one says why.
 // Same fighter on both sides: «In arrivo» (it needs a second copy of the model and an alternate colour).
-const SEL = {p: null};
+const SEL = {p: null, at: {l: -1e9, r: -1e9}};
 function selImg(c) {
   if (!c) return ASSETS['ui/silhouette.webp'];
   return ASSETS['ui/' + c + '_full.webp'] || ASSETS['ui/face_' + c + '.webp'] || ASSETS['ui/silhouette.webp'];
@@ -78,6 +78,18 @@ function selFig(el, c, ghost) {
   el.className = 'selFig ' + el.dataset.side + (ghost ? ' ghost' : '') + (c && CFG.ui.chars[c] && CFG.ui.chars[c].lock ? ' locked' : '') + (c ? '' : ' none');
   el.dataset.c = c || '';
   el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
+  const aura = el.previousElementSibling;   // the light behind the figure takes its colour and flashes (selLife)
+  if (aura && aura.classList.contains('selAura')) { aura.dataset.c = c && !(CFG.ui.chars[c] && CFG.ui.chars[c].lock) ? c : ''; aura.dataset.ghost = ghost ? '1' : ''; }
+  SEL.at[el.dataset.side] = performance.now();
+}
+// The select's life: each figure breathes, the light behind it breathes and flashes as the figure changes.
+function selLife(r, now) {
+  for (const s of ['l', 'r']) {
+    const f = r.querySelector('.selFig.' + s), a = f.previousElementSibling, k = Math.max(0, 1 - (now - SEL.at[s]) / 520);
+    f.style.scale = (1 + .007 * (1 - Math.cos(now / 760 + (s === 'r' ? 1.7 : 0)))).toFixed(4);
+    a.style.opacity = a.dataset.c ? ((a.dataset.ghost ? .35 : .75) + .15 * Math.sin(now / 640 + (s === 'r' ? 2 : 0)) + .6 * k * k).toFixed(3) : '0';
+    a.style.scale = (1 + .12 * k).toFixed(3);
+  }
 }
 function selPick(i) {
   const p = SEL.p, c = CFG.ui.roster[i];
@@ -96,7 +108,7 @@ function selScreen() {
       r.appendChild(cBack());
       r.appendChild(uiEl('div', 'selTitle', '<i></i><b>Scegli il combattente</b><i></i>'));
       r.appendChild(uiEl('div', 'selWho'));
-      for (const side of ['l', 'r']) { const f = uiEl('i', 'selFig ' + side); f.dataset.side = side; r.appendChild(f); r.appendChild(uiEl('div', 'selInfo ' + side)); }
+      for (const side of ['l', 'r']) { const f = uiEl('i', 'selFig ' + side); f.dataset.side = side; r.appendChild(uiEl('i', 'selAura ' + side)); r.appendChild(f); r.appendChild(uiEl('div', 'selInfo ' + side)); }
       const grid = uiEl('div', 'selGrid');
       CFG.ui.roster.forEach((c, i) => {
         const C = c && CFG.ui.chars[c];
@@ -136,7 +148,8 @@ function selScreen() {
       const info = selInfo(box, c, p.mode === 'versus' ? (p.step ? 'Giocatore 2' : 'Giocatore 1') : 'Allenamento');
       info.name.id = 'uSelName'; info.st.id = 'uSelStats';
       selFig(r.querySelector('.selFig.' + SEL.side), c, false);
-    }});
+    },
+    frame(now) { if (LY.q !== 'bassa') selLife(this.root, now); }});
 }
 
 // --- Arena (params {mode, chars, rounds, timeS}): the arena with the focus fills the background; the cards of the coming
@@ -185,7 +198,28 @@ function arenaScreen() {
 // «Caricamento…» follows the real loading. It stays CFG.ui.vs.minMs (its clock runs on shown frames only, so a hidden
 // page does not start the fight); once loaded, a tap or a key after CFG.ui.vs.tapAfterMs starts at once. Loading
 // failed: the reason, «Riprova» and «Indietro».
-const VS = {t: 0, last: 0, ready: false, err: false, started: false, tok: 0, p: null};
+const VS = {t: 0, last: 0, ready: false, err: false, started: false, tok: 0, p: null, el: null, burst: false};
+// The VS's entrance (a pure function of the screen's clock t, ms): the two faces slam in from the sides, the VS mark
+// crashes down on them with a flash, a shake and a burst of sparks, the names rise; then the faces push in slowly and the
+// seam of light between them flickers. Driven from the frame, no CSS animation.
+function vsLife(t) {
+  const E = VS.el, k = x => Math.max(0, Math.min(1, x)), back = x => 1 + 2.7 * Math.pow(x - 1, 3) + 1.7 * Math.pow(x - 1, 2);   // ease out with an overshoot
+  const kl = k(t / 260), kr = k((t - 60) / 260), push = (1 + .035 * k((t - 300) / 3000)).toFixed(4);
+  E.l.style.translate = (-26 * (1 - back(kl))).toFixed(2) + 'vw 0'; E.l.style.opacity = Math.min(1, kl * 3).toFixed(3); E.l.style.scale = push;
+  E.r.style.translate = (26 * (1 - back(kr))).toFixed(2) + 'vw 0'; E.r.style.opacity = Math.min(1, kr * 3).toFixed(3); E.r.style.scale = push;
+  const km = k((t - 220) / 170), hit = t - 390;
+  E.mark.style.opacity = km > 0 ? '1' : '0';
+  E.mark.style.scale = (1 + 2.2 * (1 - km * km) + (hit > 0 ? .04 * Math.sin(t / 300) * k(hit / 600) : 0)).toFixed(3);
+  E.flash.style.opacity = hit >= 0 ? (.75 * (1 - k(hit / 240))).toFixed(3) : '0';
+  const sh = hit >= 0 ? 14 * (1 - k(hit / 380)) : 0, e = Math.floor(t / 33);
+  E.stage.style.translate = sh ? ((uiRand(e, 1) - .5) * sh).toFixed(1) + 'px ' + ((uiRand(e, 2) - .5) * sh).toFixed(1) + 'px' : '0px 0px';
+  if (hit >= 0 && !VS.burst) { VS.burst = true; const b = E.mark.getBoundingClientRect(); layersBurst(b.left + b.width / 2, b.top + b.height / 2, 48, '#ffc46a', 1.4); }
+  E.lines.style.opacity = (.75 * k(t / 120) * (1 - k((t - 380) / 520))).toFixed(3);
+  E.lines.style.translate = (-(t * .8) % 90).toFixed(1) + 'px 0';
+  E.seam.style.opacity = hit > 0 ? (.5 + .5 * uiRand(Math.floor(t / 70), 3)).toFixed(3) : '0';
+  const kn = k((t - 450) / 300);
+  for (const s of E.sides) { s.style.opacity = kn.toFixed(3); s.style.translate = '0 ' + (16 * (1 - kn)).toFixed(1) + 'px'; }
+}
 function vsLoad() {
   const tok = ++VS.tok, r = NAV.screens.vs.root;
   VS.ready = VS.err = false;
@@ -197,28 +231,34 @@ function vsStart() { if (VS.started) return; VS.started = true; bridgeStart(VS.p
 function vsScreen() {
   navRegister({id: 'vs', scene: 'vs', layers: () => ({}),
     build(r) {
-      r.innerHTML = '<i class="vsF l"></i><i class="vsF r"></i><div class="vsMark"><b>VS</b><i></i></div>' +
+      r.innerHTML = '<div class="vsStage"><i class="vsLines"></i><i class="vsF l"></i><i class="vsF r"></i><div class="vsMark"><b>VS</b><i></i></div></div><i class="vsFlash"></i>' +
         '<div class="vsSide l"><b class="vsName"></b><i class="vsLine"></i></div><div class="vsSide r"><b class="vsName"></b><i class="vsLine"></i></div>' +
         '<div class="vsLoad"><span>Caricamento…</span></div><div class="vsErr"><b>Impossibile caricare l\'arena</b><div class="vsErrB"></div></div>';
       const bar = cProgress(0); bar.classList.add('vsBar'); r.querySelector('.vsLoad').appendChild(bar);
       r.querySelector('.vsErrB').append(cBtn({label: 'Riprova', act: () => vsLoad()}), cBtn({label: 'Indietro', act: () => navBack()}));
+      const q = s => r.querySelector(s);
+      VS.el = {stage: q('.vsStage'), lines: q('.vsLines'), l: q('.vsF.l'), r: q('.vsF.r'), mark: q('.vsMark'), seam: q('.vsMark i'), flash: q('.vsFlash'), sides: [...r.querySelectorAll('.vsSide')]};
     },
     enter(p) {
-      VS.p = p; VS.t = 0; VS.last = 0; VS.started = false;
+      VS.p = p; VS.t = 0; VS.last = 0; VS.started = false; VS.burst = false;
       const r = this.root, lines = CFG.ui.lines[p.chars[0] + '>' + p.chars[1]] || ['', ''];
       ['l', 'r'].forEach((s, i) => {
         const c = p.chars[i];
-        r.querySelector('.vsF.' + s).style.backgroundImage = 'url(' + (ASSETS['ui/' + c + '_vs.webp'] || '') + ')';
+        const f = r.querySelector('.vsF.' + s), A = CFG.ui.art[c + '_vs'];
+        f.style.backgroundImage = 'url(' + (ASSETS['ui/' + c + '_vs.webp'] || '') + ')';
+        if (A) f.style.setProperty('--ax', (A[0] * A[1]).toFixed(4));
         r.querySelector('.vsSide.' + s + ' .vsName').textContent = CFG.ui.chars[c].name;
         r.querySelector('.vsSide.' + s + ' .vsLine').textContent = lines[i];
       });
       r.querySelector('.vsBar').uiSet(0);
+      vsLife(0);
       vsLoad();
     },
     leave() { VS.tok++; },
     frame(now) {
       const dt = VS.last ? Math.min(100, now - VS.last) : 0, M = CFG.ui.vs.minMs;
       VS.last = now; VS.t += dt;
+      vsLife(VS.t);
       if (VS.err) return;
       NAV.screens.vs.root.querySelector('.vsBar').uiSet(VS.ready ? Math.min(1, M ? VS.t / M : 1) : Math.min(.85, VS.t / Math.max(M, 1)));
       if (VS.ready && VS.t >= M) vsStart();
@@ -230,7 +270,21 @@ function vsScreen() {
 // winner large on the left, «Vittoria» between laurels (or «Pareggio»), who won, the score between the two faces, the XP
 // of the match part by part with the total counted up and the level bar (G1 is the player of this device: statistics and
 // XP are his, saved at once), then «Rivincita», «Cambia personaggio», «Menu principale». Esc / B = the menu.
-const RS = {t: 0, last: 0, xp: 0, lv: null, done: false};
+const RS = {t: 0, last: 0, xp: 0, lv: null, done: false, burst: false};
+// The results' entrance (pure function of the clock t, ms): «Vittoria» crashes in and glows, the laurels open out from
+// it, a burst of gold (or of silver for a draw).
+function rsLife(root, t) {
+  const k = x => Math.max(0, Math.min(1, x)), kt = k(t / 320), e = 1 - Math.pow(1 - kt, 3), title = root.querySelector('.rsTitle');
+  title.style.opacity = Math.min(1, kt * 2.5).toFixed(3);
+  title.style.scale = (1 + .8 * (1 - e)).toFixed(3);
+  const kl = k((t - 160) / 320), el = 1 - Math.pow(1 - kl, 3);
+  root.querySelectorAll('.rsLaurel').forEach((l, i) => { l.style.opacity = kl.toFixed(3); l.style.translate = ((i ? -1 : 1) * 26 * (1 - el)).toFixed(1) + 'px 0'; });
+  if (t >= 320 && !RS.burst) {
+    RS.burst = true;
+    const b = title.getBoundingClientRect(), draw = root.classList.contains('draw');
+    layersBurst(b.left + b.width / 2, b.top + b.height / 2, 40, draw ? '#d8d4e8' : '#ffc46a', 1.2);
+  }
+}
 const RS_LAUREL = '<svg class="rsLaurel" viewBox="0 0 40 80" aria-hidden="true"><path d="M31 77C11 62 6 36 19 5"/>' +
   [[12, 60, -40], [9, 47, -60], [10, 34, -75], [14, 22, -95], [19, 12, -110], [22, 66, 30], [17, 52, 15], [16, 39, 0], [19, 27, -20]].map(([x, y, a]) =>
     '<ellipse cx="' + x + '" cy="' + y + '" rx="6.5" ry="2.6" transform="rotate(' + a + ' ' + x + ' ' + y + ')"/>').join('') + '</svg>';
@@ -266,7 +320,9 @@ function resultsScreen() {
       q('.rsLvl').textContent = up.after > up.before ? 'Livello ' + up.after + '!' : 'Livello ' + up.after;
       root.classList.toggle('lvup', up.after > up.before);
       root.classList.remove('done');
-      RS.t = 0; RS.last = 0; RS.xp = x.xp; RS.done = false;
+      RS.t = 0; RS.last = 0; RS.xp = x.xp; RS.done = false; RS.burst = false;
+      root.classList.toggle('draw', r.winner === 2);
+      rsLife(root, 0);
       RS.lv = {from: up.after > up.before ? 0 : before.into / before.need, to: after.into / after.need};
       q('.rsXpN').textContent = '0';
       q('.rsBar .uprog').uiSet(RS.lv.from);
@@ -277,9 +333,10 @@ function resultsScreen() {
       const dt = RS.last ? Math.min(100, now - RS.last) : 0;
       RS.last = now; RS.t += dt;
       const k = Math.min(1, RS.t / (CFG.ui.t.go * 2)), e = 1 - (1 - k) * (1 - k), root = this.root;
+      rsLife(root, RS.t);
       root.querySelector('.rsXpN').textContent = String(Math.round(RS.xp * e));
       root.querySelector('.rsBar .uprog').uiSet(RS.lv.from + (RS.lv.to - RS.lv.from) * e);
-      if (k >= 1) { RS.done = true; root.classList.add('done'); }
+      if (k >= 1 && RS.t >= 500) { RS.done = true; root.classList.add('done'); rsLife(root, 1e4); }
     },
     back() { menu.toTitle(); return false; }});
 }

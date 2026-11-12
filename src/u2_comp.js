@@ -23,7 +23,7 @@ function uiFocusable(el, act, locked, note) {
 // «VOIDRISE» in spaced capitals with a thin gold crescent cutting behind it (size 's' in a corner, 'l' on the title).
 function cLogo(size) {
   return uiEl('div', 'ulogo ' + (size || 's'), '<svg class="ulogoArc" viewBox="0 0 100 100" aria-hidden="true"><path d="M70 8a44 44 0 1 1-52 64"/></svg>' +
-    '<span class="ulogoTx">VOIDRISE</span><i class="ulogoCut"></i>');
+    '<span class="ulogoTx">VOIDRISE</span><span class="ulogoSh" aria-hidden="true"><span class="ulogoTx">VOIDRISE</span></span><i class="ulogoCut"></i>');   // ulogoSh: the light that sweeps across the word
 }
 // Section title: orange bar on the left, title, italic subtitle, a fading line with an orange brush stroke under it.
 function cHead(title, sub) {

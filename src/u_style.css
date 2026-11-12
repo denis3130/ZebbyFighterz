@@ -31,6 +31,11 @@
   font-size:inherit;filter:drop-shadow(0 0 4px rgba(216,166,87,.4))}
 .ulogo.s .ulogoArc{font-size:max(18px,calc(var(--u)*5.2))}.ulogo.l .ulogoArc{font-size:calc(var(--u)*12)}
 .ulogoCut{position:absolute;left:58%;bottom:-.05em;width:22%;height:2px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange));transform:rotate(-22deg);box-shadow:0 0 6px rgba(240,138,50,.7)}
+/* the light sweeping across the word: the same word over it, painted only where a bright band passes (u3_layers.js) */
+.ulogoSh{position:absolute;inset:0;padding:inherit;pointer-events:none;white-space:nowrap}
+.ulogoSh{filter:drop-shadow(0 0 .12em rgba(255,186,96,.85))}
+.ulogoSh .ulogoTx{color:transparent;text-shadow:none;background:linear-gradient(100deg,rgba(255,206,130,0) 40%,#ffc874 47%,#fff6e4 50%,#ffc874 53%,rgba(255,206,130,0) 60%) no-repeat;
+  background-size:220% 100%;background-position:125% 0;-webkit-background-clip:text;background-clip:text}
 /* --- section head: orange bar, title, italic subtitle, fading line with a brush stroke --- */
 .uhead{position:relative;padding-left:calc(var(--u)*2.6)}
 .uhead::before{content:'';position:absolute;left:0;top:.2em;height:calc(var(--u)*7);width:max(3px,calc(var(--u)*.6));background:var(--u-orange);box-shadow:0 0 10px rgba(240,138,50,.8)}
@@ -51,6 +56,9 @@
   box-shadow:0 0 0 1px rgba(243,214,160,.22),0 0 22px rgba(240,138,50,.35),inset 0 1px 0 rgba(255,222,176,.35)}
 .ub.f::after{opacity:1}
 .ub.f::before{animation:uShine .7s var(--u-ease) .05s 1}
+.ub.f.shine::before{animation:uShine2 .8s var(--u-ease) 1}
+@keyframes uShine2{0%{opacity:0;transform:translateX(0)}30%{opacity:1}100%{opacity:0;transform:translateX(480%)}}
+.ub.f::after{opacity:var(--br,1)}
 @keyframes uShine{0%{opacity:0;transform:translateX(0)}30%{opacity:1}100%{opacity:0;transform:translateX(480%)}}
 .ub:active{transform:skewX(-16deg) scale(.95)}
 .ub.lock{color:var(--u-dim)}
@@ -72,7 +80,7 @@
 .uitem::after{content:'';position:absolute;z-index:-1;left:45%;width:calc(var(--u)*28);top:30%;height:50%;opacity:0;transition:opacity .2s;
   background:linear-gradient(90deg,rgba(240,138,50,0),rgba(240,138,50,.55) 45%,rgba(255,170,80,.8) 70%,rgba(255,200,130,0));clip-path:var(--u-brush)}
 .uitem.f{font-size:max(26px,calc(var(--u)*8));color:#fff7ea;text-shadow:0 0 18px rgba(240,138,50,.35)}
-.uitem.f::before,.uitem.f::after{opacity:1}
+.uitem.f::before{opacity:1}.uitem.f::after{opacity:var(--br,1)}
 .uitem.lock{color:rgba(165,157,179,.75)}
 .uitem.lock .uico{font-size:.62em;color:var(--u-gold)}
 /* --- card with a picture: italic label at the bottom; with the focus an orange frame, glow and a slow zoom --- */
@@ -175,6 +183,14 @@
 #lyRival{-webkit-mask-image:radial-gradient(ellipse 38% 44% at 54% 44%,#000 30%,transparent 100%);mask-image:radial-gradient(ellipse 38% 44% at 54% 44%,#000 30%,transparent 100%)}
 #lyGlow{right:2%;bottom:0;width:60%;height:100%;background:radial-gradient(ellipse at 55% 55%,rgba(240,138,50,.22),rgba(240,138,50,0) 62%)}
 #uiParts{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+/* light rays from the sky, behind the characters (their opacity and sway set from JS, per scene) */
+#uiLayers #lyRays,#uiLayers #lyGlow{transition:transform .7s var(--u-ease)}   /* their opacity follows JS every frame: no transition on it */
+#lyRays{left:6%;right:-12%;top:-24%;height:112%;opacity:0;transform-origin:60% 0;
+  background:repeating-linear-gradient(114deg,rgba(255,200,146,0) 0 5%,rgba(255,200,146,.17) 6.4% 7.6%,rgba(255,200,146,0) 9.2% 13%,rgba(255,214,170,.1) 14% 14.8%,rgba(255,200,146,0) 16% 21%);
+  -webkit-mask-image:radial-gradient(ellipse 72% 62% at 58% 0%,#000 18%,transparent 78%);mask-image:radial-gradient(ellipse 72% 62% at 58% 0%,#000 18%,transparent 78%)}
+#lyGlow[data-c="kael"]{background:radial-gradient(ellipse at 55% 55%,rgba(150,100,255,.24),rgba(150,100,255,0) 62%)}
+/* sparks of the big moments, over the screens (u3_layers.js layersBurst); shown only while a burst lives */
+#uiFx{position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none}
 #lyShade{inset:0;background:radial-gradient(ellipse at 62% 42%,rgba(10,8,14,0) 35%,rgba(10,8,14,.55) 100%),linear-gradient(180deg,rgba(10,8,14,.25),rgba(10,8,14,0) 30%,rgba(10,8,14,0) 70%,rgba(10,8,14,.45))}
 /* per scene: only the menu shows the characters behind the interface; other screens draw their own */
 #uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]):not([data-scene="results"]) #lyHero,#uiLayers:not([data-scene="menu"]):not([data-scene="title"]):not([data-scene="versus"]) #lyRival,#uiLayers:not([data-scene="menu"]) #lyGlow{opacity:0}
@@ -296,6 +312,11 @@
 .selTitle i{width:calc(var(--u)*20);height:1px;background:linear-gradient(90deg,rgba(216,166,87,0),rgba(216,166,87,.7))}
 .selTitle i:last-child{background:linear-gradient(90deg,rgba(216,166,87,.7),rgba(216,166,87,0))}
 .selWho{position:absolute;z-index:2;left:50%;top:calc(env(safe-area-inset-top) + var(--u)*11);transform:translateX(-50%);font-family:var(--u-display);font-size:max(11px,calc(var(--u)*2.6));letter-spacing:.16em;color:var(--u-gold2)}
+/* the light behind each figure, in the fighter's colour (opacity and size from JS, selLife) */
+.selAura{position:absolute;bottom:calc(var(--u)*26);height:calc(100% - var(--u)*30);width:40%;opacity:0;pointer-events:none;
+  background:radial-gradient(ellipse 46% 50% at 50% 50%,rgba(255,150,70,.42),rgba(255,120,50,.12) 55%,rgba(255,120,50,0) 72%)}
+.selAura.l{left:12%}.selAura.r{right:12%}
+.selAura[data-c="kael"]{background:radial-gradient(ellipse 46% 50% at 50% 50%,rgba(160,110,255,.42),rgba(130,80,255,.12) 55%,rgba(130,80,255,0) 72%)}
 .selFig{position:absolute;bottom:calc(var(--u)*28);height:calc(100% - var(--u)*30);width:40%;background:center bottom/contain no-repeat;pointer-events:none;
   -webkit-mask-image:linear-gradient(180deg,#000 72%,transparent),linear-gradient(90deg,transparent,#000 22%,#000 80%,transparent);-webkit-mask-composite:source-in;
   mask-image:linear-gradient(180deg,#000 72%,transparent),linear-gradient(90deg,transparent,#000 22%,#000 80%,transparent);mask-composite:intersect}
@@ -341,21 +362,25 @@
 /* --- VS (u5_play.js), as the reference: the two faces, the golden VS between them, a line each, the loading bar --- */
 #sc-vs{padding:0;display:none;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,rgba(14,12,22,0),rgba(14,12,22,.55))}
 #sc-vs.on{display:block}
-.vsF{position:absolute;top:0;height:86%;width:52%;background:center top/cover no-repeat;pointer-events:none}
-.vsF.l{left:-2%;background-position:right top;-webkit-mask-image:linear-gradient(90deg,#000 65%,transparent),linear-gradient(180deg,#000 70%,transparent);-webkit-mask-composite:source-in;
-  mask-image:linear-gradient(90deg,#000 65%,transparent),linear-gradient(180deg,#000 70%,transparent);mask-composite:intersect}
-.vsF.r{right:-2%;background-position:left top;-webkit-mask-image:linear-gradient(270deg,#000 65%,transparent),linear-gradient(180deg,#000 70%,transparent);-webkit-mask-composite:source-in;
-  mask-image:linear-gradient(270deg,#000 65%,transparent),linear-gradient(180deg,#000 70%,transparent);mask-composite:intersect}
-#sc-vs.in .vsF.l{animation:vsInL .55s var(--u-ease) both}
-#sc-vs.in .vsF.r{animation:vsInR .55s var(--u-ease) .08s both}
-@keyframes vsInL{from{opacity:0;translate:-18vw 0}}
-@keyframes vsInR{from{opacity:0;translate:18vw 0}}
+.vsStage{position:absolute;inset:0;pointer-events:none}
+/* speed lines toward the middle while the faces slam in; the flash of the VS mark's crash (both from JS, vsLife) */
+.vsLines{position:absolute;inset:-6% -10%;opacity:0;
+  background:repeating-linear-gradient(98deg,rgba(255,232,204,0) 0 26px,rgba(255,232,204,.22) 26px 28px,rgba(255,232,204,0) 28px 64px,rgba(255,190,120,.16) 64px 65px,rgba(255,232,204,0) 65px 90px);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 45%,transparent 30%,#000 75%);mask-image:radial-gradient(ellipse 60% 55% at 50% 45%,transparent 30%,#000 75%)}
+.vsFlash{position:absolute;inset:0;opacity:0;pointer-events:none;background:radial-gradient(circle at 50% 44%,#fff8ec,rgba(255,224,176,.55) 32%,rgba(255,200,140,0) 72%)}
+/* each face (--ax: where it is in its picture, set in vsScreen) at a quarter of the width from its side; the picture fades
+   only past the face, toward the VS mark, and toward the bottom, under the names */
+.vsF{position:absolute;inset:0;background-repeat:no-repeat;background-size:auto 100%;pointer-events:none}
+.vsF.l{background-position:calc(25vw - var(--ax,.66) * 100vh) 0;transform-origin:25vw 45%;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(25vw + 30vh),transparent calc(25vw + 56vh)),linear-gradient(180deg,#000 62%,transparent 97%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,#000 calc(25vw + 30vh),transparent calc(25vw + 56vh)),linear-gradient(180deg,#000 62%,transparent 97%);mask-composite:intersect}
+.vsF.r{background-position:calc(75vw - var(--ax,.61) * 100vh) 0;transform-origin:75vw 45%;
+  -webkit-mask-image:linear-gradient(270deg,#000 calc(25vw + 30vh),transparent calc(25vw + 56vh)),linear-gradient(180deg,#000 62%,transparent 97%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(270deg,#000 calc(25vw + 30vh),transparent calc(25vw + 56vh)),linear-gradient(180deg,#000 62%,transparent 97%);mask-composite:intersect}
 .vsMark{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);pointer-events:none}
 .vsMark b{display:block;font-family:var(--u-display);font-weight:600;font-size:calc(var(--u)*26);line-height:1;letter-spacing:-.04em;
   background:linear-gradient(180deg,#fff3d8,#e7c27e 45%,#a87632);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 14px rgba(0,0,0,.6))}
 .vsMark i{position:absolute;left:-10%;right:-10%;top:48%;height:5px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange) 45%,#ffd9a0 55%,rgba(240,138,50,0));transform:rotate(-58deg);clip-path:var(--u-brush)}
-#sc-vs.in .vsMark{animation:vsMark .6s var(--u-ease) .2s both}
-@keyframes vsMark{from{opacity:0;scale:1.6}}
 .vsSide{position:absolute;bottom:calc(env(safe-area-inset-bottom) + var(--u)*17);width:34%;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1);text-align:center}
 .vsSide.l{left:6%}.vsSide.r{right:6%}
 .vsName{font-family:var(--u-display);font-weight:500;font-size:max(20px,calc(var(--u)*6.4));letter-spacing:.14em;text-transform:uppercase;color:#f6efe3;text-shadow:0 2px 10px #000}

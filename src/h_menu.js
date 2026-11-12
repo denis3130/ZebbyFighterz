@@ -17,6 +17,7 @@ function menuSync() {
   const st = G.state;
   if (st === 'fight' && NAV.cur) navClear();
   mnEl('uiLayers').classList.toggle('off', st === 'fight' || st === 'pause');   // the layered scene only behind the menus
+  if (st === 'fight' || st === 'pause') { LY.bursts.length = 0; LY.fxOn = false; mnEl('uiFx').style.display = 'none'; }   // no sparks over a fight
   mnEl('hud').style.visibility = st === 'fight' ? '' : 'hidden';   // (the pause screen covers the fight, as in the reference)
   mnEl('tPause').classList.toggle('on', st === 'fight' && !MN.rot);
   mnEl('rotate').classList.toggle('on', MN.rot);
