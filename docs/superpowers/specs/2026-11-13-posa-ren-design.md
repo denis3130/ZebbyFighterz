@@ -10,7 +10,25 @@ che ha in mente, senza lunghe descrizioni e senza rifare le cose molte volte.
   fila a velocità fissa; i tempi li dice a parole (note). Semplice da usare sul telefono.
 - B: una linea del tempo con i fotogrammi di ogni posa. Più preciso sui tempi, più complicato da toccare sul telefono.
 
-## Cosa fa
+## Seconda versione (13/11, stesso giorno): solo tasti
+La prima versione (punti da trascinare su ogni parte, sotto) per Denis era "TROPPO DIFFICILE". Tra tre strade
+(di lato con 5 punti grossi; pose pronte solo a tasti; un omino 2D da muovere) ha scelto **le pose pronte, solo
+tasti**:
+- Braccio avanti / dietro: Guardia, Avanti, Alto, Al viso. Mano avanti / dietro (un tasto che gira): Pugno,
+  Socchiusa, Aperta. Gamba avanti / dietro: A terra, Ginocchio su, Calcio. Busto: Dritto, Avanti, Indietro.
+  Altezza: Normale, Basso, Alto. La prima posa è la guardia del kit.
+- Il corpo segue da solo (scelte di Claude): un braccio dritto porta dentro la sua spalla (fianchi e busto girano,
+  il peso avanti), entrambi squadrano; un calcio inclina indietro e alza sulla gamba d'appoggio, il cui piede gira
+  sulla punta; due piedi in aria fanno un salto; gli occhi restano sull'avversario. Posizioni prese dal kit.
+- Ren a sinistra, tutte le scelte a destra senza menu nascosti (in verticale sotto). Ogni cambio arriva in 12
+  fotogrammi; il gomito tra due posizioni gira attorno al braccio passando dal fianco (nessuno scatto).
+- Salvataggio: formato 2 (le scelte per nome); i documenti della prima versione restano e non si elencano.
+- Verificato: tutte le 11.664 combinazioni (nessun braccio nel petto, nessun piede sotto il pavimento, nessuna gamba
+  tirata) e ognuno dei 288 cambi di una riga senza scatti.
+
+## La prima versione (sostituita)
+
+### Cosa faceva
 - Lo stesso Ren della pagina delle tecniche (kit.js): stessa guardia, stesso risolutore (gambe e braccia per IK,
   piedi in appoggio fermi). La guardia è la prima posa di ogni animazione nuova.
 - Punti da trascinare: testa (il punto davanti al viso, dove guarda), busto (piega), bacino (sposta e abbassa),
@@ -25,7 +43,7 @@ che ha in mente, senza lunghe descrizioni e senza rifare le cose molte volte.
 - Salvataggio automatico nel database della pagina (raccolta `animazioni`, un documento per animazione, con la
   legenda dei numeri dentro), e su questo dispositivo quando il database non c'è.
 
-## Scelte di Claude
+### Scelte di Claude
 - Mani nel riferimento del busto (il busto che gira o si piega porta le braccia con sé); gomito come "lato verso
   cui si piega" (mai un punto: così muovere la mano dopo non lo ribalta); rotazione del palmo e piega del polso
   misurate sull'avambraccio, quindi sempre definite.
@@ -34,5 +52,5 @@ che ha in mente, senza lunghe descrizioni e senza rifare le cose molte volte.
 
 ## Per dopo (non costruito)
 - Linea del tempo con i fotogrammi (approccio B), se le note non bastano.
-- Ginocchia trascinabili, inclinazione della testa, specchiare una posa.
-- Eliminare un'animazione salvata.
+- Altre posizioni pronte se servono (es. gomito, calcio basso, spazzata), su richiesta di Denis.
+- Specchiare una posa; eliminare un'animazione salvata.

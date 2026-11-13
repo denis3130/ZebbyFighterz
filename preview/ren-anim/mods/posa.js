@@ -1,379 +1,280 @@
-// --- posa.js: "Pose di Ren", an editor of key poses (13/11/2026). ---
-// Denis (13/11): "mi puoi fare un'anteprima del personaggio dove posso muoverlo come voglio toccando per esempio le
-// gambe o le braccia per fare nuove animazioni? così capisci meglio cosa intendo". His choice (A): key poses only, as
-// his sheets have them (posa 1, 2, 3...), and a "Riproduci" that shows them in a row at one fixed speed; the timing he
-// tells in words (the notes). Built on the kit (kit.js, loaded before this): the same Ren, base guard and solver. One
-// act, 'posa', whose style, feet, arms, hands and head are the pose being edited or, while it plays, the mix of two.
-// Touch and mouse: a part's handle dragged on the picture moves in the plane facing the camera (turn the view to move
-// it in depth); a drag elsewhere turns the view, a pinch or the wheel zooms, as in the viewer. Keyboard and controller:
-// the same, part by part. The poses are saved in the page's database (collection "animazioni", one document per
-// animation: Claude reads them there) and on this device (localStorage) when the database is not there.
-//
-// A pose, on top of the kit's base guard (RK.g); metres and degrees (pzDoc writes this legend into each document):
-//   b      {yaw, chest, leanL, leanS, lx, lz, dip}: the hips' turn, the chest's own twist, the lean toward the
-//          opponent and sideways (+: toward his right), the pelvis along the fight line, across it (+: his left), down
-//   h      {yaw, nod}: the head's turn and nod (< 0: chin up)
-//   L, R   {p, e, k, roll, wrist}: the wrist from its shoulder and the elbow's way from it, both in the chest's frame
-//          ([across: his left, up, forward]); how closed the hand is (0 open, fingers together .. 1 fist); the palm's
-//          roll about the forearm (0: toward the elbow's side, "giù" when the elbow is down; 90 "di lato", inward;
-//          180 "su") and the wrist's bend (> 0 back, as in a palm strike; < 0 toward the palm)
-//   fL, fR {x, z, up, heel, yaw, toe}: the foot moved along the fight line, across it and up; its heel lifted, its
-//          turn on its tip, its toes' point once it is in the air
-//   note   Denis's words for this pose
-// Left is the lead side (the front hand and foot), right the rear.
+// --- posa.js: "Pose di Ren", key poses made with buttons (13/11/2026, second version). ---
+// Denis (13/11): "mi puoi fare un'anteprima del personaggio dove posso muoverlo come voglio [...] per fare nuove
+// animazioni? così capisci meglio cosa intendo"; his choice A: key poses as his sheets have them (posa 1, 2, 3...),
+// a "Riproduci" that shows them in a row at one fixed speed, the timing told in words (the notes). The first version
+// had handles to drag on every part; Denis found it too hard ("NO BRO TROPPO DIFFICILE") and chose ready positions,
+// buttons only. A pose is a set of choices:
+//   Braccio avanti / dietro   Guardia, Avanti, Alto, Al viso      (avanti = the lead arm, his left)
+//   Mano avanti / dietro      Pugno, Socchiusa, Aperta            (one button each, it goes round)
+//   Gamba avanti / dietro     A terra, Ginocchio su, Calcio
+//   Busto                     Dritto, Avanti, Indietro
+//   Altezza                   Normale, Basso, Alto
+// and the body follows by itself: a straight arm brings its shoulder in (the hips and chest turn, the weight goes
+// forward), a kick leans him back and lifts him on the standing leg (whose foot turns on its tip), both feet off the
+// floor make a jump, the eyes stay on the opponent. The positions are the kit's (kit.js, loaded before this: the same
+// Ren, base guard and solver). A change eases in (a few frames); "Riproduci" plays pose 1 to 2 to ... at one speed.
+// Touch and mouse: the buttons (a drag on the picture turns the view, a double tap brings back the side view).
+// Keyboard and controller: rows and choices (the hint). The poses are saved by themselves in the page's database
+// (collection "animazioni", one document per animation, format 2: the choices by name), where Claude reads them, and
+// on this device when the database is not there. Documents of the first version (format 1) stay and are not listed.
 
 const PZ = {
   T: 24, hold: 40, back: 24, rest: 14,   // playing: frames from a pose to the next (0.4 s), held on the last, back to the first, held there
-  max: 24, turn: 10,                     // poses in one animation; degrees a turn button turns
-  poses: [], cur: 0, sel: 'hL', play: null, undo: [], guard: null, fk: null, ver: 0, now: {af: NaN, v: -1, P: null},
-  id: null, name: 'Nuova animazione', note: '', pending: null,
-  db: null, col: null, list: [], loaded: false, edited: false, busy: false, dirty: false, retry: 0, timer: 0,
-  drag: null, el: {}, scr: {}, showH: true, pad: {}, padT: 0, padMove: false, lastPush: 0, ui: {}, sub: '',
-  ySign: 1, nSign: 1,                    // the head's turn and nod against the gaze's (from the rig: tests/posa.js checks them)
+  ease: 12,                              // frames a changed pose takes to be reached (0.2 s: from rest to rest)
+  max: 24,                               // poses in one animation
+  poses: [], cur: 0, row: 0, kb: false, play: null, undo: [], D: null, Daf: NaN, ver: 0, lastPush: 0,
+  id: null, name: 'Nuova animazione', note: '', db: null, col: null, list: [], loaded: false, edited: false, busy: false,
+  dirty: false, retry: 0, timer: 0, pad: {}, padRep: {}, ui: {},
 };
-const PZ_FOOT = () => ({x: 0, z: 0, up: 0, heel: 0, yaw: 0, toe: 15});
-PZ.base = {b: {yaw: 0, chest: 0, leanL: 0, leanS: 0, lx: 0, lz: 0, dip: 0}, h: {yaw: 0, nod: 0}, L: null, R: null, fL: PZ_FOOT(), fR: PZ_FOOT(), note: ''};
-const PZ_PARTS = [
-  {id: 'head', name: 'Testa', c: '#f4f1fb', kind: 'head'},
-  {id: 'chest', name: 'Busto', c: '#f4f1fb', kind: 'chest'},
-  {id: 'hips', name: 'Bacino', c: '#f4f1fb', kind: 'hips'},
-  {id: 'hL', name: 'Mano sinistra (davanti)', c: '#35d8ff', kind: 'hand'},
-  {id: 'eL', name: 'Gomito sinistro', c: '#35d8ff', kind: 'elbow'},
-  {id: 'hR', name: 'Mano destra (dietro)', c: '#ff7a1a', kind: 'hand'},
-  {id: 'eR', name: 'Gomito destro', c: '#ff7a1a', kind: 'elbow'},
-  {id: 'fL', name: 'Piede sinistro (davanti)', c: '#35d8ff', kind: 'foot'},
-  {id: 'fR', name: 'Piede destro (dietro)', c: '#ff7a1a', kind: 'foot'},
-  {id: 'all', name: 'Tutto il corpo', c: '#f4f1fb', kind: 'all'},
+// the rows of choices: the pose's field, its label, its values [name, label]
+const PZ_ROWS = [
+  {key: 'bA', label: 'Braccio avanti', vals: [['guardia', 'Guardia'], ['avanti', 'Avanti'], ['alto', 'Alto'], ['viso', 'Al viso']]},
+  {key: 'bD', label: 'Braccio dietro', vals: [['guardia', 'Guardia'], ['avanti', 'Avanti'], ['alto', 'Alto'], ['viso', 'Al viso']]},
+  {key: 'mani', label: 'Mani', hands: [['mA', 'Mano avanti'], ['mD', 'Mano dietro']]},
+  {key: 'gA', label: 'Gamba avanti', vals: [['terra', 'A terra'], ['ginocchio', 'Ginocchio su'], ['calcio', 'Calcio']]},
+  {key: 'gD', label: 'Gamba dietro', vals: [['terra', 'A terra'], ['ginocchio', 'Ginocchio su'], ['calcio', 'Calcio']]},
+  {key: 'busto', label: 'Busto', vals: [['dritto', 'Dritto'], ['avanti', 'Avanti'], ['indietro', 'Indietro']]},
+  {key: 'alt', label: 'Altezza', vals: [['normale', 'Normale'], ['basso', 'Basso'], ['alto', 'Alto']]},
 ];
-// What each kind of part offers besides its drag: groups of values (the pose's field, [value, label]) or a turn.
-const PZ_OPTS = {
-  hand: {hint: '', groups: [
-    {label: 'Mano', key: 'k', vals: [[1, 'Pugno'], [.55, 'Socchiusa'], [0, 'Aperta']]},
-    {label: 'Palmo', key: 'roll', vals: [[0, 'Giù'], [90, 'Di lato'], [180, 'Su']]},
-    {label: 'Polso', key: 'wrist', vals: [[-50, 'Avanti'], [0, 'Dritto'], [70, 'Indietro']]}]},
-  foot: {hint: '', groups: [
-    {label: 'Tallone', key: 'heel', vals: [[0, 'Giù'], [15, 'Su'], [30, 'Punta']]},
-    {label: 'In aria', key: 'toe', vals: [[45, 'Punta tesa'], [15, 'Normale'], [-5, 'Martello']]},
-    {label: 'Gira', turn: true}]},
-  elbow: {hint: 'Trascina il gomito: sceglie da che parte si piega il braccio.', groups: []},
-  chest: {hint: 'Trascina per piegarlo.', groups: [{label: 'Gira il busto', turn: true}]},
-  hips: {hint: 'Trascina per spostarlo o abbassarlo.', groups: [{label: 'Gira il bacino', turn: true}]},
-  head: {hint: 'Trascina il punto: è dove guarda.', groups: [{label: 'Gira', turn: true}]},
-  all: {hint: 'Trascina il punto a terra: sposta tutto Ren.', groups: []},
-};
-const PZ_KEY = 'pose-ren-v1';   // localStorage: {id, doc} of the animation open on this device
-const pzV = () => new THREE.Vector3();
+const PZ_HANDS = [['pugno', 'Pugno', 1], ['socchiusa', 'Socchiusa', .55], ['aperta', 'Aperta', 0]];   // [name, label, how closed]
+const PZ_GUARD = {bA: 'guardia', mA: 'pugno', bD: 'guardia', mD: 'socchiusa', gA: 'terra', gD: 'terra', busto: 'dritto', alt: 'normale'};   // the kit's guard
+const PZ_KEY = 'pose-ren-v2';   // localStorage: {id, doc} of the animation open on this device
 const pzClone = o => JSON.parse(JSON.stringify(o));
 const pzC = (x, a, b) => Math.max(a, Math.min(b, x));
-const pzW = a => Math.atan2(Math.sin(a), Math.cos(a));   // an angle back into -pi..pi
-const pzR = a => a.map(x => Math.round(x * 1000) / 1000);
-const pzPart = id => PZ_PARTS.find(p => p.id === id);
-
-// --- Poses: mixing, filling (a pose read back from the database is checked field by field), the one drawn now ---
-function pzMix(a, b, u) {
-  if (typeof a === 'number') return a + (b - a) * u;
-  if (Array.isArray(a)) return a.map((x, i) => x + (b[i] - x) * u);
-  const o = {};
-  for (const k in a) o[k] = typeof a[k] === 'string' ? a[k] : pzMix(a[k], b[k], u);
-  if (o.e) { const l = Math.hypot(o.e[0], o.e[1], o.e[2]) || 1; o.e = o.e.map(x => x / l); }   // (the elbow's way stays a way)
-  return o;
-}
+const pzSame = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const pzNew0 = () => Object.assign({}, PZ_GUARD, {note: ''});
+// a pose read back (the database's or this device's): each choice checked against the row's values
 function pzFill(p) {
-  const o = pzClone(PZ.guard); o.note = '';
+  const o = pzNew0();
   if (!p || typeof p !== 'object') return o;
-  for (const k of ['b', 'h', 'L', 'R', 'fL', 'fR']) {
-    const src = p[k];
-    if (!src || typeof src !== 'object') continue;
-    for (const j in o[k]) {
-      const v = src[j];
-      if (typeof o[k][j] === 'number' && typeof v === 'number' && isFinite(v)) o[k][j] = v;
-      else if (Array.isArray(o[k][j]) && Array.isArray(v) && v.length === 3 && v.every(x => typeof x === 'number' && isFinite(x))) o[k][j] = v.slice();
-    }
+  for (const r of PZ_ROWS) {
+    if (r.vals && r.vals.some(v => v[0] === p[r.key])) o[r.key] = p[r.key];
+    if (r.hands) for (const [k] of r.hands) if (PZ_HANDS.some(h => h[0] === p[k])) o[k] = p[k];
   }
   if (typeof p.note === 'string') o.note = p.note.slice(0, 300);
   return o;
 }
-// The pose of fighter state F: the edited one, or while it plays the mix of two (cached per frame and pose version).
-function pzNow(F) {
-  const c = PZ.now;
-  if (c.af === F.af && c.v === PZ.ver) return c.P;
-  const n = PZ.poses.length;
-  c.P = !PZ.guard || !n ? PZ.base : PZ.play && n > 1 ? pzPlayAt(F.af - PZ.play.f0) : PZ.poses[Math.min(PZ.cur, n - 1)];
-  c.af = F.af; c.v = PZ.ver;
-  return c.P;
+
+// --- What a pose asks of the body: the style (on top of the kit's base guard), the feet, the arms' positions ---
+function pzBody(c) {
+  const b = {yaw: 0, chest: 0, leanL: 0, lx: 0, dip: 0, head: 0, jump: 0};
+  if (c.busto === 'avanti') { b.leanL += 16; b.lx += .04; b.dip += .015; }
+  else if (c.busto === 'indietro') { b.leanL -= 14; b.lx -= .05; }
+  if (c.alt === 'basso') b.dip += .13; else if (c.alt === 'alto') b.dip -= .07;
+  // a straight arm: its shoulder in (the kit's palm: hips -20, chest -25, 10 cm on); both: square to him (the double palm)
+  const sA = c.bA === 'avanti', sD = c.bD === 'avanti';
+  if (sA && sD) { b.yaw += 4; b.chest += 6; b.lx += .05; }
+  else if (sA) { b.yaw -= 18; b.chest -= 22; b.lx += .07; }
+  else if (sD) { b.yaw += 20; b.chest += 26; b.lx += .07; }
+  // a kick leans him away from it and lifts him on the standing leg (the kit's kick: -34 degrees, 17 cm up); a knee less
+  if (c.gA === 'calcio') { b.leanL -= 26; b.dip -= .15; b.yaw -= 5; b.lx -= .08; }
+  else if (c.gA === 'ginocchio') { b.leanL -= 4; b.dip -= .06; b.lx -= .03; }
+  if (c.gD === 'calcio') { b.leanL -= 22; b.dip -= .12; b.yaw -= 25; b.chest += 10; b.lx += .1; }   // (the rear hip comes forward)
+  else if (c.gD === 'ginocchio') { b.leanL -= 2; b.dip -= .05; b.lx += .03; }
+  if (c.gA !== 'terra' && c.gD !== 'terra') b.jump = .35;   // both feet off the floor: a jump
+  b.leanL = pzC(b.leanL, -42, 32);
+  b.head = -.5 * b.leanL;   // (the eyes stay on the opponent)
+  return b;
+}
+// the feet: along the line (m, from the guard's spot), up, the heel (deg), the turn on the tip (deg), the toes' point in
+// the air (deg: > 0 pointed, < 0 flexed, the sole forward: the kit's kick strikes with it) and how much in the air (0..1)
+function pzFeet(c, b) {
+  const F = {L: {x: 0, up: 0, heel: 0, yaw: 0, point: 30, air: 0}, R: {x: 0, up: 0, heel: 0, yaw: 0, point: 30, air: 0}};
+  if (c.gA === 'ginocchio') Object.assign(F.L, {x: -.12, up: .5, point: 40, air: 1});
+  else if (c.gA === 'calcio') Object.assign(F.L, {x: .33, up: 1.02, point: -5, air: 1});
+  if (c.gD === 'ginocchio') Object.assign(F.R, {x: .55, up: .55, point: 40, air: 1});   // (the rear knee comes forward, up in front)
+  else if (c.gD === 'calcio') Object.assign(F.R, {x: 1.15, up: .9, point: -5, air: 1});
+  if (c.gA === 'calcio' && c.gD === 'terra') F.R.yaw = -30;   // the standing foot turned on its tip (the kit's)
+  if (c.gD === 'calcio' && c.gA === 'terra') F.L.yaw = -40;
+  if (b.jump) { F.L.up += b.jump; F.R.up += b.jump; }
+  return F;
+}
+// The arms' positions, as the kit's poses are: (A, hand) -> {p: wrist, f: fingers' way, n: palm's way, e: elbow
+// hint, s: 1 a straight wrist (the fist continues the forearm)}. A: the kit's frames (l: along the fight line
+// [forward, up, side], c: the chest's [across, up, forward]), shoulders sL / sR, the chest C1, the guard G.
+const PZ_UP = () => RB_UP.clone(), PZ_LN = () => RB_LINE.clone();
+const pzPalm = () => ({f: PZ_UP().addScaledVector(RB_LINE, .2).normalize(), n: PZ_LN().addScaledVector(RB_UP, -.12).normalize(), s: 0});   // the kit's palm strike
+const PZ_ARM = {
+  L: {
+    guardia: (A, h) => Object.assign({p: A.G.L.p, e: A.G.L.e}, h === 'aperta' ? {f: A.l([.55, .8, -.15]).normalize(), n: A.l([0, -.2, -1]).normalize(), s: 0} : {f: A.G.L.f, n: A.G.L.n, s: 0}),
+    avanti: (A, h) => Object.assign({p: A.sL.clone().addScaledVector(RB_LINE, .965 * A.armL), e: A.l([0, -1, .3]).normalize()}, h === 'aperta' ? pzPalm() : {f: PZ_LN(), n: PZ_UP().negate(), s: 1}),
+    alto: (A, h) => Object.assign({p: A.l([.2, .33, -.02]).add(A.sL), e: A.l([.35, -1, .55]).normalize()}, h === 'aperta' ? {f: PZ_UP().addScaledVector(RB_LINE, .15).normalize(), n: PZ_LN(), s: 0} : {f: PZ_UP(), n: A.l([0, 0, -1]), s: 1}),
+    viso: (A, h) => h === 'aperta' ? {p: A.l([.18, .2, -.04]).add(A.sL), e: A.l([.15, -1, .25]).normalize(), f: PZ_UP(), n: PZ_LN(), s: 0}   // (the kit's cover)
+      : {p: A.l([.2, .16, -.08]).add(A.sL), e: A.l([.2, -1, .3]).normalize(), f: A.l([.3, 1, 0]).normalize(), n: A.l([0, 0, -1]), s: 1},
+  },
+  R: {
+    guardia: (A) => ({p: A.G.R.p, e: A.G.R.e, f: A.G.R.f, n: A.G.R.n, s: 0}),
+    avanti: (A, h) => Object.assign({p: A.sR.clone().addScaledVector(RB_LINE, .965 * A.armR).addScaledVector(RB_UP, -.06), e: A.c([-.2, -1, -.1]).normalize()}, h === 'aperta' ? pzPalm() : {f: PZ_LN(), n: PZ_UP().negate(), s: 1}),
+    alto: (A, h) => Object.assign({p: A.l([.22, .31, .05]).add(A.sR), e: A.c([-.8, -.45, .1]).normalize()}, h === 'aperta' ? {f: PZ_UP(), n: PZ_LN(), s: 0} : {f: PZ_UP(), n: A.c([1, 0, 0]), s: 1}),
+    viso: (A, h) => h === 'aperta' ? {p: A.c([-.17, .2, .12]).add(A.C1), e: A.c([-.3, -1, -.1]).normalize(), f: PZ_UP().addScaledVector(RB_LINE, .1).normalize(), n: PZ_LN(), s: 0}   // (the kit's rHead)
+      : {p: A.c([-.04, .26, .2]).add(A.C1), e: A.c([-.4, -1, -.2]).normalize(), f: A.c([1, .4, .2]).normalize(), n: A.c([0, 0, -1]), s: 0},   // (the kit's rChin)
+  },
+};
+// A pose's numbers (body, feet, and per arm the weight of each position|hand), so two poses mix and a pose eases
+// into another: every change is continuous.
+function pzTarget(c) {
+  const b = pzBody(c);
+  return {b, f: pzFeet(c, b), arm: {L: {[c.bA + '|' + c.mA]: 1}, R: {[c.bD + '|' + c.mD]: 1}}};
+}
+function pzMixT(a, b, u) {
+  const num = (x, y) => { const o = {}; for (const k in x) o[k] = x[k] + (y[k] - x[k]) * u; return o; };
+  const w = (x, y) => { const o = {}; for (const k in x) o[k] = x[k] * (1 - u); for (const k in y) o[k] = (o[k] || 0) + y[k] * u; for (const k in o) if (o[k] < 1e-4) delete o[k]; return o; };
+  return {b: num(a.b, b.b), f: {L: num(a.f.L, b.f.L), R: num(a.f.R, b.f.R)}, arm: {L: w(a.arm.L, b.arm.L), R: w(a.arm.R, b.arm.R)}};
+}
+// the pose drawn at fighter state F: while playing, the mix of two poses; else the pose being edited, reached from
+// wherever the drawing was over PZ.ease frames (a tap in the middle of a change does not jump)
+function pzDrawn(F) {
+  const P = PZ.poses;
+  if (!P.length) return pzTarget(PZ_GUARD);
+  if (F.af === PZ.Daf && PZ.D && PZ.Dv === PZ.ver) return PZ.D;
+  let D;
+  if (PZ.play && P.length > 1) D = pzPlayAt(F.af - PZ.play.f0);
+  else {
+    const T = pzTarget(P[Math.min(PZ.cur, P.length - 1)]);
+    if (PZ.D && PZ.Dv !== PZ.ver) PZ.tr = {from: PZ.D, f0: F.af};   // (a change: it starts here)
+    const tr = PZ.tr;
+    if (tr && F.af < tr.f0) tr.f0 = F.af;
+    const u = tr ? rnSm((F.af - tr.f0) / PZ.ease) : 1;
+    D = u >= 1 ? T : pzMixT(tr.from, T, u);
+    if (u >= 1) PZ.tr = null;
+  }
+  PZ.D = D; PZ.Daf = F.af; PZ.Dv = PZ.ver;
+  return D;
 }
 // Playing: pose 1 to 2 to ... n, PZ.T frames each (from rest to rest: each key pose is reached and seen), held on the
 // last, then back to the first and held there; again.
 function pzPlayAt(t) {
   const P = PZ.poses, n = P.length, run = (n - 1) * PZ.T, len = run + PZ.hold + PZ.back + PZ.rest, at = PZ.play.at;
   t = ((t % len) + len) % len;
-  if (t < run) { const i = Math.min(n - 2, Math.floor(t / PZ.T)), u = rnSm((t - i * PZ.T) / PZ.T); at.a = i; at.b = i + 1; at.back = false; return pzMix(P[i], P[i + 1], u); }
+  if (t < run) { const i = Math.min(n - 2, Math.floor(t / PZ.T)); at.a = i; at.b = i + 1; at.back = false; return pzMixT(pzTarget(P[i]), pzTarget(P[i + 1]), rnSm((t - i * PZ.T) / PZ.T)); }
   t -= run;
-  if (t < PZ.hold) { at.a = at.b = n - 1; at.back = false; return P[n - 1]; }
+  if (t < PZ.hold) { at.a = at.b = n - 1; at.back = false; return pzTarget(P[n - 1]); }
   t -= PZ.hold;
-  if (t < PZ.back) { at.a = n - 1; at.b = 0; at.back = true; return pzMix(P[n - 1], P[0], rnSm(t / PZ.back)); }
+  if (t < PZ.back) { at.a = n - 1; at.b = 0; at.back = true; return pzMixT(pzTarget(P[n - 1]), pzTarget(P[0]), rnSm(t / PZ.back)); }
   at.a = at.b = 0; at.back = true;
-  return P[0];
+  return pzTarget(P[0]);
 }
 
-// --- The act: style, feet, arms, head, kicking legs, hands ---
+// --- The act: style, feet, arms, head, the legs in the air, hands ---
 RB.pin.posa = 1;
 RB.styleFor.posa = (y, F) => {
-  const P = pzNow(F), b = P.b;
-  y.yaw = b.yaw; y.chest = b.chest; y.leanL = b.leanL; y.leanS = b.leanS; y.lx = b.lx; y.lz = b.lz; y.dip = .004 + b.dip; y.head = P.h.nod;
+  const b = pzDrawn(F).b;
+  y.yaw = b.yaw; y.chest = b.chest; y.leanL = b.leanL; y.lx = b.lx; y.dip = .004 + b.dip - b.jump; y.head = b.head;
   rkBase(y);
 };
-// a foot in the air (by its height) leaves its heel to the leg (rkKickLeg below sets it against the shin)
-const pzAir = f => rnSm((f.up - .03) / .12);
 RB.feetFor.posa = (s, c, st, L, F) => {
-  const f = pzNow(F)['f' + s];
-  rkFoot(s, c, st, L, f.heel * (1 - pzAir(f)), f.yaw, f.x, f.up, 0);
-  if (f.z) c.G.addScaledVector(RB_SIDE, f.z);
+  const f = pzDrawn(F).f[s];
+  rkFoot(s, c, st, L, f.heel * (1 - f.air), f.yaw, f.x, f.up, 0);   // (in the air the leg sets the foot: rkKickLeg below)
 };
-// Arm s of pose p to hand A (a pose's L or R). First where the arm goes (the hand's own way does not change it): the
-// forearm's frame from it, x along the forearm, y toward the elbow's side, z its hinge (a frame that exists for any
-// arm: the elbow is never on the forearm's line). Then the palm rolled about the forearm and bent at the wrist in that
-// frame, and the arm solved again from where it was, with that hand.
-function pzArm(md, p, s, A) {
-  const T = THREE, ix = md.index, n = s === 'L' ? 'Left' : 'Right', iA = ix[n + 'Arm'], iF = ix[n + 'ForeArm'], iH = ix[n + 'Hand'];
-  let W = rbFK(md, p, RB.W);
-  const qC = W.q[ix.Spine01].clone(), sh = W.p[iA].clone();
-  const tgt = new T.Vector3().fromArray(A.p).applyQuaternion(qC).add(sh), eh = new T.Vector3().fromArray(A.e).applyQuaternion(qC).normalize();
-  const keep = [iA, iF, iH].map(i => [i, Array.from(p.q.slice(i * 4, i * 4 + 4))]);
-  rsArm(md, p, W, s, tgt, eh, eh, eh, 1, 1);
-  W = rbFK(md, p, RB.W);
-  const Ap = W.p[iA], E = W.p[iF], H = W.p[iH], dir = H.clone().sub(Ap).normalize(), Pe = E.clone().sub(Ap);
-  Pe.addScaledVector(dir, -Pe.dot(dir));
-  const ax = H.clone().sub(E).normalize(), y = Pe.addScaledVector(ax, -Pe.dot(ax)).normalize(), z = new T.Vector3().crossVectors(ax, y);
-  const r = A.roll * RB_R, w = A.wrist * RB_R, sg = s === 'L' ? -1 : 1;
-  const n0 = y.clone().multiplyScalar(Math.cos(r)).addScaledVector(z, sg * Math.sin(r));
-  const nn = n0.clone().multiplyScalar(Math.cos(w)).addScaledVector(ax, Math.sin(w)), ff = ax.clone().multiplyScalar(Math.cos(w)).addScaledVector(n0, -Math.sin(w));
-  for (const [i, q] of keep) for (let k = 0; k < 4; k++) p.q[i * 4 + k] = q[k];
-  rsArm(md, p, rbFK(md, p, RB.W), s, tgt, eh, ff, nn, 1, 0);
-  return {ax, y, z, sg};
-}
-// The base guard in these numbers (the kit's guard: the lead fist straight out, the rear hand half closed on the
-// stomach), from the first pose drawn; the first pose of a new animation.
-function pzMakeGuard(md, p) {
-  const T = THREE, W = rbFK(md, p, RB.W), ix = md.index, C1 = W.p[ix.Spine01].clone(), qi = W.q[ix.Spine01].clone().invert();
-  const l = a => rsVec(a, new T.Vector3()), c = a => rsChest(md, W, a, new T.Vector3());
-  const sh = {L: W.p[ix.LeftArm].clone(), R: W.p[ix.RightArm].clone()};
-  const armL = sh.L.distanceTo(W.p[ix.LeftForeArm]) + W.p[ix.LeftForeArm].distanceTo(W.p[ix.LeftHand]);
-  const G = {L: {p: l(RS.lead.dir).normalize().multiplyScalar(RS.lead.reach * armL).add(sh.L), n: l(RS.lead.palm).normalize(), e: l(RS.lead.elbow).normalize(), k: RK_HAND.fist},
-    R: {p: c(RS.rear.pos).add(C1), n: c(RS.rear.palm).normalize(), e: c(RS.rear.elbow).normalize(), k: RK_HAND.rear}};
-  const g = pzClone(PZ.base);
-  for (const s of ['L', 'R']) {
-    const A = G[s];
-    g[s] = {p: pzR(A.p.clone().sub(sh[s]).applyQuaternion(qi).toArray()), e: pzR(A.e.clone().applyQuaternion(qi).toArray()), k: A.k, roll: 0, wrist: 0};
-    const fr = pzArm(md, p, s, g[s]), nv = A.n.clone().addScaledVector(fr.ax, -A.n.dot(fr.ax));   // the guard's palm, about the forearm it takes
-    g[s].roll = Math.round(Math.atan2(nv.dot(fr.z) * fr.sg, nv.dot(fr.y)) / RB_R);
-    g[s].wrist = Math.round(Math.asin(pzC(A.n.dot(fr.ax), -1, 1)) / RB_R);
-  }
-  g.L.roll = 90; g.L.wrist = 0;   // (the lead fist as the buttons name it: palm in, wrist straight; it comes out at 101 and 1)
-  PZ.guard = g;
-  // the head's own axes (its look and its up, in its bone's frame): the rest pose faces +z
-  const R = rbFK(md, mdRest(md), rbSpace(md.nb)), qh = R.q[ix.Head].clone().invert();
-  PZ.hFwd = new T.Vector3(0, 0, 1).applyQuaternion(qh); PZ.hUp = new T.Vector3(0, 1, 0).applyQuaternion(qh);
-  if (!PZ.poses.length) PZ.poses = [pzClone(g)];
-  if (PZ.pending) { const d = PZ.pending; PZ.pending = null; pzLoad(d.id, d.doc, true); }
-  PZ.ver++; PZ.ui.dirty = true;
+// where a two-bone arm from shoulder sh, its wrist at tgt, puts its elbow for hint e (upper and lower lengths a, b),
+// as rsArm does (the chest's own push left out): a point, so that two can be mixed
+function pzElbow(sh, tgt, e, a, b) {
+  const dir = tgt.clone().sub(sh), full = dir.length(), d = pzC(full, Math.abs(a - b) + 1e-3, (a + b) * .995);
+  dir.multiplyScalar(1 / (full || 1e-9));
+  const P = e.clone().addScaledVector(dir, -e.dot(dir));
+  if (P.lengthSq() < 1e-8) P.set(0, -1, 0).addScaledVector(dir, dir.y);
+  P.normalize();
+  const cos = (a * a + d * d - b * b) / (2 * a * d), sin = Math.sqrt(Math.max(0, 1 - cos * cos));
+  return sh.clone().addScaledVector(dir, a * cos).addScaledVector(P, a * sin);
 }
 RB.post.push((md, p, F) => {
   if (F.act !== 'posa' || F.air) return;
-  if (!PZ.guard) pzMakeGuard(md, p);
-  const P = pzNow(F), ix = md.index;
-  pzArm(md, p, 'L', P.L); pzArm(md, p, 'R', P.R);
-  mdBoneTurn(p, ix.Head, MD_Y, RK.g.headYaw + P.h.yaw);   // (the nod: the style's)
-  for (const s of ['L', 'R']) { const f = P['f' + s], air = pzAir(f); if (air > 0) rkKickLeg(md, p, {s, pole: [1, 1, 0], point: f.toe, air}, 0); }
-  // where the parts are now (model space): the handles and the drags start from here
-  const W = rbFK(md, p, RB.W), V = pzV;
-  const k = PZ.fk || (PZ.fk = {w: {L: V(), R: V()}, e: {L: V(), R: V()}, sh: {L: V(), R: V()}, ank: {L: V(), R: V()}, hip: {L: V(), R: V()},
-    arm: {}, leg: {}, chest: V(), hips: V(), hp: V(), gaze: V(), qC: new THREE.Quaternion(), t: V()});
-  for (const s of ['L', 'R']) {
-    const n = s === 'L' ? 'Left' : 'Right', L = RB.leg[s];
-    k.w[s].copy(W.p[ix[n + 'Hand']]); k.e[s].copy(W.p[ix[n + 'ForeArm']]); k.sh[s].copy(W.p[ix[n + 'Arm']]);
-    k.arm[s] = k.sh[s].distanceTo(k.e[s]) + k.e[s].distanceTo(k.w[s]);
-    k.ank[s].copy(W.p[L.ia]); k.hip[s].copy(W.p[L.iu]); k.leg[s] = L.a + L.b;
+  const D = pzDrawn(F), W = rbFK(md, p, RB.W), ix = md.index, C1 = W.p[ix.Spine01].clone();
+  const c = a => rsChest(md, W, a, new THREE.Vector3()), l = a => rsVec(a, new THREE.Vector3());
+  const sL = W.p[ix.LeftArm].clone(), sR = W.p[ix.RightArm].clone();
+  const armL = sL.distanceTo(W.p[ix.LeftForeArm]) + W.p[ix.LeftForeArm].distanceTo(W.p[ix.LeftHand]);
+  const armR = sR.distanceTo(W.p[ix.RightForeArm]) + W.p[ix.RightForeArm].distanceTo(W.p[ix.RightHand]);
+  const G = {L: {p: l(RS.lead.dir).normalize().multiplyScalar(RS.lead.reach * armL).add(sL), f: l(RS.lead.fing).normalize(), n: l(RS.lead.palm).normalize(), e: l(RS.lead.elbow).normalize()},
+    R: {p: c(RS.rear.pos).add(C1), f: c(RS.rear.fing).normalize(), n: c(RS.rear.palm).normalize(), e: c(RS.rear.elbow).normalize()}};
+  const A = {W, ix, C1, c, l, sL, sR, armL, armR, G};
+  for (const s of ['L', 'R']) {   // each arm: its positions mixed by their weights (one, but while it changes)
+    const t = {p: new THREE.Vector3(), f: new THREE.Vector3(), n: new THREE.Vector3(), e: new THREE.Vector3(), s: 0};
+    const sh = s === 'L' ? sL : sR, n = s === 'L' ? 'Left' : 'Right', ua = sh.distanceTo(W.p[ix[n + 'ForeArm']]), la = W.p[ix[n + 'ForeArm']].distanceTo(W.p[ix[n + 'Hand']]);
+    const all = Object.entries(D.arm[s]).map(([k, w]) => { const [pos, hand] = k.split('|'); return {w, a: PZ_ARM[s][pos](A, hand)}; });
+    let best = all[0];
+    for (const x of all) {
+      const {a, w} = x;
+      t.p.addScaledVector(a.p, w); t.f.addScaledVector(a.f, w); t.n.addScaledVector(a.n, w); t.e.addScaledVector(a.e, w); t.s += a.s * w;
+      if (w > best.w) best = x;
+    }
+    for (const k of ['f', 'n', 'e']) { if (t[k].lengthSq() < 1e-6) t[k].copy(best.a[k]); t[k].normalize(); }   // (two ways that cancel: the stronger one)
+    if (all.length > 1) {
+      // between two positions the elbow turns about the arm's line by the mixed angle of where each puts it, from its
+      // outer side: it goes round by the side, as an arm that rises does (the hints' ways mixed can lie along the arm
+      // half way, and the elbow would swing round it at once)
+      const dir = t.p.clone().sub(sh).normalize(), r0 = c([s === 'L' ? 1 : -1, -.5, 0]).normalize();
+      r0.addScaledVector(dir, -r0.dot(dir));
+      if (r0.lengthSq() < 1e-4) r0.copy(c([0, 0, 1])).addScaledVector(dir, -c([0, 0, 1]).dot(dir));
+      r0.normalize();
+      const r1 = new THREE.Vector3().crossVectors(dir, r0), ang = x => { const v = pzElbow(sh, x.a.p, x.a.e, ua, la).sub(sh); return Math.atan2(v.dot(r1), v.dot(r0)); };
+      const a0 = ang(best);
+      let sum = 0;
+      for (const x of all) { const d = ang(x) - a0; sum += x.w * (a0 + Math.atan2(Math.sin(d), Math.cos(d))); }
+      t.e.copy(r0).multiplyScalar(Math.cos(sum)).addScaledVector(r1, Math.sin(sum));
+    }
+    rsArm(md, p, rbFK(md, p, RB.W), s, t.p, t.e, t.f, t.n, 1, t.s);
   }
-  k.chest.copy(W.p[ix.Spine]); k.hips.copy(W.p[ix.Hips]); k.qC.copy(W.q[ix.Spine01]);   // (the rig's spine: Hips, Spine02, Spine01, Spine, up)
-  k.hp.copy(W.p[ix.Head]).addScaledVector(k.t.copy(PZ.hUp).applyQuaternion(W.q[ix.Head]), .07);
-  k.gaze.copy(k.hp).addScaledVector(k.t.copy(PZ.hFwd).applyQuaternion(W.q[ix.Head]), .3);
+  mdBoneTurn(p, ix.Head, MD_Y, RK.g.headYaw);   // the eyes on the opponent (the nod: the style's)
+  for (const s of ['L', 'R']) { const f = D.f[s]; if (f.air > 0) rkKickLeg(md, p, {s, pole: [1, 1, 0], point: f.point, air: f.air}, 0); }
 });
-RN.hooks.applied.push((it, F) => {   // the hands: open with the fingers together (and the thumb along them), half closed, a fist
-  if (!it.fingers || F.act !== 'posa' || !PZ.guard) return;
-  const P = pzNow(F);
-  for (let i = 0; i < it.fingers.length; i++) rkSetFinger(it, i, (/^Left/.test(it.fingers[i].name) ? P.L : P.R).k, true);
+RN.hooks.applied.push((it, F) => {   // the hands: a fist, half closed, open (fingers together, the thumb along them)
+  if (!it.fingers || F.act !== 'posa') return;
+  const D = pzDrawn(F), k = {L: 0, R: 0};
+  for (const s of ['L', 'R']) for (const [key, w] of Object.entries(D.arm[s])) k[s] += w * PZ_HANDS.find(h => h[0] === key.split('|')[1])[2];
+  for (let i = 0; i < it.fingers.length; i++) rkSetFinger(it, i, /^Left/.test(it.fingers[i].name) ? k.L : k.R, true);
 });
 
-// --- Editing: a part's handle where the part is, a drag in the camera's plane, its model-space move on the pose ---
-function pzModel(id) {
-  const k = PZ.fk;
-  if (!k) return null;
-  switch (id) {
-    case 'head': return k.gaze.clone();
-    case 'chest': return k.chest.clone();
-    case 'hips': return k.hips.clone().addScaledVector(RB_UP, -.1);   // (a little low: the rear hand rests just above the pelvis)
-    case 'hL': case 'hR': return k.w[id[1]].clone();
-    case 'eL': case 'eR': return k.e[id[1]].clone();
-    case 'fL': case 'fR': return k.ank[id[1]].clone();
-    case 'all': return new THREE.Vector3(k.hips.x, 0, k.hips.z);
-  }
-  return null;
-}
-function pzCtx() {
-  const k = PZ.fk, two = o => ({L: o.L.clone(), R: o.R.clone()});
-  return {qi: k.qC.clone().invert(), sh: two(k.sh), e: two(k.e), w: two(k.w), ank: two(k.ank), hip: two(k.hip), arm: {L: k.arm.L, R: k.arm.R}, leg: {L: k.leg.L, R: k.leg.R},
-    chest: k.chest.clone(), hips: k.hips.clone(), hp: k.hp.clone(), gaze: k.gaze.clone()};
-}
-// Pose P0 with part id moved by d (model space, m), x = where the parts were (pzCtx): a new pose.
-function pzApply(id, P0, d, x) {
-  const P = pzClone(P0), L = RB_LINE, S = RB_SIDE, deg = 1 / RB_R, s = id[1];
-  if (id === 'hL' || id === 'hR') {   // the wrist, in the chest's frame, within the arm's reach
-    const v = pzV().fromArray(P0[s].p).add(d.clone().applyQuaternion(x.qi)), n = v.length(), hi = .99 * x.arm[s];
-    if (n > hi) v.multiplyScalar(hi / n); else if (n < .1 && n > 1e-6) v.multiplyScalar(.1 / n);
-    P[s].p = pzR(v.toArray());
-  } else if (id === 'eL' || id === 'eR') {   // the elbow's side: where the pointer is about the shoulder-wrist line
-    const ax = x.w[s].clone().sub(x.sh[s]).normalize(), v = x.e[s].clone().add(d).sub(x.sh[s]);
-    v.addScaledVector(ax, -v.dot(ax));   // (only its way off that line: along it, it would turn the arm's later moves)
-    if (v.lengthSq() > 1e-8) P[s].e = pzR(v.normalize().applyQuaternion(x.qi).toArray());
-  } else if (id === 'chest') {   // the upper body tipped about the pelvis: toward the opponent, and sideways
-    const v0 = x.chest.clone().sub(x.hips), v1 = v0.clone().add(d), aL = a => Math.atan2(a.dot(L), a.y), aS = a => Math.atan2(a.dot(S), a.y);
-    P.b.leanL = pzC(P0.b.leanL + pzW(aL(v1) - aL(v0)) * deg, -60, 75);
-    P.b.leanS = pzC(P0.b.leanS - pzW(aS(v1) - aS(v0)) * deg, -45, 45);
-  } else if (id === 'hips') {
-    P.b.lx = pzC(P0.b.lx + d.dot(L), -2, 2); P.b.lz = pzC(P0.b.lz + d.dot(S), -2, 2); P.b.dip = pzC(P0.b.dip - d.y, -.15, .6);
-  } else if (id === 'fL' || id === 'fR') {   // the ankle: never under the floor, within the leg's reach
-    const f0 = P0['f' + s], f = P['f' + s], a = x.ank[s].clone().add(d), up = f0.up + d.y;
-    if (up < 0) a.y -= up;
-    const r = a.clone().sub(x.hip[s]), n = r.length(), max = .96 * x.leg[s];
-    if (n > max) a.copy(x.hip[s]).addScaledVector(r, max / n);
-    const dd = a.sub(x.ank[s]);
-    f.x = pzC(f0.x + dd.dot(L), -2.5, 2.5); f.z = pzC(f0.z + dd.dot(S), -2, 2); f.up = pzC(f0.up + dd.y, 0, 1.3);
-  } else if (id === 'all') {   // the pelvis and both feet along the floor
-    const dx = d.dot(L), dz = d.dot(S);
-    P.b.lx = pzC(P0.b.lx + dx, -2, 2); P.b.lz = pzC(P0.b.lz + dz, -2, 2);
-    for (const k of ['fL', 'fR']) { P[k].x = pzC(P0[k].x + dx, -2.5, 2.5); P[k].z = pzC(P0[k].z + dz, -2, 2); }
-  } else if (id === 'head') {   // the head turned and nodded to look at the dragged point
-    const v0 = x.gaze.clone().sub(x.hp), v1 = v0.clone().add(d), el = a => Math.atan2(a.y, Math.hypot(a.x, a.z));
-    P.h.yaw = pzC(P0.h.yaw + PZ.ySign * pzW(Math.atan2(v1.x, v1.z) - Math.atan2(v0.x, v0.z)) * deg, -80, 80);
-    P.h.nod = pzC(P0.h.nod - PZ.nSign * (el(v1) - el(v0)) * deg, -50, 50);
-  }
-  return P;
-}
+// --- Editing: a choice, the hands, the poses ---
 function pzPush() {
   PZ.undo.push({poses: pzClone(PZ.poses), cur: PZ.cur});
   if (PZ.undo.length > 80) PZ.undo.shift();
 }
-function pzSet(P) { PZ.poses[PZ.cur] = P; PZ.ver++; }
 function pzStop() { if (PZ.play) pzPlay(); }
-// the pointer on the plane (camera's ray)
-function pzRay(sx, sy, plane) {
-  const rc = PZ.rc || (PZ.rc = new THREE.Raycaster());
-  rc.setFromCamera(new THREE.Vector2(sx / innerWidth * 2 - 1, 1 - sy / innerHeight * 2), VW.camera);
-  return rc.ray.intersectPlane(plane, pzV());
-}
-function pzDown(e) {
-  if (PZ.drag || !PZ.fk || !PZ.guard) return;
-  e.preventDefault(); e.stopPropagation();
-  pzStop();
-  let id = e.currentTarget.dataset.id, best = 1e9;   // (handles that overlap: the nearest, the selected one first)
-  for (const part of PZ_PARTS) {
-    const q = PZ.scr[part.id];
-    if (!q) continue;
-    const d = Math.hypot(q.x - e.clientX, q.y - e.clientY) - (part.id === PZ.sel ? 8 : 0);
-    if (d < best && d < 26) { best = d; id = part.id; }
-  }
-  try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { /* (not capturable: the window's listeners still follow it) */ }
-  pzSelect(id);
-  const it = VW.it, M = it.body.matrixWorld, w = pzModel(id).applyMatrix4(M);
-  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(VW.camera.getWorldDirection(pzV()), w);
-  pzPush();
-  PZ.drag = {id, pid: e.pointerId, plane, hit0: pzRay(e.clientX, e.clientY, plane) || w, Mi: M.clone().invert(), P0: pzClone(PZ.poses[PZ.cur]), x: pzCtx()};
-  PZ.el[id].classList.add('on');
-}
-function pzMove(e) {
-  const D = PZ.drag;
-  if (!D || e.pointerId !== D.pid) return;
-  const hit = pzRay(e.clientX, e.clientY, D.plane);
-  if (!hit) return;
-  const d = hit.applyMatrix4(D.Mi).sub(D.hit0.clone().applyMatrix4(D.Mi));
-  pzSet(pzApply(D.id, D.P0, d, D.x));
-}
-function pzUp(e) {
-  const D = PZ.drag;
-  if (!D || e.pointerId !== D.pid) return;
-  PZ.drag = null; PZ.el[D.id].classList.remove('on');
-  if (JSON.stringify(D.P0) === JSON.stringify(PZ.poses[PZ.cur])) PZ.undo.pop();   // (a tap: nothing moved)
-  else pzChanged();
-}
-// keys and controller: part sel moved by (dx, dy, dz) m along the camera's right, up and forward
-function pzNudge(dx, dy, dz, held) {
-  if (!PZ.fk || !PZ.guard || PZ.drag) return;
-  pzStop();
-  const now = performance.now();
-  if (!held || now - PZ.lastPush > 900) pzPush();
-  PZ.lastPush = now;
-  const cam = VW.camera, M = VW.it.body.matrixWorld, Mi = M.clone().invert();
-  const r = pzV().setFromMatrixColumn(cam.matrixWorld, 0), u = pzV().setFromMatrixColumn(cam.matrixWorld, 1), f = cam.getWorldDirection(pzV());
-  const w0 = pzModel(PZ.sel).applyMatrix4(M), w1 = w0.clone().addScaledVector(r, dx).addScaledVector(u, dy).addScaledVector(f, dz);
-  const d = w1.applyMatrix4(Mi).sub(w0.applyMatrix4(Mi));
-  pzSet(pzApply(PZ.sel, PZ.poses[PZ.cur], d, pzCtx()));
-  pzChanged();
-}
-// a value of the selected part (a button of its row), a turn (dir -1 / 1; 0 straight again)
-function pzOpt(key, v) {
-  const id = PZ.sel, P = PZ.poses[PZ.cur], o = id[0] === 'h' && id !== 'hips' && id !== 'head' ? P[id[1]] : id[0] === 'f' ? P[id] : null;
-  if (!o || o[key] === v) return;
+function pzChoose(key, v) {
+  const P = PZ.poses[PZ.cur];
+  if (!P || P[key] === v) return;
   pzStop(); pzPush();
-  const N = pzClone(P);
-  (id[0] === 'f' ? N[id] : N[id[1]])[key] = v;
-  pzSet(N); pzChanged();
+  P[key] = v; pzChanged();
 }
-function pzTurn(dir) {
-  const id = PZ.sel, P = pzClone(PZ.poses[PZ.cur]), t = PZ.turn * dir, kind = pzPart(id).kind;
-  const go = (o, k, lim) => { o[k] = dir ? pzC(Math.round(o[k] + t), -lim, lim) : 0; };
-  if (kind === 'chest') go(P.b, 'chest', 70);
-  else if (kind === 'hips') go(P.b, 'yaw', 90);
-  else if (kind === 'head') { if (dir) P.h.yaw = pzC(Math.round(P.h.yaw + t * PZ.ySign), -80, 80); else P.h.yaw = 0; }
-  else if (kind === 'foot') go(P[id], 'yaw', 60);
-  else if (kind === 'hand') { const h = P[id[1]]; h.roll = dir ? ((Math.round(h.roll / 45) * 45 + 45 * dir) % 360 + 360) % 360 : PZ.guard[id[1]].roll; if (h.roll > 180) h.roll -= 360; }
-  else return;
-  if (JSON.stringify(P) === JSON.stringify(PZ.poses[PZ.cur])) return;
-  pzStop(); pzPush(); pzSet(P); pzChanged();
+function pzHand(key, dir) {   // the next (or previous) hand: pugno, socchiusa, aperta, round again
+  const P = PZ.poses[PZ.cur];
+  if (!P) return;
+  const i = PZ_HANDS.findIndex(h => h[0] === P[key]);
+  pzChoose(key, PZ_HANDS[(i + (dir || 1) + PZ_HANDS.length) % PZ_HANDS.length][0]);
 }
-// the next value of one of the part's groups (keys and controller)
-function pzCycle(g) {
-  const part = pzPart(PZ.sel), o = PZ_OPTS[part.kind], grp = o.groups.filter(x => !x.turn)[g];
-  if (!grp) { pzTurn(g ? 1 : -1); return; }
-  const P = PZ.poses[PZ.cur], cur = (part.kind === 'foot' ? P[PZ.sel] : P[PZ.sel[1]])[grp.key];
-  let i = grp.vals.findIndex(v => Math.abs(v[0] - cur) < 1e-6);
-  pzOpt(grp.key, grp.vals[(i + 1) % grp.vals.length][0]);
+function pzStepRow(dir) {   // keys and controller: the selected row's previous or next choice
+  const r = PZ_ROWS[PZ.row], P = PZ.poses[PZ.cur];
+  if (!P) return;
+  if (r.hands) { pzHand(r.hands[dir < 0 ? 0 : 1][0]); return; }
+  const i = r.vals.findIndex(v => v[0] === P[r.key]);
+  pzChoose(r.key, r.vals[pzC(i + dir, 0, r.vals.length - 1)][0]);
 }
+function pzRowGo(dir) { PZ.row = (PZ.row + dir + PZ_ROWS.length) % PZ_ROWS.length; PZ.kb = true; PZ.ui.dirty = true; }
 function pzUndo() {
   const u = PZ.undo.pop();
   if (!u) { pzStatus('Niente da annullare'); return; }
   pzStop();
-  PZ.poses = u.poses; PZ.cur = Math.min(u.cur, u.poses.length - 1); PZ.ver++;
+  PZ.poses = u.poses; PZ.cur = Math.min(u.cur, u.poses.length - 1);
   pzChanged();
 }
 function pzGuard() {
-  if (!PZ.guard) return;
-  const P = pzClone(PZ.guard); P.note = PZ.poses[PZ.cur].note;
-  if (JSON.stringify(P) === JSON.stringify(PZ.poses[PZ.cur])) return;
-  pzStop(); pzPush(); pzSet(P); pzChanged();
+  const P = PZ.poses[PZ.cur];
+  if (!P) return;
+  const G = Object.assign({}, PZ_GUARD, {note: P.note});
+  if (pzSame(G, P)) return;
+  pzStop(); pzPush(); PZ.poses[PZ.cur] = G; pzChanged();
 }
 function pzGo(i) {
   if (!PZ.poses.length) return;
   pzStop();
-  const n = PZ.poses.length, j = Math.max(0, Math.min(n - 1, i));
+  const j = pzC(i, 0, PZ.poses.length - 1);
   if (j === PZ.cur) return;
   PZ.cur = j; PZ.ver++; PZ.ui.dirty = true;
 }
 function pzAdd() {
-  if (!PZ.guard) return;
   if (PZ.poses.length >= PZ.max) { pzStatus('Massimo ' + PZ.max + ' pose'); return; }
   pzStop(); pzPush();
-  const P = pzClone(PZ.poses[PZ.cur]); P.note = '';
+  const P = pzClone(PZ.poses[PZ.cur] || pzNew0()); P.note = '';
   PZ.poses.splice(PZ.cur + 1, 0, P); PZ.cur++; PZ.pop = PZ.cur;
   pzChanged();
 }
@@ -385,32 +286,31 @@ function pzDel() {
 }
 function pzPlay() {
   if (PZ.play) { PZ.play = null; PZ.ver++; PZ.ui.dirty = true; return; }
-  if (PZ.poses.length < 2) { pzStatus('Aggiungi almeno 2 pose per riprodurle'); return; }
-  if (PZ.drag) return;
+  if (PZ.poses.length < 2) { pzStatus('Fai almeno 2 pose («+ Posa») per riprodurle'); return; }
   PZ.play = {f0: VW.F.af + (RN_D.k || 0), at: {a: 0, b: 1, back: false}}; PZ.ver++; PZ.ui.dirty = true;
 }
-function pzView(k) { VW.yaw = F3_YAW - k * Math.PI / 4; PZ.view = k; PZ.ui.dirty = true; }   // 0 side, 1 three-quarters, 2 front
+function pzView() { const side = Math.abs(VW.yaw - F3_YAW) < .02; VW.yaw = side ? F3_YAW - Math.PI / 4 : F3_YAW; PZ.ui.dirty = true; }   // the game's side view, or three-quarters
 
 // --- Saving: the database (collection "animazioni"), this device, the data for Claude ---
+const PZ_LEGENDA = 'Pose di Ren, formato 2 (preview/ren-anim/mods/posa.js). Ogni posa sono le scelte: bA braccio avanti e bD braccio dietro '
+  + '(guardia, avanti, alto, viso), mA mano avanti e mD mano dietro (pugno, socchiusa, aperta), gA gamba avanti e gD gamba dietro '
+  + '(terra, ginocchio, calcio), busto (dritto, avanti, indietro), alt altezza (normale, basso, alto); note: le parole di Denis. '
+  + 'Avanti = il lato sinistro, quello davanti. Riproduci: 24 fotogrammi da una posa alla successiva.';
 function pzDoc() {
-  return {v: 1, name: PZ.name, note: PZ.note, frames: PZ.T, updated: Date.now(),
-    legenda: 'Pose di Ren (preview/ren-anim/mods/posa.js). Ogni posa sopra la guardia base, metri e gradi: b {yaw bacino, chest torsione busto, leanL piega verso l\'avversario, leanS piega di lato (+ verso la sua destra), lx avanti, lz di lato (+ sua sinistra), dip giù}; h {yaw, nod (< 0 mento su)}; L/R mano {p polso dalla spalla e e gomito, nel busto [sua sinistra, su, avanti]; k 0 aperta .. 1 pugno; roll palmo 0 giù 90 di lato 180 su; wrist polso > 0 indietro}; fL/fR piede {x avanti, z di lato, up su, heel tallone, yaw giro, toe punta in aria}. L = davanti, R = dietro.',
-    poses: PZ.poses.map(P => JSON.parse(JSON.stringify(P, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)))};
+  return {v: 2, name: PZ.name, note: PZ.note, frames: PZ.T, updated: Date.now(), legenda: PZ_LEGENDA, poses: pzClone(PZ.poses)};
 }
-function pzLoad(id, doc, keepUndo) {
-  if (!doc || !Array.isArray(doc.poses) || !doc.poses.length) return false;
-  if (!PZ.guard) { PZ.pending = {id, doc}; return true; }
+function pzLoad(id, doc) {
+  if (!doc || doc.v !== 2 || !Array.isArray(doc.poses) || !doc.poses.length) return false;
   PZ.id = id || null; PZ.name = typeof doc.name === 'string' && doc.name.trim() ? doc.name.slice(0, 60) : 'Animazione';
   PZ.note = typeof doc.note === 'string' ? doc.note.slice(0, 2000) : '';
-  PZ.poses = doc.poses.slice(0, PZ.max).map(pzFill); PZ.cur = 0; PZ.play = null;
-  if (!keepUndo) PZ.undo = [];
-  PZ.ver++; PZ.ui.dirty = true; PZ.ui.notes = true;
+  PZ.poses = doc.poses.slice(0, PZ.max).map(pzFill); PZ.cur = 0; PZ.play = null; PZ.undo = [];
+  PZ.ver++; PZ.ui.dirty = true;
   return true;
 }
 function pzLocal(doc) { try { localStorage.setItem(PZ_KEY, JSON.stringify({id: PZ.id, doc})); } catch (_) { /* (private window: the database alone) */ } }
 function pzChanged() {
   PZ.ver++; PZ.edited = true; PZ.ui.dirty = true;
-  clearTimeout(PZ.timer); PZ.timer = setTimeout(pzSave, 700);   // (a burst of edits: one write once they pause)
+  clearTimeout(PZ.timer); PZ.timer = setTimeout(pzSave, 700);   // (a burst of taps: one write once they pause)
 }
 async function pzSave() {
   clearTimeout(PZ.timer);
@@ -422,11 +322,11 @@ async function pzSave() {
   try {
     if (!PZ.id) PZ.id = PZ.col.doc().id;
     await PZ.col.doc(PZ.id).set(doc);
-    PZ.retry = 0; pzLocal(doc); pzStatus('Salvato');
+    PZ.retry = 0; pzStatus('Salvato');
   } catch (e) {
     const code = e && e.code;
     if ((code === 'unavailable' || code === 'resource_exhausted') && PZ.retry < 2) { PZ.retry++; PZ.dirty = true; await new Promise(r => setTimeout(r, 1500 + 1500 * Math.random())); }
-    else { PZ.retry = 0; pzStatus(pzErr(code)); if (code === 'invalid_argument' || code === 'revoked' || code === 'not_granted' || code === 'capability_disabled' || code === 'capability_removed') PZ.col = null; }
+    else { PZ.retry = 0; pzStatus(pzErr(code)); if (code !== 'unavailable' && code !== 'resource_exhausted' && code !== 'quota_exceeded') PZ.col = null; }
   }
   PZ.busy = false;
   if (PZ.dirty) { PZ.dirty = false; pzSave(); }
@@ -438,7 +338,7 @@ function pzErr(code) {
   return 'Connessione assente: salvo alla prossima modifica';
 }
 async function pzStore() {
-  try { const s = JSON.parse(localStorage.getItem(PZ_KEY) || 'null'); if (s && s.doc) { PZ.localDoc = s; pzLoad(s.id, s.doc); } } catch (_) { /* (none, or not readable) */ }
+  try { const s = JSON.parse(localStorage.getItem(PZ_KEY) || 'null'); if (s && s.doc && pzLoad(s.id, s.doc)) PZ.localDoc = s; } catch (_) { /* (none, or not readable) */ }
   pzStatus('Caricamento…');
   let db = null;
   try { const c = window.claude; db = c && typeof c.use === 'function' ? await c.use('db') : null; } catch (_) { db = null; }
@@ -446,22 +346,22 @@ async function pzStore() {
   PZ.db = db; PZ.col = db.collection('animazioni');
   const wait = setTimeout(() => { if (!PZ.loaded) pzStatus('Il salvataggio non risponde ancora'); }, 10000);
   PZ.col.orderBy('updated', 'desc').limit(50).onSnapshot(snap => {
-    PZ.list = snap.docs.map(d => { const x = d.data() || {}; return {id: d.id, name: typeof x.name === 'string' ? x.name.slice(0, 60) : 'Animazione', updated: +x.updated || 0, doc: x}; });
+    PZ.list = snap.docs.map(d => ({id: d.id, doc: d.data() || {}})).filter(a => a.doc.v === 2)
+      .map(a => ({id: a.id, name: typeof a.doc.name === 'string' ? a.doc.name.slice(0, 60) : 'Animazione', updated: +a.doc.updated || 0, doc: a.doc}));
     PZ.ui.list = true;
     if (snap.metadata.fromCache || PZ.loaded) return;
     clearTimeout(wait); PZ.loaded = true;
-    // the first answer: the newest animation, unless this device has a newer copy of one, or Denis already began
+    // the first answer: the animation this device had open (unless its own copy is newer), else the newest one
     const L = PZ.localDoc, mine = L && PZ.list.find(a => a.id === L.id), open = mine || PZ.list[0];
-    if (PZ.edited || (L && L.doc && (!mine || (+L.doc.updated || 0) > mine.updated))) pzSave();   // (this device's copy is newer, or was never saved there)
+    if (PZ.edited || (L && (!mine || (+L.doc.updated || 0) > mine.updated))) pzSave();
     else if (open) { pzLoad(open.id, open.doc); pzStatus('Aperta «' + open.name + '»'); }
     else pzStatus('Pronto: le pose si salvano da sole');
   }, err => { clearTimeout(wait); PZ.loaded = true; pzStatus(pzErr(err && err.code)); if (err && err.code !== 'unavailable') PZ.col = null; });
 }
-function pzNew() {
-  if (!PZ.guard) return;
+function pzNewAnim() {
   pzStop();
-  PZ.id = null; PZ.name = 'Animazione ' + (PZ.list.length + 1); PZ.note = ''; PZ.poses = [pzClone(PZ.guard)]; PZ.cur = 0; PZ.undo = [];
-  PZ.ui.notes = true; pzChanged(); pzSave();
+  PZ.id = null; PZ.name = 'Animazione ' + (PZ.list.length + 1); PZ.note = ''; PZ.poses = [pzNew0()]; PZ.cur = 0; PZ.undo = [];
+  pzChanged(); pzSave();
 }
 function pzCopy() {
   const txt = JSON.stringify(pzDoc());
@@ -469,55 +369,45 @@ function pzCopy() {
   try { navigator.clipboard.writeText(txt).then(() => pzStatus('Dati copiati: incollali a Claude'), show); } catch (_) { show(); }
 }
 
-// --- The page: handles over the picture, the poses' row, the selected part's row, tools, notes ---
+// --- The page: Ren on the left, the choices on the right (below him when the screen stands up) ---
 function pzStatus(t) { const s = document.getElementById('pzSt'); if (s && s.textContent !== t) s.textContent = t; }
 function pzBtn(label, f, id) {
   const b = document.createElement('button'); if (id) b.id = id;
   b.innerHTML = '<span></span>'; b.firstChild.textContent = label; b.addEventListener('click', f);
   return b;
 }
-function pzSelect(id) { if (PZ.sel === id) return; PZ.sel = id; PZ.ui.dirty = true; }
-function pzStep(dir) { const i = PZ_PARTS.findIndex(p => p.id === PZ.sel); pzSelect(PZ_PARTS[(i + dir + PZ_PARTS.length) % PZ_PARTS.length].id); }
-// the selected part's row: its name's hint and its groups of values
-function pzPartUi() {
-  const row = PZ.ui.part0, part = pzPart(PZ.sel), o = PZ_OPTS[part.kind], P = PZ.poses[PZ.cur];
-  if (PZ.ui.partFor !== part.id) {
-    PZ.ui.partFor = part.id; row.textContent = '';
-    if (o.hint) { const h = document.createElement('span'); h.className = 'pzMsg'; h.textContent = o.hint; row.appendChild(h); }
-    for (const g of o.groups) {
-      const box = document.createElement('div'); box.className = 'opt'; box.append(g.label + ' ');
-      if (g.turn) for (const [lab, d] of [['◀', -1], ['▶', 1], ['Azzera', 0]]) { const b = pzBtn(lab, () => pzTurn(d)); if (d) b.setAttribute('aria-label', g.label + (d < 0 ? ' a sinistra' : ' a destra')); box.appendChild(b); }
-      else for (const [v, lab] of g.vals) { const b = pzBtn(lab, () => pzOpt(g.key, v)); b.dataset.key = g.key; b.dataset.v = v; box.appendChild(b); }
-      row.appendChild(box);
-    }
+function pzPress(b, on) { const v = on ? 'true' : 'false'; if (b.getAttribute('aria-pressed') !== v) b.setAttribute('aria-pressed', v); }
+function pzRowsUi() {
+  const P = PZ.poses[PZ.cur], at = PZ.play && PZ.play.at, show = at ? PZ.poses[at.b] : P;
+  for (const r of PZ_ROWS) {
+    const row = PZ.ui.rows[r.key];
+    row.classList.toggle('kb', PZ.kb && PZ_ROWS[PZ.row] === r);
+    if (!show) continue;
+    if (r.hands) for (const [k, lab] of r.hands) { const b = PZ.ui.hands[k], h = PZ_HANDS.find(x => x[0] === show[k]), t = lab + ': ' + h[1]; if (b.firstChild.textContent !== t) b.firstChild.textContent = t; }
+    else for (const b of row.querySelectorAll('button')) pzPress(b, show[r.key] === b.dataset.v);
   }
-  if (!P) return;
-  const src = part.kind === 'hand' ? P[part.id[1]] : part.kind === 'foot' ? P[part.id] : null;
-  for (const b of row.querySelectorAll('button[data-key]')) vwPressEl(b, !!src && Math.abs(src[b.dataset.key] - +b.dataset.v) < 1e-6);
 }
-function vwPressEl(b, on) { const v = on ? 'true' : 'false'; if (b.getAttribute('aria-pressed') !== v) b.setAttribute('aria-pressed', v); }
-// the poses' row: one numbered button per pose, the current one pressed
 function pzStrip() {
-  const box = PZ.ui.chips, n = PZ.poses.length;
+  const box = PZ.ui.chips, n = PZ.poses.length, at = PZ.play && PZ.play.at;
   while (box.children.length > n) box.lastChild.remove();
   while (box.children.length < n) { const i = box.children.length, b = pzBtn(String(i + 1), () => pzGo(i)); b.className = 'chip'; b.setAttribute('aria-label', 'Posa ' + (i + 1)); box.appendChild(b); }
-  const at = PZ.play && PZ.play.at;
-  [...box.children].forEach((b, i) => vwPressEl(b, at ? i === at.b : i === PZ.cur));
+  [...box.children].forEach((b, i) => pzPress(b, at ? i === at.b : i === PZ.cur));
   if (PZ.pop !== undefined && box.children[PZ.pop]) { const b = box.children[PZ.pop]; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); b.scrollIntoView({block: 'nearest', inline: 'nearest'}); PZ.pop = undefined; }
-  PZ.ui.play.firstChild.textContent = PZ.play ? 'Ferma' : 'Riproduci'; vwPressEl(PZ.ui.play, !!PZ.play);
+  PZ.ui.play.firstChild.textContent = PZ.play ? 'Ferma' : 'Riproduci'; pzPress(PZ.ui.play, !!PZ.play);
   PZ.ui.del.disabled = n < 2; PZ.ui.add.disabled = n >= PZ.max;
+  const side = Math.abs(VW.yaw - F3_YAW) < .02; PZ.ui.view.firstChild.textContent = side ? 'Vista: lato' : 'Vista: 3/4';
 }
 function pzTitle() {
   const sm = document.querySelector('#name small'), at = PZ.play && PZ.play.at;
   const t = at ? (at.back ? 'Riproduzione · torna alla posa 1' : at.a === at.b ? 'Riproduzione · posa ' + (at.a + 1) : 'Riproduzione · posa ' + (at.a + 1) + ' → ' + (at.b + 1))
-    : 'Posa ' + (PZ.cur + 1) + ' di ' + PZ.poses.length + ' · ' + pzPart(PZ.sel).name;
+    : 'Posa ' + (PZ.cur + 1) + ' di ' + PZ.poses.length + (PZ.name ? ' · ' + PZ.name : '');
   if (sm && sm.textContent !== t) sm.textContent = t;
 }
 function pzNotes(open) {
   const N = document.getElementById('pzN');
   if (open === undefined) open = N.hidden;
-  N.hidden = !open; vwPressEl(document.getElementById('pzNb'), open);
-  if (open) { PZ.ui.notes = true; pzNotesUi(); } else document.getElementById('pzData').hidden = true;
+  N.hidden = !open; pzPress(document.getElementById('pzNb'), open);
+  if (open) pzNotesUi(); else document.getElementById('pzData').hidden = true;
 }
 function pzNotesUi() {
   const N = document.getElementById('pzN');
@@ -531,32 +421,42 @@ function pzListUi() {
   if (!sel || sel === document.activeElement) return;
   sel.textContent = '';
   const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
-  add('', PZ.list.length ? 'Apri un\'animazione salvata…' : 'Nessun\'altra animazione salvata');
+  add('', PZ.list.length ? 'Apri un\'animazione salvata…' : 'Nessun\'animazione salvata');
   for (const a of PZ.list) add(a.id, a.name + (a.id === PZ.id ? ' (aperta)' : ''));
   sel.disabled = !PZ.list.length;
 }
-function pzUi(VW) {
+// the camera: Ren in the middle of the space the panel leaves him (left of it, or above it), below the title
+function pzResize() {
+  const w = innerWidth, h = innerHeight, c = VW.camera, P = document.getElementById('pzP').getBoundingClientRect(), top = document.getElementById('name').getBoundingClientRect().bottom + 4;
+  const right = P.left > w * .25, x1 = right ? P.left : w, y1 = right ? h : P.top, y0 = Math.min(top, y1 - 120);
+  const fw = Math.max(80, x1), fh = Math.max(80, y1 - y0), cx = x1 / 2, cy = (y0 + y1) / 2;
+  const FW = 2 * Math.max(cx, w - cx), FH = 2 * Math.max(cy, h - cy);
+  c.fov = 30; c.aspect = FW / FH; c.setViewOffset(FW, FH, FW / 2 - cx, FH / 2 - cy, w, h); c.updateProjectionMatrix();
+  const t = Math.tan(c.fov * Math.PI / 360);
+  VW.fit = Math.max(2 * FH / (fh * 2 * t), 1.6 * FW / (fw * 2 * t * c.aspect)) / .94;   // 2 m tall (Ren is 1.8), 1.6 m wide fit
+}
+function pzUi() {
   const css = document.createElement('style');
   css.textContent = `
-#moves,#bottom>.row:not(.pz),#now{display:none!important}
-#pzH{position:fixed;inset:0;z-index:2;pointer-events:none}
-.pzh{position:absolute;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:auto;cursor:grab;touch-action:none}
-.pzh::before{content:"";position:absolute;inset:8px;border-radius:50%;border:3px solid var(--c);background:rgba(20,18,28,.35);box-shadow:0 0 0 1.5px rgba(0,0,0,.75),0 2px 6px rgba(0,0,0,.45);transition:transform .12s ease-out,background .12s}
-.pzh[aria-pressed="true"]::before{background:var(--c);transform:scale(1.3)}
-.pzh.on{cursor:grabbing}.pzh.on::before{transform:scale(1.6)}
-@media (pointer:coarse){.pzh{width:44px;height:44px;margin:-22px 0 0 -22px}.pzh::before{inset:12px}}
-#top{flex-wrap:wrap}
-#pzTop{display:flex;align-items:center;justify-content:flex-end;gap:6px;pointer-events:auto;min-width:0;margin-left:auto}
-#pzChips{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;max-width:40vw;padding:3px 2px;touch-action:pan-x}#pzChips::-webkit-scrollbar{display:none}
-#pzChips .chip{flex:0 0 auto;min-width:36px;padding:5px 9px 4px}
-#pzTop>button{flex:0 0 auto}
+#moves,#bottom>.row,#now{display:none!important}
+#pzP{position:fixed;z-index:3;top:0;right:0;bottom:0;width:min(500px,57vw);box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:6px;overflow-y:auto;
+  padding:calc(8px + env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) 14px;
+  background:rgba(20,18,28,.82);border-left:1px solid var(--line);scrollbar-width:thin}
+#bottom{right:min(500px,57vw)}
+.pzR{display:flex;align-items:center;gap:5px;flex-wrap:wrap;border-radius:4px;padding:1px 2px}
+.pzR.kb{outline:2px solid var(--cyan);outline-offset:2px}
+.pzL{flex:0 0 96px;color:var(--dim);font-size:14px;line-height:1.1}
+#pzP button{font-size:15px;padding:5px 10px 4px}
+#pzP .hand{min-width:150px;text-align:left}
+#pzTopRow{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+#pzChips{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding:3px 2px;flex:1 1 60px;min-width:0;touch-action:pan-x}#pzChips::-webkit-scrollbar{display:none}
+#pzChips .chip{flex:0 0 auto;min-width:36px}
+#pzTools{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
 button:disabled{opacity:.4;cursor:default}
-.row.pz{align-items:center;min-height:32px;gap:6px 12px}
-.pzMsg{color:var(--dim);font-size:15px}
 #pzInfo{display:block;font-family:var(--body);font-style:italic;font-size:13px;letter-spacing:.04em;color:var(--dim);text-shadow:0 1px 3px #000;transform:none;margin-top:2px}
 #pzInfo #fps{display:inline;font-size:inherit;color:inherit}#pzInfo #fps:not(:empty)::before{content:" · "}
-#pzN{position:fixed;z-index:5;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 20px);overflow:auto;
-  background:rgba(20,18,28,.96);border:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+#pzN{position:fixed;z-index:5;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 20px);overflow:auto;box-sizing:border-box;
+  background:rgba(20,18,28,.97);border:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 30px rgba(0,0,0,.6)}
 #pzN[hidden]{display:none}
 #pzN label{display:flex;flex-direction:column;gap:4px;color:var(--dim);font-size:14px}
 #pzN input,#pzN textarea,#pzN select{font:inherit;font-style:normal;font-weight:600;font-size:16px;color:var(--ink);background:#0d0c13;border:1px solid var(--line);padding:6px 8px;user-select:text;-webkit-user-select:text;min-width:0}
@@ -564,44 +464,43 @@ button:disabled{opacity:.4;cursor:default}
 #pzN .row{align-items:center}
 @keyframes pzPop{0%{transform:skewX(-10deg) scale(.55)}60%{transform:skewX(-10deg) scale(1.18)}100%{transform:skewX(-10deg) scale(1)}}
 .pop{animation:pzPop .28s ease-out}
-@media (max-height:430px){#name{font-size:34px}#name small{font-size:14px}.row.pz{min-height:28px}.pzMsg{font-size:13px}}
-@media (pointer:coarse) and (max-height:430px){#hint{display:none}}
-@media (prefers-reduced-motion:reduce){.pop{animation:none}.pzh::before{transition:none}}`;
+@media (max-height:430px){#name{font-size:34px}#name small{font-size:14px}#pzP{gap:4px}#pzP button{font-size:14px;padding:4px 9px 3px}.pzL{font-size:13px;flex-basis:88px}#pzP .hand{min-width:136px}}
+@media (max-height:370px){#pzP{gap:3px}#pzP button{padding:3px 8px 2px}}
+@media (pointer:coarse){#hint{display:none}}
+@media (orientation:portrait){#pzP{top:auto;left:0;width:auto;max-height:56vh;justify-content:flex-start;border-left:0;border-top:1px solid var(--line)}#bottom{display:none}}
+@media (prefers-reduced-motion:reduce){.pop{animation:none}}`;
   document.head.appendChild(css);
-  // the handles
-  const box = document.createElement('div'); box.id = 'pzH';
-  for (const part of PZ_PARTS) {
-    const h = document.createElement('div'); h.className = 'pzh'; h.dataset.id = part.id; h.style.setProperty('--c', part.c);
-    h.setAttribute('role', 'button'); h.setAttribute('aria-label', part.name); h.title = part.name;
-    h.addEventListener('pointerdown', pzDown);
-    box.appendChild(h); PZ.el[part.id] = h;
-  }
-  document.getElementById('stage').after(box); PZ.ui.handles = box;
-  addEventListener('pointermove', pzMove); addEventListener('pointerup', pzUp); addEventListener('pointercancel', pzUp);
-  // the poses' row (top right)
-  const top = document.createElement('div'); top.id = 'pzTop';
+  const P = document.createElement('div'); P.id = 'pzP';
+  // the poses' row
+  const top = document.createElement('div'); top.id = 'pzTopRow';
   const chips = document.createElement('div'); chips.id = 'pzChips'; chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Pose');
-  PZ.ui.chips = chips;
-  PZ.ui.add = pzBtn('+ Posa', pzAdd, 'pzAdd'); PZ.ui.del = pzBtn('Elimina', pzDel, 'pzDel'); PZ.ui.play = pzBtn('Riproduci', pzPlay, 'pzPlay');
-  top.append(chips, PZ.ui.add, PZ.ui.del, PZ.ui.play);
-  document.getElementById('top').appendChild(top);
-  // the part's row and the tools' row (bottom)
-  const bottom = document.getElementById('bottom'), hint = document.getElementById('hint');
-  const part = document.createElement('div'); part.className = 'row pz'; part.id = 'pzPart'; PZ.ui.part0 = part;
-  const tools = document.createElement('div'); tools.className = 'row pz'; tools.id = 'pzTools';
-  const view = document.createElement('div'); view.className = 'opt'; view.append('Vista ');
-  PZ.ui.views = [['Lato', 0], ['3/4', 1], ['Fronte', 2]].map(([t, k]) => { const b = pzBtn(t, () => pzView(k)); view.appendChild(b); return b; });
-  const hb = pzBtn('Punti', () => { PZ.showH = !PZ.showH; PZ.ui.dirty = true; }, 'pzHb'); hb.setAttribute('aria-label', 'Mostra i punti da trascinare'); PZ.ui.hb = hb;
-  tools.append(pzBtn('Annulla', pzUndo, 'pzUndo'), pzBtn('Guardia', pzGuard, 'pzGuard'), view, hb, pzBtn('Note', () => pzNotes(), 'pzNb'));
-  // the saving's state and the frames per second: a line under the title (the tools' row stays one line on a phone)
+  PZ.ui.chips = chips; PZ.ui.add = pzBtn('+ Posa', pzAdd, 'pzAdd'); PZ.ui.play = pzBtn('Riproduci', pzPlay, 'pzPlay');
+  top.append(chips, PZ.ui.add, PZ.ui.play); P.appendChild(top);
+  // the choices
+  PZ.ui.rows = {}; PZ.ui.hands = {};
+  for (const r of PZ_ROWS) {
+    const row = document.createElement('div'); row.className = 'pzR'; row.setAttribute('role', 'group'); row.setAttribute('aria-label', r.label);
+    const lab = document.createElement('span'); lab.className = 'pzL'; lab.textContent = r.label; row.appendChild(lab);
+    if (r.hands) for (const [k, l] of r.hands) { const b = pzBtn(l, () => pzHand(k), 'pz_' + k); b.className = 'hand'; row.appendChild(b); PZ.ui.hands[k] = b; }
+    else for (const [v, l] of r.vals) { const b = pzBtn(l, () => pzChoose(r.key, v)); b.dataset.v = v; row.appendChild(b); }
+    row.addEventListener('pointerdown', () => { PZ.kb = false; PZ.row = PZ_ROWS.indexOf(r); PZ.ui.dirty = true; });
+    PZ.ui.rows[r.key] = row; P.appendChild(row);
+  }
+  // the tools
+  const tools = document.createElement('div'); tools.id = 'pzTools';
+  PZ.ui.del = pzBtn('Elimina posa', pzDel, 'pzDel'); PZ.ui.view = pzBtn('Vista: lato', pzView, 'pzView');
+  tools.append(pzBtn('Annulla', pzUndo, 'pzUndo'), pzBtn('Guardia', pzGuard, 'pzGuard'), PZ.ui.del, pzBtn('Note', () => pzNotes(), 'pzNb'), PZ.ui.view);
+  P.appendChild(tools);
+  document.body.appendChild(P);
+  // the saving's state and the frames per second: a line under the title
   const info = document.createElement('small'); info.id = 'pzInfo';
   const st = document.createElement('span'); st.id = 'pzSt'; st.setAttribute('role', 'status'); info.appendChild(st);
   const fps = document.getElementById('fps'); if (fps) info.appendChild(fps);
   document.getElementById('name').appendChild(info);
-  bottom.insertBefore(part, hint); bottom.insertBefore(tools, hint);
-  if (hint) hint.innerHTML = 'Trascina i punti colorati per muovere Ren; altrove per girare la vista, rotella o pizzico per avvicinarti.'
-    + '<span class=kb> Tastiera: Tab parte, frecce sposta, PagSu/PagGiù in profondità, Q/E gira, 1-3 e 4-6 le scelte della parte, [ ] posa, N nuova posa, P riproduci, G guardia, Ctrl+Z annulla.'
-    + ' Controller: levetta sinistra sposta, destra vista e profondità, dorsali parte, grilletti posa, A e X le scelte, Y riproduci, B annulla, Start nuova posa.</span>';
+  const hint = document.getElementById('hint');
+  if (hint) hint.innerHTML = 'Tocca le scelte a destra; trascina Ren per girarlo, doppio tocco per tornare di lato.'
+    + '<span class=kb> Tastiera: frecce su e giù la riga, sinistra e destra la scelta, N nuova posa, [ ] cambia posa, P riproduci, G guardia, Ctrl+Z annulla.'
+    + ' Controller: croce per righe e scelte, A nuova posa, B annulla, X guardia, Y riproduci, dorsali cambia posa.</span>';
   // the notes (for Claude): the animation's name and words, each pose's own, the saved animations, the data
   const N = document.createElement('div'); N.id = 'pzN'; N.hidden = true; N.setAttribute('role', 'dialog'); N.setAttribute('aria-label', 'Note per Claude');
   N.innerHTML = '<label>Nome dell\'animazione<input id="pzName" maxlength="60" autocomplete="off"></label>'
@@ -610,22 +509,22 @@ button:disabled{opacity:.4;cursor:default}
     + '<textarea id="pzData" rows="3" readonly hidden aria-label="I dati delle pose"></textarea>'
     + '<div class="row"><select id="pzList" aria-label="Animazioni salvate"></select></div>'
     + '<div class="row"></div>';
-  N.lastChild.append(pzBtn('Nuova animazione', pzNew, 'pzNew'), pzBtn('Copia i dati', pzCopy, 'pzCopy'));
+  N.lastChild.append(pzBtn('Nuova animazione', pzNewAnim, 'pzNew'), pzBtn('Copia i dati', pzCopy, 'pzCopy'));
   const bg = document.getElementById('kitBg'); if (bg) N.lastChild.appendChild(bg);   // (the kit's floor or arena)
   N.lastChild.appendChild(pzBtn('Chiudi', () => pzNotes(false), 'pzClose'));
   document.body.appendChild(N);
-  const typed = (id, f) => document.getElementById(id).addEventListener('input', e => { f(e.target.value); PZ.edited = true; clearTimeout(PZ.timer); PZ.timer = setTimeout(pzSave, 900); });
+  const typed = (id, f) => document.getElementById(id).addEventListener('input', e => { f(e.target.value); PZ.edited = true; PZ.ui.dirty = true; clearTimeout(PZ.timer); PZ.timer = setTimeout(pzSave, 900); });
   typed('pzName', v => { PZ.name = v.slice(0, 60); });
   typed('pzNote', v => { PZ.note = v.slice(0, 2000); });
   typed('pzPnote', v => { if (PZ.poses[PZ.cur]) PZ.poses[PZ.cur].note = v.slice(0, 300); });
   document.getElementById('pzList').addEventListener('change', e => {
     const a = PZ.list.find(x => x.id === e.target.value);
     e.target.blur();
-    if (a && a.id !== PZ.id) { pzStop(); if (pzLoad(a.id, a.doc)) { pzLocal(pzDoc()); pzStatus('Aperta «' + a.name + '»'); } }
+    if (a && a.id !== PZ.id) { pzStop(); if (pzLoad(a.id, a.doc)) { pzLocal(pzDoc()); pzStatus('Aperta «' + a.name + '»'); pzNotesUi(); } }
     PZ.ui.list = true;
   });
+  addEventListener('resize', pzResize); pzResize();
   PZ.ui.dirty = true; PZ.ui.list = true;
-  dispatchEvent(new Event('resize'));
 }
 // keys (taken before the viewer's own: its plays and speeds are not this page's)
 function pzKeys() {
@@ -634,44 +533,36 @@ function pzKeys() {
     e.stopImmediatePropagation();
     if (typing) { if (e.key === 'Escape') { t.blur(); pzNotes(false); } return; }
     if (e.key === 'Escape') { pzNotes(false); pzStop(); return; }
-    const k = e.key, K = k.length === 1 ? k.toLowerCase() : k, step = e.shiftKey ? .05 : .01, onBtn = tag === 'BUTTON';
+    const k = e.key, K = k.length === 1 ? k.toLowerCase() : k, onBtn = tag === 'BUTTON';
     if ((e.ctrlKey || e.metaKey) && K === 'z') { e.preventDefault(); pzUndo(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const act = {
-      ArrowLeft: () => pzNudge(-step, 0, 0, e.repeat), ArrowRight: () => pzNudge(step, 0, 0, e.repeat),
-      ArrowUp: () => pzNudge(0, step, 0, e.repeat), ArrowDown: () => pzNudge(0, -step, 0, e.repeat),
-      PageUp: () => pzNudge(0, 0, step, e.repeat), PageDown: () => pzNudge(0, 0, -step, e.repeat),
-      q: () => pzTurn(-1), e: () => pzTurn(1), '[': () => pzGo(PZ.cur - 1), ']': () => pzGo(PZ.cur + 1),
-      n: () => pzAdd(), p: () => pzPlay(), g: () => pzGuard(), z: () => pzUndo(), h: () => { PZ.showH = !PZ.showH; PZ.ui.dirty = true; },
-      v: () => pzView(((PZ.view || 0) + 1) % 3), Delete: () => pzDel(),
+      ArrowUp: () => pzRowGo(-1), ArrowDown: () => pzRowGo(1), ArrowLeft: () => { PZ.kb = true; pzStepRow(-1); }, ArrowRight: () => { PZ.kb = true; pzStepRow(1); },
+      '[': () => pzGo(PZ.cur - 1), ']': () => pzGo(PZ.cur + 1), n: () => pzAdd(), p: () => pzPlay(), g: () => pzGuard(), z: () => pzUndo(), v: () => pzView(), Delete: () => pzDel(),
     }[K];
-    const d = '123456'.indexOf(K);
-    if (K === 'Tab' && !onBtn) { e.preventDefault(); pzStep(e.shiftKey ? -1 : 1); }
-    else if (act && !(onBtn && (K === 'Enter' || K === ' '))) { e.preventDefault(); if (!e.repeat || /^Arrow|^Page/.test(K)) act(); }
-    else if (d >= 0 && !e.repeat) { e.preventDefault(); pzPick(Math.floor(d / 3), d % 3); }
+    if (act && !(onBtn && (K === 'Enter' || K === ' '))) { e.preventDefault(); if (!e.repeat || /^Arrow/.test(K)) act(); }
   }, true);
 }
-// value i of the part's group g (keys 1-3: the first group, 4-6: the second)
-function pzPick(g, i) {
-  const grp = PZ_OPTS[pzPart(PZ.sel).kind].groups.filter(x => !x.turn)[g];
-  if (grp && grp.vals[i]) pzOpt(grp.key, grp.vals[i][0]);
-}
-// the controller: sticks move (left: in the camera's plane; right: x turns the view, y in depth), shoulders the part,
-// triggers the pose, A and X the part's groups, Y plays, B undoes, Start a new pose, Back the guard
+// the controller: the d-pad (or the left stick) rows and choices, A a new pose, B undo, X the guard, Y plays, the
+// shoulders the pose
 function pzPad() {
-  const pads = navigator.getGamepads ? navigator.getGamepads() : [], now = performance.now(), dt = Math.min(.05, (now - (PZ.padT || now)) / 1000);
-  PZ.padT = now;
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [], now = performance.now();
   for (const g of pads) {
     if (!g) continue;
     const b = i => !!(g.buttons[i] && g.buttons[i].pressed), was = PZ.pad, hit = i => b(i) && !was[i];
-    const ax = i => { const v = g.axes[i] || 0; return Math.abs(v) < .2 ? 0 : (v - Math.sign(v) * .2) / .8; };
-    if (hit(4)) pzStep(-1); if (hit(5)) pzStep(1);
-    if (hit(6)) pzGo(PZ.cur - 1); if (hit(7)) pzGo(PZ.cur + 1);
-    if (hit(0)) pzCycle(0); if (hit(2)) pzCycle(1);
-    if (hit(3)) pzPlay(); if (hit(1)) pzUndo(); if (hit(9)) pzAdd(); if (hit(8)) pzGuard();
-    const mx = ax(0) + (b(15) ? 1 : 0) - (b(14) ? 1 : 0), my = -ax(1) + (b(12) ? 1 : 0) - (b(13) ? 1 : 0), mz = -ax(3), v = .5 * dt;   // (.5 m/s at full tilt)
-    if (mx || my || mz) { pzNudge(mx * v, my * v, mz * v, PZ.padMove); PZ.padMove = true; } else PZ.padMove = false;
-    if (ax(2)) VW.yaw += ax(2) * 2.2 * dt;
+    const ax = (i, s) => (g.axes[i] || 0) * s > .6;
+    // the d-pad or the stick: once on the press, then again every 250 ms while held
+    const dir = {up: b(12) || ax(1, -1), down: b(13) || ax(1, 1), left: b(14) || ax(0, -1), right: b(15) || ax(0, 1)};
+    for (const [d, on] of Object.entries(dir)) {
+      const r = PZ.padRep;
+      if (!on) { r[d] = 0; continue; }
+      if (r[d] && now < r[d]) continue;
+      r[d] = now + (r[d] ? 250 : 420);
+      PZ.kb = true;
+      if (d === 'up') pzRowGo(-1); else if (d === 'down') pzRowGo(1); else pzStepRow(d === 'left' ? -1 : 1);
+    }
+    if (hit(0)) pzAdd(); if (hit(1)) pzUndo(); if (hit(2)) pzGuard(); if (hit(3)) pzPlay();
+    if (hit(4)) pzGo(PZ.cur - 1); if (hit(5)) pzGo(PZ.cur + 1);
     for (let i = 0; i < 17; i++) was[i] = b(i);
     break;
   }
@@ -679,42 +570,18 @@ function pzPad() {
 RN.hooks.boot.push(VW => {
   VW_PLAYS[0][1][0][1] = 1e9;   // (the kit's boot sets its guard's length on the first play: this page's one play lasts)
   CFG.looks.ren.clips = Object.assign({}, CFG.looks.ren.clips, {posa: {c: 'a191', at: 0}});   // the kit's held guard clip under it
-  VW.PZ = PZ;   // (tests)
-  pzUi(VW); pzKeys(); pzStore();
+  VW.PZ = PZ; VW.pz = {target: pzTarget, rows: PZ_ROWS, hands: PZ_HANDS, guard: PZ_GUARD};   // (tests)
+  PZ.poses = [pzNew0()];
+  pzUi(); pzKeys(); pzStore();
 });
-// each drawn frame: the controller, the handles where their parts are, the rows when something changed
+// each drawn frame: the controller, the camera on the body, the panel when something changed
 RN.hooks.draw.push((VW, dt, cam) => {
   if (RN.pad !== pzPad) RN.pad = pzPad;   // (the scaffold sets its own after the boot hooks)
-  const it = VW.it, show = PZ.showH && !PZ.play && !!PZ.fk, box = PZ.ui.handles;
-  if (PZ.fk) {   // zoomed in (pinch, wheel), the camera closes on the selected part, not on the face
-    it.root.updateMatrixWorld(true);
-    const k = pzC((1 - VW.zoom) / .55, 0, 1), T = PZ.camT || (PZ.camT = pzV());
-    if (!PZ.drag) { const p = pzModel(PZ.sel).applyMatrix4(it.body.matrixWorld); T.set(VW.aimX + (p.x - VW.aimX) * k, .95 + (p.y - .95) * k, 0); }
-    cam.position.set(T.x, T.y + .1 * (1 - k), cam.position.z); cam.lookAt(T.x, T.y, 0); cam.updateMatrixWorld();
-  }
-  if (box.style.display !== (show ? '' : 'none')) box.style.display = show ? '' : 'none';
-  if (show) {
-    it.root.updateMatrixWorld(true);
-    const M = it.body.matrixWorld, w = innerWidth, h = innerHeight;
-    for (const part of PZ_PARTS) {
-      const v = pzModel(part.id).applyMatrix4(M).project(cam), x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h, el = PZ.el[part.id];
-      PZ.scr[part.id] = {x, y};
-      el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px)';
-      vwPressEl(el, part.id === PZ.sel);
-    }
-  }
+  const j = PZ.D ? PZ.D.b.jump : 0;   // (a jump: the camera goes up with half of it)
+  cam.position.set(VW.aimX, .95 + .5 * j + .1, cam.position.z); cam.lookAt(VW.aimX, .95 + .5 * j, 0); cam.updateMatrixWorld();
   if (PZ.play) { const a = PZ.play.at, key = a.a + ',' + a.b + ',' + a.back; if (key !== PZ.ui.at) { PZ.ui.at = key; PZ.ui.dirty = true; } }
-  if (PZ.ui.dirty && PZ.guard) {
-    PZ.ui.dirty = false;
-    pzStrip(); pzPartUi(); pzTitle(); pzNotesUi();
-    vwPressEl(PZ.ui.hb, PZ.showH);
-    const th = pzW(VW.yaw - F3_YAW);
-    PZ.ui.views.forEach((b, k) => vwPressEl(b, Math.abs(th + k * Math.PI / 4) < .02));
-    // the part's row may be taller or shorter: the picture fits the space left (not in the middle of a drag)
-    const top = document.getElementById('bottom').getBoundingClientRect().top;
-    if (PZ.ui.partTop !== undefined && Math.abs(top - PZ.ui.partTop) > .5 && !PZ.drag) dispatchEvent(new Event('resize'));
-    if (!PZ.drag) PZ.ui.partTop = top;
-  }
+  const side = Math.abs(VW.yaw - F3_YAW) < .02; if (side !== PZ.ui.side) { PZ.ui.side = side; PZ.ui.dirty = true; }   // (the view's button names it)
+  if (PZ.ui.dirty) { PZ.ui.dirty = false; pzStrip(); pzRowsUi(); pzTitle(); pzNotesUi(); }
   if (PZ.ui.list) { PZ.ui.list = false; pzListUi(); }
 });
 // one play: the pose being edited, for as long as the page is open

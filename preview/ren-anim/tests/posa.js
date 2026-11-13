@@ -1,14 +1,17 @@
-// The pose editor (mods/posa.js), checked:  node tests/posa.js <page.html> [shot.png]
+// The pose page (mods/posa.js: ready positions, buttons only), checked:  node tests/posa.js <page.html> [shot.png]
 // On a phone held sideways (844x390, touch) with a stand-in for the page's database (window.claude.use('db'), in
-// memory): no page error, nothing wider than the screen, every handle on the picture; then each part dragged (the
-// mouse, and one drag by touch) and where its handle ends against where the pointer went (a part within reach follows
-// the pointer: the head's look and the elbow's way included, which checks their signs); the part's buttons, the
-// poses' row, playing, undo, the keys, a controller (a stand-in for navigator.getGamepads); the saved document, and
-// the page opened again from it; the time the act's pose takes (ms per frame) against the kit's guard.
+// memory, holding one document of the first version, which must not be listed): no page error, nothing wider than
+// the screen, the panel whole without scrolling, Ren inside the space it leaves him; each row's buttons (the pose
+// takes the choice, the button shows it, the body moves), the hands' buttons going round, a new pose, playing, undo,
+// the guard, deleting, the keys, a controller (a stand-in for navigator.getGamepads); the saved document (format 2),
+// and the page opened again from it. Then every combination of choices solved once (no NaN, no arm inside the chest,
+// no hand in the head, no standing leg past the solver's stretch, no foot under the floor), every change of one row
+// eased frame by frame (no joint jumping in the middle of it), and the time the pose takes (ms) against the guard's.
 // Prints one JSON object; exits 1 on a page error or a failed check.
-const {open, drawn} = require('./lib');
+const {open} = require('./lib');
 const FAKE_DB = `(() => {
-  const store = window.__store = JSON.parse(sessionStorage.getItem('fakeStore') || '{}'), subs = [];
+  const old = {v: 1, name: 'Prova vecchia', updated: 1, poses: [{b: {}, h: {}, L: {}, R: {}, fL: {}, fR: {}}]};
+  const store = window.__store = JSON.parse(sessionStorage.getItem('fakeStore') || JSON.stringify({vecchia: old})), subs = [];
   const snap = () => { const docs = Object.entries(store).sort((a, b) => (b[1].updated || 0) - (a[1].updated || 0))
     .map(([id, d]) => ({id, exists: true, data: () => d, metadata: {fromCache: false, hasPendingWrites: false}}));
     return {docs, size: docs.length, empty: !docs.length, docChanges: () => [], metadata: {fromCache: false, hasPendingWrites: false}}; };
@@ -22,119 +25,156 @@ const FAKE_DB = `(() => {
 (async () => {
   const shot = process.argv[3];
   const {browser, page, errors} = await open(process.argv[2], {w: 844, h: 390, dpr: 1, mobile: true, init: FAKE_DB, settle: 1500});
-  const fails = [], ok = (c, what) => { if (!c) fails.push(what); };
-  const S = () => page.evaluate(() => ({P: JSON.parse(JSON.stringify(VW.PZ.poses[VW.PZ.cur])), n: VW.PZ.poses.length, cur: VW.PZ.cur, sel: VW.PZ.sel, scr: JSON.parse(JSON.stringify(VW.PZ.scr)),
-    st: document.getElementById('pzSt').textContent, title: document.querySelector('#name small').textContent, play: !!VW.PZ.play}));
-  const settle = () => page.waitForTimeout(250);
-  await page.waitForTimeout(600);
-  // layout
-  const lay = await page.evaluate(() => {
-    const b = document.getElementById('bottom').getBoundingClientRect(), t = document.getElementById('pzTop').getBoundingClientRect(), vis = [];
-    for (const [id, q] of Object.entries(VW.PZ.scr)) vis.push(q.x > 10 && q.x < innerWidth - 10 && q.y > 10 && q.y < b.top - 4 ? 1 : id);
-    return {overflowX: document.documentElement.scrollWidth > innerWidth, bottomTop: Math.round(b.top), topBottom: Math.round(t.bottom), hidden: vis.filter(x => x !== 1),
-      hint: getComputedStyle(document.getElementById('hint')).display, rows: [...document.querySelectorAll('#bottom .row.pz')].map(r => Math.round(r.getBoundingClientRect().height))};
+  const fails = [], ok = (c, what) => { if (!c) fails.push(what); }, r = {};
+  const S = () => page.evaluate(() => ({P: JSON.parse(JSON.stringify(VW.PZ.poses[VW.PZ.cur])), n: VW.PZ.poses.length, cur: VW.PZ.cur, play: !!VW.PZ.play,
+    title: document.querySelector('#name small').textContent, st: document.getElementById('pzSt').textContent}));
+  const bones = () => page.evaluate(() => ['LeftHand', 'RightHand', 'LeftFoot', 'RightFoot', 'Head'].map(n => VW.it.bones.find(b => b.name === n).getWorldPosition(new THREE.Vector3()).toArray()));
+  const moved = (a, b) => Math.max(...a.map((p, i) => Math.hypot(p[0] - b[i][0], p[1] - b[i][1], p[2] - b[i][2])));
+  const settle = (ms = 400) => page.waitForTimeout(ms);
+  await settle(600);
+  // layout: the panel whole, Ren in the space left of it and under the title
+  r.lay = await page.evaluate(() => {
+    const P = document.getElementById('pzP'), pr = P.getBoundingClientRect(), tb = document.getElementById('name').getBoundingClientRect().bottom, cam = VW.camera;
+    VW.it.root.updateMatrixWorld(true);
+    const scr = n => { const v = VW.it.bones.find(b => b.name === n).getWorldPosition(new THREE.Vector3()).project(cam); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; };
+    const pts = ['Head', 'LeftHand', 'RightHand', 'LeftToeBase', 'RightToeBase'].map(scr);
+    return {overflowX: document.documentElement.scrollWidth > innerWidth, panelScroll: P.scrollHeight - P.clientHeight, panelLeft: Math.round(pr.left), titleBottom: Math.round(tb),
+      inside: pts.every(([x, y]) => x > 4 && x < pr.left - 4 && y > tb - 30 && y < innerHeight - 4), head: pts[0].map(Math.round), feet: [pts[3], pts[4]].map(p => p.map(Math.round))};
   });
-  ok(!lay.overflowX, 'overflow'); ok(!lay.hidden.length, 'handles off the picture: ' + lay.hidden);
+  ok(!r.lay.overflowX, 'overflow'); ok(r.lay.panelScroll <= 1, 'panel scrolls: ' + r.lay.panelScroll); ok(r.lay.inside, 'Ren outside his space');
   if (shot) await page.screenshot({path: shot});
-  // drags (mouse): part, by (dx, dy) px; where its handle ends
-  const drag = async (id, dx, dy, steps = 8) => {
-    const s0 = await S(), q = s0.scr[id];
-    await page.mouse.move(q.x, q.y); await page.mouse.down();
-    for (let i = 1; i <= steps; i++) await page.mouse.move(q.x + dx * i / steps, q.y + dy * i / steps);
-    await page.mouse.up(); await settle();
-    const s1 = await S(), e = s1.scr[id];
-    return {sel: s1.sel, P0: s0.P, P1: s1.P, miss: Math.round(Math.hypot(e.x - q.x - dx, e.y - q.y - dy))};
-  };
-  const r = {};
-  r.hL = await drag('hL', -40, -30); ok(r.hL.sel === 'hL' && r.hL.miss <= 4, 'hand L: ' + r.hL.miss);
-  r.hLfar = await drag('hL', 120, 0);   // (beyond the arm's reach: the wrist stops at it)
-  ok(Math.hypot(...r.hLfar.P1.L.p) <= .45, 'hand L reach');
-  r.hR = await drag('hR', 20, -30); ok(r.hR.miss <= 4, 'hand R: ' + r.hR.miss);
-  r.eL = await drag('eL', 0, -25); ok(JSON.stringify(r.eL.P0.L.e) !== JSON.stringify(r.eL.P1.L.e), 'elbow L');
-  // the elbow's way is kept across the arm (a hint, not a point): moving the hand afterwards turns no elbow over
-  r.eHint = await page.evaluate(() => { const P = VW.PZ.poses[VW.PZ.cur].L, k = VW.PZ.fk, q = k.qC.clone(), e = new THREE.Vector3().fromArray(P.e).applyQuaternion(q);
-    const ax = k.w.L.clone().sub(k.sh.L).normalize(); return +Math.abs(e.dot(ax)).toFixed(3); });
-  ok(r.eHint < .05, 'elbow hint across the arm: ' + r.eHint);
-  r.fL = await drag('fL', 25, -60); ok(r.fL.P1.fL.up > .2 && r.fL.miss <= 6, 'foot L: ' + r.fL.miss);
-  r.fR = await drag('fR', 20, 0); ok(r.fR.P1.fR.up === 0 && r.fR.P1.fR.x > .05 && r.fR.miss <= 4, 'foot R: ' + r.fR.miss);
-  r.fRfar = await drag('fR', -150, 0);   // (beyond the leg's reach: the ankle stops at it)
-  r.legR = await page.evaluate(() => { const k = VW.PZ.fk; return +(k.ank.R.distanceTo(k.hip.R) / k.leg.R).toFixed(3); });
-  ok(r.legR <= .97, 'foot R reach: ' + r.legR);
-  r.hips = await drag('hips', 0, 15); ok(r.hips.P1.b.dip > .05 && r.hips.miss <= 4, 'hips: ' + r.hips.miss);
-  // the chest turns about the pelvis: its handle on the pointer's way from the pelvis (it cannot stretch toward it)
-  { const s0 = await S(), q = s0.scr.chest, h = s0.scr.hips;
-    r.chest = await drag('chest', 25, 0);
-    const e = (await S()).scr.chest, hy = h.y + 0, ang = (a, b) => Math.atan2(b.x - a.x, a.y - b.y) * 180 / Math.PI;
-    r.chestAng = Math.round(Math.abs(ang({x: h.x, y: hy}, e) - ang({x: h.x, y: hy}, {x: q.x + 25, y: q.y})));
-    ok(r.chest.P1.b.leanL > 5 && r.chestAng <= 6, 'chest: ' + r.chestAng); }
-  r.head = await drag('head', 0, -25); ok(r.head.P1.h.nod < -3 && r.head.miss <= 8, 'head nod: ' + r.head.miss);
-  r.all = await drag('all', 40, 0); ok(Math.abs((r.all.P1.b.lx - r.all.P0.b.lx) - (r.all.P1.fL.x - r.all.P0.fL.x)) < .002 && r.all.P1.b.lx > r.all.P0.b.lx + .1, 'all');
-  // the head's turn, in the front view: drag its look sideways
-  await page.click('#pzTools .opt button:nth-of-type(3)'); await settle();
-  r.headYaw = await drag('head', 30, 0);   // (the look's point is held 30 cm from the face: it follows the pointer's way, not all of it)
-  ok(Math.abs(r.headYaw.P1.h.yaw - r.headYaw.P0.h.yaw) > 5 && r.headYaw.miss <= 15, 'head yaw: ' + r.headYaw.miss);
-  await page.click('#pzTools .opt button:nth-of-type(1)'); await settle();
-  // a drag by touch (CDP touch events) on the right hand
-  {
-    const s0 = await S(), q = s0.scr.hR, cdp = await page.context().newCDPSession(page), T = (type, x, y) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints: type === 'touchEnd' ? [] : [{x, y}]});
-    await T('touchStart', q.x, q.y); for (let i = 1; i <= 6; i++) await T('touchMove', q.x - 3 * i, q.y + 2 * i); await T('touchEnd'); await settle();
-    const s1 = await S(), e = s1.scr.hR; r.touch = {miss: Math.round(Math.hypot(e.x - q.x + 18, e.y - q.y - 12)), moved: JSON.stringify(s0.P.R.p) !== JSON.stringify(s1.P.R.p), yaw: await page.evaluate(() => VW.yaw)};
-    ok(r.touch.moved && r.touch.miss <= 4, 'touch drag: ' + r.touch.miss);
+  // every row's buttons, by touch
+  r.rows = {};
+  for (const key of ['bA', 'bD', 'gA', 'gD', 'busto', 'alt']) {
+    const vals = await page.evaluate(k => VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]), key);
+    for (const v of vals.slice(1).concat(vals[0])) {
+      const b0 = await bones();
+      await page.tap(`#pzP .pzR[aria-label="${await page.evaluate(k => VW.pz.rows.find(x => x.key === k).label, key)}"] button[data-v="${v}"]`);
+      await settle();
+      const s = await S(), pressed = await page.evaluate(([k, v]) => { const row = [...document.querySelectorAll('#pzP .pzR')].find(x => x.getAttribute('aria-label') === VW.pz.rows.find(y => y.key === k).label);
+        return [...row.querySelectorAll('button[aria-pressed="true"]')].map(b => b.dataset.v); }, [key, v]);
+      const m = moved(b0, await bones());
+      r.rows[key + ':' + v] = Math.round(m * 100);
+      ok(s.P[key] === v && pressed.length === 1 && pressed[0] === v && m > .02, 'row ' + key + ' ' + v);
+    }
   }
-  // the part's buttons (the right hand selected): open, palm up, wrist back
-  for (const t of ['Aperta', 'Su', 'Indietro']) await page.click('#pzPart button:has-text("' + t + '")');
-  await settle();
-  { const s = await S(); r.btn = s.P.R; ok(s.P.R.k === 0 && s.P.R.roll === 180 && s.P.R.wrist === 70, 'hand buttons'); }
-  // undo: the three buttons back
-  for (let i = 0; i < 3; i++) await page.click('#pzUndo');
-  await settle();
-  { const s = await S(); ok(s.P.R.k === .55 && s.P.R.wrist !== 70, 'undo'); }
-  // the poses' row: a new pose, then playing, then stop
-  await page.click('#pzAdd'); await settle();
-  { const s = await S(); ok(s.n === 2 && s.cur === 1, 'add pose'); }
-  await drag('hL', -40, 30);
-  await page.click('#pzPlay'); await page.waitForTimeout(200);
+  // the hands go round
+  for (const k of ['mA', 'mD']) {
+    const seen = [];
+    for (let i = 0; i < 3; i++) { await page.tap('#pz_' + k); await settle(150); seen.push((await S()).P[k]); }
+    r[k] = seen; ok(new Set(seen).size === 3 && seen[2] === (k === 'mA' ? 'pugno' : 'socchiusa'), 'hand ' + k);
+  }
+  // a new pose, a change, playing, stop
+  await page.tap('#pzAdd'); await settle();
+  { const s = await S(); ok(s.n === 2 && s.cur === 1, 'add'); }
+  await page.tap('#pzP .pzR[aria-label="Braccio avanti"] button[data-v="avanti"]'); await page.tap('#pz_mA'); await page.tap('#pz_mA'); await settle();
+  await page.tap('#pzPlay'); await settle(200);
   { const s = await S(); r.playTitle = s.title; ok(s.play && /Riproduzione/.test(s.title), 'play'); }
-  // playing: the lead wrist goes between its two poses (sampled for 2.2 s: one loop is 1.7 s at the game's speed)
   const wr = [];
-  for (let i = 0; i < 22; i++) { wr.push(await page.evaluate(() => VW.it.bones.find(x => x.name === 'LeftHand').getWorldPosition(new THREE.Vector3()).toArray())); await page.waitForTimeout(100); }
-  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-  r.playMoves = Math.round(Math.max(...wr.map(p => dist(p, wr[0]))) * 1000);
-  ok(r.playMoves > 50, 'playing moves: ' + r.playMoves);
-  await page.click('#pzPlay'); await settle();
+  for (let i = 0; i < 22; i++) { wr.push((await bones())[0]); await page.waitForTimeout(100); }
+  r.playMoves = Math.round(Math.max(...wr.map(p => Math.hypot(p[0] - wr[0][0], p[1] - wr[0][1], p[2] - wr[0][2]))) * 1000);
+  ok(r.playMoves > 100, 'playing moves: ' + r.playMoves);
+  await page.tap('#pzPlay'); await settle();
   { const s = await S(); ok(!s.play, 'stop'); }
-  // keys: Tab to the next part, arrows move it, Ctrl+Z
-  await page.click('#pzChips button:nth-child(1)'); await page.focus('body').catch(() => {}); await page.evaluate(() => document.activeElement && document.activeElement.blur());
-  { const s0 = await S(); await page.keyboard.press('Tab'); await page.keyboard.press('Tab'); await page.keyboard.press('ArrowUp'); await page.keyboard.press('ArrowUp'); await settle();
-    const s1 = await S(); r.keys = {sel: [s0.sel, s1.sel]}; ok(s1.sel !== s0.sel && JSON.stringify(s1.P) !== JSON.stringify(s0.P), 'keys');
-    await page.keyboard.press('Control+z'); await settle(); const s2 = await S(); ok(JSON.stringify(s2.P) !== JSON.stringify(s1.P), 'ctrl+z'); }
-  // a controller: the right shoulder to the next part, the left stick up for half a second, the A button
-  await page.evaluate(() => {
-    const pad = {buttons: Array.from({length: 17}, () => ({pressed: false})), axes: [0, 0, 0, 0]};
-    window.__pad = pad; navigator.getGamepads = () => [pad];
-  });
+  // undo, the guard, delete
+  { const s0 = await S(); await page.tap('#pzUndo'); await settle(); const s1 = await S(); ok(JSON.stringify(s0.P) !== JSON.stringify(s1.P), 'undo');
+    await page.tap('#pzGuard'); await settle(); const s2 = await S(); ok(s2.P.bA === 'guardia' && s2.P.mA === 'pugno' && s2.P.gA === 'terra', 'guard');
+    await page.tap('#pzDel'); await settle(); const s3 = await S(); ok(s3.n === 1, 'delete'); }
+  // keys: up to the first row (the lead arm: the keys start from the row last touched), right to its next position,
+  // down to the rear arm, right; Ctrl+Z twice
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
   { const s0 = await S();
-    await page.evaluate(() => { __pad.buttons[5].pressed = true; }); await page.waitForTimeout(120); await page.evaluate(() => { __pad.buttons[5].pressed = false; __pad.axes[1] = -1; });
-    await page.waitForTimeout(500); await page.evaluate(() => { __pad.axes[1] = 0; __pad.buttons[0].pressed = true; }); await page.waitForTimeout(120);
-    await page.evaluate(() => { __pad.buttons[0].pressed = false; }); await settle();
-    const s1 = await S(); r.pad = {sel: [s0.sel, s1.sel]}; ok(s1.sel !== s0.sel && JSON.stringify(s1.P) !== JSON.stringify(s0.P), 'controller'); }
-  // the notes, then the save: what the database holds
-  await page.click('#pzNb'); await page.fill('#pzName', 'Prova'); await page.fill('#pzNote', 'dalla 1 alla 2 veloce'); await page.click('#pzClose');
+    for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowUp');
+    const row0 = await page.evaluate(() => VW.PZ.row);
+    for (let i = 0; i < row0; i++) await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); await settle(200);
+    const s1 = await S(); r.keys = {row: await page.evaluate(() => VW.PZ.row), bA: [s0.P.bA, s1.P.bA], bD: [s0.P.bD, s1.P.bD]};
+    ok(r.keys.row === 1 && s1.P.bA !== s0.P.bA && s1.P.bD !== s0.P.bD, 'keys');
+    await page.keyboard.press('Control+z'); await page.keyboard.press('Control+z'); await settle(200);
+    const s2 = await S(); ok(s2.P.bA === s0.P.bA && s2.P.bD === s0.P.bD, 'ctrl+z'); }
+  // a controller: down (from the rear arm to the hands' row), right (the rear hand goes round), A (a new pose)
+  await page.evaluate(() => { const pad = {buttons: Array.from({length: 17}, () => ({pressed: false})), axes: [0, 0, 0, 0]}; window.__pad = pad; navigator.getGamepads = () => [pad]; });
+  { const s0 = await S(), press = async i => { await page.evaluate(i => { __pad.buttons[i].pressed = true; }, i); await page.waitForTimeout(120); await page.evaluate(i => { __pad.buttons[i].pressed = false; }, i); await page.waitForTimeout(120); };
+    await press(13); await press(15); await press(0); await settle(200);
+    const s1 = await S(); r.pad = {mD: [s0.P.mD, s1.P.mD], n: [s0.n, s1.n]}; ok(s1.P.mD !== s0.P.mD && s1.n === s0.n + 1, 'controller'); }
+  // the notes and the save
+  await page.tap('#pzNb'); await page.fill('#pzName', 'Prova'); await page.fill('#pzNote', 'dalla 1 alla 2 veloce'); await page.tap('#pzClose');
   await page.waitForTimeout(1600);
-  const saved = await page.evaluate(() => ({writes: window.__writes || 0, docs: Object.entries(window.__store).map(([id, d]) => ({id, name: d.name, note: d.note, poses: d.poses.length, v: d.v}))}));
-  r.saved = saved; ok(saved.docs.length === 1 && saved.docs[0].name === 'Prova' && saved.docs[0].poses === 2 && saved.writes < 25, 'saved');
-  // time: the act's pose against the kit's guard (ms per frame, the pose only)
+  r.saved = await page.evaluate(() => ({writes: window.__writes || 0, docs: Object.entries(window.__store).map(([id, d]) => ({id, v: d.v, name: d.name, poses: d.poses.length, first: d.poses[0]})), list: VW.PZ.list.map(a => a.name)}));
+  ok(r.saved.docs.some(d => d.v === 2 && d.name === 'Prova' && d.poses === 2) && !r.saved.list.includes('Prova vecchia'), 'saved');
+  // time: the pose (ms per frame) against the kit's guard
   r.ms = await page.evaluate(() => {
     const X = window.__X, md = X.mdData('ren'), F = Object.assign({}, VW.F), S = {frame: 0, sides: [{team: [F], cur: 0}]};
     const t = act => { F.act = act; F.af = 50; for (let i = 0; i < 20; i++) X.RN.pure(md, F, S); const t0 = performance.now(); for (let i = 0; i < 200; i++) { F.af = 50 + i * .1; X.RN.pure(md, F, S); } return +((performance.now() - t0) / 200).toFixed(3); };
     return {posa: t('posa'), idle: t('idle')};
   });
   r.fps = await page.evaluate(() => VW.fps);
-  // opened again: the saved animation comes back
-  await page.reload(); await page.waitForFunction(() => window.VW && VW.PZ && VW.PZ.guard, null, {timeout: 60000}); await page.waitForTimeout(1200);
+  // opened again
+  await page.reload(); await page.waitForFunction(() => window.VW && VW.PZ && VW.pz, null, {timeout: 60000}); await page.waitForTimeout(1200);
   r.reopen = await page.evaluate(() => ({name: VW.PZ.name, n: VW.PZ.poses.length, st: document.getElementById('pzSt').textContent}));
   ok(r.reopen.name === 'Prova' && r.reopen.n === 2, 'reopen');
-  console.log(JSON.stringify({errors, fails, lay, ...r, hL: r.hL.miss, hR: r.hR.miss, fL: r.fL.miss, fR: r.fR.miss, hips: r.hips.miss, chest: r.chest.miss, head: r.head.miss, headYaw: r.headYaw.miss, eL: r.eL.P1.L.e, all: r.all.miss}, null, 1));
+  // every combination, solved once
+  r.all = await page.evaluate(() => {
+    const X = window.__X, T = X.THREE, it = VW.it, md = X.mdData('ren'), PZ = VW.PZ, B = n => it.bones.find(b => b.name === n), P = n => B(n).getWorldPosition(new T.Vector3());
+    const F = Object.assign({}, VW.F, {act: 'posa', af: 1000}), S = {frame: 1000, sides: [{team: [F], cur: 0}]};
+    X.mdApply(it, X.mdRest(md)); it.root.position.set(0, 0, 0); it.root.rotation.y = 0; it.body.scale.x = it.scale; it.root.updateMatrixWorld(true);
+    const len = {}; for (const s of ['Left', 'Right']) len[s] = P(s + 'UpLeg').distanceTo(P(s + 'Leg')) + P(s + 'Leg').distanceTo(P(s + 'Foot'));
+    const row = k => VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]), hands = VW.pz.hands.map(h => h[0]);
+    const keys = ['bA', 'mA', 'bD', 'mD', 'gA', 'gD', 'busto', 'alt'], dom = [row('bA'), hands, row('bD'), hands, row('gA'), row('gD'), row('busto'), row('alt')];
+    const w = {chest: 0, head: 9, ext: 0, floor: 0, nan: 0, n: 0}, idx = keys.map(() => 0);
+    for (;;) {
+      const c = {note: ''}; keys.forEach((k, i) => { c[k] = dom[i][idx[i]]; });
+      PZ.poses = [c]; PZ.cur = 0; PZ.D = null; PZ.tr = null; PZ.ver++; F.af++; S.frame++;
+      const p = X.RN.pure(md, F, S);
+      if (p.q.some(x => !isFinite(x)) || p.h.some(x => !isFinite(x))) w.nan++;
+      X.mdApply(it, p); it.root.updateMatrixWorld(true);
+      const sp = B('Spine01'), inv = sp.matrixWorld.clone().invert(), lo = P('Spine02').applyMatrix4(inv).y - .05, hi = P('neck').applyMatrix4(inv).y;
+      for (const s of ['Right', 'Left']) {
+        const E = P(s + 'ForeArm'), H = P(s + 'Hand'), tp = new T.Vector3(0, .09, 0).applyMatrix4(B(s + 'Hand').matrixWorld);
+        for (const pt of [E, E.clone().lerp(H, .5), H, H.clone().lerp(tp, .5)]) {
+          const l = pt.clone().applyMatrix4(inv); if (l.y < lo || l.y > hi) continue;
+          const rz = l.z > 0 ? .13 : .15, kk = Math.hypot(l.x / .2, l.z / (rz + .04));
+          if (kk < 1) w.chest = Math.max(w.chest, (1 - kk) * 100 * Math.min(.2, rz + .04));
+        }
+        w.head = Math.min(w.head, H.clone().lerp(tp, .5).distanceTo(P('Head').addScaledVector(new T.Vector3(0, 1, 0), .1)));
+      }
+      for (const [s, g] of [['Left', 'gA'], ['Right', 'gD']]) {
+        if (c[g] === 'terra') w.ext = Math.max(w.ext, P(s + 'UpLeg').distanceTo(P(s + 'Foot')) / len[s]);
+        w.floor = Math.max(w.floor, -Math.min(P(s + 'ToeBase').y, P(s + 'Foot').y - .06));
+      }
+      w.n++;
+      let i = 0; while (i < keys.length && ++idx[i] >= dom[i].length) { idx[i] = 0; i++; }
+      if (i === keys.length) break;
+    }
+    for (const k of ['chest', 'head', 'ext', 'floor']) w[k] = +w[k].toFixed(3);
+    return w;
+  });
+  ok(!r.all.nan && r.all.chest < .5 && r.all.head > .08 && r.all.ext <= .966 && r.all.floor < .005, 'combinations');
+  // every change of one row, eased: no joint jumps in the middle (its largest step against its mean over the change)
+  r.ease = await page.evaluate(() => {
+    const X = window.__X, T = X.THREE, it = VW.it, md = X.mdData('ren'), PZ = VW.PZ, G = VW.pz.guard, B = n => it.bones.find(b => b.name === n);
+    const F = Object.assign({}, VW.F, {act: 'posa', af: 5000}), S = {frame: 5000, sides: [{team: [F], cur: 0}]}, n = PZ.ease;
+    const J = ['LeftForeArm', 'LeftHand', 'RightForeArm', 'RightHand', 'LeftLeg', 'LeftFoot', 'RightLeg', 'RightFoot', 'Head'];
+    const pos = () => { X.mdApply(it, X.RN.pure(md, F, S)); it.root.updateMatrixWorld(true); return J.map(j => B(j).getWorldPosition(new T.Vector3())); };
+    const hands = VW.pz.hands.map(h => h[0]), changes = [], A = ['guardia', 'avanti', 'alto', 'viso'].flatMap(v => hands.map(h => [v, h]));
+    for (const [pk, hk] of [['bA', 'mA'], ['bD', 'mD']]) for (const a of A) for (const b of A) if (a.join() !== b.join()) changes.push([{[pk]: a[0], [hk]: a[1]}, {[pk]: b[0], [hk]: b[1]}]);
+    for (const k of ['gA', 'gD', 'busto', 'alt']) { const vs = VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]); for (const a of vs) for (const b of vs) if (a !== b) changes.push([{[k]: a}, {[k]: b}]); }
+    let worst = {ratio: 0, step: 0, at: ''};
+    for (const [a, b] of changes) {
+      PZ.poses = [Object.assign({}, G, a, {note: ''})]; PZ.cur = 0; PZ.D = null; PZ.tr = null; PZ.ver++; F.af++; S.frame++;
+      let prev = pos();
+      PZ.poses[0] = Object.assign({}, G, b, {note: ''}); PZ.ver++;
+      const steps = J.map(() => []);
+      for (let f = 0; f < n; f++) { F.af++; S.frame++; const cur = pos(); cur.forEach((p, j) => steps[j].push(p.distanceTo(prev[j]))); prev = cur; }
+      steps.forEach((st, j) => {
+        const tot = st.reduce((x, y) => x + y, 0), mx = Math.max(...st), ratio = mx / (tot / st.length);
+        if (mx > .03 && ratio > worst.ratio) worst = {ratio: +ratio.toFixed(2), step: +(mx * 100).toFixed(1), at: JSON.stringify(a) + ' > ' + JSON.stringify(b) + ' ' + J[j]};
+      });
+    }
+    return {n: changes.length, worst};
+  });
+  ok(r.ease.worst.ratio < 3, 'a joint jumps: ' + r.ease.worst.at);   // (an even ease: 1.5; a jump: much more)
+  console.log(JSON.stringify({errors, fails, ...r}, null, 1));
   await browser.close();
   process.exit(errors.length || fails.length ? 1 : 0);
 })();
