@@ -82,6 +82,24 @@ Tutte ritagliate o ricavate dai 5 riferimenti dell'interfaccia, ingrandite 4 vol
 - Acquisto del Premium dagli store (Google Play, App Store, Steam) con controllo delle ricevute su un server; online e classifica globale; negozio; altre lingue; musica e suoni; scelta simultanea dei personaggi con due dispositivi; scontro speculare (seconda copia del modello e colore alternativo); intro con i modelli 3D; Astra e Raigon giocabili.
 - Il VS non ha un pulsante «Indietro» a schermo (come nel riferimento): Esc / B tornano all'arena; dura 2,5 s.
 
+## Intro filmata (13/11, dallo storyboard di Denis)
+- **L'intro ora è un video**: `assets/ui/video/intro.mp4` (960×432, 32 fps, 4,5 s, 0,6 MB). Ren e Kael si alzano in guardia,
+  scattano e si colpiscono in faccia insieme (Ren col sinistro, Kael col destro); poi lampo bianco, il logo dell'intro disegnata
+  e il titolo, come prima. In tutto circa 6,2 s; «Salta» e il tocco/tasto (dopo la prima volta) restano uguali.
+- Fatto sul PC di Denis con ComfyUI (Wan 2.2 14B, primo e ultimo fotogramma) dai suoi fotogrammi chiave `docs/ref/intro/`
+  (`partenza.png`, `storyboard.png`); scelte, bozze e script in `docs/comfy/ANIMAZIONI.md`. Denis ha scelto di togliere la parata.
+- Codice: `src/u4_intro.js` (`inVideoBuild`, `introVideoAt`, `introMode`): il video è nella pagina come data URI e parte da un
+  blob, muto e in linea; si ferma quando si lascia l'intro, con «Gira il telefono» e a pagina nascosta. Se non è pronto entro
+  `CFG.ui.intro.video.wait` (1,5 s) parte l'intro disegnata, che resta intera (`video.on: false` la rimette). Numeri in
+  `CFG.ui.intro.video` (`hit` = quando i pugni arrivano in faccia: lampo e tremolio). `build.py` accetta `.mp4`.
+- Prove: `tests/ui_video.test.js` (12); `ui_intro.test.js` prova l'intro disegnata con il video spento.
+- FPS nel ciclo vero (`ui_fps`, 844×390, Chrome di Windows senza scheda video, solo da confrontare): intro **68** contro 38,8
+  (il video costa meno dei canvas dell'intro disegnata), menu 45 contro 38, VS 21,6 contro 23,6, lotta 41 contro 41,8 (rumore).
+- Sul PC di Windows la serie gira con il Chrome di sistema (`run.py` e `play_check.py` lo cercano in `C:/Program Files/...`)
+  e Node portatile per `mk.sh`; con `PYTHONIOENCODING=utf-8` (la console di Windows non stampa le frecce dei nomi delle prove).
+- Già prima di questo lavoro (provato sulla versione precedente): `touch.test.js` «stick thresholds and knob clamp» fallisce
+  di 1,2 px sulla levetta ricentrata (98,8 contro 100 ±1) in Chrome per Windows. Da guardare (per dopo).
+
 ## Animazioni con ComfyUI (12/11, scelta di Denis)
 Denis genera le animazioni sul suo PC (RTX 3060 12 GB) con ComfyUI, partendo da immagini che manda lui: intro col pugno vero
 (primo e ultimo fotogramma), personaggi vivi nei menu e sfondi in ciclo. Guida, prompt e impostazioni: `docs/comfy/ANIMAZIONI.md`.

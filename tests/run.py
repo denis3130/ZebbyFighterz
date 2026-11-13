@@ -34,7 +34,8 @@ def chrome_path():
     """System Chrome/Chromium if present (or $VF_CHROME); None = Playwright's own Chromium."""
     if os.environ.get('VF_CHROME'):
         return os.environ['VF_CHROME']
-    for c in ('/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/opt/pw-browsers/chromium'):
+    for c in ('/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/opt/pw-browsers/chromium',
+              'C:/Program Files/Google/Chrome/Application/chrome.exe'):
         if os.path.isfile(c):
             return c
     return None

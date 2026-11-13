@@ -9,7 +9,10 @@
 // introAt(ms) sets the whole scene for that time, a pure function of ms (sparks, rocks and lightning come from seeded
 // numbers), with no CSS animation (see u3_layers.js); the screen's clock advances only on shown frames. «Salta» skips at
 // any time; after the first viewing any key, button or tap does.
-const INTRO = {t: 0, last: 0, el: {}, w: 0, h: 0, dpr: 1, q: 1, scene: null, spr: [null, null], ghostA: 0};
+// The filmed opening (CFG.ui.intro.video) plays instead when its clip is ready: mode 'wait' (the clip is still loading, the
+// screen stays dark and the clock still), 'video' (the clip, then the white-out and the drawn logo) or 'drawn' (the
+// sequence below). vid = the <video>, vok = its first frame is ready.
+const INTRO = {t: 0, last: 0, el: {}, w: 0, h: 0, dpr: 1, q: 1, scene: null, spr: [null, null], ghostA: 0, vid: null, vok: false, mode: 'drawn', waited: 0};
 const IN_SHOTS = [[0, 'dark'], [250, 'rush'], [1300, 'impact'], [1700, 'hold'], [3500, 'burst'], [3900, 'logo']];
 // the beats (ms): the dash in, face to face, the draw back, the hit, the end of the freeze, the impact frame, the hold,
 // the burst, the white-out, the letters, the title's scene showing through
@@ -54,6 +57,7 @@ function introBuild(r) {
     img.src = src;
   });
   E.stage.style.transformOrigin = '50% ' + C.hitY * 100 + '%';
+  inVideoBuild();
   INTRO.w = 0;
   const skip = cBtn({label: 'Salta', kind: 'small', act: () => introSkip()});
   skip.classList.add('inSkip');
@@ -186,11 +190,78 @@ function inRock(c, x, y, r, rot, seed, lit, a, lx, ly) {    // a rock: an irregu
   c.globalAlpha = a * .7; shape(.6, (lx - x) / d * r * .3, (ly - y) / d * r * .3); c.fillStyle = lit; c.fill();
 }
 
-// --- the scene at time t (ms since the intro started) ---
-function introAt(t) {
-  if (NAV.cur !== 'intro') return;
-  if (t >= CFG.ui.intro.len) { introEnd(true); return; }
+// --- the filmed opening ---
+// The clip is embedded in the page as a data URI; the <video> plays it from a blob (Safari does not play a long data URI
+// inline). Muted and inline, so phones play it without a tap. It sits in the stage, under the canvases and the flash.
+function inVideoBuild() {
+  const src = ASSETS['ui/video/intro.mp4'], E = INTRO.el;
+  if (!src || !CFG.ui.intro.video || INTRO.vid) return;
+  const v = document.createElement('video');
+  v.className = 'inVideo'; v.muted = true; v.defaultMuted = true; v.playsInline = true; v.preload = 'auto';
+  v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', ''); v.setAttribute('aria-hidden', 'true');
+  v.addEventListener('loadeddata', () => { INTRO.vok = true; });
+  try {
+    const b = atob(src.slice(src.indexOf(',') + 1)), u = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    v.src = URL.createObjectURL(new Blob([u], {type: 'video/mp4'}));
+  } catch (e) { return; }
+  E.stage.insertBefore(v, E.stage.firstChild);
+  E.vid = INTRO.vid = v;
+  v.load();
+  // a hidden page stops the clip (the intro's clock stops too: frames are not drawn)
+  document.addEventListener('visibilitychange', () => { if (document.hidden && !v.paused) v.pause(); });
+}
+// The whole filmed opening (ms): the clip, the white-out, then the drawn intro from its white-out to its end.
+const inVideoTotal = () => { const V = CFG.ui.intro.video; return (INTRO.vlen || V.len) + V.white + CFG.ui.intro.len - IN_T.white; };
+// The time in the drawn intro that a moment of the filmed one shows (only its end is drawn: the white-out and the logo).
+const inVideoDrawn = t => { const V = CFG.ui.intro.video; return IN_T.white + t - (INTRO.vlen || V.len) - V.white; };
+// The filmed opening at time t: the clip (kept on time by seeking only when it drifts), a flash and a shake when the fists
+// land, a white-out over its last frame, then the drawn intro's logo over the dark.
+function introVideoAt(t) {
+  const V = CFG.ui.intro.video, E = INTRO.el, v = INTRO.vid, L = INTRO.vlen || V.len;
+  if (t >= inVideoTotal()) { introEnd(true); return; }
   INTRO.t = t;
+  if (t >= L + V.white) {                                  // the logo: the drawn intro's end, the clip gone
+    if (!v.paused) v.pause();
+    inOp(v, 0);
+    introAt(inVideoDrawn(t), true);
+    return;
+  }
+  inSize();
+  const root = NAV.screens.intro.root, shot = t < L ? 'film' : 'burst';
+  if (root.dataset.shot !== shot) { root.dataset.shot = shot; root.className = root.className.replace(/\bs-\w+/g, '').trim() + ' s-' + shot; }
+  if (root.classList.contains('imp')) root.classList.remove('imp');
+  if (INTRO.scene !== 'intro') { INTRO.scene = 'intro'; layersSet('intro', {}); }
+  inOp(v, 1);
+  if (t < L) { if (Math.abs(v.currentTime * 1000 - t) > 120) v.currentTime = t / 1000; }
+  else if (!v.paused) v.pause();
+  inOp(E.sky, 0); inOp(E.split, 0); for (const el of [E.ren, E.kael, E.logo, E.titleBg, E.halo]) el.style.opacity = '0';
+  inBg(E.stage, 1); inOp(E.vig, .55);
+  // the hit: a white flash and a hard shake, fading; then the white-out over the last frame
+  const k = inK(t, V.hit, V.hit + 300), e33 = Math.floor(t / 33), H = INTRO.h;
+  const flash = t >= L ? inIn(inK(t, L, L + V.white)) : t >= V.hit ? .85 * (1 - inOut(k)) : 0;
+  E.flash.style.opacity = flash.toFixed(3);
+  const sh = t >= V.hit && t < L ? .02 * (1 - inK(t, V.hit, V.hit + 450)) : 0;
+  E.stage.style.transform = 'translate(' + (sh * (inR(e33, 1) - .5) * 2 * H).toFixed(2) + 'px,' + (sh * (inR(e33, 2) - .5) * 2 * H).toFixed(2) + 'px) scale(' + (1.04 + .03 * (1 - inOut(k)) * (t >= V.hit ? 1 : 0)).toFixed(4) + ')';
+  // the canvases: only focus lines toward the impact, for a moment
+  const G = inGeo(), dpr = INTRO.dpr, fc = E.fc, bc = E.bc;
+  for (const c of [bc, fc]) { const kk = c === bc ? INTRO.bdpr : dpr; c.setTransform(kk, 0, 0, kk, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, G.w, G.h); }
+  if (t >= V.hit && t < V.hit + 350) { fc.globalCompositeOperation = 'lighter'; inLines(fc, {...G, cy: G.h * .45}, Math.floor(t / 40), Math.round(44 * Math.max(INTRO.q, .5)), .55 * (1 - k), '#fff4e6', .18); }
+}
+
+// --- the scene at time t (ms since the intro started) ---
+// fromVideo = the filmed opening draws its end with this (its time is already the drawn intro's)
+function introAt(t, fromVideo) {
+  if (NAV.cur !== 'intro') return;
+  if (!fromVideo && INTRO.mode === 'video') { introVideoAt(t); return; }
+  if (!fromVideo && INTRO.mode === 'wait') {   // the clip is still loading: only the dark (a second viewing must not show the last one's logo)
+    INTRO.t = 0; const E = INTRO.el;
+    inOp(E.sky, 0); inOp(E.split, 0); for (const el of [E.ren, E.kael, E.logo, E.titleBg, E.flash, E.halo]) el.style.opacity = '0';
+    inBg(E.stage, 1); return;
+  }
+  if (t >= CFG.ui.intro.len) { introEnd(true); return; }
+  if (INTRO.vid && !fromVideo) inOp(INTRO.vid, 0);
+  if (!fromVideo) INTRO.t = t;
   inSize();
   const E = INTRO.el, root = NAV.screens.intro.root, T = IN_T, C = CFG.ui.intro, G = inGeo(), H = G.h;
   let shot = IN_SHOTS[0][1];
@@ -351,15 +422,39 @@ function introEnd(whole) {
   if (SV) { SV.introSeen = true; saveWrite(); }
   navReset('title', whole ? {fromIntro: true} : {});
 }
-function introSkip() { introEnd(INTRO.t >= IN_T.logo + 600); }   // once the logo has formed, the title keeps it still
+// once the logo has formed, the title keeps it still
+function introSkip() { introEnd((INTRO.mode === 'video' ? inVideoDrawn(INTRO.t) : INTRO.t) >= IN_T.logo + 600); }
+// Which opening plays: the filmed one when its clip is ready (wait for it a moment at most), else the drawn one.
+function introMode() {
+  const V = CFG.ui.intro.video, v = INTRO.vid;
+  if (!v || !V || !V.on) return 'drawn';
+  if (INTRO.vok) { if (isFinite(v.duration) && v.duration > 1) INTRO.vlen = Math.round(v.duration * 1000); return 'video'; }
+  return INTRO.waited < V.wait ? 'wait' : 'drawn';
+}
+function introStart(mode) {
+  INTRO.mode = mode; INTRO.t = 0;
+  const v = INTRO.vid;
+  if (mode === 'video') { v.currentTime = 0; const p = v.play(); if (p && p.catch) p.catch(() => { if (INTRO.mode === 'video' && INTRO.t < 300) introStart('drawn'); }); }
+  else if (v) { v.pause(); inOp(v, 0); }
+  introAt(0);
+}
 
 function introScreens() {
   navRegister({id: 'intro', scene: 'intro', build: introBuild,
-    enter() { INTRO.t = 0; INTRO.last = 0; INTRO.scene = null; INTRO.q = IN_QN[LY.q] || 1; introAt(0); },
-    leave() { INTRO.scene = null; },
+    enter() { INTRO.t = 0; INTRO.last = 0; INTRO.scene = null; INTRO.q = IN_QN[LY.q] || 1; INTRO.waited = 0; introStart(introMode()); },
+    leave() { INTRO.scene = null; if (INTRO.vid) { INTRO.vid.pause(); inOp(INTRO.vid, 0); } },
     frame(now) {
-      if (MN.rot) { INTRO.last = now; return; }   // «Gira il telefono» covers it: the intro waits
-      const dt = INTRO.last ? Math.min(100, now - INTRO.last) : 0; INTRO.last = now; introAt(INTRO.t + dt);
+      const v = INTRO.vid;
+      if (MN.rot) { INTRO.last = now; if (v && !v.paused) v.pause(); return; }   // «Gira il telefono» covers it: the intro waits
+      const dt = INTRO.last ? Math.min(100, now - INTRO.last) : 0; INTRO.last = now;
+      if (INTRO.mode === 'wait') { INTRO.waited += dt; const m = introMode(); if (m !== 'wait') introStart(m); return; }
+      if (INTRO.mode === 'video') {
+        const L = INTRO.vlen || CFG.ui.intro.video.len;
+        if (INTRO.t < L && v.paused && !v.ended) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+        // the clip keeps the time while it plays (its own clock), the frames shown keep it after
+        if (INTRO.t < L && !v.paused && !v.ended && v.currentTime > 0) { introAt(Math.max(INTRO.t, Math.min(INTRO.t + 100, v.currentTime * 1000))); return; }
+      }
+      introAt(INTRO.t + dt);
     },
     any() { if (!SV || !SV.introSeen) return false; introSkip(); return true; },
     back() { return false; }});

@@ -12,7 +12,12 @@ Object.assign(CFG, {
       // each half in it (fractions), the charged fists (Ren's is hidden behind Kael's in the picture: his glow covers it);
       // on screen the panel is panelH of the screen's height, the hit at hitY of the height, centred
       aspect: 2.0291, hit: [.5353, .6038], ren: [.0006, .1396, .5263, .9994], kael: [.5215, .2409, .9997, .9703],
-      fist: {ren: [.522, .604], kael: [.549, .61]}, panelH: 1.1, hitY: .55},
+      fist: {ren: [.522, .604], kael: [.549, .61]}, panelH: 1.1, hitY: .55,
+      // the filmed opening (Denis's storyboard, docs/ref/intro/, animated with ComfyUI: docs/comfy/ANIMAZIONI.md): the
+      // clip assets/ui/video/intro.mp4, then a white-out and the logo of the drawn intro (from its «white» beat on).
+      // len = the clip (ms), hit = when the two fists land on the faces (flash and shake), white = the white-out after it,
+      // wait = how long the intro waits for the clip to be ready before playing the drawn one instead
+      video: {on: true, len: 4530, hit: 3150, white: 400, wait: 1500}},
     vs: {minMs: 2500, tapAfterMs: 600},                                   // the VS screen stays at least this long; a tap skips it after tapAfterMs once loaded
     par: {sky: .12, ruins: .35, fog: .6, hero: 1, step: 28},             // parallax: share of the shift per layer, px per navigation step
     q: {lowCores: 4, lowMem: 3, parts: {bassa: 0, media: 36, alta: 80}},  // quality 'auto': media at or below these cores / GB, else alta; particles per quality

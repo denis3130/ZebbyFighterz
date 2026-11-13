@@ -23,7 +23,8 @@ def serve():
 
 
 def chrome():
-    for c in (os.environ.get('VF_CHROME'), '/usr/bin/google-chrome', '/usr/bin/chromium', '/opt/pw-browsers/chromium'):
+    for c in (os.environ.get('VF_CHROME'), '/usr/bin/google-chrome', '/usr/bin/chromium', '/opt/pw-browsers/chromium',
+              'C:/Program Files/Google/Chrome/Application/chrome.exe'):
         if c and os.path.exists(c): return c
     return None
 

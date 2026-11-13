@@ -2,7 +2,7 @@ import sys, os, json, base64, re
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, 'src')
 ASSET_DIR = os.path.join(ROOT, 'assets')
-MIME = {'.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
+MIME = {'.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4'}
 
 def assets(extra=()):
     """{path relative to assets/: value} for the files under assets/ (empty if there is no folder): jpg/png as a data

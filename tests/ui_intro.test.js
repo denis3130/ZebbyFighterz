@@ -1,6 +1,8 @@
 // Interface: the opening (redone for Denis: Ren and Kael dash in, face off, lunge and their fists meet; impact frame, shock,
 // a slow-motion hold, a white-out, the logo where the title has it), skipping, and its clock (a pure function of the time;
 // it stops while the page is hidden).
+// These are the drawn intro's tests: the filmed opening (CFG.ui.intro.video) is off here, ui_video.test.js tests it.
+__VF.CFG.ui.intro.video.on = false;
 const inRoot = () => $('sc-intro'), inEl = s => document.querySelector('#sc-intro ' + s);
 const inOp = s => +getComputedStyle(inEl(s)).opacity;
 const inTx = el => new DOMMatrix(getComputedStyle(el).transform).e;

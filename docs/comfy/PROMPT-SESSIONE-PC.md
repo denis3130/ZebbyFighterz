@@ -28,7 +28,7 @@ qualcosa dimmi cosa e quanto pesa e aspetta il mio ok; non toccare il codice del
    passi (lightx2v / Lightning), steps 4, cfg 1. Impostazioni di prova: 832x480, 81 fotogrammi (5 s a 16 fps), seme fisso.
 3. Le clip (immagini orizzontali 16:9 che ti do io):
    - Intro: partenza = Ren e Kael lontani ai lati, pronti a scattare; arrivo = i pugni che si scontrano al centro.
-   - Titolo, Menu, Sfondo: la STESSA immagine come partenza e come arrivo, così il video torna all'inizio e va in ciclo.
+   - Titolo, Menu: la STESSA immagine come partenza e come arrivo, così il video torna all'inizio e va in ciclo.
 4. Prompt (inglese):
    - Intro: anime fighting game cinematic, two martial artists dash toward each other from the left and the right,
      Ren (dark spiky hair, teal sleeveless gi, orange sash, bandaged wrists) and Kael (silver-white hair, black and
@@ -37,14 +37,12 @@ qualcosa dimmi cosa e quanto pesa e aspetta il mio ok; non toccare il codice del
      faces and outfits
    - Personaggio in ciclo: anime character standing still, subtle breathing, hair and clothes moving gently in the
      wind, floating embers, soft aura glow, camera locked, seamless loop, same pose at the start and at the end
-   - Sfondo in ciclo: dusk sky over ancient ruins, clouds drifting slowly, floating embers, light rays, camera locked,
-     seamless loop
    - Negativo: blurry, low quality, deformed hands, extra fingers, extra limbs, morphing face, changing outfit, text,
      watermark, flicker, static image
 5. Per ogni clip: generala, guarda tu i fotogrammi (volti e vestiti che non cambiano, mani giuste), mostrami un foglio
    di fotogrammi e rifalla con un altro seme se non va.
 6. Consegna: se puoi usare git sul ramo claude/cool-fermi-fkx4iq, metti gli MP4 in assets/ui/video_src/
-   (intro.mp4, titolo.mp4, menu.mp4, sfondo.mp4), fai commit e push; altrimenti salvali in Documenti\voidrise-video
+   (intro.mp4, titolo.mp4, menu.mp4), fai commit e push; altrimenti salvali in Documenti\voidrise-video
    e dimmelo: li mando io alla chat nel cloud.
 Inizia dal punto 1 e dimmi cosa trovi.
 ```
@@ -60,7 +58,7 @@ Leggi prima `CLAUDE.md` e `docs/HANDOFF-UI.md` (regole, architettura dell'interf
   - Intro (`src/u4_intro.js`): il video dell'intro nello stage, sotto i due canvas degli effetti; tieni lampo, anelli e logo
     allineati al momento del pugno nel video (un numero in `CFG.ui.intro`, in `src/a1_ui_cfg.js`); «Salta» e la fine
     verso il titolo restano come sono.
-  - Titolo, menu, sfondo (`src/u3_layers.js`, `#uiLayers`): un livello `<video muted playsinline loop autoplay>` per scena,
+  - Titolo, menu (`src/u3_layers.js`, `#uiLayers`): un livello `<video muted playsinline loop autoplay>` per scena,
     con un fotogramma fisso come riserva; **in pausa e nascosto** durante la lotta e la pausa (`menuSync` in `src/h_menu.js`
     già spegne `#uiLayers`) e quando la pagina è nascosta.
 - **Prove**: `bash mk.sh` (deve dire SYNTAX_OK); la serie dell'interfaccia e del gioco elencata in `docs/HANDOFF-UI.md`
