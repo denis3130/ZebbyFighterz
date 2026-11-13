@@ -17,7 +17,7 @@ function playScreens() {
       vs.classList.add('mmVs');
       list.append(cItem({label: 'Gioca', act0: 'play', act: () => navFocus(vs)}),
         cItem({label: 'Allenamento', act0: 'train', act: dev => { if (dev === 'touch') mnFullscreen(); navGo('select', {mode: 'training', step: 0, picks: []}); }}),
-        cItem({label: 'Profilo', locked: true, note: soon}), cItem({label: 'Pass stagionale', locked: true, note: soon}), cItem({label: 'Impostazioni', locked: true, note: soon}));
+        cItem({label: 'Profilo', act0: 'profile', act: () => navGo('profile')}), cItem({label: 'Pass stagionale', locked: true, note: soon}), cItem({label: 'Impostazioni', act0: 'settings', act: () => navGo('settings')}));
       const cards = uiEl('div', 'mmCards');
       cards.append(cCard({label: 'Arcade', img: ASSETS['ui/card_arcade.webp'], locked: true, note: 'Arcade in arrivo'}),
         cCard({label: 'Online', img: ASSETS['ui/card_online.webp'], locked: true, note: 'Modalità online in arrivo'}));

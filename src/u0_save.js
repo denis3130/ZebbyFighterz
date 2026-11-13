@@ -5,9 +5,9 @@ const SAVE = {key: 'voidrise.save', v: 1, old: 'voidrise.prefs', warned: false};
 let SV = null;
 
 function saveDefaults() {
-  return {v: SAVE.v, name: null, introSeen: false, xp: 0, lastChar: 'ren',
+  return {v: SAVE.v, name: null, avatar: null, introSeen: false, xp: 0, lastChar: 'ren',
     stats: {played: 0, won: 0, lost: 0, draw: 0, rounds: 0, hits: 0, maxCombo: 0, timeS: 0, byChar: {}},
-    settings: {quality: 'auto', fpsCap: 60, showFps: false}};
+    settings: {quality: 'auto', fpsCap: 60, showFps: false, music: 70, sfx: 85}};
 }
 const svIsObj = o => !!o && typeof o === 'object' && !Array.isArray(o);
 // s laid over d: nested objects merge key by key, so a save written before a new setting still gets its default.

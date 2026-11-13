@@ -274,7 +274,7 @@ html,body{margin:0;height:100%;background:var(--dark);color:var(--ink);overflow:
 @keyframes uBladeBack{0%{opacity:0;transform:translateX(120vw) skewX(-18deg)}20%{opacity:1}100%{opacity:0;transform:translateX(-30vw) skewX(-18deg)}}
 /* --- the screens of the fight cycle (h_menu.js) --- */
 #sc-pause{justify-content:flex-start;background:linear-gradient(90deg,rgba(14,12,22,.9) 0%,rgba(14,12,22,.62) 42%,rgba(14,12,22,.2) 100%)}
-#sc-pause .ucol{width:calc(var(--u)*46);gap:calc(var(--u)*2)}
+#sc-pause .ucol{width:calc(var(--u)*46);gap:calc(var(--u)*1.2);margin-top:calc(var(--u)*2)}   /* six entries (U2) still fit a 390 px tall phone */
 #sc-results{align-items:center;background:rgba(14,12,22,.66)}
 /* --- the layered scene behind the menus (u3_layers.js). Parallax moves each layer with transform; the clouds and fog scroll
    with the separate translate property, the characters breathe with scale: they add up. All set from JS while a menu is
@@ -624,6 +624,65 @@ html,body{margin:0;height:100%;background:var(--dark);color:var(--ink);overflow:
 #stickBase{background:radial-gradient(circle,rgba(36,30,46,.5),rgba(12,10,18,.6) 70%);border:1.5px solid rgba(226,196,150,.6);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23e2c496' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' opacity='.75'%3E%3Cpath d='M44 14l6-6 6 6M44 86l6 6 6-6M14 44l-6 6 6 6M86 44l6 6-6 6'/%3E%3C/g%3E%3C/svg%3E"),radial-gradient(circle,rgba(36,30,46,.5),rgba(12,10,18,.6) 70%);background-size:100% 100%}
 #stickKnob{background:radial-gradient(circle at 40% 35%,rgba(255,240,218,.55),rgba(190,160,120,.35) 70%);border:1.5px solid rgba(243,214,160,.85)}
+/* --- U2 (u6_meta.js): Lista mosse and Impostazioni, from the pause (over the fight) and from the main menu. A dark veil on
+   the left half keeps the text readable over any scene; the rows sit in a thin gold-edged panel. --- */
+#sc-moves,#sc-settings{justify-content:flex-start;gap:calc(var(--u)*2.6);background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.84) 55%,rgba(14,12,22,.45) 100%)}
+#sc-moves .uback,#sc-settings .uback{position:absolute;left:calc(env(safe-area-inset-left) + var(--u)*5);top:calc(env(safe-area-inset-top) + var(--u)*3)}
+.mtTop{display:flex;align-items:flex-end;justify-content:space-between;gap:calc(var(--u)*4);width:100%;margin-top:calc(var(--u)*8);flex-wrap:wrap}
+.mtTabs{gap:calc(var(--u)*4)}
+.mtBody{width:100%;max-width:calc(var(--u)*160);min-height:0;overflow:auto;padding:calc(var(--u)*2.4) calc(var(--u)*3);background:var(--u-panel);border:1px solid var(--u-line);box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.mvGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:calc(var(--u)*5)}
+.mvRow{display:flex;align-items:baseline;justify-content:space-between;gap:calc(var(--u)*2);padding:calc(var(--u)*1) 0;border-bottom:1px solid rgba(216,166,87,.16)}
+.mvN{font-weight:600;font-size:max(14px,calc(var(--u)*3.6));color:#f6efe3}
+.mvK{font-style:italic;font-weight:500;font-size:max(13px,calc(var(--u)*3.2));color:var(--u-gold2);text-align:right}
+@media (max-width:640px){.mvGrid{grid-template-columns:1fr}}
+.stBody{display:flex;flex-direction:column;gap:calc(var(--u)*2.2);max-width:calc(var(--u)*120)}
+.stRow{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--u)*4);flex-wrap:wrap}
+.stL{display:flex;flex-direction:column;font-weight:600;font-size:max(16px,calc(var(--u)*4.4));color:#f6efe3}
+.stNote{font-style:italic;font-weight:500;font-size:max(12px,calc(var(--u)*2.8));color:var(--u-dim)}
+.stRow .ub{min-width:calc(var(--u)*36);height:max(44px,calc(var(--u)*10))}
+.stInfo{margin:0;font-style:italic;font-weight:500;font-size:max(13px,calc(var(--u)*3.2));color:var(--u-dim)}
+.stCmd{display:grid;gap:calc(var(--u)*.6)}
+.stCmdH,.stCmdR{display:grid;grid-template-columns:1.1fr 1fr 1fr 1.3fr;gap:calc(var(--u)*2);align-items:baseline}
+.stCmdH b{font-family:var(--u-display);font-weight:500;font-size:max(10px,calc(var(--u)*2.4));letter-spacing:.14em;text-transform:uppercase;color:var(--u-gold2)}
+.stCmdR{padding:calc(var(--u)*.8) 0;border-bottom:1px solid rgba(216,166,87,.16)}
+.stCmdR span{font-weight:600;font-size:max(14px,calc(var(--u)*3.4));color:#f6efe3}
+.stCmdR i{font-weight:500;font-size:max(12px,calc(var(--u)*3));color:var(--u-ink)}
+/* short phone screens: the head beside the tabs, the panel a little tighter */
+@media (max-height:430px){.mtTop{margin-top:calc(var(--u)*10)}#sc-moves .uheadS{display:none}.mvRow{padding:calc(var(--u)*.6) 0}}
+/* --- «Gira il telefono» in the interface's style (the phone turned from JS: h_menu.js mnRotLoop) --- */
+#rotate{background:radial-gradient(ellipse at 50% 40%,#2a2138 0%,#16121f 60%,#0d0b13 100%);gap:14px}
+#rotate svg{animation:none;width:110px;height:110px;stroke:var(--u-gold);stroke-width:1.8;filter:drop-shadow(0 0 10px rgba(216,166,87,.35))}
+#rotate p{font-family:var(--u-serif);font-style:normal;font-weight:600;font-size:30px;letter-spacing:.02em;color:#f6efe3}
+#rotate .rotSub{max-width:260px;font-family:var(--u-serif);font-style:italic;font-weight:500;font-size:17px;line-height:1.3;color:var(--u-dim)}
+#rotate::after{content:'';width:120px;height:6px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange) 50%,rgba(240,138,50,0));clip-path:var(--u-brush)}
+/* --- U3, Profilo (u6_meta.js): the player's card (round portrait, name, level, XP bar), the numbers as label / value rows --- */
+#sc-profile{justify-content:flex-start;gap:calc(var(--u)*2.6);background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.82) 55%,rgba(14,12,22,.2) 100%)}
+#sc-profile .uback{position:absolute;left:calc(env(safe-area-inset-left) + var(--u)*5);top:calc(env(safe-area-inset-top) + var(--u)*3)}
+.pfBody{display:flex;flex-direction:column;gap:calc(var(--u)*2.2);max-width:calc(var(--u)*110)}
+.pfCard{display:flex;align-items:center;gap:calc(var(--u)*3)}
+.pfFace{flex:none;width:max(56px,calc(var(--u)*15));height:max(56px,calc(var(--u)*15));border-radius:50%;background:#241f30 center 20%/cover no-repeat;border:1px solid var(--u-gold);box-shadow:0 0 14px rgba(216,166,87,.35)}
+.pfWho{display:flex;flex-direction:column;gap:calc(var(--u)*.6);flex:1;min-width:0}
+.pfName{font-weight:600;font-size:max(20px,calc(var(--u)*6.4));line-height:1.05;color:#f6efe3;overflow-wrap:anywhere}
+.pfLvl{font-style:italic;font-weight:500;font-size:max(14px,calc(var(--u)*3.6));color:var(--u-gold2)}
+.pfBar{width:100%;max-width:calc(var(--u)*60)}
+.pfXp{font-size:max(11px,calc(var(--u)*2.6));color:var(--u-dim);font-variant-numeric:tabular-nums}
+.pfActs{display:flex;gap:calc(var(--u)*3);flex-wrap:wrap;align-items:center}
+.pfActs .ustep{min-width:calc(var(--u)*44)}
+.pfActs .ub{min-width:calc(var(--u)*34);height:max(44px,calc(var(--u)*10))}
+.pfStats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:calc(var(--u)*5)}
+.pfWide{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pfStat{display:flex;align-items:baseline;justify-content:space-between;gap:calc(var(--u)*2);padding:calc(var(--u)*1) 0;border-bottom:1px solid rgba(216,166,87,.16)}
+.pfStat span{font-weight:500;font-size:max(13px,calc(var(--u)*3.4));color:var(--u-ink)}
+.pfStat b{font-family:var(--u-display);font-weight:600;font-size:max(15px,calc(var(--u)*4.4));color:#fff4e0;font-variant-numeric:tabular-nums}
+.pfPer{display:flex;flex-direction:column;gap:calc(var(--u)*.8)}
+.pfPerRow{display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:calc(var(--u)*2.4);align-items:center;font-size:max(13px,calc(var(--u)*3.3));color:var(--u-ink);font-variant-numeric:tabular-nums}
+.pfPerRow b{font-weight:600;color:#f6efe3}
+.pfMini{width:max(28px,calc(var(--u)*7));height:max(28px,calc(var(--u)*7));border-radius:50%;background:#241f30 center 20%/cover no-repeat;border:1px solid var(--u-line)}
+.pfRank{display:flex;align-items:center;gap:calc(var(--u)*1.6);font-style:italic;font-size:max(15px,calc(var(--u)*4));color:var(--u-ink)}
+.pfRank .uico{color:var(--u-gold2);font-size:1.2em}
+.pfSub{font-family:var(--u-display);font-weight:500;font-size:max(11px,calc(var(--u)*2.6));letter-spacing:.14em;text-transform:uppercase;color:var(--u-gold2)}
+@media (max-width:640px){.pfWide{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <div id="app"><canvas id="game"></canvas><div id="hud"><div id="hudTop">
 <div class="hs" id="hs0"><div class="face"><i id="face0"></i></div><div class="hmid"><div class="nm" id="name0"></div><div class="bar"><i class="chip" id="hpChip0"></i><i class="fill" id="hpFill0"></i></div><div class="pips" id="wins0"><i></i><i></i></div><div class="mw l"><div class="lvl" id="lvl0">0</div><div class="mt" id="meter0"><i><b></b></i><i><b></b></i><i><b></b></i></div></div></div></div>
@@ -636,7 +695,7 @@ html,body{margin:0;height:100%;background:var(--dark);color:var(--ink);overflow:
 <div id="fps"></div>
 <div id="uiScreens"></div><canvas id="uiFx"></canvas><div id="uiOver"></div><div id="uiBlade"></div>
 <div id="tPause" role="button" aria-label="Pausa"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></div>
-<div id="rotate"><svg viewBox="0 0 48 48"><rect x="14" y="5" width="20" height="38" rx="4"/><path d="M21 38h6"/><path d="M40 14c3 2.6 4 6 4 10M44 24l-3-3M44 24l3-3" transform="translate(-4 0)"/></svg><p>Gira il telefono in orizzontale</p></div>
+<div id="rotate"><svg viewBox="0 0 48 48"><rect x="14" y="5" width="20" height="38" rx="4"/><path d="M21 38h6"/><path d="M40 14c3 2.6 4 6 4 10M44 24l-3-3M44 24l3-3" transform="translate(-4 0)"/></svg><p>Gira il telefono</p><span class="rotSub" id="rotSub">Voidrise si gioca in orizzontale</span></div>
 <div id="touch">
 <div id="stickZone"><div id="stickBase" class="idle"><div id="stickKnob"></div></div></div>
 <div id="cluster">
@@ -3518,6 +3577,9 @@ function hudInit() {
 function hudReset(S) {
   HUD.S = S;
   HUD.round = S ? S.round : 0; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
+  // one round pip per round to win (1, 2 or 3: a match of 1, 3 or 5 rounds)
+  const need = S ? Math.max(1, Math.min(5, S.need | 0)) : 2;
+  for (let i = 0; i < 2; i++) { const w = HUD.el['wins' + i]; if (w.children.length !== need) { w.innerHTML = '<i></i>'.repeat(need); HUD.pip[i] = [...w.children]; for (let j = 0; j < 5; j++) delete HUD.dom['p' + i + j]; } }
   // the faces of the match's fighters, from the interface pictures (the VS reference)
   if (S) for (let i = 0; i < 2; i++) HUD.el['face' + i].style.backgroundImage = 'url(' + uiFace(fighterOf(S, i).char) + ')';
   HUD.combo = [{n: 0, last: 0, left: 0, seq: 0}, {n: 0, last: 0, left: 0, seq: 0}];
@@ -3598,9 +3660,9 @@ const SAVE = {key: 'voidrise.save', v: 1, old: 'voidrise.prefs', warned: false};
 let SV = null;
 
 function saveDefaults() {
-  return {v: SAVE.v, name: null, introSeen: false, xp: 0, lastChar: 'ren',
+  return {v: SAVE.v, name: null, avatar: null, introSeen: false, xp: 0, lastChar: 'ren',
     stats: {played: 0, won: 0, lost: 0, draw: 0, rounds: 0, hits: 0, maxCombo: 0, timeS: 0, byChar: {}},
-    settings: {quality: 'auto', fpsCap: 60, showFps: false}};
+    settings: {quality: 'auto', fpsCap: 60, showFps: false, music: 70, sfx: 85}};
 }
 const svIsObj = o => !!o && typeof o === 'object' && !Array.isArray(o);
 // s laid over d: nested objects merge key by key, so a save written before a new setting still gets its default.
@@ -3760,12 +3822,17 @@ function navBack() {
 // there: inside a [data-wrap] box it wraps to the far end, else it stays. A focused element may take the direction
 // itself first (el.uiDir(dir) returning true: a stepper changes its value with left/right).
 function navCentre(e) { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }
+// across = how far the candidate sits off the line of movement: 0 while it overlaps the focused element's extent (the same
+// column or row, whatever the widths: a list of entries of different lengths reads top to bottom), else the gap between them,
+// plus a little of the centres' offset.
 function navBest(f, items, dir, ahead) {
-  const [x0, y0] = navCentre(f), v = NAV_VEC[dir];
+  const [x0, y0] = navCentre(f), v = NAV_VEC[dir], r0 = f.getBoundingClientRect();
   let best = null, bs = Infinity;
   for (const e of items) {
     if (e === f) continue;
-    const [x, y] = navCentre(e), dx = x - x0, dy = y - y0, along = dx * v[0] + dy * v[1], across = Math.abs(dx * v[1] + dy * v[0]);
+    const [x, y] = navCentre(e), r = e.getBoundingClientRect(), dx = x - x0, dy = y - y0, along = dx * v[0] + dy * v[1];
+    const gap = v[1] ? Math.max(0, r.left - r0.right, r0.left - r.right) : Math.max(0, r.top - r0.bottom, r0.top - r.bottom);
+    const across = gap + .3 * Math.abs(v[1] ? dx : dy);   // (the centres still break ties between overlapping candidates)
     if (ahead && along <= 1) continue;
     const s = along + 2 * across;
     if (s < bs) { bs = s; best = e; }
@@ -4004,7 +4071,7 @@ function uiFace(c) { return ASSETS['ui/face_' + c + '.webp'] || ''; }   // (only
 function cChip() {
   const e = uiEl('div', 'uchip');
   const lv = progLevel(SV ? SV.xp : 0).lvl;
-  e.innerHTML = '<i class="uchipFace" style="background-image:url(' + uiFace((SV && SV.lastChar) || 'ren') + ')"></i><span class="uchipN">' +
+  e.innerHTML = '<i class="uchipFace" style="background-image:url(' + uiFace((SV && ['ren', 'kael'].includes(SV.avatar) ? SV.avatar : SV && SV.lastChar) || 'ren') + ')"></i><span class="uchipN">' +
     uiEsc((SV && SV.name) || 'Giocatore') + '</span><span class="uchipL">Liv. ' + lv + '</span>';
   return e;
 }
@@ -4762,7 +4829,8 @@ function nameConfirm() {
   SV.name = f.value.trim();
   saveWrite();
   f.blur();
-  navReset('menu');
+  const top = NAV.stack[NAV.stack.length - 1];
+  if (top && top.params && top.params.from === 'profile') navBack(); else navReset('menu');   // from the profile: back to it, with the new name
 }
 
 // The way into a match (spec §3): main menu, the «Gioca» block, the local versus options, the fighter select, the arena,
@@ -4784,7 +4852,7 @@ function playScreens() {
       vs.classList.add('mmVs');
       list.append(cItem({label: 'Gioca', act0: 'play', act: () => navFocus(vs)}),
         cItem({label: 'Allenamento', act0: 'train', act: dev => { if (dev === 'touch') mnFullscreen(); navGo('select', {mode: 'training', step: 0, picks: []}); }}),
-        cItem({label: 'Profilo', locked: true, note: soon}), cItem({label: 'Pass stagionale', locked: true, note: soon}), cItem({label: 'Impostazioni', locked: true, note: soon}));
+        cItem({label: 'Profilo', act0: 'profile', act: () => navGo('profile')}), cItem({label: 'Pass stagionale', locked: true, note: soon}), cItem({label: 'Impostazioni', act0: 'settings', act: () => navGo('settings')}));
       const cards = uiEl('div', 'mmCards');
       cards.append(cCard({label: 'Arcade', img: ASSETS['ui/card_arcade.webp'], locked: true, note: 'Arcade in arrivo'}),
         cCard({label: 'Online', img: ASSETS['ui/card_online.webp'], locked: true, note: 'Modalità online in arrivo'}));
@@ -5110,6 +5178,158 @@ function resultsScreen() {
     back() { menu.toTitle(); return false; }});
 }
 
+// Interface U2 (spec §3-4): the moves list and the settings, reachable from the pause (without leaving the fight) and
+// from the main menu. Both show the controls of the device in use first (touch, keyboard or controller); the settings
+// apply and save at once (the device save, u0_save.js).
+
+// The moves of the Tappa 1 (spec 2026-11-06 §2), with the input on each device. Keyboard = player 1's keys (WASD, J K L U I).
+const META_MOVES = [
+  ['Muoversi e saltare', 'Levetta', 'W A S D', 'Levetta o croce'],
+  ['Pugno', 'Pugno', 'J', 'X / Quadrato'],
+  ['Calcio', 'Calcio', 'K', 'A / Croce'],
+  ['Colpo forte', 'Tieni Pugno o Calcio', 'Tieni J o K', 'Tieni X o A'],
+  ['Combo', 'Tocchi ripetuti, poi Calcio', 'J J J, poi K', 'X X X, poi A'],
+  ['Lancio in aria', 'Giù + Calcio tenuto', 'S + K tenuto', 'Giù + A tenuto'],
+  ['Speciale', 'Speciale', 'L', 'B / Cerchio'],
+  ['Presa', 'Pugno + Calcio, da vicino', 'J + K, da vicino', 'X + A, da vicino'],
+  ['Scatto', 'Scatto', 'U, o avanti due volte', 'Dorsale destro, o avanti due volte'],
+  ['Scatto indietro', 'Indietro + Scatto', 'Indietro + U', 'Indietro + dorsale destro'],
+  ['Guardia', 'Guardia', 'I, o tieni indietro', 'Dorsale sinistro, o tieni indietro'],
+  ['Guardia bassa', 'Guardia accovacciati', 'I accovacciati', 'Dorsale sinistro accovacciati'],
+];
+const META_DEVS = ['Tocco', 'Tastiera', 'Controller'];
+const metaDevIx = () => (NAV.dev === 'touch' ? 0 : NAV.dev === 'pad' ? 2 : 1);
+// A list of «name — input» rows for one device (ix 0 touch, 1 keyboard, 2 controller), in two columns where there is room.
+function metaMovesRows(ix) {
+  const g = uiEl('div', 'mvGrid');
+  for (const m of META_MOVES) g.appendChild(uiEl('div', 'mvRow', '<span class="mvN">' + uiEsc(m[0]) + '</span><span class="mvK">' + uiEsc(m[ix + 1]) + '</span>'));
+  return g;
+}
+
+function metaScreens() {
+  // --- Lista mosse: the moves with the inputs of the device in use; the tabs show the other devices.
+  navRegister({id: 'moves', scene: 'menu', layers: () => ({hero: (SV && SV.lastChar) || 'ren'}),
+    build(r) {
+      r.appendChild(cBack());
+      const top = uiEl('div', 'mtTop');
+      top.appendChild(cHead('Lista mosse', 'Le stesse mosse per Ren e Kael.'));
+      const body = uiEl('div', 'mtBody');
+      const tabs = cTabs(META_DEVS, 1, k => { body.innerHTML = ''; body.appendChild(metaMovesRows(k)); });
+      tabs.classList.add('mtTabs');
+      top.appendChild(tabs);
+      r.append(top, body);
+      this.tabs = tabs;
+    },
+    enter(p, back) { if (!back) metaTabStart(this.tabs, metaDevIx()); }});
+
+  // --- Impostazioni: Audio | Grafica | Comandi | Lingua, as Denis's reference 03. A change applies and is saved at once.
+  navRegister({id: 'settings', scene: 'menu', layers: () => ({hero: 'kael'}),
+    build(r) {
+      r.appendChild(cBack());
+      const top = uiEl('div', 'mtTop');
+      top.appendChild(cHead('Impostazioni'));
+      const body = uiEl('div', 'mtBody stBody');
+      const tabs = cTabs(['Audio', 'Grafica', 'Comandi', 'Lingua'], 0, k => { body.innerHTML = ''; metaSettingsTab(body, k); });
+      tabs.classList.add('mtTabs');
+      top.appendChild(tabs);
+      r.append(top, body);
+      this.tabs = tabs;
+    },
+    enter(p, back) { if (!back) metaTabStart(this.tabs, (p && p.tab) || 0); }});
+  metaProfileScreen();
+}
+
+// Opens tab k and gives it the first focus (the navigation focuses [data-first] when the screen shows).
+function metaTabStart(tabs, k) { [...tabs.children].forEach((t, j) => t.toggleAttribute('data-first', j === k)); tabs.children[k].uiAct(); }
+// One settings row: a label on the left, its control on the right.
+function metaRow(label, ctrl, note) {
+  const row = uiEl('div', 'stRow', '<span class="stL">' + uiEsc(label) + (note ? '<em class="stNote">' + uiEsc(note) + '</em>' : '') + '</span>');
+  row.appendChild(ctrl);
+  return row;
+}
+function metaSave(fn) { if (SV) { fn(SV.settings); saveWrite(); } }
+const META_Q = ['auto', 'bassa', 'media', 'alta'], META_QN = {auto: 'Auto', bassa: 'Bassa', media: 'Media', alta: 'Alta'};
+function metaSettingsTab(body, k) {
+  const S = SV ? SV.settings : {};
+  if (k === 0) {        // Audio: the levels are kept for when the sounds arrive
+    const pct = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], at = v => Math.max(0, pct.indexOf(Math.round((v === undefined ? 70 : v) / 10) * 10));
+    body.append(metaRow('Musica', cStepper({label: 'Volume', values: pct, i: at(S.music), fmt: v => v + '%', onChange: v => metaSave(s => { s.music = v; })})),
+      metaRow('Effetti', cStepper({label: 'Volume', values: pct, i: at(S.sfx === undefined ? 85 : S.sfx), fmt: v => v + '%', onChange: v => metaSave(s => { s.sfx = v; })})),
+      uiEl('p', 'stInfo', 'Musica ed effetti sonori sono in arrivo: i volumi scelti restano salvati.'));
+  } else if (k === 1) { // Grafica: the quality of the menus' scene (Auto = chosen for this device), the FPS counter
+    body.append(metaRow('Qualità', cStepper({label: 'Scena', values: META_Q, i: Math.max(0, META_Q.indexOf(S.quality || 'auto')), fmt: v => META_QN[v], onChange: v => {
+      metaSave(s => { s.quality = v; });
+      layersQuality(v === 'auto' ? LY.autoQuality({cores: navigator.hardwareConcurrency, mem: navigator.deviceMemory}) : v);
+    }}), 'Bassa: scena ferma, più fluida sui telefoni lenti'),
+      metaRow('Contatore', cBtn({label: 'FPS: ' + (MN.fps.on ? 'Sì' : 'No'), id: 'bFps', txId: 'fpsTx', act: () => mnFpsSet(!MN.fps.on, true)}), 'Fotogrammi al secondo, in basso al centro'));
+  } else if (k === 2) { // Comandi: what each device does today; changing them comes later
+    const g = uiEl('div', 'stCmd');
+    g.appendChild(uiEl('div', 'stCmdH', '<span></span>' + META_DEVS.map(d => '<b>' + d + '</b>').join('')));
+    for (const m of META_MOVES.filter(m => ['Pugno', 'Calcio', 'Speciale', 'Scatto', 'Guardia', 'Muoversi e saltare'].includes(m[0])))
+      g.appendChild(uiEl('div', 'stCmdR', '<span>' + uiEsc(m[0]) + '</span>' + m.slice(1).map(x => '<i>' + uiEsc(x) + '</i>').join('')));
+    body.append(g, uiEl('p', 'stInfo', 'Giocatore 2 in tastiera: frecce, tastierino 1 2 3, 4 Scatto, 5 Guardia. Spostare i tasti è in arrivo.'));
+  } else {              // Lingua
+    body.append(metaRow('Lingua', cBtn({label: 'Italiano', act: () => uiToast('Altre lingue in arrivo', 'soon')})),
+      uiEl('p', 'stInfo', 'Altre lingue in arrivo.'));
+  }
+}
+
+// --- U3, Profilo (spec §3, reference 03): Profilo | Statistiche | Classifica. Only true numbers from this device's save:
+// the global ranking needs the online (it says so, with no invented names) and meanwhile shows the player's own record.
+const META_AV = ['ren', 'kael'];
+const metaAvatar = () => (SV && META_AV.includes(SV.avatar) ? SV.avatar : (SV && SV.lastChar) || 'ren');
+function metaPct(st) { return st.played ? Math.round(100 * st.won / st.played) + '%' : '—'; }
+function metaTime(s) { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? h + ' h ' + m + ' min' : m ? m + ' min ' + (s % 60) + ' s' : s + ' s'; }
+function metaStat(label, value) { return uiEl('div', 'pfStat', '<span>' + uiEsc(label) + '</span><b>' + uiEsc(String(value)) + '</b>'); }
+function metaProfileTab(body, k) {
+  const st = SV ? SV.stats : {played: 0, won: 0, lost: 0, draw: 0, rounds: 0, hits: 0, maxCombo: 0, timeS: 0, byChar: {}};
+  const L = progLevel(SV ? SV.xp : 0);
+  if (k === 0) {
+    const card = uiEl('div', 'pfCard', '<i class="pfFace" style="background-image:url(' + uiFace(metaAvatar()) + ')"></i><div class="pfWho"><b class="pfName">' +
+      uiEsc((SV && SV.name) || 'Giocatore') + '</b><span class="pfLvl">Livello ' + L.lvl + '</span></div>');
+    const bar = cProgress(L.into / L.need); bar.classList.add('pfBar');
+    card.querySelector('.pfWho').append(bar, uiEl('span', 'pfXp', L.into + ' / ' + L.need + ' XP al livello ' + (L.lvl + 1)));
+    const acts = uiEl('div', 'pfActs');
+    acts.append(cStepper({label: 'Ritratto', values: META_AV, i: Math.max(0, META_AV.indexOf(metaAvatar())), fmt: v => CFG.ui.chars[v].name, onChange: v => {
+      if (SV) { SV.avatar = v; saveWrite(); } card.querySelector('.pfFace').style.backgroundImage = 'url(' + uiFace(v) + ')'; }}),
+      cBtn({label: 'Cambia nome', act0: 'name', act: () => navGo('name', {from: 'profile'})}));
+    const stats = uiEl('div', 'pfStats');
+    stats.append(metaStat('Vittorie', st.won), metaStat('Sconfitte', st.lost), metaStat('Pareggi', st.draw), metaStat('Percentuale vittorie', metaPct(st)));
+    body.append(card, acts, stats);
+  } else if (k === 1) {
+    const tot = uiEl('div', 'pfStats pfWide');
+    tot.append(metaStat('Incontri', st.played), metaStat('Vittorie', st.won), metaStat('Round vinti', st.rounds), metaStat('Colpi a segno', st.hits),
+      metaStat('Combo massima', st.maxCombo), metaStat('Tempo di gioco', metaTime(st.timeS)));
+    const per = uiEl('div', 'pfPer');
+    for (const c of META_AV) {
+      const b = (st.byChar || {})[c] || {played: 0, won: 0};
+      per.appendChild(uiEl('div', 'pfPerRow', '<i class="pfMini" style="background-image:url(' + uiFace(c) + ')"></i><b>' + uiEsc(CFG.ui.chars[c].name) + '</b><span>' +
+        b.played + ' incontri</span><span>' + b.won + ' vittorie</span><span>' + metaPct(b) + '</span>'));
+    }
+    body.append(tot, per, uiEl('p', 'stInfo', 'Contano le partite del Giocatore 1 in Versus; l\'allenamento non conta.'));
+  } else {
+    body.append(uiEl('div', 'pfRank', UI_ICON.soon + '<span>La classifica globale arriva con le partite online.</span>'));
+    const own = uiEl('div', 'pfStats');
+    own.append(metaStat('Il tuo livello', L.lvl), metaStat('XP totali', SV ? SV.xp : 0), metaStat('Combo massima', st.maxCombo), metaStat('Vittorie', st.won));
+    body.append(uiEl('b', 'pfSub', 'Il tuo record'), own);
+  }
+}
+function metaProfileScreen() {
+  navRegister({id: 'profile', scene: 'menu', layers: () => ({hero: metaAvatar()}),
+    build(r) {
+      r.appendChild(cBack());
+      const top = uiEl('div', 'mtTop');
+      top.appendChild(cHead('Profilo'));
+      const body = uiEl('div', 'mtBody pfBody');
+      const tabs = cTabs(['Profilo', 'Statistiche', 'Classifica'], 0, k => { this.tab = k; body.innerHTML = ''; metaProfileTab(body, k); });
+      tabs.classList.add('mtTabs');
+      top.appendChild(tabs);
+      r.append(top, body);
+      this.tabs = tabs;
+    },
+    enter(p, back) { if (!back) metaTabStart(this.tabs, (p && p.tab) || 0); else this.tabs.children[this.tab || 0].uiAct(); }});   // back from the name: the new name shown
+}
+
 // The one door between the menus and the fight (spec §6): preload (real work: one hidden frame of the arena with the two
 // fighters, so the shaders and textures are ready before the match and its first frames do not stall), start, the result
 // of a match for the results screen, and the match statistics counted from the fight's events (read only).
@@ -5158,7 +5378,7 @@ function bridgeResult(S) {
 // The game cycle around the fight, on the interface navigation (u1_nav.js): pause, end of a match, "gira il telefono",
 // full screen, auto-pause and the FPS counter (pause menu "FPS: Sì / No", or ?fps=1). Reads the sim, never changes it
 // (except the training dummy's mode, chosen in the pause menu).
-const MN = {rot: false, fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
+const MN = {rot: false, rotOn: false, fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
 
 function mnEl(id) { return document.getElementById(id); }
 function mnTouchDevice() { return (window.matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0; }
@@ -5178,7 +5398,21 @@ function menuSync() {
   mnEl('hud').style.visibility = st === 'fight' ? '' : 'hidden';   // (the pause screen covers the fight, as in the reference)
   mnEl('tPause').classList.toggle('on', st === 'fight' && !MN.rot);
   mnEl('rotate').classList.toggle('on', MN.rot);
+  if (MN.rot) { mnEl('rotSub').textContent = st === 'pause' && G.S ? 'La lotta è in pausa: riprende quando giri il telefono' : 'Voidrise si gioca in orizzontale'; mnRotLoop(); }
   touchShow(st === 'fight' && !MN.rot);
+}
+// The phone on the «Gira il telefono» screen turns from upright to sideways and waits, every 2.4 s: moved from JS while
+// the screen shows (no endless CSS animation: it slows down the fight's frames even when hidden).
+function mnRotLoop() {
+  if (MN.rotOn) return; MN.rotOn = true;
+  const svg = mnEl('rotate').querySelector('svg'), t0 = performance.now();
+  const step = now => {
+    if (!MN.rot) { MN.rotOn = false; svg.style.transform = ''; return; }
+    const k = ((now - t0) % 2400) / 2400, e = Math.max(0, Math.min(1, (k - .15) / .4));
+    svg.style.transform = 'rotate(' + (-90 * (e < .5 ? 2 * e * e : 1 - Math.pow(-2 * e + 2, 2) / 2)).toFixed(1) + 'deg)';
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 const menu = {
   pause() { if (G.state !== 'fight') return; G.state = 'pause'; navReset('pause'); menuSync(); },
@@ -5222,7 +5456,7 @@ function mnFpsSet(on, save) {
   const f = MN.fps; f.on = on; f.t = f.frames = f.sim = f.steps = f.draw = 0;
   mnEl('fps').textContent = on ? 'FPS …' : '';
   mnEl('fps').classList.toggle('on', on);
-  if (mnEl('fpsTx')) mnEl('fpsTx').textContent = 'FPS: ' + (on ? 'Sì' : 'No');
+  if (mnEl('fpsTx')) mnEl('fpsTx').textContent = 'FPS: ' + (on ? 'Sì' : 'No');   // (the settings' Grafica tab)
   if (save && SV) { SV.settings.showFps = on; saveWrite(); }
 }
 // At start: on with ?fps=1 in the address, else as last chosen on this device.
@@ -5246,16 +5480,18 @@ function mnColumn(r, head, btns, fn) {
 }
 function menuScreens() {
   navRegister({id: 'pause', build(r) {
-    mnColumn(r, cHead('Pausa'), [{label: 'Riprendi', act0: 'resume'}, {label: 'Ricomincia', act0: 'restart'},
-      {label: 'Avversario: Fermo', act0: 'opp', id: 'bOpp', txId: 'oppTx'}, {label: 'FPS: No', act0: 'fps', id: 'bFps', txId: 'fpsTx'}, {label: 'Abbandona', act0: 'quit'}], a => {
+    mnColumn(r, cHead('Pausa'), [{label: 'Riprendi', act0: 'resume'}, {label: 'Lista mosse', act0: 'moves'}, {label: 'Impostazioni', act0: 'settings'},
+      {label: 'Ricomincia', act0: 'restart'}, {label: 'Avversario: Fermo', act0: 'opp', id: 'bOpp', txId: 'oppTx'}, {label: 'Abbandona', act0: 'quit'}], a => {
       if (a === 'resume') menu.resume();
+      else if (a === 'moves') navGo('moves');
+      else if (a === 'settings') navGo('settings');
       else if (a === 'restart') menu.restart();
       else if (a === 'opp') { G.S.dummy = G.S.dummy === 'casuale' ? 'fermo' : 'casuale'; mnPauseRefresh(); }
-      else if (a === 'fps') mnFpsSet(!MN.fps.on, true);
       else if (a === 'quit') uiConfirm({title: 'Abbandonare la partita?', text: 'Tornerai al menu principale.', yes: 'Abbandona', no: 'Annulla'}).then(ok => { if (ok) menu.toTitle(); });
     });
   }, enter() { mnPauseRefresh(); }, back() { menu.resume(); return false; }});
-  navRootOf(NAV.screens.pause);   // built now: the FPS label and the opponent button exist from the start   // built now: the FPS label and the opponent button exist from the start
+  navRootOf(NAV.screens.pause);   // built now: the opponent button exists from the start
+  metaScreens();
 }
 function menuInit() {
   navInit();

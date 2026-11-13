@@ -77,8 +77,8 @@ T.test('training chosen with the second controller: that controller plays G1', (
   padsAt([{},{}]); V.inputRead(0);   // A let go (it was masked at the confirm)
   padsAt([{},{axes:[.9,0]}]); T.eq(V.inputRead(0)&B.R, B.R, 'pad 1 stick right');
   padsAt([{},{buttons:{2:1}}]); T.eq(V.inputRead(0)&B.P, B.P, 'pad 1 X'); fakePads([]); padTick(); });
-T.test('pause menu: FPS Sì / No shows the counter and is remembered in the device save', () => {
-  const V=__VF, K='voidrise.save', saved=()=>JSON.parse(localStorage.getItem(K)); V.startMatch('training',{seed:1}); V.menu.pause();
+T.test('settings from the pause (Grafica): FPS Sì / No shows the counter and is remembered in the device save', () => {
+  const V=__VF, K='voidrise.save', saved=()=>JSON.parse(localStorage.getItem(K)); V.startMatch('training',{seed:1}); V.menu.pause(); uiClick('Impostazioni'); uiClick('Grafica');
   localStorage.removeItem(K); V.saveLoad(); V.menuFpsInit(); T.ok(!vis('fps'),'off by default'); T.eq(txt('fpsTx'),'FPS: No');
   uiClick('FPS'); T.ok(vis('fps'),'counter shown'); T.eq(txt('fpsTx'),'FPS: Sì'); T.eq(saved().settings.showFps,true,'saved'); T.eq(saved().v,1,'versioned');
   V.saveLoad(); V.menuFpsInit(); T.ok(vis('fps'),'still on after a reload');

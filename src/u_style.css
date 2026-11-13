@@ -161,7 +161,7 @@
 @keyframes uBladeBack{0%{opacity:0;transform:translateX(120vw) skewX(-18deg)}20%{opacity:1}100%{opacity:0;transform:translateX(-30vw) skewX(-18deg)}}
 /* --- the screens of the fight cycle (h_menu.js) --- */
 #sc-pause{justify-content:flex-start;background:linear-gradient(90deg,rgba(14,12,22,.9) 0%,rgba(14,12,22,.62) 42%,rgba(14,12,22,.2) 100%)}
-#sc-pause .ucol{width:calc(var(--u)*46);gap:calc(var(--u)*2)}
+#sc-pause .ucol{width:calc(var(--u)*46);gap:calc(var(--u)*1.2);margin-top:calc(var(--u)*2)}   /* six entries (U2) still fit a 390 px tall phone */
 #sc-results{align-items:center;background:rgba(14,12,22,.66)}
 /* --- the layered scene behind the menus (u3_layers.js). Parallax moves each layer with transform; the clouds and fog scroll
    with the separate translate property, the characters breathe with scale: they add up. All set from JS while a menu is
@@ -511,3 +511,62 @@
 #stickBase{background:radial-gradient(circle,rgba(36,30,46,.5),rgba(12,10,18,.6) 70%);border:1.5px solid rgba(226,196,150,.6);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23e2c496' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' opacity='.75'%3E%3Cpath d='M44 14l6-6 6 6M44 86l6 6 6-6M14 44l-6 6 6 6M86 44l6 6-6 6'/%3E%3C/g%3E%3C/svg%3E"),radial-gradient(circle,rgba(36,30,46,.5),rgba(12,10,18,.6) 70%);background-size:100% 100%}
 #stickKnob{background:radial-gradient(circle at 40% 35%,rgba(255,240,218,.55),rgba(190,160,120,.35) 70%);border:1.5px solid rgba(243,214,160,.85)}
+/* --- U2 (u6_meta.js): Lista mosse and Impostazioni, from the pause (over the fight) and from the main menu. A dark veil on
+   the left half keeps the text readable over any scene; the rows sit in a thin gold-edged panel. --- */
+#sc-moves,#sc-settings{justify-content:flex-start;gap:calc(var(--u)*2.6);background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.84) 55%,rgba(14,12,22,.45) 100%)}
+#sc-moves .uback,#sc-settings .uback{position:absolute;left:calc(env(safe-area-inset-left) + var(--u)*5);top:calc(env(safe-area-inset-top) + var(--u)*3)}
+.mtTop{display:flex;align-items:flex-end;justify-content:space-between;gap:calc(var(--u)*4);width:100%;margin-top:calc(var(--u)*8);flex-wrap:wrap}
+.mtTabs{gap:calc(var(--u)*4)}
+.mtBody{width:100%;max-width:calc(var(--u)*160);min-height:0;overflow:auto;padding:calc(var(--u)*2.4) calc(var(--u)*3);background:var(--u-panel);border:1px solid var(--u-line);box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.mvGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:calc(var(--u)*5)}
+.mvRow{display:flex;align-items:baseline;justify-content:space-between;gap:calc(var(--u)*2);padding:calc(var(--u)*1) 0;border-bottom:1px solid rgba(216,166,87,.16)}
+.mvN{font-weight:600;font-size:max(14px,calc(var(--u)*3.6));color:#f6efe3}
+.mvK{font-style:italic;font-weight:500;font-size:max(13px,calc(var(--u)*3.2));color:var(--u-gold2);text-align:right}
+@media (max-width:640px){.mvGrid{grid-template-columns:1fr}}
+.stBody{display:flex;flex-direction:column;gap:calc(var(--u)*2.2);max-width:calc(var(--u)*120)}
+.stRow{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--u)*4);flex-wrap:wrap}
+.stL{display:flex;flex-direction:column;font-weight:600;font-size:max(16px,calc(var(--u)*4.4));color:#f6efe3}
+.stNote{font-style:italic;font-weight:500;font-size:max(12px,calc(var(--u)*2.8));color:var(--u-dim)}
+.stRow .ub{min-width:calc(var(--u)*36);height:max(44px,calc(var(--u)*10))}
+.stInfo{margin:0;font-style:italic;font-weight:500;font-size:max(13px,calc(var(--u)*3.2));color:var(--u-dim)}
+.stCmd{display:grid;gap:calc(var(--u)*.6)}
+.stCmdH,.stCmdR{display:grid;grid-template-columns:1.1fr 1fr 1fr 1.3fr;gap:calc(var(--u)*2);align-items:baseline}
+.stCmdH b{font-family:var(--u-display);font-weight:500;font-size:max(10px,calc(var(--u)*2.4));letter-spacing:.14em;text-transform:uppercase;color:var(--u-gold2)}
+.stCmdR{padding:calc(var(--u)*.8) 0;border-bottom:1px solid rgba(216,166,87,.16)}
+.stCmdR span{font-weight:600;font-size:max(14px,calc(var(--u)*3.4));color:#f6efe3}
+.stCmdR i{font-weight:500;font-size:max(12px,calc(var(--u)*3));color:var(--u-ink)}
+/* short phone screens: the head beside the tabs, the panel a little tighter */
+@media (max-height:430px){.mtTop{margin-top:calc(var(--u)*10)}#sc-moves .uheadS{display:none}.mvRow{padding:calc(var(--u)*.6) 0}}
+/* --- «Gira il telefono» in the interface's style (the phone turned from JS: h_menu.js mnRotLoop) --- */
+#rotate{background:radial-gradient(ellipse at 50% 40%,#2a2138 0%,#16121f 60%,#0d0b13 100%);gap:14px}
+#rotate svg{animation:none;width:110px;height:110px;stroke:var(--u-gold);stroke-width:1.8;filter:drop-shadow(0 0 10px rgba(216,166,87,.35))}
+#rotate p{font-family:var(--u-serif);font-style:normal;font-weight:600;font-size:30px;letter-spacing:.02em;color:#f6efe3}
+#rotate .rotSub{max-width:260px;font-family:var(--u-serif);font-style:italic;font-weight:500;font-size:17px;line-height:1.3;color:var(--u-dim)}
+#rotate::after{content:'';width:120px;height:6px;background:linear-gradient(90deg,rgba(240,138,50,0),var(--u-orange) 50%,rgba(240,138,50,0));clip-path:var(--u-brush)}
+/* --- U3, Profilo (u6_meta.js): the player's card (round portrait, name, level, XP bar), the numbers as label / value rows --- */
+#sc-profile{justify-content:flex-start;gap:calc(var(--u)*2.6);background:linear-gradient(90deg,rgba(14,12,22,.94) 0%,rgba(14,12,22,.82) 55%,rgba(14,12,22,.2) 100%)}
+#sc-profile .uback{position:absolute;left:calc(env(safe-area-inset-left) + var(--u)*5);top:calc(env(safe-area-inset-top) + var(--u)*3)}
+.pfBody{display:flex;flex-direction:column;gap:calc(var(--u)*2.2);max-width:calc(var(--u)*110)}
+.pfCard{display:flex;align-items:center;gap:calc(var(--u)*3)}
+.pfFace{flex:none;width:max(56px,calc(var(--u)*15));height:max(56px,calc(var(--u)*15));border-radius:50%;background:#241f30 center 20%/cover no-repeat;border:1px solid var(--u-gold);box-shadow:0 0 14px rgba(216,166,87,.35)}
+.pfWho{display:flex;flex-direction:column;gap:calc(var(--u)*.6);flex:1;min-width:0}
+.pfName{font-weight:600;font-size:max(20px,calc(var(--u)*6.4));line-height:1.05;color:#f6efe3;overflow-wrap:anywhere}
+.pfLvl{font-style:italic;font-weight:500;font-size:max(14px,calc(var(--u)*3.6));color:var(--u-gold2)}
+.pfBar{width:100%;max-width:calc(var(--u)*60)}
+.pfXp{font-size:max(11px,calc(var(--u)*2.6));color:var(--u-dim);font-variant-numeric:tabular-nums}
+.pfActs{display:flex;gap:calc(var(--u)*3);flex-wrap:wrap;align-items:center}
+.pfActs .ustep{min-width:calc(var(--u)*44)}
+.pfActs .ub{min-width:calc(var(--u)*34);height:max(44px,calc(var(--u)*10))}
+.pfStats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:calc(var(--u)*5)}
+.pfWide{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pfStat{display:flex;align-items:baseline;justify-content:space-between;gap:calc(var(--u)*2);padding:calc(var(--u)*1) 0;border-bottom:1px solid rgba(216,166,87,.16)}
+.pfStat span{font-weight:500;font-size:max(13px,calc(var(--u)*3.4));color:var(--u-ink)}
+.pfStat b{font-family:var(--u-display);font-weight:600;font-size:max(15px,calc(var(--u)*4.4));color:#fff4e0;font-variant-numeric:tabular-nums}
+.pfPer{display:flex;flex-direction:column;gap:calc(var(--u)*.8)}
+.pfPerRow{display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:calc(var(--u)*2.4);align-items:center;font-size:max(13px,calc(var(--u)*3.3));color:var(--u-ink);font-variant-numeric:tabular-nums}
+.pfPerRow b{font-weight:600;color:#f6efe3}
+.pfMini{width:max(28px,calc(var(--u)*7));height:max(28px,calc(var(--u)*7));border-radius:50%;background:#241f30 center 20%/cover no-repeat;border:1px solid var(--u-line)}
+.pfRank{display:flex;align-items:center;gap:calc(var(--u)*1.6);font-style:italic;font-size:max(15px,calc(var(--u)*4));color:var(--u-ink)}
+.pfRank .uico{color:var(--u-gold2);font-size:1.2em}
+.pfSub{font-family:var(--u-display);font-weight:500;font-size:max(11px,calc(var(--u)*2.6));letter-spacing:.14em;text-transform:uppercase;color:var(--u-gold2)}
+@media (max-width:640px){.pfWide{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -75,12 +75,37 @@ Tutte ritagliate o ricavate dai 5 riferimenti dell'interfaccia, ingrandite 4 vol
 - Ogni decisione presa durante il lavoro è nel registro dell'esecuzione (righe «Ruling»), riassunta a Denis alla consegna.
 
 ## Per dopo (annotato, non costruito)
-- U2: i pallini dei round sono ancora 2 (con 5 round ne servono 3), pausa completa (Lista mosse, Impostazioni), «Gira il telefono» nel nuovo stile.
 - Titolo su schermi 4:3 (tablet): i volti vanno bene ma il logo si stringe tra loro; Kael non ha una posa di vittoria nei riferimenti (nei risultati usa quella delle impostazioni).
 - L'arena della lotta è luminosa e di giorno, l'interfaccia è al tramonto: l'HUD ora ha lo stesso stile, il resto dipende dalla grafica della lotta (l'altra sessione).
 - U3: Profilo, Statistiche, Classifica, Impostazioni (la qualità Auto/Bassa/Media/Alta è già nel codice). U4: Pass, Missioni, Archivio, Sblocco. U5: Arcade, Tutorial, schermate Online.
 - Acquisto del Premium dagli store (Google Play, App Store, Steam) con controllo delle ricevute su un server; online e classifica globale; negozio; altre lingue; musica e suoni; scelta simultanea dei personaggi con due dispositivi; scontro speculare (seconda copia del modello e colore alternativo); intro con i modelli 3D; Astra e Raigon giocabili.
 - Il VS non ha un pulsante «Indietro» a schermo (come nel riferimento): Esc / B tornano all'arena; dura 2,5 s.
+
+## U2 (13/11): pausa completa, round, «Gira il telefono»
+- **Pausa** come il riferimento 03: Riprendi, **Lista mosse**, **Impostazioni**, Ricomincia, Avversario (allenamento), Abbandona.
+  Mosse e impostazioni si aprono senza lasciare la lotta (resta in pausa sotto un velo scuro); Esc / B tornano alla pausa.
+- **Lista mosse** (`src/u6_meta.js`, `META_MOVES`): 12 mosse della Tappa 1 con i comandi di Tocco / Tastiera / Controller;
+  si apre sul dispositivo in uso, le linguette mostrano gli altri.
+- **Impostazioni** (anche dal menu principale, non più «In arrivo»): Audio (Musica / Effetti salvati, «suoni in arrivo»),
+  Grafica (Qualità Auto/Bassa/Media/Alta applicata subito; contatore FPS, spostato qui dalla pausa), Comandi (i tasti dei tre
+  dispositivi; spostarli è in arrivo), Lingua (Italiano; altre in arrivo). Ogni scelta si applica e si salva subito: niente
+  «Salva» (scelta di questa tappa, il riferimento 03 lo mostra: si può aggiungere con l'editor dei comandi della U3).
+- **Pallini dei round**: uno per round da vincere (1, 2 o 3 con 1, 3 o 5 round), rifatti a ogni partita (`hudReset`).
+- **«Gira il telefono»** nello stile dell'interfaccia; il telefono gira da JavaScript (`mnRotLoop`) solo mentre la schermata si
+  vede (prima era un'animazione CSS infinita); in lotta dice che la partita è in pausa.
+- Prove: `tests/ui_u2.test.js` (10, anche a 640×360 … 1920×1080); `menu.test.js` apre l'FPS da Impostazioni → Grafica.
+
+## U3, prima parte (13/11): Profilo
+- **Profilo** dal menu principale (`src/u6_meta.js`, `metaProfileScreen`), riferimento 03: Profilo | Statistiche | Classifica.
+  Profilo = ritratto tondo (scelta Ren / Kael salvata in `SV.avatar`, usata anche dal chip del menu), nome, livello, barra XP,
+  «Cambia nome» (la schermata del nome torna al profilo), vittorie / sconfitte / pareggi / percentuale (— senza partite).
+  Statistiche = totali e per lottatore dal salvataggio. Classifica = «arriva con le partite online» e il record personale:
+  nessun nome inventato (regola del design §1).
+- Prove: `tests/ui_u3.test.js` (7). Restano per la U3: l'editor dei comandi touch e la riassegnazione dei tasti.
+- **Fuoco nelle liste** (`navBest`, `u1_nav.js`): la distanza «di traverso» ora è 0 finché il candidato si sovrappone
+  all'elemento col fuoco (stessa colonna o riga, qualunque la larghezza) più un po' dello scarto dei centri. Prima, da «Gioca»
+  la freccia giù saltava ad «Allenamento» o a «Profilo» a seconda di quanto erano lunghe le parole (si è visto togliendo il
+  lucchetto a Profilo).
 
 ## Intro filmata (13/11, dallo storyboard di Denis)
 - **L'intro ora è un video**: `assets/ui/video/intro.mp4` (960×432, 32 fps, 4,5 s, 0,6 MB). Ren e Kael si alzano in guardia,
@@ -108,4 +133,4 @@ Denis genera le animazioni sul suo PC (RTX 3060 12 GB) con ComfyUI, partendo da 
 (primo e ultimo fotogramma), personaggi vivi nei menu e sfondi in ciclo. Guida, prompt e impostazioni: `docs/comfy/ANIMAZIONI.md`.
 
 ## Prossimo passo
-Denis prova la pagina sul telefono (percorso intero fino ai risultati) e dice cosa cambiare. Poi U2 (HUD della lotta e pausa completa) o le immagini definitive, a sua scelta.
+Denis prova sul telefono l'intro filmata e la U2 (pausa, Lista mosse, Impostazioni). Poi U3: Profilo, Statistiche, Classifica e l'editor dei comandi (riferimento 03).

@@ -96,12 +96,17 @@ function navBack() {
 // there: inside a [data-wrap] box it wraps to the far end, else it stays. A focused element may take the direction
 // itself first (el.uiDir(dir) returning true: a stepper changes its value with left/right).
 function navCentre(e) { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }
+// across = how far the candidate sits off the line of movement: 0 while it overlaps the focused element's extent (the same
+// column or row, whatever the widths: a list of entries of different lengths reads top to bottom), else the gap between them,
+// plus a little of the centres' offset.
 function navBest(f, items, dir, ahead) {
-  const [x0, y0] = navCentre(f), v = NAV_VEC[dir];
+  const [x0, y0] = navCentre(f), v = NAV_VEC[dir], r0 = f.getBoundingClientRect();
   let best = null, bs = Infinity;
   for (const e of items) {
     if (e === f) continue;
-    const [x, y] = navCentre(e), dx = x - x0, dy = y - y0, along = dx * v[0] + dy * v[1], across = Math.abs(dx * v[1] + dy * v[0]);
+    const [x, y] = navCentre(e), r = e.getBoundingClientRect(), dx = x - x0, dy = y - y0, along = dx * v[0] + dy * v[1];
+    const gap = v[1] ? Math.max(0, r.left - r0.right, r0.left - r.right) : Math.max(0, r.top - r0.bottom, r0.top - r.bottom);
+    const across = gap + .3 * Math.abs(v[1] ? dx : dy);   // (the centres still break ties between overlapping candidates)
     if (ahead && along <= 1) continue;
     const s = along + 2 * across;
     if (s < bs) { bs = s; best = e; }

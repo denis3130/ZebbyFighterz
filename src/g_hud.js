@@ -15,6 +15,9 @@ function hudInit() {
 function hudReset(S) {
   HUD.S = S;
   HUD.round = S ? S.round : 0; HUD.dom.cs0 = HUD.dom.cs1 = HUD.dom.bk = undefined; HUD.chip = [1, 1]; HUD.hold = [0, 0]; HUD.hp = [1, 1];
+  // one round pip per round to win (1, 2 or 3: a match of 1, 3 or 5 rounds)
+  const need = S ? Math.max(1, Math.min(5, S.need | 0)) : 2;
+  for (let i = 0; i < 2; i++) { const w = HUD.el['wins' + i]; if (w.children.length !== need) { w.innerHTML = '<i></i>'.repeat(need); HUD.pip[i] = [...w.children]; for (let j = 0; j < 5; j++) delete HUD.dom['p' + i + j]; } }
   // the faces of the match's fighters, from the interface pictures (the VS reference)
   if (S) for (let i = 0; i < 2; i++) HUD.el['face' + i].style.backgroundImage = 'url(' + uiFace(fighterOf(S, i).char) + ')';
   HUD.combo = [{n: 0, last: 0, left: 0, seq: 0}, {n: 0, last: 0, left: 0, seq: 0}];

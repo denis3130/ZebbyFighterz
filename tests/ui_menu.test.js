@@ -3,7 +3,7 @@
 T.test('main menu items and chip', () => { __VF.UI.SV.name = 'Lama'; __VF.navReset('menu'); for (const t of ['Gioca', 'Allenamento', 'Profilo', 'Pass stagionale', 'Impostazioni', 'Arcade', 'Online', 'Versus locale']) T.ok(byText(t), t);
   T.ok(txt('sc-menu').includes('Lama')); T.ok(txt('sc-menu').includes('VOIDRISE')); T.eq(focused(), 'Gioca'); });
 T.test('the hero is the last fighter used', () => { __VF.UI.SV.lastChar = 'kael'; __VF.navReset('menu'); T.eq($('lyHero').dataset.c, 'kael'); __VF.UI.SV.lastChar = 'ren'; __VF.navReset('menu'); T.eq($('lyHero').dataset.c, 'ren'); });
-T.test('locked entries say so and do nothing', () => { __VF.navReset('menu'); uiClick('Profilo'); T.eq(__VF.UI.NAV.cur, 'menu'); T.ok(txt('uiToast').includes('In arrivo'));
+T.test('locked entries say so and do nothing', () => { __VF.navReset('menu'); uiClick('Pass stagionale'); T.eq(__VF.UI.NAV.cur, 'menu'); T.ok(txt('uiToast').includes('In arrivo'));
   uiClick('Online'); T.eq(__VF.UI.NAV.cur, 'menu'); T.ok(txt('uiToast').includes('online in arrivo')); uiClick('Arcade'); T.ok(txt('uiToast').includes('Arcade in arrivo')); });
 T.test('keyboard: Gioca → Versus locale → the cards above it', () => { __VF.navReset('menu'); T.eq(focused(), 'Gioca'); keyTap('Enter'); T.eq(focused(), 'Versus locale');
   keyTap('ArrowUp'); T.ok(['Arcade', 'Online'].includes(focused()), focused()); });

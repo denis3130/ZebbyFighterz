@@ -1,0 +1,24 @@
+// Interface U3: the profile (Profilo | Statistiche | Classifica) from the main menu, with only true numbers from the save.
+const u3Go = (tab) => { __VF.UI.SV.name = 'Lama'; __VF.menu.toTitle(); __VF.navGo('profile', {tab: tab || 0}); };
+const u3T = () => $('sc-profile').textContent;
+T.test('Profilo from the main menu (no more «In arrivo»), back to the menu', () => { __VF.UI.SV.name = 'Lama'; __VF.menu.toTitle(); uiClick('Profilo');
+  T.eq(__VF.UI.NAV.cur, 'profile'); for (const t of ['Profilo', 'Statistiche', 'Classifica']) T.ok(byText(t), t);
+  key('Escape'); keyUp('Escape'); T.eq(__VF.UI.NAV.cur, 'menu'); });
+T.test('the card: name, level and XP from the save, wins / losses / percentage', () => { const SV = __VF.UI.SV;
+  SV.xp = 2350; Object.assign(SV.stats, {played: 4, won: 3, lost: 1, draw: 0}); u3Go();
+  const t = u3T(); T.ok(t.includes('Lama'), 'name'); T.ok(t.includes('Livello 3'), 'level'); T.ok(t.includes('350 / 1000 XP'), 'xp'); T.ok(t.includes('75%'), 'percentage');
+  SV.stats.played = 0; SV.stats.won = 0; SV.stats.lost = 0; u3Go(); T.ok(u3T().includes('—'), 'no matches: a dash, not 0%'); });
+T.test('the portrait changes, is saved and shows in the chip of the menu', () => { u3Go(); const st = document.querySelector('#sc-profile .ustep'); __VF.navFocus(st);
+  const a = __VF.UI.SV.avatar; key('ArrowRight'); keyUp('ArrowRight'); key('ArrowLeft'); keyUp('ArrowLeft'); key('ArrowRight'); keyUp('ArrowRight');
+  T.eq(__VF.UI.SV.avatar, 'kael'); T.eq(JSON.parse(localStorage.getItem('voidrise.save')).avatar, 'kael', 'saved');
+  __VF.menu.toTitle(); T.ok(document.querySelector('#sc-menu .uchipFace').style.backgroundImage.length > 20, 'chip face'); });
+T.test('Cambia nome: the name screen, then back to the profile with the new name', () => { u3Go(); uiClick('Cambia nome'); T.eq(__VF.UI.NAV.cur, 'name');
+  const f = $('uName'); f.value = 'Vento12'; f.dispatchEvent(new Event('input')); uiClick('Conferma');
+  T.eq(__VF.UI.NAV.cur, 'profile'); T.eq(__VF.UI.SV.name, 'Vento12'); T.ok(u3T().includes('Vento12'), 'shown'); __VF.UI.SV.name = 'Lama'; });
+T.test('Statistiche: totals and per fighter from the save', () => { const SV = __VF.UI.SV;
+  Object.assign(SV.stats, {played: 5, won: 2, rounds: 7, hits: 123, maxCombo: 9, timeS: 754, byChar: {ren: {played: 3, won: 2}, kael: {played: 2, won: 0}}});
+  u3Go(1); const t = u3T(); for (const x of ['123', '12 min 34 s', 'Ren', 'Kael', '3 incontri', '67%']) T.ok(t.includes(x), x); });
+T.test('Classifica: says it comes with the online, invents no names, shows the own record', () => { u3Go(2); const t = u3T();
+  T.ok(t.includes('online'), 'coming'); T.ok(t.includes('Il tuo record')); for (const n of ['Zenith', 'Valmar', 'Kaelion']) T.ok(!t.includes(n), 'no invented ' + n); });
+T.test('nothing overflows the screen', () => { for (const k of [0, 1, 2]) { u3Go(k);
+  for (const e of $('sc-profile').querySelectorAll('.pfStat,.pfPerRow,.pfCard,.ustep,.utab')) { const r = e.getBoundingClientRect(); T.ok(r.left >= -1 && r.right <= innerWidth + 1, k + ' ' + e.textContent.slice(0, 20)); } } });

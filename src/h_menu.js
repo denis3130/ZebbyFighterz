@@ -1,7 +1,7 @@
 // The game cycle around the fight, on the interface navigation (u1_nav.js): pause, end of a match, "gira il telefono",
 // full screen, auto-pause and the FPS counter (pause menu "FPS: Sì / No", or ?fps=1). Reads the sim, never changes it
 // (except the training dummy's mode, chosen in the pause menu).
-const MN = {rot: false, fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
+const MN = {rot: false, rotOn: false, fps: {on: false, t: 0, frames: 0, sim: 0, steps: 0, draw: 0}};
 
 function mnEl(id) { return document.getElementById(id); }
 function mnTouchDevice() { return (window.matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0; }
@@ -21,7 +21,21 @@ function menuSync() {
   mnEl('hud').style.visibility = st === 'fight' ? '' : 'hidden';   // (the pause screen covers the fight, as in the reference)
   mnEl('tPause').classList.toggle('on', st === 'fight' && !MN.rot);
   mnEl('rotate').classList.toggle('on', MN.rot);
+  if (MN.rot) { mnEl('rotSub').textContent = st === 'pause' && G.S ? 'La lotta è in pausa: riprende quando giri il telefono' : 'Voidrise si gioca in orizzontale'; mnRotLoop(); }
   touchShow(st === 'fight' && !MN.rot);
+}
+// The phone on the «Gira il telefono» screen turns from upright to sideways and waits, every 2.4 s: moved from JS while
+// the screen shows (no endless CSS animation: it slows down the fight's frames even when hidden).
+function mnRotLoop() {
+  if (MN.rotOn) return; MN.rotOn = true;
+  const svg = mnEl('rotate').querySelector('svg'), t0 = performance.now();
+  const step = now => {
+    if (!MN.rot) { MN.rotOn = false; svg.style.transform = ''; return; }
+    const k = ((now - t0) % 2400) / 2400, e = Math.max(0, Math.min(1, (k - .15) / .4));
+    svg.style.transform = 'rotate(' + (-90 * (e < .5 ? 2 * e * e : 1 - Math.pow(-2 * e + 2, 2) / 2)).toFixed(1) + 'deg)';
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 const menu = {
   pause() { if (G.state !== 'fight') return; G.state = 'pause'; navReset('pause'); menuSync(); },
@@ -65,7 +79,7 @@ function mnFpsSet(on, save) {
   const f = MN.fps; f.on = on; f.t = f.frames = f.sim = f.steps = f.draw = 0;
   mnEl('fps').textContent = on ? 'FPS …' : '';
   mnEl('fps').classList.toggle('on', on);
-  if (mnEl('fpsTx')) mnEl('fpsTx').textContent = 'FPS: ' + (on ? 'Sì' : 'No');
+  if (mnEl('fpsTx')) mnEl('fpsTx').textContent = 'FPS: ' + (on ? 'Sì' : 'No');   // (the settings' Grafica tab)
   if (save && SV) { SV.settings.showFps = on; saveWrite(); }
 }
 // At start: on with ?fps=1 in the address, else as last chosen on this device.
@@ -89,16 +103,18 @@ function mnColumn(r, head, btns, fn) {
 }
 function menuScreens() {
   navRegister({id: 'pause', build(r) {
-    mnColumn(r, cHead('Pausa'), [{label: 'Riprendi', act0: 'resume'}, {label: 'Ricomincia', act0: 'restart'},
-      {label: 'Avversario: Fermo', act0: 'opp', id: 'bOpp', txId: 'oppTx'}, {label: 'FPS: No', act0: 'fps', id: 'bFps', txId: 'fpsTx'}, {label: 'Abbandona', act0: 'quit'}], a => {
+    mnColumn(r, cHead('Pausa'), [{label: 'Riprendi', act0: 'resume'}, {label: 'Lista mosse', act0: 'moves'}, {label: 'Impostazioni', act0: 'settings'},
+      {label: 'Ricomincia', act0: 'restart'}, {label: 'Avversario: Fermo', act0: 'opp', id: 'bOpp', txId: 'oppTx'}, {label: 'Abbandona', act0: 'quit'}], a => {
       if (a === 'resume') menu.resume();
+      else if (a === 'moves') navGo('moves');
+      else if (a === 'settings') navGo('settings');
       else if (a === 'restart') menu.restart();
       else if (a === 'opp') { G.S.dummy = G.S.dummy === 'casuale' ? 'fermo' : 'casuale'; mnPauseRefresh(); }
-      else if (a === 'fps') mnFpsSet(!MN.fps.on, true);
       else if (a === 'quit') uiConfirm({title: 'Abbandonare la partita?', text: 'Tornerai al menu principale.', yes: 'Abbandona', no: 'Annulla'}).then(ok => { if (ok) menu.toTitle(); });
     });
   }, enter() { mnPauseRefresh(); }, back() { menu.resume(); return false; }});
-  navRootOf(NAV.screens.pause);   // built now: the FPS label and the opponent button exist from the start   // built now: the FPS label and the opponent button exist from the start
+  navRootOf(NAV.screens.pause);   // built now: the opponent button exists from the start
+  metaScreens();
 }
 function menuInit() {
   navInit();

@@ -87,7 +87,7 @@ function uiFace(c) { return ASSETS['ui/face_' + c + '.webp'] || ''; }   // (only
 function cChip() {
   const e = uiEl('div', 'uchip');
   const lv = progLevel(SV ? SV.xp : 0).lvl;
-  e.innerHTML = '<i class="uchipFace" style="background-image:url(' + uiFace((SV && SV.lastChar) || 'ren') + ')"></i><span class="uchipN">' +
+  e.innerHTML = '<i class="uchipFace" style="background-image:url(' + uiFace((SV && ['ren', 'kael'].includes(SV.avatar) ? SV.avatar : SV && SV.lastChar) || 'ren') + ')"></i><span class="uchipN">' +
     uiEsc((SV && SV.name) || 'Giocatore') + '</span><span class="uchipL">Liv. ' + lv + '</span>';
   return e;
 }

@@ -530,5 +530,6 @@ function nameConfirm() {
   SV.name = f.value.trim();
   saveWrite();
   f.blur();
-  navReset('menu');
+  const top = NAV.stack[NAV.stack.length - 1];
+  if (top && top.params && top.params.from === 'profile') navBack(); else navReset('menu');   // from the profile: back to it, with the new name
 }
