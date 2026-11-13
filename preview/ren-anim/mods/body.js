@@ -158,7 +158,7 @@ RN.moveT = function (t, m, af, hit) {
 // --- Style: what the act asks of the body at this frame (RB.sty, reused) ---
 function rbStyle(F, S, st) {
   const y = RB.sty, act = F.act, H = RB.H, t = S.frame + 23 * F.side, af = F.af;
-  y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = y.lx = y.leanL = 0; y.stab = .6; y.free = null; y.freeW = 1; y.back = 0; y.backTo = null; y.box = 0; y.move = null; y.foot = 1; y.lift = 1; y.freeB = 1; y.after = false; y.knee = 0;
+  y.yaw = y.chest = y.lean = y.dip = y.sz = y.head = y.lx = y.leanL = y.leanS = y.lz = 0; y.stab = .6; y.free = null; y.freeW = 1; y.back = 0; y.backTo = null; y.box = 0; y.move = null; y.foot = 1; y.lift = 1; y.freeB = 1; y.after = false; y.knee = 0;
   y.h.L = y.h.R = 0;
   if (RB.styleFor[act]) { RB.styleFor[act](y, F, S, st); return y; }   // an act another module styles (swag.js)
   const mv = RB.moves[act], m = mv && (CFG.moves[act] || mv.fd);
@@ -281,9 +281,11 @@ function rbBody(md, p, y) {
   if (y.yaw) qH.premultiply(q[1].setFromAxisAngle(RB_UP, y.yaw * RB_R));
   if (y.lean) qH.premultiply(q[1].setFromAxisAngle(RB_X, y.lean * RB_R));
   if (y.leanL) qH.premultiply(q[1].setFromAxisAngle(RB_SIDE, y.leanL * RB_R));   // toward the opponent, along the fight line
+  if (y.leanS) qH.premultiply(q[1].setFromAxisAngle(RB_LINE, y.leanS * RB_R));   // sideways, across the fight line
   qH.toArray(p.q, 0);
   p.h[1] -= y.dip; p.h[2] += y.sz;
   if (y.lx) { p.h[0] += RB_LINE.x * y.lx; p.h[2] += RB_LINE.z * y.lx; }   // the weight along the fight line
+  if (y.lz) { p.h[0] += RB_SIDE.x * y.lz; p.h[2] += RB_SIDE.z * y.lz; }   // and across it
   // spine: the chest's twist spread over its three bones, each about the vertical
   const PW = q[2].copy(qH), chain = [ix.Spine02, ix.Spine01, ix.Spine], share = [.3, .35, .35];
   for (let k = 0; k < 3; k++) {

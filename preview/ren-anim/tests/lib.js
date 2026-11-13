@@ -6,7 +6,10 @@ const path = require('path');
 async function open(html, o) {
   o = o || {};
   const browser = await chromium.launch({args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader']});
-  const page = await browser.newPage({viewport: {width: o.w || 900, height: o.h || 420}, deviceScaleFactor: o.dpr || 1});
+  // o.mobile: a phone (touch, coarse pointer); o.init: a script run in the page before its own (a stand-in for the viewer's
+  // services, say)
+  const page = await browser.newPage({viewport: {width: o.w || 900, height: o.h || 420}, deviceScaleFactor: o.dpr || 1, isMobile: !!o.mobile, hasTouch: !!o.mobile});
+  if (o.init) await page.addInitScript(o.init);
   const errors = [];
   page.on('pageerror', e => errors.push(String(e.message)));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });

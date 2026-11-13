@@ -103,7 +103,9 @@ function rsArm(md, p, W, s, tgt, eh, fd, pn, w, straight) {
     nL.premultiply(new T.Quaternion().setFromAxisAngle(ax, .6 * th * w));
   }
   // the hand: fingers along fd, palm toward pn (as a basis), from the forearm's hand by w
-  const f = fd.clone().normalize().lerp(ax, straight || 0).normalize(), pnn = pn.clone().addScaledVector(f, -pn.dot(f)).normalize();
+  const f = fd.clone().normalize().lerp(ax, straight || 0).normalize(), pnn = pn.clone().addScaledVector(f, -pn.dot(f));
+  if (pnn.lengthSq() < 1e-6) pnn.copy(Math.abs(f.y) < .9 ? new T.Vector3(0, 1, 0) : new T.Vector3(1, 0, 0)).addScaledVector(f, -pnn.copy(pnn).dot(f));   // (a palm way along the fingers: any across)
+  pnn.normalize();
   const lf = new T.Vector3(0, 1, 0), lp = palmLoc.clone().addScaledVector(lf, -palmLoc.dot(lf)).normalize();
   const Mw = new T.Matrix4().makeBasis(f, pnn, new T.Vector3().crossVectors(f, pnn)), Ml = new T.Matrix4().makeBasis(lf, lp, new T.Vector3().crossVectors(lf, lp));
   const qWant = new T.Quaternion().setFromRotationMatrix(Mw.multiply(Ml.transpose()));
