@@ -211,37 +211,37 @@ function inVideoBuild() {
   // a hidden page stops the clip (the intro's clock stops too: frames are not drawn)
   document.addEventListener('visibilitychange', () => { if (document.hidden && !v.paused) v.pause(); });
 }
-// The whole filmed opening (ms): the clip, the white-out, then the drawn intro from its white-out to its end.
-const inVideoTotal = () => { const V = CFG.ui.intro.video; return (INTRO.vlen || V.len) + V.white + CFG.ui.intro.len - IN_T.white; };
+// The whole filmed opening (ms): the clip (its last moments under the white-out), then the drawn intro from its white-out
+// to its end.
+const inVideoTotal = () => (INTRO.vlen || CFG.ui.intro.video.len) + CFG.ui.intro.len - IN_T.white;
 // The time in the drawn intro that a moment of the filmed one shows (only its end is drawn: the white-out and the logo).
-const inVideoDrawn = t => { const V = CFG.ui.intro.video; return IN_T.white + t - (INTRO.vlen || V.len) - V.white; };
+const inVideoDrawn = t => IN_T.white + t - (INTRO.vlen || CFG.ui.intro.video.len);
 // The filmed opening at time t: the clip (kept on time by seeking only when it drifts), a flash and a shake when the fists
-// land, a white-out over its last frame, then the drawn intro's logo over the dark.
+// land, a white-out over its last moments (the clip still moving under it), then the drawn intro's logo over the dark.
 function introVideoAt(t) {
   const V = CFG.ui.intro.video, E = INTRO.el, v = INTRO.vid, L = INTRO.vlen || V.len;
   if (t >= inVideoTotal()) { introEnd(true); return; }
   INTRO.t = t;
-  if (t >= L + V.white) {                                  // the logo: the drawn intro's end, the clip gone
+  if (t >= L) {                                            // the logo: the drawn intro's end, the clip gone
     if (!v.paused) v.pause();
     inOp(v, 0);
     introAt(inVideoDrawn(t), true);
     return;
   }
   inSize();
-  const root = NAV.screens.intro.root, shot = t < L ? 'film' : 'burst';
+  const root = NAV.screens.intro.root, shot = t < L - V.white ? 'film' : 'burst';
   if (root.dataset.shot !== shot) { root.dataset.shot = shot; root.className = root.className.replace(/\bs-\w+/g, '').trim() + ' s-' + shot; }
   if (root.classList.contains('imp')) root.classList.remove('imp');
   if (INTRO.scene !== 'intro') { INTRO.scene = 'intro'; layersSet('intro', {}); }
   inOp(v, 1);
-  if (t < L) { if (Math.abs(v.currentTime * 1000 - t) > 120) v.currentTime = t / 1000; }
-  else if (!v.paused) v.pause();
+  if (Math.abs(v.currentTime * 1000 - t) > 120 && !(v.ended && t >= L - 200)) v.currentTime = t / 1000;
   inOp(E.sky, 0); inOp(E.split, 0); for (const el of [E.ren, E.kael, E.logo, E.titleBg, E.halo]) el.style.opacity = '0';
   inBg(E.stage, 1); inOp(E.vig, .55);
-  // the hit: a white flash and a hard shake, fading; then the white-out over the last frame
+  // the hit: a white flash and a hard shake, fading; then the white-out over the clip's last moments
   const k = inK(t, V.hit, V.hit + 300), e33 = Math.floor(t / 33), H = INTRO.h;
-  const flash = t >= L ? inIn(inK(t, L, L + V.white)) : t >= V.hit ? .85 * (1 - inOut(k)) : 0;
+  const flash = Math.max(t >= V.hit ? .85 * (1 - inOut(k)) : 0, inIn(inK(t, L - V.white, L)));
   E.flash.style.opacity = flash.toFixed(3);
-  const sh = t >= V.hit && t < L ? .02 * (1 - inK(t, V.hit, V.hit + 450)) : 0;
+  const sh = t >= V.hit ? .02 * (1 - inK(t, V.hit, V.hit + 450)) : 0;
   E.stage.style.transform = 'translate(' + (sh * (inR(e33, 1) - .5) * 2 * H).toFixed(2) + 'px,' + (sh * (inR(e33, 2) - .5) * 2 * H).toFixed(2) + 'px) scale(' + (1.04 + .03 * (1 - inOut(k)) * (t >= V.hit ? 1 : 0)).toFixed(4) + ')';
   // the canvases: only focus lines toward the impact, for a moment
   const G = inGeo(), dpr = INTRO.dpr, fc = E.fc, bc = E.bc;

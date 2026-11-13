@@ -4,7 +4,7 @@
 const vEl = () => document.querySelector('#sc-intro video.inVideo'), vI = () => __VF.UI.INTRO, vC = () => __VF.CFG.ui.intro;
 const vOp = el => +getComputedStyle(el).opacity, vQ = s => document.querySelector('#sc-intro ' + s);
 const vWait = (ok, ms = 8000) => new Promise((done, fail) => { const t0 = performance.now(), go = () => ok() ? done() : performance.now() - t0 > ms ? fail(new Error('timeout')) : setTimeout(go, 50); go(); });
-const vLen = () => vI().vlen || vC().video.len, vTotal = () => vLen() + vC().video.white + vC().len - 3900;
+const vLen = () => vI().vlen || vC().video.len, vTotal = () => vLen() + vC().len - 3900;
 function vFresh() { vC().video.on = true; __VF.UI.SV.introSeen = false; __VF.navReset('intro'); }
 T.test('the clip is in the page, muted and inline, played from a blob', () => { const v = vEl();
   T.ok(v, 'video element'); T.ok(v.src.startsWith('blob:'), v.src.slice(0, 20)); T.ok(v.muted && v.playsInline, 'muted inline'); });
@@ -19,9 +19,10 @@ T.test('a flash and a shake when the fists land', () => { vFresh(); const H = vC
   __VF.introAt(H + 10); T.ok(vOp(vQ('.inFlash')) > .5, 'flash ' + vOp(vQ('.inFlash')));
   let m = 0; for (const t of [H + 20, H + 60, H + 100]) { __VF.introAt(t); const s = new DOMMatrix(getComputedStyle(vQ('.inStage')).transform); m = Math.max(m, Math.abs(s.e) + Math.abs(s.f)); }
   T.ok(m > 1, 'shake ' + m); __VF.introAt(H + 700); T.ok(vOp(vQ('.inFlash')) < .05, 'flash gone'); });
-T.test('the white-out over the last frame, then the logo over the dark and the clip gone', () => { vFresh(); const L = vLen(), W = vC().video.white;
-  __VF.introAt(L + W - 20); T.ok(vOp(vQ('.inFlash')) > .8, 'white ' + vOp(vQ('.inFlash'))); T.eq(vOp(vQ('.inLogoBox')), 0);
-  __VF.introAt(L + W + 700); T.eq(vOp(vQ('.inLogoBox')), 1); T.eq(vOp(vEl()), 0); T.ok(vEl().paused, 'clip stopped'); });
+T.test('the white-out over the last moments of the clip (still showing), then the logo over the dark and the clip gone', () => { vFresh(); const L = vLen(), W = vC().video.white;
+  __VF.introAt(L - W / 2); const f = vOp(vQ('.inFlash')); T.ok(f > .05 && f < .6, 'rising ' + f); T.eq(vOp(vEl()), 1);
+  __VF.introAt(L - 20); T.ok(vOp(vQ('.inFlash')) > .8, 'white ' + vOp(vQ('.inFlash'))); T.eq(vOp(vQ('.inLogoBox')), 0);
+  __VF.introAt(L + 700); T.eq(vOp(vQ('.inLogoBox')), 1); T.eq(vOp(vEl()), 0); T.ok(vEl().paused, 'clip stopped'); });
 T.test('the drawn fighters and effects stay hidden under the clip', () => { vFresh(); __VF.introAt(1500);
   T.eq(vOp(vQ('.inF.r')), 0); T.eq(vOp(vQ('.inF.k')), 0); T.eq(vOp(vQ('.inSky')), 0); T.eq(vOp(vQ('.inLogoBox')), 0); });
 T.test('the end goes to the title, the logo kept still', () => { vFresh(); __VF.introAt(vTotal() + 1);

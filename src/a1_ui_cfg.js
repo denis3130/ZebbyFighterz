@@ -15,7 +15,7 @@ Object.assign(CFG, {
       fist: {ren: [.522, .604], kael: [.549, .61]}, panelH: 1.1, hitY: .55,
       // the filmed opening (Denis's storyboard, docs/ref/intro/, animated with ComfyUI: docs/comfy/ANIMAZIONI.md): the
       // clip assets/ui/video/intro.mp4, then a white-out and the logo of the drawn intro (from its «white» beat on).
-      // len = the clip (ms), hit = when the two fists land on the faces (flash and shake), white = the white-out after it,
+      // len = the clip (ms), hit = when the two fists land on the faces (flash and shake), white = the white-out over its last ms,
       // wait = how long the intro waits for the clip to be ready before playing the drawn one instead
       video: {on: true, len: 4530, hit: 3150, white: 400, wait: 1500}},
     vs: {minMs: 2500, tapAfterMs: 600},                                   // the VS screen stays at least this long; a tap skips it after tapAfterMs once loaded

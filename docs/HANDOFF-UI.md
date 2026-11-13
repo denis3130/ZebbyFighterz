@@ -85,7 +85,10 @@ Tutte ritagliate o ricavate dai 5 riferimenti dell'interfaccia, ingrandite 4 vol
 ## Intro filmata (13/11, dallo storyboard di Denis)
 - **L'intro ora è un video**: `assets/ui/video/intro.mp4` (960×432, 32 fps, 4,5 s, 0,6 MB). Ren e Kael si alzano in guardia,
   scattano e si colpiscono in faccia insieme (Ren col sinistro, Kael col destro); poi lampo bianco, il logo dell'intro disegnata
-  e il titolo, come prima. In tutto circa 6,2 s; «Salta» e il tocco/tasto (dopo la prima volta) restano uguali.
+  e il titolo, come prima. In tutto circa 5,8 s; «Salta» e il tocco/tasto (dopo la prima volta) restano uguali.
+- 13/11 sera, dopo la prova di Denis («lo scenario a volte si muove altre no»): clip rifatte con lo sfondo sempre in
+  movimento (`c1v` 1103 + `fin2v` 1103, misurate fotogramma per fotogramma) e il bianco finale che sale sugli ultimi 400 ms
+  del video ancora in movimento, invece che sopra l'ultimo fotogramma fermo.
 - Fatto sul PC di Denis con ComfyUI (Wan 2.2 14B, primo e ultimo fotogramma) dai suoi fotogrammi chiave `docs/ref/intro/`
   (`partenza.png`, `storyboard.png`); scelte, bozze e script in `docs/comfy/ANIMAZIONI.md`. Denis ha scelto di togliere la parata.
 - Codice: `src/u4_intro.js` (`inVideoBuild`, `introVideoAt`, `introMode`): il video è nella pagina come data URI e parte da un
