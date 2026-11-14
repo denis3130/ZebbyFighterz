@@ -35,13 +35,18 @@ const LIM = {slide: +(process.env.SLIDE || 2), floor: 5, chest: .5, head: .08, e
       PZ.play = {f0: 0, at: {a: 0, b: 1, back: false}}; PZ.ver++;
       const L = VW.pz.timeline(), F = Object.assign({}, VW.F, {act: 'posa', af: 0, air: false}), S = {frame: 0, sides: [{team: [F], cur: 0}]};
       const J = ['LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm', 'LeftFoot', 'RightFoot', 'LeftLeg', 'RightLeg', 'Head', 'Hips'];
-      const o = {len: L.len, slide: 0, slideAt: '', floor: 0, floorAt: '', chest: 0, chestAt: '', head: 9, headAt: '', ext: 0, extAt: '', nan: 0, jumps: []};
-      let prev = null, trail = [];
+      const o = {len: L.len, low: 9, lowAt: '', slide: 0, slideAt: '', floor: 0, floorAt: '', chest: 0, chestAt: '', head: 9, headAt: '', ext: 0, extAt: '', nan: 0, jumps: []};
+      let prev = null, trail = [], tag0 = () => '';
       for (let t = 0; t <= L.len; t += .25) {
+        tag0 = () => 'f' + t.toFixed(2);
         F.af = t; S.frame = t;
         const p = X.RN.pure(md, F, S);
         if (p.q.some(x => !isFinite(x)) || p.h.some(x => !isFinite(x))) { o.nan++; continue; }
-        X.mdApply(it, p); it.root.position.set(0, 0, 0); it.root.rotation.y = 0; it.root.updateMatrixWorld(true);
+        X.mdApply(it, p); it.root.rotation.set(0, 0, 0);
+        const xf = VW.pz.rootOf(p); it.root.quaternion.copy(xf.q); it.root.position.copy(xf.t).multiplyScalar(it.scale);   // (the whole body's turn and flip)
+        it.root.updateMatrixWorld(true);
+        const low = Math.min(...['Head', 'Hips', 'LeftHand', 'RightHand'].map(n => P(n).y));
+        if (low < o.low) { o.low = +low.toFixed(3); o.lowAt = tag0(); }
         const at = PZ.play.at, tag = 'f' + t.toFixed(2) + ' ' + (at.back ? 'ritorno' : (at.a + 1) + '>' + (at.b + 1)), cur = {};
         for (const s of ['Left', 'Right']) {
           const ank = P(s + 'Foot'), ball = P(s + 'ToeBase'), R = rest[s], tip = R.tip.clone().applyQuaternion(Q(s + 'Foot')).add(ank);
@@ -87,6 +92,7 @@ const LIM = {slide: +(process.env.SLIDE || 2), floor: 5, chest: .5, head: .08, e
     if (r.chest > LIM.chest) bad.push('braccio nel petto ' + r.chest + 'cm ' + r.chestAt);
     if (r.head < LIM.head) bad.push('mano nel viso ' + r.head + ' ' + r.headAt);
     if (r.ext > LIM.ext) bad.push('gamba tirata ' + r.ext + ' ' + r.extAt);
+    if (r.low < .05) bad.push('testa, mani o bacino a terra ' + r.low + ' ' + r.lowAt);
     if (r.jumps.length) bad.push('scatti: ' + r.jumps.slice(0, 3).join('; ') + (r.jumps.length > 3 ? ' (+' + (r.jumps.length - 3) + ')' : ''));
     res.push({id: d.id, name: d.doc.name, bad, r});
     console.log((bad.length ? 'NO ' : 'ok ') + d.id.padEnd(26) + ' ' + (r.len / 60).toFixed(1) + 's  slide ' + r.slide + '  chest ' + r.chest + '  head ' + r.head + '  ext ' + r.ext + (bad.length ? '\n     ' + bad.join('\n     ') : ''));

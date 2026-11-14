@@ -448,7 +448,8 @@ function rbLegs(md, p) {
   for (const s of ['L', 'R']) {
     const c = con[s], L = RB.leg[s];
     if (c.w < 1 || !c.auto) continue;
-    const ex = hip(s, v[5]).distanceTo(ankle(s, v[6])) - (L.a + L.b) * RB.ext;
+    let ex = hip(s, v[5]).distanceTo(ankle(s, v[6])) - (L.a + L.b) * RB.ext;
+    if (RB.softHeel) ex = ex < -.02 ? 0 : ex < .02 ? (ex + .02) ** 2 / .08 : ex;   // (eased in from 2 cm before: no heel popping up)
     if (ex > 0) { const f = v[1].copy(L.tp).applyQuaternion(c.Q).setY(0).normalize(); c.Q.premultiply(q[1].setFromAxisAngle(v[2].crossVectors(RB_UP, f).normalize(), Math.min(12, ex * 250) * RB_R)); }
   }
   // the pelvis within reach of the legs in contact (a foot only partly on its spot, leaving it or coming back to it,
@@ -485,7 +486,9 @@ function rbLegs(md, p) {
       const low = Math.max(L.ball + fl - ball.y, fl - (v[1].copy(L.tp).applyQuaternion(Qf).y + tgt.y), .07 + fl - tgt.y);   // ball, toe tip and ankle above the floor
       if (low > 0) tgt.y += low;
     }
-    rbIK(md, p, L, qH, A, tgt, Qf, qU, qL, knee, fa, c.w >= 1 && !!c.flat, c.loc === L.tp ? c.w : 0);   // (the clip's own foot: its knee is right)
+    // (the clip's own foot: its knee is right; c.knee, when a module sets it: how much of the standing foot's knee
+    // rule this foot takes, 0..1 — a foot high in the air takes none of it)
+    rbIK(md, p, L, qH, A, tgt, Qf, qU, qL, knee, fa, c.w >= 1 && !!c.flat, c.loc === L.tp ? c.w * (c.knee === undefined ? 1 : c.knee) : 0);
   }
 }
 
@@ -522,7 +525,11 @@ function rbIK(md, p, L, qH, A, tgt, Qf, qU, qL, knee, ank, rigid, w) {
     // (the toes' way: the sole's direction on the floor, across the leg; the ankle-to-ball line runs nearly along a bent
     // leg and its part across the leg flips side as they pass parallel)
     const Pf = L.sd.clone().applyQuaternion(Qf).setY(0); Pf.addScaledVector(dir, -Pf.dot(dir));
-    if (Pf.lengthSq() > .04) {
+    // (RB.softKnee: the rule fades in as the toes' way comes off the leg's line, instead of switching on at once: a leg
+    // in the air whose foot passes along that line does not turn its knee over in one frame; the kit's moves keep the
+    // switch they were made with)
+    const pl = Pf.length(), kw = RB.softKnee ? rnSm((pl - .12) / .16) : pl > .2 ? 1 : 0;
+    if (kw > 0) {
       Pf.normalize();
       // angles about the leg's line, from the toes: the knee's (aP) and the hips' forward (aH). In a punch (weight k)
       // the knee goes toward the hips' way (60% of it from the toes, a rear knee driving in with the punch) within 15
@@ -531,7 +538,7 @@ function rbIK(md, p, L, qH, A, tgt, Qf, qU, qL, knee, ank, rigid, w) {
       const Hf = RB.t.hipF.clone(); Hf.addScaledVector(dir, -Hf.dot(dir));
       const aP = sa(Pf, P), aH = Hf.lengthSq() > .04 ? sa(Pf, Hf.normalize()) : 0, k = RB.sty.knee;
       const c = k * Math.max(-.8, Math.min(.8, .6 * aH)) * (1 - rnSm((Math.abs(aH) - 2.4) / .6)), tol = (40 - 25 * k) * RB_R;
-      const g = rnSm((Math.abs(aP) - 2.5) / .5), want = Math.max(c - tol, Math.min(c + tol, aP)) * (1 - g) + c * g, turn = (want - aP) * w;
+      const g = rnSm((Math.abs(aP) - 2.5) / .5), want = Math.max(c - tol, Math.min(c + tol, aP)) * (1 - g) + c * g, turn = (want - aP) * w * kw;
       if (Math.abs(turn) > 1e-5) { const tw = new T.Quaternion().setFromAxisAngle(dir, turn); P.applyQuaternion(tw); R.premultiply(tw); }
     }
   }

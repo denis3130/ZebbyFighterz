@@ -39,6 +39,28 @@ comportamenti del corpo strane". Scelte di Claude per farle bene con gli stessi 
 - 66 animazioni in sei gruppi, elenco "Animazioni" nella pagina (un tocco: si apre e parte).
 - Verificate fotogramma per fotogramma (tests/posa_anims.js) e guardate una per una.
 
+## Quarta tappa (14/11): combo e mosse speciali
+Denis: "aggiungi anche tante combo / non basarti solo su movimenti macchinosi inventati anche qualche figata, come combo
+speciali, mosse speciali ecc". Scelte di Claude:
+- Due posizioni nuove per le gambe, Alto (calcio alla testa) e Dietro (calcio indietro, di tallone).
+- Campi oltre i tasti, conservati se Denis modifica una posa: giro e capriola di tutto il corpo (gradi contati: il
+  giro sulla punta del piede che resta a terra, il cui tallone sale prima e scende dopo; nessun piede striscia), vola
+  (salto più alto), x (posto in metri), scatto (balzo radente), fx (colpo, forte, energia, onda) dal punto hit, scia.
+  Il giro va in senso orario visto dall'alto: continua la guardia di profilo, come un vero calcio girato.
+- Effetti solo grafici: scintille d'impatto, lampo bianco e tremolio leggero sui colpi forti, sfera di energia tra le
+  mani, onda che parte in avanti, scia ciano degli arti; niente pause sul tempo (le lotte non si allungano); spenti
+  con "riduci movimento".
+- Correzioni al corpo trovate provando: in un salto il bacino sale e scende con i piedi (prima atterrava prima di loro
+  e piegava le gambe); il ginocchio in aria segue il lato naturale della gamba (prima poteva girarsi passando da
+  davanti a dietro); un piede che passa da davanti a dietro il bacino (o il contrario) gira sotto di esso ad arco,
+  la gamba che si piega, invece di attraversarlo; il tallone d'appoggio vicino alla gamba tesa sale piano; un braccio
+  che arriva quasi teso ci arriva morbido (prima il gomito scattava dritto); il gomito tra due posizioni gira dal lato
+  giusto anche quando le due sono lontane; la fascia segue il corpo nei giri e nelle capriole; la capriola non lascia
+  più Ren storto.
+- 38 animazioni nuove (103 in tutto): 15 combinazioni, 12 mosse speciali, 5 calci, 2 difese, 4 movimenti; impatti
+  aggiunti anche alle 65 di prima.
+- Verificate fotogramma per fotogramma (tutte, scivolamento massimo 0,8 mm) e guardate una per una.
+
 ## La prima versione (sostituita)
 
 ### Cosa faceva
@@ -65,5 +87,6 @@ comportamenti del corpo strane". Scelte di Claude per farle bene con gli stessi 
 
 ## Per dopo (non costruito)
 - Linea del tempo con i fotogrammi (approccio B), se le note non bastano.
-- Altre posizioni pronte se servono (es. spazzata, calcio girato), su richiesta di Denis.
+- Altre posizioni pronte se servono (es. spazzata), su richiesta di Denis.
+- Mosse speciali come tasti nella pagina (oggi solo nelle animazioni di Claude): giro, capriola, effetti.
 - Specchiare una posa; eliminare un'animazione salvata.

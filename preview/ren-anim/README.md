@@ -25,7 +25,7 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
   ancora). Pagina a parte, senza effetti.
 - `mods/posa.js` (dopo `kit.js`): "Pose di Ren" (13-14/11/2026), le pose chiave a tasti con cui Denis mostra le
   animazioni che ha in mente. Per braccio avanti e dietro Guardia / Avanti / Alto / Viso / Gomito / Basso, per ogni mano
-  Pugno / Socchiusa / Aperta, per gamba avanti e dietro A terra / Ginocchio / Calcio / Basso, Busto Dritto / Avanti /
+  Pugno / Socchiusa / Aperta, per gamba avanti e dietro A terra / Ginocchio / Calcio / Alto / Basso / Dietro, Busto Dritto / Avanti /
   Indietro, Altezza Normale / Basso / Alto, Passo Indietro / Qui / Avanti / 2 avanti. Il resto del corpo segue da solo
   (un braccio dritto o un gomito porta dentro la spalla, un calcio inclina indietro e alza sulla gamba d'appoggio, il
   cui piede sale sulla punta e gira; due piedi in aria fanno un salto; i passi sono veri: un piede e poi l'altro,
@@ -35,9 +35,21 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
   fotogrammi. Tocco, mouse, tastiera, controller. Salvataggio nel database della pagina (raccolta `animazioni`,
   formato 2: le scelte per nome, con la legenda dentro) e sul dispositivo. La spinta che tiene le braccia fuori dal
   busto, in questa pagina, sfuma oltre i bordi del busto (`RS.torso.soft`, style.js): un braccio che entra nella fascia
-  del petto non scatta.
-- `data/animazioni.py`: le animazioni fatte da Claude (14/11/2026, richiesta di Denis: "almeno 50, fatte bene"): 66 in
-  sei gruppi (Colpi, Calci, Combinazioni, Difese, Movimenti, Speciali), ognuna con i suoi tempi e una nota per posa.
+  del petto non scatta. Oltre i tasti, per le mosse speciali di Claude (14/11): tutto il corpo che gira su se stesso
+  (sul piede che resta a terra, sulla punta) o fa la capriola (sul bacino, in aria), salti più alti, un posto in metri,
+  lo scatto radente, e gli effetti all'arrivo di una posa (impatto, impatto forte con lampo e tremolio, energia tra le
+  mani, onda di energia in avanti, scia dell'arto). Solo grafica, calcolati dal tempo di riproduzione: un'animazione
+  è uguale ogni volta. Il ginocchio di una gamba in aria si piega sempre dal suo lato naturale (la linea della gamba
+  girata di un quarto in avanti: giù -> avanti, avanti -> su, indietro -> giù), anche quando la gamba passa da davanti
+  a dietro, e un piede che passa da davanti a dietro il bacino gira sotto di esso ad arco; il tallone d'appoggio
+  vicino alla gamba tesa sale piano (`RB.softHeel`, body.js); un braccio quasi teso ci arriva morbido; la fascia
+  segue il corpo girato e capovolto.
+- `data/animazioni.py`: le animazioni fatte da Claude (14/11/2026, richieste di Denis: "almeno 50, fatte bene", poi
+  "tante combo [...] combo speciali, mosse speciali"): 103 in sei gruppi (Colpi 15, Calci 17, Combinazioni 30,
+  Difese 11, Movimenti 12, Speciali 18), ognuna con i suoi tempi e una nota per posa. Le mosse speciali: calcio
+  girato, calcio tornado, capriola d'ascia, mille palmi, onda del vuoto, pugno fantasma, ascesa, martello del cielo,
+  pugno rotante, danza del vuoto, capriola di vittoria e il Colpo Voidrise (la mossa finale). Ogni colpo "snap" ha il
+  suo impatto (l'ultimo di una combinazione è forte), i calci la loro scia.
   Scrive `data/animazioni.json` (i documenti come li salva la pagina, id `c-<nome>`), che va nel database della
   pagina.
 - `mods/body_v1.js`: il primo tentativo, tenuto solo come confronto.

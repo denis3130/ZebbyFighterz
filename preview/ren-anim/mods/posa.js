@@ -32,7 +32,7 @@ const PZ = {
 };
 // the rows of choices: the pose's field, its label, its values [name, label]
 const PZ_ARMV = [['guardia', 'Guardia'], ['avanti', 'Avanti'], ['alto', 'Alto'], ['viso', 'Viso'], ['gomito', 'Gomito'], ['basso', 'Basso']];
-const PZ_LEGV = [['terra', 'A terra'], ['ginocchio', 'Ginocchio'], ['calcio', 'Calcio'], ['basso', 'Basso']];
+const PZ_LEGV = [['terra', 'A terra'], ['ginocchio', 'Ginocchio'], ['calcio', 'Calcio'], ['alto', 'Alto'], ['basso', 'Basso'], ['dietro', 'Dietro']];
 const PZ_ROWS = [
   {key: 'bA', label: 'Braccio avanti', vals: PZ_ARMV},
   {key: 'bD', label: 'Braccio dietro', vals: PZ_ARMV},
@@ -47,6 +47,8 @@ const PZ_HANDS = [['pugno', 'Pugno', 1], ['socchiusa', 'Socchiusa', .55], ['aper
 const PZ_GUARD = {bA: 'guardia', mA: 'pugno', bD: 'guardia', mD: 'socchiusa', gA: 'terra', gD: 'terra', busto: 'dritto', alt: 'normale', passo: 'qui'};   // the kit's guard
 const PZ_STEP = .3, PZ_PASSO = {indietro: -1, qui: 0, avanti: 1, avanti2: 2};   // m a step; where each place is, in steps
 const PZ_EASES = ['snap', 'out', 'lin', 'smooth'];
+const PZ_FX = ['colpo', 'forte', 'energia', 'onda'];   // an impact, a heavy one, energy between the hands, an energy wave sent forward
+const PZ_HIT = {mA: ['LeftHand'], mD: ['RightHand'], eA: ['LeftForeArm'], eD: ['RightForeArm'], gA: ['LeftLeg'], gD: ['RightLeg'], pA: ['LeftToeBase'], pD: ['RightToeBase'], due: ['LeftHand', 'RightHand']};   // the limb an effect comes from (the bones whose middle it is)
 // the animations' groups (a document's cat), in the list's order; Denis's own have none
 const PZ_CATS = ['Colpi', 'Calci', 'Combinazioni', 'Difese', 'Movimenti', 'Speciali'];
 const PZ_KEY = 'pose-ren-v2';   // localStorage: {id, doc} of the animation open on this device
@@ -67,6 +69,14 @@ function pzFill(p) {
   if (Number.isFinite(p.t) && p.t >= 2 && p.t <= 240) o.t = Math.round(p.t);
   if (Number.isFinite(p.h) && p.h >= 0 && p.h <= 240) o.h = Math.round(p.h);
   if (PZ_EASES.includes(p.e)) o.e = p.e;
+  // beyond the buttons (Claude's animations): the whole body's turn and flip (deg, counted on: 360 is round once),
+  // a higher jump (m), a place in metres (instead of the steps), a glide (one long low step), an effect on reaching
+  // the pose and the limb it comes from
+  for (const [k, lo, hi] of [['giro', -1080, 1080], ['capriola', -1080, 1080], ['vola', 0, 1], ['x', -3, 3]]) if (Number.isFinite(p[k]) && p[k] >= lo && p[k] <= hi) o[k] = p[k];
+  if (p.scatto === true) o.scatto = true;
+  if (PZ_FX.includes(p.fx)) o.fx = p.fx;
+  if (p.scia === true) o.scia = true;
+  if (PZ_HIT[p.hit]) o.hit = p.hit;
   return o;
 }
 function pzEase(u, e) { u = pzC(u, 0, 1); return e === 'snap' ? rkEase(u, 'snap') : e === 'out' ? 1 - rkEase(1 - u, 'snap') : e === 'lin' ? u : rnSm(u); }
@@ -86,15 +96,20 @@ function pzBody(c) {
   if (c.bA === 'basso' || c.bD === 'basso') { b.leanL += 8; b.dip += .04; }   // (a low strike or block: in and down a little)
   // a kick leans him away from it and lifts him on the standing leg (the kit's kick: -34 degrees, 17 cm up); a knee less
   if (c.gA === 'calcio') { b.leanL -= 26; b.dip -= .15; b.yaw -= 5; b.lx -= .08; }
+  else if (c.gA === 'alto') { b.leanL -= 34; b.dip -= .17; b.yaw -= 6; b.lx -= .1; }   // (the head kick: further back, up on the standing leg)
+  else if (c.gA === 'dietro') { b.leanL += 26; b.dip -= .05; b.lx += .04; }   // (a kick behind: the chest goes the other way)
   else if (c.gA === 'ginocchio') { b.leanL -= 4; b.dip -= .06; b.lx -= .03; }
   else if (c.gA === 'basso') { b.leanL -= 8; b.dip -= .03; b.lx -= .04; }
   if (c.gD === 'calcio') { b.leanL -= 22; b.dip -= .12; b.yaw -= 25; b.chest += 10; b.lx += .1; }   // (the rear hip comes forward)
+  else if (c.gD === 'alto') { b.leanL -= 30; b.dip -= .14; b.yaw -= 28; b.chest += 12; b.lx += .1; }
+  else if (c.gD === 'dietro') { b.leanL += 24; b.dip -= .05; b.lx += .02; }
   else if (c.gD === 'ginocchio') { b.leanL -= 2; b.dip -= .05; b.lx += .03; }
   else if (c.gD === 'basso') { b.leanL -= 10; b.dip -= .03; b.yaw -= 12; b.lx += .08; }
-  if (c.gA !== 'terra' && c.gD !== 'terra') b.jump = .35;   // both feet off the floor: a jump
+  if (c.gA !== 'terra' && c.gD !== 'terra') b.jump = .35 + (c.vola || 0);   // both feet off the floor: a jump (higher with vola)
   b.leanL = pzC(b.leanL, -42, 32);
   b.head = -.5 * b.leanL;   // (the eyes stay on the opponent)
-  b.tx = (PZ_PASSO[c.passo] || 0) * PZ_STEP;   // where he stands (m along the line)
+  b.tx = Number.isFinite(c.x) ? c.x : (PZ_PASSO[c.passo] || 0) * PZ_STEP;   // where he stands (m along the line)
+  b.giro = c.giro || 0; b.flip = c.capriola || 0; b.glide = c.scatto ? 1 : 0;   // (the turn and flip: graphics, pzRootXf)
   return b;
 }
 // the feet: along the line (m, from the guard's spot), up, the heel (deg), the turn on the tip (deg), the toes' point in
@@ -102,16 +117,21 @@ function pzBody(c) {
 function pzFeet(c, b) {
   const F = {L: {x: 0, up: 0, heel: 0, yaw: 0, point: 30, air: 0, tx: b.tx}, R: {x: 0, up: 0, heel: 0, yaw: 0, point: 30, air: 0, tx: b.tx}};
   if (c.gA === 'ginocchio') Object.assign(F.L, {x: -.12, up: .5, point: 40, air: 1});
-  else if (c.gA === 'calcio') Object.assign(F.L, {x: .33, up: 1.02, point: -5, air: 1});
-  else if (c.gA === 'basso') Object.assign(F.L, {x: .28, up: .3, point: 0, air: 1});   // (a low kick: the sole at the shin, the leg not quite straight)
+  else if (c.gA === 'calcio') Object.assign(F.L, {x: .27, up: 1, point: -5, air: 1});
+  else if (c.gA === 'basso') Object.assign(F.L, {x: .2, up: .3, point: 0, air: 1});   // (a low kick: the sole at the shin, the leg not quite straight)
+  else if (c.gA === 'alto') Object.assign(F.L, {x: .1, up: 1.24, point: -5, air: 1});   // (at the head)
+  else if (c.gA === 'dietro') Object.assign(F.L, {x: -.85, up: .8, point: 10, air: 1});   // (behind him at the middle, the heel first)
   if (c.gD === 'ginocchio') Object.assign(F.R, {x: .55, up: .55, point: 40, air: 1});   // (the rear knee comes forward, up in front)
   else if (c.gD === 'calcio') Object.assign(F.R, {x: 1.15, up: .9, point: -5, air: 1});
-  else if (c.gD === 'basso') Object.assign(F.R, {x: 1.1, up: .28, point: 0, air: 1});   // (the rear leg reaching forward low, nearly straight)
+  else if (c.gD === 'basso') Object.assign(F.R, {x: 1, up: .28, point: 0, air: 1});   // (the rear leg reaching forward low, nearly straight)
+  else if (c.gD === 'alto') Object.assign(F.R, {x: .88, up: 1.14, point: -5, air: 1});
+  else if (c.gD === 'dietro') Object.assign(F.R, {x: -.24, up: .7, point: 10, air: 1});
   // the standing foot turned on its tip (the kit's kick: 30 degrees), up on its ball to turn (a flat foot cannot
   // turn on the floor without sliding)
-  if (c.gD === 'terra') F.R.yaw = c.gA === 'calcio' ? -30 : c.gA === 'basso' ? -15 : 0;
-  if (c.gA === 'terra') F.L.yaw = c.gD === 'calcio' ? -40 : c.gD === 'basso' ? -20 : 0;
+  if (c.gD === 'terra') F.R.yaw = c.gA === 'calcio' || c.gA === 'alto' ? -30 : c.gA === 'basso' ? -15 : 0;
+  if (c.gA === 'terra') F.L.yaw = c.gD === 'calcio' || c.gD === 'alto' ? -40 : c.gD === 'basso' ? -20 : 0;
   for (const s of ['L', 'R']) if (F[s].yaw) F[s].heel = 12;
+  if (((c.giro || 0) % 360 + 360) % 360 > 1) for (const s of ['L', 'R']) if (pzDown(F[s])) F[s].heel = 12;   // (turned round: up on the ball it turns on)
   if (b.jump) { F.L.up += b.jump; F.R.up += b.jump; }
   return F;
 }
@@ -154,20 +174,52 @@ const PZ_ARM = {
 // A pose's numbers (body, feet, and per arm the weight of each position|hand), so two poses mix and a pose eases
 // into another: every change is continuous.
 function pzTarget(c) {
-  const b = pzBody(c);
-  return {b, f: pzFeet(c, b), arm: {L: {[c.bA + '|' + c.mA]: 1}, R: {[c.bD + '|' + c.mD]: 1}}};
+  const b = pzBody(c), f = pzFeet(c, b), dL = pzDown(f.L), dR = pzDown(f.R);
+  return {b, f, arm: {L: {[c.bA + '|' + c.mA]: 1}, R: {[c.bD + '|' + c.mD]: 1}}, pivot: dL !== dR ? (dL ? 'L' : 'R') : 'H'};
 }
-// a at 0 .. b at 1, by u (eased); raw = the change's own time (0..1), which the steps follow
-function pzMixT(a, b, u, raw) {
-  if (raw === undefined) raw = u;
-  const num = (x, y) => { const o = {}; for (const k in x) o[k] = x[k] + (y[k] - x[k]) * u; return o; };
-  const w = (x, y) => { const o = {}; for (const k in x) o[k] = x[k] * (1 - u); for (const k in y) o[k] = (o[k] || 0) + y[k] * u; for (const k in o) if (o[k] < 1e-4) delete o[k]; return o; };
-  const B = num(a.b, b.b), f = {L: num(a.f.L, b.f.L), R: num(a.f.R, b.f.R)};
+const pzDown = x => x.up < .005 && x.air < .05;   // (a foot on the floor)
+// the guard's ankles and hip joints along the fight line and up (m; tests/posa.js checks them against the page's guard)
+const PZ_LEG = {L: {ax: .4, ay: .1505, hx: .0698, hy: .7614}, R: {ax: -.4869, ay: .1505, hx: -.0902, hy: .7804}};
+// a at 0 .. b at 1 over the change's own time raw (0..1), eased by e. Not all at once: the body (hips, chest, head)
+// gets there first, by 80% of the change, the arms last, from 20% of it: the force goes from the feet through the
+// hips and chest to the hand (Ren's brief), and a strike lands with the body already set behind it.
+function pzMixT(a, b, raw, e) {
+  raw = pzC(raw, 0, 1);
+  const u = pzEase(raw, e), ub = pzEase(raw / .8, e), ua = pzEase((raw - .2) / .8, e);
+  const num = (x, y, k) => { const o = {}; for (const j in x) o[j] = x[j] + (y[j] - x[j]) * k; return o; };
+  const w = (x, y, k) => { const o = {}; for (const j in x) o[j] = x[j] * (1 - k); for (const j in y) o[j] = (o[j] || 0) + y[j] * k; for (const j in o) if (o[j] < 1e-4) delete o[j]; return o; };
+  const B = num(a.b, b.b, ub), f = {L: num(a.f.L, b.f.L, u), R: num(a.f.R, b.f.R, u)};
+  // the turn and the flip pivot on the foot that stays on the floor all through the change (none: on the hips); about
+  // the hips they wait for the feet to leave the floor and end before they land again (the feet never sweep it)
+  const stay = s => pzDown(a.f[s]) && pzDown(b.f[s]) && Math.abs(b.f[s].tx - a.f[s].tx) < 1e-6, sL = stay('L'), sR = stay('R');
+  const pivot = sL !== sR ? (sL ? 'L' : 'R') : 'H';
+  let heelT = null;
+  {
+    // (about the hips: both feet; on a foot: the other one) leaving the floor: the turn starts once it is off; landing:
+    // the turn ends before it is down
+    // the foot it turns on is up on its ball all through the turn: its heel goes up before it starts, down after it
+    // ends (a flat foot turned about its tip would sweep the floor)
+    const other = pivot === 'H' ? ['L', 'R'] : [pivot === 'L' ? 'R' : 'L'], up0 = other.some(s => pzDown(a.f[s])), down1 = other.some(s => pzDown(b.f[s]));
+    let s0 = up0 ? .3 : 0, s1 = down1 ? .7 : 1;
+    if (pivot !== 'H' && Math.abs(b.b.giro - a.b.giro) > .5) {
+      const ha = a.f[pivot].heel, hb = b.f[pivot].heel, top = Math.max(12, ha, hb);
+      if (ha < top - .5) s0 = Math.max(s0, .25);
+      if (hb < top - .5) s1 = Math.min(s1, .75);
+      heelT = {s: pivot, h: raw < s0 ? ha + (top - ha) * rnSm(raw / s0) : raw > s1 ? top + (hb - top) * rnSm((raw - s1) / (1 - s1)) : top};
+    }
+    const k = up0 && down1 ? (pivot === 'H' ? pzEase(raw, e) : ub) : pzEase((raw - s0) / (s1 - s0), e);
+    B.giro = a.b.giro + (b.b.giro - a.b.giro) * k; B.flip = a.b.flip + (b.b.flip - a.b.flip) * k;
+  }
   // a foot that leaves the floor goes up before it goes anywhere (and turns its toes down only once off it); one that
   // lands gets there first and comes down last: none drags its toes on the floor
-  const down = x => x.up < .005 && x.air < .05;
+  // (a jump, both feet off the floor, goes up and comes down with the feet, not ahead of them with the body: a body
+  // that lands first would fold the legs up under it)
+  const down = x => x.up < .005 && x.air < .05, ja = a.b.jump, jb = b.b.jump;
+  const lifts = ['L', 'R'].some(s => down(a.f[s]) && !down(b.f[s])), lands = ['L', 'R'].some(s => !down(a.f[s]) && down(b.f[s]));
+  B.jump = ja + (jb - ja) * (lifts ? rnSm(u / .85) : lands ? rnSm((u - .15) / .85) : u);
   for (const s of ['L', 'R']) {
     const fa = a.f[s], fb = b.f[s], off = down(fa) && !down(fb), on = !down(fa) && down(fb);
+    let ku = u;
     if (!off && !on) {
       // a standing foot that turns (under a kick): up on its ball first, then the turn on its tip; back, the turn
       // first, then the heel down (a flat foot turning would slide on the floor)
@@ -175,25 +227,46 @@ function pzMixT(a, b, u, raw) {
         const away = Math.abs(fb.yaw) > Math.abs(fa.yaw), kh = away ? rnSm(u / .4) : rnSm((u - .6) / .4), ky = away ? rnSm((u - .25) / .75) : rnSm(u / .75);
         f[s].heel = fa.heel + (fb.heel - fa.heel) * kh; f[s].yaw = fa.yaw + (fb.yaw - fa.yaw) * ky;
       }
-      continue;
+    } else {
+      const kx = off ? rnSm((u - .15) / .85) : rnSm(u / .85);
+      ku = off ? rnSm(u / .85) : rnSm((u - .15) / .85);
+      for (const k of ['x', 'air', 'point', 'heel', 'yaw']) f[s][k] = fa[k] + (fb[k] - fa[k]) * kx;
     }
-    const kx = off ? rnSm((u - .15) / .85) : rnSm(u / .85), ku = off ? rnSm(u / .85) : rnSm((u - .15) / .85);
-    for (const k of ['x', 'air', 'point', 'heel', 'yaw']) f[s][k] = fa[k] + (fb[k] - fa[k]) * kx;
-    f[s].up = fa.up + (fb.up - fa.up) * ku;
+    f[s].up = fa.up - ja + (fb.up - jb - fa.up + ja) * ku + B.jump;   // (its own height over the jump's)
   }
+  if (heelT) f[heelT.s].heel = heelT.h;
   B.tx = a.b.tx + (b.b.tx - a.b.tx) * rnSm(raw);   // (the body's way to a new place: even, whatever the strike's ease)
   // to a new place by steps, each foot lifted and travelling inside its lift (it leaves the floor before it moves and
   // stops before it lands: none slides): forward the front (left) foot first, back the rear one; a step at a time
-  const fwd = b.b.tx >= a.b.tx;
+  // (a glide, scatto: steps of up to 60 cm, the feet low and close behind each other: a dash)
+  const fwd = b.b.tx >= a.b.tx, gl = b.b.glide > .5, size = gl ? .6 : PZ_STEP, win = gl ? [0, .7, .25] : [0, .6, .4], lift = gl ? .02 : .045;
   for (const s of ['L', 'R']) {
     const d = b.f[s].tx - a.f[s].tx;
     if (Math.abs(d) < 1e-6) continue;
-    const n = Math.max(1, Math.round(Math.abs(d) / PZ_STEP)), q = pzC(raw, 0, 1) * n, k = Math.min(n - 1, Math.floor(q)), r = q - k;
-    const v = pzC((r - ((s === 'L') === fwd ? 0 : .4)) / .6, 0, 1);
+    const n = Math.max(1, Math.ceil(Math.abs(d) / size - .25)), q = raw * n, k = Math.min(n - 1, Math.floor(q)), r = q - k;
+    const v = pzC((r - ((s === 'L') === fwd ? win[0] : win[2])) / win[1], 0, 1);
     f[s].tx = a.f[s].tx + d / n * (k + rnSm((v - .15) / .7));
-    f[s].up += .045 * Math.min(1, Math.abs(d) / n / .15) * Math.sin(Math.PI * v) ** 2;
+    f[s].up += lift * Math.min(1, Math.abs(d) / n / .15) * Math.sin(Math.PI * v) ** 2;
   }
-  return {b: B, f, arm: {L: w(a.arm.L, b.arm.L), R: w(a.arm.R, b.arm.R)}};
+  // a foot that goes from one side of the hips to the other off the floor (the rear one coming up in front, the front
+  // one kicking behind, a kick swung from front to back) goes round under them, not through them: its angle about the
+  // hip and its distance from it mixed, the distance kept short enough to pass well above the floor (the leg folds
+  // under him as it swings); away from its ends only (it leaves the floor and meets it straight up and down)
+  for (const s of ['L', 'R']) {
+    const fa = a.f[s], fb = b.f[s];
+    if (down(fa) && down(fb)) continue;
+    const G0 = PZ_LEG[s], rel = (x, bd) => { const h = G0.ax + x.x + x.tx - G0.hx - bd.lx - bd.tx, v = G0.ay + x.up - G0.hy + bd.dip - bd.jump; return {th: Math.atan2(h, -v), r: Math.hypot(h, v)}; };
+    const A = rel(fa, a.b), Z = rel(fb, b.b);
+    if (A.th * Z.th >= 0 || Math.min(Math.abs(A.th), Math.abs(Z.th)) < .14) continue;
+    const off = down(fa), on = down(fb), kt = off ? rnSm((u - .15) / .85) : on ? rnSm(u / .85) : u, kr = off ? rnSm(u / .85) : on ? rnSm((u - .15) / .85) : u;
+    const th = A.th + (Z.th - A.th) * kt, hx = G0.hx + B.lx + B.tx, hy = G0.hy - B.dip + B.jump, c = Math.cos(th);
+    let r = A.r + (Z.r - A.r) * kr;
+    if (c > .05) r = Math.min(r, (hy - G0.ay - .12 * Math.sin(Math.PI * kt)) / c);
+    const wp = rnSm(kt / .3) * rnSm((1 - kt) / .3);
+    f[s].x += (hx + r * Math.sin(th) - G0.ax - f[s].tx - f[s].x) * wp;
+    f[s].up += (hy - r * c - G0.ay - f[s].up) * wp;
+  }
+  return {b: B, f, arm: {L: w(a.arm.L, b.arm.L, ua), R: w(a.arm.R, b.arm.R, ua)}, pivot};
 }
 // the pose drawn at fighter state F: while playing, the mix of two poses; else the pose being edited, reached from
 // wherever the drawing was over PZ.ease frames (a tap in the middle of a change does not jump)
@@ -208,8 +281,8 @@ function pzDrawn(F) {
     if (PZ.D && PZ.Dv !== PZ.ver) PZ.tr = {from: PZ.D, f0: F.af};   // (a change: it starts here)
     const tr = PZ.tr;
     if (tr && F.af < tr.f0) tr.f0 = F.af;
-    const raw = tr ? (F.af - tr.f0) / (PZ.ease * Math.max(1, 1.5 * Math.abs(T.b.tx - tr.from.b.tx) / PZ_STEP)) : 1, u = rnSm(raw);   // (a step: 18 frames each)
-    D = raw >= 1 ? T : pzMixT(tr.from, T, u, raw);
+    const raw = tr ? (F.af - tr.f0) / (PZ.ease * Math.max(1, 1.5 * Math.abs(T.b.tx - tr.from.b.tx) / PZ_STEP)) : 1;   // (a step: 18 frames each)
+    D = raw >= 1 ? T : pzMixT(tr.from, T, raw);
     if (raw >= 1) PZ.tr = null;
   }
   PZ.D = D; PZ.Daf = F.af; PZ.Dv = PZ.ver;
@@ -230,13 +303,18 @@ function pzPlayAt(t) {
   const P = PZ.poses, n = P.length, L = pzTimeline(), at = PZ.play.at;
   t = ((t % L.len) + L.len) % L.len;
   for (const g of L.seg) {
-    if (t < g.t0 + g.T) { const raw = (t - g.t0) / g.T; at.a = g.i - 1; at.b = g.i; at.back = false; return pzMixT(pzTarget(P[g.i - 1]), pzTarget(P[g.i]), pzEase(raw, g.e), raw); }
+    if (t < g.t0 + g.T) { at.a = g.i - 1; at.b = g.i; at.back = false; return pzMixT(pzTarget(P[g.i - 1]), pzTarget(P[g.i]), (t - g.t0) / g.T, g.e); }
     if (t < g.t0 + g.T + g.H) { at.a = at.b = g.i; at.back = false; return pzTarget(P[g.i]); }
   }
   t -= L.run;
   if (t < PZ.hold) { at.a = at.b = n - 1; at.back = false; return pzTarget(P[n - 1]); }
   t -= PZ.hold;
-  if (t < L.back) { at.a = n - 1; at.b = 0; at.back = true; return pzMixT(pzTarget(P[n - 1]), pzTarget(P[0]), rnSm(t / L.back), t / L.back); }
+  if (t < L.back) {
+    at.a = n - 1; at.b = 0; at.back = true;
+    const A0 = pzTarget(P[n - 1]), B0 = pzTarget(P[0]), near = (x, y) => x + ((((y - x) % 360) + 540) % 360 - 180);   // (y's turn nearest x)
+    B0.b.giro = near(A0.b.giro, B0.b.giro); B0.b.flip = near(A0.b.flip, B0.b.flip);
+    return pzMixT(A0, B0, t / L.back);
+  }
   at.a = at.b = 0; at.back = true;
   return pzTarget(P[0]);
 }
@@ -244,6 +322,8 @@ function pzPlayAt(t) {
 // --- The act: style, feet, arms, head, the legs in the air, hands ---
 RB.pin.posa = 1;
 RS.torso.soft = {lo: .04, hi: .06};   // (this page's arms go anywhere: the chest's push fades in at its top and bottom, style.js)
+RB.softKnee = true;   // (and its legs too: a standing foot's knee rule fades in, body.js)
+RB.softHeel = true;   // (and a standing leg near its stretch lifts its heel gradually, body.js)
 RB.styleFor.posa = (y, F) => {
   const D = pzDrawn(F), b = D.b, open = Math.min(1, Math.abs(D.f.L.tx - D.f.R.tx) / PZ_STEP);   // (a step half done: the stance wider)
   y.yaw = b.yaw; y.chest = b.chest; y.leanL = b.leanL; y.lx = b.lx + b.tx; y.dip = .004 + b.dip - b.jump + .03 * open; y.head = b.head;
@@ -251,8 +331,46 @@ RB.styleFor.posa = (y, F) => {
 };
 RB.feetFor.posa = (s, c, st, L, F) => {
   const f = pzDrawn(F).f[s];
-  rkFoot(s, c, st, L, f.heel * (1 - f.air), f.yaw, f.x + f.tx, f.up, 0);   // (in the air the leg sets the foot: rkKickLeg below)
+  rkFoot(s, c, st, L, f.heel * (1 - f.air), f.yaw, f.x + f.tx, f.up, 0);   // (in the air the leg sets the foot: pzKickLeg below)
+  c.knee = 1 - rnSm((f.up - .02) / .13);   // (the knee over the toes near the floor only: higher up, the toes' way says nothing)
 };
+// A leg off the floor, as kit.js's rkKickLeg sets it, with two weights: the leg turned about its hip-ankle line until
+// its knee points its own way by wk, the foot set against the shin (the rest ankle bent by point degrees) by wf. The
+// knee's own way is the leg's line turned a quarter forward about the body's side: down -> forward (standing), forward
+// -> up (a kick), up -> back, back -> down (a kick behind); never along the leg, however it swings. The turn is the
+// knee's own part, not a full turn by a share: halfway it never goes round the other side (a turn of nearly 180
+// degrees by a share would flip its way as the angle passes 180).
+function pzKickLeg(md, p, s, point, wk, wf, wo) {
+  const T = THREE, L = RB.leg[s], W = rbFK(md, p, RB.W), A = W.p[L.iu].clone(), K = W.p[L.il].clone(), E = W.p[L.ia].clone();
+  const dir = E.sub(A).normalize(), off = K.sub(A), pole = new T.Vector3().crossVectors(dir, RB_SIDE);
+  off.addScaledVector(dir, -off.dot(dir));
+  if (wo > 0 && off.lengthSq() > 1e-6 && pole.lengthSq() > 1e-6) {
+    const bend = rnSm((off.length() - .02) / .05);
+    off.normalize(); pole.normalize();
+    // the knee's way: over the toes (as a standing foot's, low down), its own (higher up, wk), mixed as ways
+    // (no angle to share out: halfway it never goes round the other side); then from the solver's by wo
+    const toes = L.sd.clone().applyQuaternion(RB.con[s].Q).setY(0); toes.addScaledVector(dir, -toes.dot(dir));
+    let want = toes.lengthSq() > 1e-6 ? toes.normalize().multiplyScalar(1 - wk).addScaledVector(pole, wk) : pole.clone();
+    if (want.lengthSq() < 1e-8) want = pole.clone();
+    want.normalize().multiplyScalar(wo * bend).addScaledVector(off, 1 - wo * bend);
+    if (want.lengthSq() > 1e-8) {
+      want.normalize();
+      const phi = Math.atan2(new T.Vector3().crossVectors(off, want).dot(dir), off.dot(want));
+      const par = md.bones[L.iu].p, qU = W.q[L.iu].clone().premultiply(new T.Quaternion().setFromAxisAngle(dir, phi));
+      const footW = W.q[L.ia].clone(), shinW = qU.clone().multiply(new T.Quaternion().fromArray(p.q, L.il * 4));
+      W.q[par].clone().invert().multiply(qU).toArray(p.q, L.iu * 4);
+      shinW.invert().multiply(footW).toArray(p.q, L.ia * 4);   // (the foot keeps its own turn: only the knee goes round)
+    }
+  }
+  if (wf <= 0) return;
+  const R = RK.restLeg || (RK.restLeg = {});
+  const r = R[s] || (R[s] = (() => {
+    const rest = mdRest(md), qL = new T.Quaternion().fromArray(rest.q, L.il * 4), qF = new T.Quaternion().fromArray(rest.q, L.ia * 4);
+    return {qF, hinge: L.hu.clone().applyQuaternion(qL.clone().invert()).normalize()};
+  })());
+  const want = r.qF.clone().premultiply(new T.Quaternion().setFromAxisAngle(r.hinge, point * RB_R));
+  new T.Quaternion().fromArray(p.q, L.ia * 4).slerp(want, wf).toArray(p.q, L.ia * 4);
+}
 // where a two-bone arm from shoulder sh, its wrist at tgt, puts its elbow for hint e (upper and lower lengths a, b),
 // as rsArm does (the chest's own push left out): a point, so that two can be mixed
 function pzElbow(sh, tgt, e, a, b) {
@@ -293,8 +411,18 @@ RB.post.push((md, p, F) => {
       r0.addScaledVector(dir, -r0.dot(dir));
       if (r0.lengthSq() < 1e-4) r0.copy(c([0, 0, 1])).addScaledVector(dir, -c([0, 0, 1]).dot(dir));
       r0.normalize();
-      // (each position's angle counts by how far its elbow is off that line too: an elbow near it has no clear side)
-      const r1 = new THREE.Vector3().crossVectors(dir, r0), ang = x => { const v = pzElbow(sh, x.a.p, x.a.e, ua, la).sub(sh); v.addScaledVector(dir, -v.dot(dir)); return {a: Math.atan2(v.dot(r1), v.dot(r0)), w: x.w * v.length()}; };
+      // (each position's angle about its own arm's line, from that arm's outer side: the same for it all through the
+      // change; measured about the line the arm has now, a position far from it could come out on the inner side and
+      // turn over. Each counts by how far its elbow is off its line too: an elbow near it has no clear side)
+      const r1 = new THREE.Vector3().crossVectors(dir, r0), out = c([s === 'L' ? 1 : -1, -.5, 0]).normalize(), fw = c([0, 0, 1]);
+      const ang = x => {
+        const d0 = x.a.p.clone().sub(sh).normalize(), q0 = out.clone().addScaledVector(d0, -out.dot(d0));
+        if (q0.lengthSq() < 1e-4) q0.copy(fw).addScaledVector(d0, -fw.dot(d0));
+        q0.normalize();
+        const q1 = new THREE.Vector3().crossVectors(d0, q0), v = pzElbow(sh, x.a.p, x.a.e, ua, la).sub(sh);
+        v.addScaledVector(d0, -v.dot(d0));
+        return {a: Math.atan2(v.dot(q1), v.dot(q0)), w: x.w * v.length()};
+      };
       // (the angles from the arm's outer side, never unwrapped round another one: an elbow is on the outer half of the
       // arm, and the mean of two goes round by that side; picking the shorter way flips when the two are opposite)
       const g = all.map(ang);
@@ -303,10 +431,19 @@ RB.post.push((md, p, F) => {
       const th = ws > 1e-6 ? sum / ws : ang(best).a;
       t.e.copy(r0).multiplyScalar(Math.cos(th)).addScaledVector(r1, Math.sin(th));
     }
+    // (a wrist near or past the arm's reach comes in smoothly: the arm never snaps straight as it gets there)
+    const dv = t.p.clone().sub(sh), dl = dv.length() / (ua + la);
+    if (dl > .9) t.p.copy(sh).addScaledVector(dv, (.9 + .09 * (1 - Math.exp(-(dl - .9) / .09))) / dl);
     rsArm(md, p, rbFK(md, p, RB.W), s, t.p, t.e, t.f, t.n, 1, t.s);
   }
   mdBoneTurn(p, ix.Head, MD_Y, RK.g.headYaw);   // the eyes on the opponent (the nod: the style's)
-  for (const s of ['L', 'R']) { const f = D.f[s]; if (f.air > 0) rkKickLeg(md, p, {s, pole: [1, 1, 0], point: f.point, air: f.air}, 0); }
+  for (const s of ['L', 'R']) {
+    const f = D.f[s];
+    // a foot off the floor: its knee's way is set here (over the toes low down, the leg's own higher up), not left to
+    // the solver's carried leg, whose knee can turn over as the leg swings far; on the floor, the solver's
+    const wo = rnSm(f.up / .1), wk = Math.max(f.air, rnSm((f.up - .05) / .15));
+    if (wo > 0 || f.air > 0) pzKickLeg(md, p, s, f.point, wk, f.air, wo);
+  }
 });
 RN.hooks.applied.push((it, F) => {   // the hands: a fist, half closed, open (fingers together, the thumb along them)
   if (!it.fingers || F.act !== 'posa') return;
@@ -314,6 +451,124 @@ RN.hooks.applied.push((it, F) => {   // the hands: a fist, half closed, open (fi
   for (const s of ['L', 'R']) for (const [key, w] of Object.entries(D.arm[s])) k[s] += w * PZ_HANDS.find(h => h[0] === key.split('|')[1])[2];
   for (let i = 0; i < it.fingers.length; i++) rkSetFinger(it, i, /^Left/.test(it.fingers[i].name) ? k.L : k.R, true);
 });
+
+// (the sash's simulation sees the body turned and flipped as it is drawn: it hangs from him as gravity takes it, not
+// stuck to him upside down. The viewer sets the yaw alone each frame: last frame's flip goes first)
+RN.hooks.applied.push((it, F) => {
+  if (F.act !== 'posa' || !PZ.D || !it.pose) return;
+  it.root.rotation.set(0, it.root.rotation.y, 0);
+  const xf = pzRootXf(PZ.D, it.pose, mdData(it.key)), q0 = it.root.quaternion.clone();
+  if (xf.q.w < 1 - 1e-9 || xf.t.lengthSq() > 0) { it.root.quaternion.multiply(xf.q); it.root.position.add(xf.t.clone().multiplyScalar(it.scale).applyQuaternion(q0)); }
+});
+
+// --- The whole body turned and flipped (Claude's spins and somersaults): graphics only, on top of the pose ---
+// The turn (giro, about the vertical) pivots on the one foot on the floor (its ball: it turns where it stands), on
+// the hips over the floor when he is in the air or on both feet; the flip (capriola, about his side axis) on the hips.
+// (A change of pivot while turned would jump: the animations change it only when the turn is a whole one.) Returns
+// the model-space transform X -> q X + t for drawn state D on pose p.
+function pzRootXf(D, p, md) {
+  const o = PZ.xf || (PZ.xf = {q: new THREE.Quaternion(), t: new THREE.Vector3()});
+  const th = (D.b.giro || 0) * RB_R, ph = (D.b.flip || 0) * RB_R;
+  o.q.identity(); o.t.set(0, 0, 0);
+  if (Math.abs(th) < 1e-6 && Math.abs(ph) < 1e-6) return o;
+  const T = THREE, W = rbFK(md, p, RB.W), ix = md.index, pv = D.pivot || 'H';
+  const P = (pv === 'H' ? W.p[ix.Hips] : RB.con[pv].G).clone().setY(0);   // (a foot: its toe tip on the floor, where it turns)
+  const q = new T.Quaternion().setFromAxisAngle(RB_UP, th), t = P.clone().sub(P.clone().applyQuaternion(q));
+  if (ph) {
+    const H = W.p[ix.Hips].clone().applyQuaternion(q).add(t), qf = new T.Quaternion().setFromAxisAngle(RB_SIDE.clone().applyQuaternion(q), ph);
+    t.applyQuaternion(qf).add(H).sub(H.clone().applyQuaternion(qf)); q.premultiply(qf);
+  }
+  o.q.copy(q); o.t.copy(t);
+  return o;
+}
+// The effects of a pose (fx) while it plays: an impact (colpo, forte: a burst at the limb, the picture shaking, a white
+// flash for a heavy one), energy between the hands (energia), an energy wave sent forward from them (onda); a trail
+// behind the limb on its way into the pose (scia). Each from the play's time: an animation looks the same each time.
+const PZ_FXC = {};
+function pzFxInit(VW) {
+  const T = THREE, tex = draw => { const c = document.createElement('canvas'); c.width = c.height = 128; draw(c.getContext('2d')); return new T.CanvasTexture(c); };
+  const sprite = (m, add) => { const s = new T.Sprite(new T.SpriteMaterial({map: m, transparent: true, depthWrite: false, depthTest: false, blending: add ? T.AdditiveBlending : T.NormalBlending})); s.visible = false; s.renderOrder = 6; VW.scene.add(s); return s; };
+  const burst = tex(g => {   // a white core, rays of Ren's cyan
+    g.translate(64, 64);
+    for (let i = 0; i < 12; i++) { g.rotate(Math.PI / 6); g.fillStyle = i % 2 ? 'rgba(120,235,255,.95)' : 'rgba(255,255,255,.95)'; g.beginPath(); g.moveTo(0, -5); g.lineTo(i % 2 ? 46 : 62, 0); g.lineTo(0, 5); g.fill(); }
+    const r = g.createRadialGradient(0, 0, 0, 0, 0, 34); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.5, 'rgba(210,248,255,.9)'); r.addColorStop(1, 'rgba(53,216,255,0)');
+    g.fillStyle = r; g.beginPath(); g.arc(0, 0, 34, 0, 7); g.fill();
+  });
+  const glow = tex(g => { const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.25, 'rgba(190,245,255,.95)'); r.addColorStop(.6, 'rgba(53,216,255,.4)'); r.addColorStop(1, 'rgba(53,216,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); });
+  PZ_FXC.burst = [0, 1, 2].map(() => sprite(burst, false)); PZ_FXC.glow = sprite(glow, true); PZ_FXC.ball = sprite(glow, true); PZ_FXC.ring = sprite(burst, true);
+  // the trail: a ribbon of N points, its alpha from the head (the limb) to the tail
+  const N = PZ_FXC.N = 16, g = new T.BufferGeometry(), idx = [];
+  g.setAttribute('position', new T.BufferAttribute(new Float32Array(N * 6), 3)); g.setAttribute('aA', new T.BufferAttribute(new Float32Array(N * 2), 1));
+  for (let i = 0; i < N - 1; i++) { const a = 2 * i; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  g.setIndex(idx);
+  const m = new T.ShaderMaterial({transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+    vertexShader: 'attribute float aA; varying float vA; void main(){ vA = aA; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'varying float vA; void main(){ gl_FragColor = vec4(vec3(.21, .85, 1.) * vA + vec3(.6) * vA * vA, vA); }'});
+  PZ_FXC.trail = new T.Mesh(g, m); PZ_FXC.trail.frustumCulled = false; PZ_FXC.trail.visible = false; PZ_FXC.trail.renderOrder = 5; VW.scene.add(PZ_FXC.trail);
+  PZ_FXC.hist = []; PZ_FXC.calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const fl = document.createElement('div'); fl.id = 'pzFlash'; fl.style.cssText = 'position:fixed;inset:0;z-index:2;pointer-events:none;background:#fff;opacity:0';
+  document.getElementById('stage').after(fl); PZ_FXC.flash = fl;
+}
+// where the limb of key k is (world): the middle of its bones
+function pzLimb(it, k) {
+  const names = PZ_HIT[k] || PZ_HIT.mA, v = new THREE.Vector3(), w = new THREE.Vector3();
+  for (const n of names) v.add(it.bones.find(b => b.name === n).getWorldPosition(w));
+  return v.multiplyScalar(1 / names.length);
+}
+// the effects at play time t (frames into the loop); returns the camera's shake (m)
+function pzFx(VW, it, t, cam) {
+  const C = PZ_FXC, L = pzTimeline(), P = PZ.poses, shake = {x: 0, y: 0};
+  for (const b of C.burst) b.visible = false;
+  C.glow.visible = C.ball.visible = C.ring.visible = false;
+  let flash = 0, trail = null, bi = 0;
+  for (const g of L.seg) {
+    const pose = P[g.i], arr = g.t0 + g.T, age = t - arr, end = arr + g.H + (L.seg[L.seg.indexOf(g) + 1] ? L.seg[L.seg.indexOf(g) + 1].T * .5 : 20);
+    if ((pose.fx === 'colpo' || pose.fx === 'forte') && age >= 0 && age < 12 && bi < C.burst.length) {
+      const big = pose.fx === 'forte', k = age / 12, b = C.burst[bi++];
+      if (!C.at || C.at.key !== g.i + ':' + Math.floor(PZ.loop || 0)) C.at = {key: g.i + ':' + Math.floor(PZ.loop || 0), p: pzLimb(it, pose.hit || 'mA')};
+      b.position.copy(C.at.p); b.visible = true; b.scale.setScalar((big ? .55 : .36) * (.5 + k * .9)); b.material.opacity = 1 - k * k; b.material.rotation = g.i * 1.7 + k * .6;
+      const a = (big ? .035 : .012) * (1 - k) * (1 - k);
+      shake.x += a * Math.sin(t * 2.9 + g.i); shake.y += a * Math.cos(t * 3.7 + g.i);
+      if (big) flash = Math.max(flash, .38 * (1 - age / 6));
+    }
+    if (pose.fx === 'energia' && t >= arr - g.T * .7 && t < end) {   // charging: it grows on the way in, pulses while held
+      const k = pzC((t - (arr - g.T * .7)) / (g.T * .7), 0, 1), out = pzC((end - t) / 6, 0, 1);
+      C.glow.position.copy(pzLimb(it, pose.hit || 'due')); C.glow.visible = true;
+      C.glow.scale.setScalar((.18 + .3 * k) * (1 + .08 * Math.sin(t * .9)) * out); C.glow.material.opacity = .9 * out;
+    }
+    if (pose.fx === 'onda' && age >= 0 && age < 40) {   // the wave: from the hands, forward along the line, growing, then gone
+      if (!C.wave || C.wave.key !== g.i + ':' + Math.floor(PZ.loop || 0)) C.wave = {key: g.i + ':' + Math.floor(PZ.loop || 0), p: pzLimb(it, pose.hit || 'due')};
+      const k = age / 40, dir = new THREE.Vector3(Math.cos(VW.yaw - F3_YAW), 0, -Math.sin(VW.yaw - F3_YAW));
+      C.ball.position.copy(C.wave.p).addScaledVector(dir, 3.2 * k); C.ball.visible = true; C.ball.scale.setScalar(.45 + .5 * k); C.ball.material.opacity = 1 - k * k * k;
+      C.ring.position.copy(C.wave.p); C.ring.visible = age < 10; C.ring.scale.setScalar(.4 + age * .06); C.ring.material.opacity = 1 - age / 10;
+      if (age < 8) { const a = .02 * (1 - age / 8); shake.x += a * Math.sin(t * 3.3); shake.y += a * Math.cos(t * 2.1); }
+    }
+    if (pose.scia && t >= g.t0 - 1 && t < arr + 10) trail = {g, pose, age: t - arr};
+  }
+  // the trail: the limb's last places (drawn frames), smoothed, its tail fading; gone over 10 frames after arrival
+  if (trail) {
+    const key = trail.g.i + ':' + Math.floor(PZ.loop || 0);
+    if (C.trKey !== key) { C.trKey = key; C.hist = []; }
+    if (trail.age < 0) { C.hist.push(pzLimb(it, trail.pose.hit || 'mA')); if (C.hist.length > 10) C.hist.shift(); }
+    const H = C.hist, N = C.N;
+    if (H.length >= 2) {
+      const pos = C.trail.geometry.attributes.position, al = C.trail.geometry.attributes.aA, fade = trail.age < 0 ? 1 : 1 - trail.age / 10;
+      const camDir = cam.getWorldDirection(new THREE.Vector3());
+      for (let i = 0; i < N; i++) {   // a Catmull-Rom curve through the samples, head (newest) last
+        const f = i / (N - 1) * (H.length - 1), j = Math.min(H.length - 2, Math.floor(f)), u = f - j, P0 = H[Math.max(0, j - 1)], P1 = H[j], P2 = H[j + 1], P3 = H[Math.min(H.length - 1, j + 2)];
+        const pt = new THREE.Vector3(), u2 = u * u, u3 = u2 * u;
+        for (const c of ['x', 'y', 'z']) pt[c] = .5 * (2 * P1[c] + (-P0[c] + P2[c]) * u + (2 * P0[c] - 5 * P1[c] + 4 * P2[c] - P3[c]) * u2 + (-P0[c] + 3 * P1[c] - 3 * P2[c] + P3[c]) * u3);
+        const tan = new THREE.Vector3().subVectors(P2, P1), side = new THREE.Vector3().crossVectors(tan, camDir).normalize().multiplyScalar(.045 * (i / (N - 1)) + .005);
+        pos.setXYZ(2 * i, pt.x + side.x, pt.y + side.y, pt.z + side.z); pos.setXYZ(2 * i + 1, pt.x - side.x, pt.y - side.y, pt.z - side.z);
+        const a = (i / (N - 1)) ** 1.5 * .85 * fade; al.setX(2 * i, a); al.setX(2 * i + 1, a);
+      }
+      pos.needsUpdate = al.needsUpdate = true; C.trail.visible = true;
+    } else C.trail.visible = false;
+  } else { C.trail.visible = false; C.trKey = null; }
+  if (C.calm) { flash = 0; shake.x = shake.y = 0; }
+  const fo = flash.toFixed(3); if (C.flash.style.opacity !== fo) C.flash.style.opacity = fo;
+  return shake;
+}
 
 // --- Editing: a choice, the hands, the poses ---
 function pzPush() {
@@ -385,10 +640,14 @@ function pzView() { const side = Math.abs(VW.yaw - F3_YAW) < .02; VW.yaw = side 
 // --- Saving: the database (collection "animazioni"), this device, the data for Claude ---
 const PZ_LEGENDA = 'Pose di Ren, formato 2 (preview/ren-anim/mods/posa.js). Ogni posa sono le scelte: bA braccio avanti e bD braccio dietro '
   + '(guardia, avanti, alto, viso, gomito, basso), mA mano avanti e mD mano dietro (pugno, socchiusa, aperta), gA gamba avanti e gD gamba dietro '
-  + '(terra, ginocchio, calcio, basso), busto (dritto, avanti, indietro), alt altezza (normale, basso, alto), passo (indietro, qui, avanti, avanti2: '
-  + 'dove sta, a passi di 30 cm); note: le parole di Denis. Avanti = il lato sinistro, quello davanti. Riproduci: 24 fotogrammi da una posa '
-  + 'alla successiva, se la posa non ha i suoi tempi: t fotogrammi per arrivarci, h fotogrammi ferma, e (snap: sempre più veloce, un colpo; '
-  + 'out: veloce poi frena). cat e ord: gruppo e ordine nell\'elenco delle animazioni.';
+  + '(terra, ginocchio, calcio, alto, basso, dietro), busto (dritto, avanti, indietro), alt altezza (normale, basso, alto), passo (indietro, qui, '
+  + 'avanti, avanti2: dove sta, a passi di 30 cm); note: le parole di Denis. Avanti = il lato sinistro, quello davanti. Riproduci: 24 fotogrammi da '
+  + 'una posa alla successiva, se la posa non ha i suoi tempi: t fotogrammi per arrivarci, h fotogrammi ferma, e (snap: sempre più veloce, un colpo; '
+  + 'out: veloce poi frena). Oltre i tasti (le mosse speciali di Claude): giro e capriola, tutto il corpo girato su se stesso (sul piede che resta '
+  + 'a terra) e capovolto (in avanti; negativa: all\'indietro), in gradi contati (360 = un giro intero); vola, salto più alto (m); x, dove sta in '
+  + 'metri (al posto di passo); scatto, ci arriva in un balzo radente; fx, un effetto all\'arrivo (colpo, forte: un impatto; energia: si raccoglie '
+  + 'tra le mani; onda: un\'onda di energia in avanti) dal punto hit (mA, mD le mani, eA, eD i gomiti, gA, gD le ginocchia, pA, pD i piedi, due: '
+  + 'le due mani); scia, la scia di quel punto. cat e ord: gruppo e ordine nell\'elenco delle animazioni.';
 function pzDoc() {
   const d = {v: 2, name: PZ.name, note: PZ.note, frames: PZ.T, updated: Date.now(), legenda: PZ_LEGENDA, poses: pzClone(PZ.poses)};
   if (PZ.cat) d.cat = PZ.cat;
@@ -699,15 +958,30 @@ function pzPad() {
 RN.hooks.boot.push(VW => {
   VW_PLAYS[0][1][0][1] = 1e9;   // (the kit's boot sets its guard's length on the first play: this page's one play lasts)
   CFG.looks.ren.clips = Object.assign({}, CFG.looks.ren.clips, {posa: {c: 'a191', at: 0}});   // the kit's held guard clip under it
-  VW.PZ = PZ; VW.pz = {target: pzTarget, rows: PZ_ROWS, hands: PZ_HANDS, guard: PZ_GUARD, load: pzLoad, fill: pzFill, timeline: pzTimeline, step: PZ_STEP};   // (tests)
+  VW.PZ = PZ; VW.pz = {target: pzTarget, rows: PZ_ROWS, hands: PZ_HANDS, guard: PZ_GUARD, load: pzLoad, fill: pzFill, timeline: pzTimeline, step: PZ_STEP,
+    rootOf: p => pzRootXf(PZ.D, p, mdData('ren')), leg: PZ_LEG};   // (tests)
   PZ.poses = [pzNew0()];
-  pzUi(); pzKeys(); pzStore();
+  pzUi(); pzKeys(); pzStore(); pzFxInit(VW);
 });
 // each drawn frame: the controller, the camera on the body, the panel when something changed
 RN.hooks.draw.push((VW, dt, cam) => {
   if (RN.pad !== pzPad) RN.pad = pzPad;   // (the scaffold sets its own after the boot hooks)
   const j = PZ.D ? PZ.D.b.jump : 0, x = PZ.D ? PZ.D.b.tx * Math.cos(VW.yaw - F3_YAW) : 0;   // (a jump: the camera goes up with half of it; steps: it follows him)
-  cam.position.set(x, .95 + .5 * j + .1, cam.position.z); cam.lookAt(x, .95 + .5 * j, 0); cam.updateMatrixWorld();
+  // the whole body's turn and flip (on top of the viewer's own placing of the model), the shadow under his hips
+  const it = VW.it;
+  if (PZ.D && it.pose) {
+    it.root.rotation.set(0, it.root.rotation.y, 0);   // (the viewer sets the yaw alone each frame: last frame's flip goes)
+    const xf = pzRootXf(PZ.D, it.pose, mdData(it.key)), q0 = it.root.quaternion.clone();
+    if (xf.q.w < 1 - 1e-9 || xf.t.lengthSq() > 0) { it.root.quaternion.multiply(xf.q); it.root.position.add(xf.t.clone().multiplyScalar(it.scale).applyQuaternion(q0)); }
+    it.root.updateMatrixWorld(true);
+    const h = it.bones[mdData(it.key).index.Hips].getWorldPosition(new THREE.Vector3()); VW.shadow.position.set(h.x, .004, h.z);
+  }
+  let sh = {x: 0, y: 0};
+  if (PZ.play && PZ_FXC.burst) {
+    const L = pzTimeline(), tt = (RN_D.F ? RN_D.F.af : VW.F.af) - PZ.play.f0;
+    PZ.loop = Math.floor(tt / L.len); sh = pzFx(VW, it, ((tt % L.len) + L.len) % L.len, cam);
+  } else if (PZ_FXC.burst) { for (const b of PZ_FXC.burst) b.visible = false; PZ_FXC.glow.visible = PZ_FXC.ball.visible = PZ_FXC.ring.visible = PZ_FXC.trail.visible = false; PZ_FXC.flash.style.opacity = '0'; }
+  cam.position.set(x + sh.x, .95 + .5 * j + .1 + sh.y, cam.position.z); cam.lookAt(x + sh.x, .95 + .5 * j + sh.y, 0); cam.updateMatrixWorld();
   if (PZ.play) { const a = PZ.play.at, key = a.a + ',' + a.b + ',' + a.back; if (key !== PZ.ui.at) { PZ.ui.at = key; PZ.ui.dirty = true; } }
   const side = Math.abs(VW.yaw - F3_YAW) < .02; if (side !== PZ.ui.side) { PZ.ui.side = side; PZ.ui.dirty = true; }   // (the view's button names it)
   if (PZ.ui.dirty) { PZ.ui.dirty = false; pzStrip(); pzRowsUi(); pzTitle(); pzNotesUi(); if (!document.getElementById('pzA').hidden) PZ.ui.list = true; }

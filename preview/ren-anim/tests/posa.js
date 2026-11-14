@@ -150,6 +150,21 @@ const FAKE_DB = `(() => {
     return w;
   });
   ok(!r.all.nan && r.all.chest < .5 && r.all.head > .08 && r.all.ext <= .966 && r.all.floor < .005, 'combinations');
+  // the guard's ankles and hip joints that a foot swinging under the hips goes round (posa.js PZ_LEG): still the page's
+  r.leg = await page.evaluate(() => {
+    const X = window.__X, T = X.THREE, it = VW.it, md = X.mdData('ren'), PZ = VW.PZ, P = n => it.bones.find(b => b.name === n).getWorldPosition(new T.Vector3());
+    const F = Object.assign({}, VW.F, {act: 'posa', af: 3000}), S = {frame: 3000, sides: [{team: [F], cur: 0}]};
+    PZ.poses = [Object.assign({}, VW.pz.guard, {note: ''})]; PZ.cur = 0; PZ.D = null; PZ.tr = null; PZ.ver++;
+    X.mdApply(it, X.RN.pure(md, F, S)); it.root.position.set(0, 0, 0); it.root.rotation.set(0, 0, 0); it.body.scale.x = it.scale; it.root.updateMatrixWorld(true);
+    const line = new T.Vector3(Math.cos(X.F3_YAW), 0, Math.sin(X.F3_YAW));
+    let off = 0;
+    for (const [s, n] of [['L', 'Left'], ['R', 'Right']]) {
+      const a = P(n + 'Foot'), h = P(n + 'UpLeg'), G = VW.pz.leg[s];
+      off = Math.max(off, Math.abs(a.dot(line) - G.ax), Math.abs(a.y - G.ay), Math.abs(h.dot(line) - G.hx), Math.abs(h.y - G.hy));
+    }
+    return {off: +(off * 1000).toFixed(1)};
+  });
+  ok(r.leg.off < 5, 'the guard moved: PZ_LEG off by ' + r.leg.off + ' mm');
   // every change of one row, eased: no joint jumps in the middle (its largest step against its mean over the change)
   r.ease = await page.evaluate(() => {
     const X = window.__X, T = X.THREE, it = VW.it, md = X.mdData('ren'), PZ = VW.PZ, G = VW.pz.guard, B = n => it.bones.find(b => b.name === n);
