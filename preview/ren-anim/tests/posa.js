@@ -45,12 +45,12 @@ const FAKE_DB = `(() => {
   if (shot) await page.screenshot({path: shot});
   // every row's buttons, by touch
   r.rows = {};
-  for (const key of ['bA', 'bD', 'gA', 'gD', 'busto', 'alt']) {
-    const vals = await page.evaluate(k => VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]), key);
-    for (const v of vals.slice(1).concat(vals[0])) {
+  for (const key of ['bA', 'bD', 'gA', 'gD', 'busto', 'alt', 'passo']) {
+    const vals = await page.evaluate(k => VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]), key), first = await page.evaluate(k => VW.PZ.poses[VW.PZ.cur][k], key);
+    for (const v of vals.filter(x => x !== first).concat(first)) {
       const b0 = await bones();
       await page.tap(`#pzP .pzR[aria-label="${await page.evaluate(k => VW.pz.rows.find(x => x.key === k).label, key)}"] button[data-v="${v}"]`);
-      await settle();
+      await settle(key === 'passo' ? 1000 : 400);
       const s = await S(), pressed = await page.evaluate(([k, v]) => { const row = [...document.querySelectorAll('#pzP .pzR')].find(x => x.getAttribute('aria-label') === VW.pz.rows.find(y => y.key === k).label);
         return [...row.querySelectorAll('button[aria-pressed="true"]')].map(b => b.dataset.v); }, [key, v]);
       const m = moved(b0, await bones());
@@ -120,10 +120,10 @@ const FAKE_DB = `(() => {
     X.mdApply(it, X.mdRest(md)); it.root.position.set(0, 0, 0); it.root.rotation.y = 0; it.body.scale.x = it.scale; it.root.updateMatrixWorld(true);
     const len = {}; for (const s of ['Left', 'Right']) len[s] = P(s + 'UpLeg').distanceTo(P(s + 'Leg')) + P(s + 'Leg').distanceTo(P(s + 'Foot'));
     const row = k => VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]), hands = VW.pz.hands.map(h => h[0]);
-    const keys = ['bA', 'mA', 'bD', 'mD', 'gA', 'gD', 'busto', 'alt'], dom = [row('bA'), hands, row('bD'), hands, row('gA'), row('gD'), row('busto'), row('alt')];
+    const keys = ['bA', 'mA', 'bD', 'mD', 'gA', 'gD', 'busto', 'alt'], dom = [row('bA'), hands, row('bD'), hands, row('gA'), row('gD'), row('busto'), row('alt')];   // (the place: a translation, left out)
     const w = {chest: 0, head: 9, ext: 0, floor: 0, nan: 0, n: 0}, idx = keys.map(() => 0);
     for (;;) {
-      const c = {note: ''}; keys.forEach((k, i) => { c[k] = dom[i][idx[i]]; });
+      const c = {note: '', passo: 'qui'}; keys.forEach((k, i) => { c[k] = dom[i][idx[i]]; });
       PZ.poses = [c]; PZ.cur = 0; PZ.D = null; PZ.tr = null; PZ.ver++; F.af++; S.frame++;
       const p = X.RN.pure(md, F, S);
       if (p.q.some(x => !isFinite(x)) || p.h.some(x => !isFinite(x))) w.nan++;
@@ -156,7 +156,7 @@ const FAKE_DB = `(() => {
     const F = Object.assign({}, VW.F, {act: 'posa', af: 5000}), S = {frame: 5000, sides: [{team: [F], cur: 0}]}, n = PZ.ease;
     const J = ['LeftForeArm', 'LeftHand', 'RightForeArm', 'RightHand', 'LeftLeg', 'LeftFoot', 'RightLeg', 'RightFoot', 'Head'];
     const pos = () => { X.mdApply(it, X.RN.pure(md, F, S)); it.root.updateMatrixWorld(true); return J.map(j => B(j).getWorldPosition(new T.Vector3())); };
-    const hands = VW.pz.hands.map(h => h[0]), changes = [], A = ['guardia', 'avanti', 'alto', 'viso'].flatMap(v => hands.map(h => [v, h]));
+    const hands = VW.pz.hands.map(h => h[0]), changes = [], A = VW.pz.rows.find(x => x.key === 'bA').vals.map(v => v[0]).flatMap(v => hands.map(h => [v, h]));
     for (const [pk, hk] of [['bA', 'mA'], ['bD', 'mD']]) for (const a of A) for (const b of A) if (a.join() !== b.join()) changes.push([{[pk]: a[0], [hk]: a[1]}, {[pk]: b[0], [hk]: b[1]}]);
     for (const k of ['gA', 'gD', 'busto', 'alt']) { const vs = VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]); for (const a of vs) for (const b of vs) if (a !== b) changes.push([{[k]: a}, {[k]: b}]); }
     let worst = {ratio: 0, step: 0, at: ''};
@@ -166,14 +166,16 @@ const FAKE_DB = `(() => {
       PZ.poses[0] = Object.assign({}, G, b, {note: ''}); PZ.ver++;
       const steps = J.map(() => []);
       for (let f = 0; f < n; f++) { F.af++; S.frame++; const cur = pos(); cur.forEach((p, j) => steps[j].push(p.distanceTo(prev[j]))); prev = cur; }
-      steps.forEach((st, j) => {
-        const tot = st.reduce((x, y) => x + y, 0), mx = Math.max(...st), ratio = mx / (tot / st.length);
-        if (mx > .03 && ratio > worst.ratio) worst = {ratio: +ratio.toFixed(2), step: +(mx * 100).toFixed(1), at: JSON.stringify(a) + ' > ' + JSON.stringify(b) + ' ' + J[j]};
-      });
+      // (a jump: a step larger than 1.5 cm and three times the steps on either side of it; a fast middle is no jump)
+      steps.forEach((st, j) => st.forEach((x, i) => {
+        if (i === 0 || i === st.length - 1 || x < .015) return;
+        const ratio = x / Math.max(st[i - 1], st[i + 1], 1e-6);
+        if (ratio > worst.ratio) worst = {ratio: +ratio.toFixed(2), step: +(x * 100).toFixed(1), at: JSON.stringify(a) + ' > ' + JSON.stringify(b) + ' ' + J[j]};
+      }));
     }
     return {n: changes.length, worst};
   });
-  ok(r.ease.worst.ratio < 3, 'a joint jumps: ' + r.ease.worst.at);   // (an even ease: 1.5; a jump: much more)
+  ok(r.ease.worst.ratio < 3, 'a joint jumps: ' + r.ease.worst.at);
   console.log(JSON.stringify({errors, fails, ...r}, null, 1));
   await browser.close();
   process.exit(errors.length || fails.length ? 1 : 0);

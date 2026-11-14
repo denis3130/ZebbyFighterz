@@ -51,8 +51,12 @@ function rsChest(md, W, a, out) { return out.set(a[0], a[1], a[2]).applyQuaterni
 function rsOut(md, W, pt, extra) {
   const ix = md.index, C = W.p[ix.Spine01], q = RS.t.q[4].copy(W.q[ix.Spine01]).invert(), l = RS.t.v[7].copy(pt).sub(C).applyQuaternion(q), o = RS.torso;
   const lo = RS.t.v[6].copy(W.p[ix.Spine02]).sub(C).applyQuaternion(q).y - o.lo, hi = RS.t.v[6].copy(W.p[ix.neck]).sub(C).applyQuaternion(q).y;
-  if (l.y < lo || l.y > hi) return false;
-  const m = o.arm + (extra || 0), rx = o.w + m, rz = (l.z > 0 ? o.front : o.back) + m, k = Math.hypot(l.x / rx, l.z / rz);
+  // (RS.torso.soft {lo, hi}: past its bottom and top the chest's section narrows to nothing over these metres, so that
+  // an arm coming into the band is pushed out by degrees, not at once; none: the band's edges are hard, as the kit's
+  // moves were made with)
+  const sf = o.soft, fade = !sf ? (l.y < lo || l.y > hi ? 0 : 1) : l.y < lo ? rnSm(1 - (lo - l.y) / sf.lo) : l.y > hi ? rnSm(1 - (l.y - hi) / sf.hi) : 1;
+  if (fade <= 0) return false;
+  const m = o.arm + (extra || 0), rx = (o.w + m) * fade, rz = ((l.z > 0 ? o.front : o.back) + m) * fade, k = Math.hypot(l.x / rx, l.z / rz);
   if (k >= 1) return false;
   if (k < 1e-4) l.z = rz; else { l.x /= k; l.z /= k; }
   pt.copy(l.applyQuaternion(q.invert())).add(C);

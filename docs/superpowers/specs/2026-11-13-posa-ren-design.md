@@ -26,6 +26,19 @@ tasti**:
 - Verificato: tutte le 11.664 combinazioni (nessun braccio nel petto, nessun piede sotto il pavimento, nessuna gamba
   tirata) e ognuno dei 288 cambi di una riga senza scatti.
 
+## Terza tappa (14/11): le animazioni di Claude
+Denis: "creami tantissime animazioni inventatene almeno 50 [...] basta che siano fatte bene e senza bug o
+comportamenti del corpo strane". Scelte di Claude per farle bene con gli stessi tasti:
+- Tempi per posa (t fotogrammi per arrivarci, h ferma, e: snap = sempre più veloce, un colpo; out = veloce poi frena),
+  nascosti nei tasti ma conservati se Denis modifica una posa; senza tempi resta 24 fotogrammi.
+- Posizioni nuove: Gomito e Basso per le braccia, Basso per le gambe, e la riga Passo (Indietro, Qui, Avanti,
+  2 avanti) con passi veri (un piede alla volta, alzato, mai strisciato).
+- Il corpo: un piede che si stacca sale prima di avanzare e atterra per ultimo; il piede d'appoggio sale sulla punta
+  prima di girare; il gomito tra due posizioni gira dal lato esterno del braccio; la spinta fuori dal busto sfuma ai
+  bordi (nessuno scatto quando un braccio entra nella fascia del petto).
+- 66 animazioni in sei gruppi, elenco "Animazioni" nella pagina (un tocco: si apre e parte).
+- Verificate fotogramma per fotogramma (tests/posa_anims.js) e guardate una per una.
+
 ## La prima versione (sostituita)
 
 ### Cosa faceva
@@ -52,5 +65,5 @@ tasti**:
 
 ## Per dopo (non costruito)
 - Linea del tempo con i fotogrammi (approccio B), se le note non bastano.
-- Altre posizioni pronte se servono (es. gomito, calcio basso, spazzata), su richiesta di Denis.
+- Altre posizioni pronte se servono (es. spazzata, calcio girato), su richiesta di Denis.
 - Specchiare una posa; eliminare un'animazione salvata.

@@ -23,15 +23,23 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
   sullo stomaco). Ogni mossa è una tabella (tempi, corpo, piedi, braccia, mani) letta dalle stesse poche funzioni.
   Piedi messi a mano (quello in appoggio non si muove), tempi e numeri tutti proposte (il progetto non li definisce
   ancora). Pagina a parte, senza effetti.
-- `mods/posa.js` (dopo `kit.js`): "Pose di Ren" (13/11/2026), le pose chiave che Denis compone per mostrare le
-  animazioni che ha in mente. Solo tasti (la prima versione, con i punti da trascinare, era troppo difficile): per
-  braccio avanti e dietro Guardia / Avanti / Alto / Al viso, per ogni mano Pugno / Socchiusa / Aperta, per gamba
-  avanti e dietro A terra / Ginocchio su / Calcio, Busto Dritto / Avanti / Indietro, Altezza Normale / Basso / Alto.
-  Il resto del corpo segue da solo (un braccio dritto porta dentro la spalla, un calcio inclina indietro e alza sulla
-  gamba d'appoggio, due piedi in aria fanno un salto, gli occhi restano sull'avversario); le posizioni sono quelle
-  del kit. Ren a sinistra, i tasti a destra. Pose numerate, "Riproduci" le mostra in fila (24 fotogrammi da una
-  all'altra), Annulla, Guardia, note per Claude. Tocco, mouse, tastiera, controller. Le pose si salvano da sole nel
-  database della pagina (raccolta `animazioni`, formato 2: le scelte per nome, con la legenda dentro) e sul dispositivo.
+- `mods/posa.js` (dopo `kit.js`): "Pose di Ren" (13-14/11/2026), le pose chiave a tasti con cui Denis mostra le
+  animazioni che ha in mente. Per braccio avanti e dietro Guardia / Avanti / Alto / Viso / Gomito / Basso, per ogni mano
+  Pugno / Socchiusa / Aperta, per gamba avanti e dietro A terra / Ginocchio / Calcio / Basso, Busto Dritto / Avanti /
+  Indietro, Altezza Normale / Basso / Alto, Passo Indietro / Qui / Avanti / 2 avanti. Il resto del corpo segue da solo
+  (un braccio dritto o un gomito porta dentro la spalla, un calcio inclina indietro e alza sulla gamba d'appoggio, il
+  cui piede sale sulla punta e gira; due piedi in aria fanno un salto; i passi sono veri: un piede e poi l'altro,
+  ciascuno alzato, nessuno striscia; un piede che si stacca sale prima di andare avanti e atterra per ultimo; gli occhi
+  restano sull'avversario). Ren a sinistra, i tasti a destra; "Animazioni" apre l'elenco a gruppi (un tocco: si apre e
+  parte). Ogni posa può avere i suoi tempi (t fotogrammi per arrivarci, h ferma, e: snap o out), altrimenti 24
+  fotogrammi. Tocco, mouse, tastiera, controller. Salvataggio nel database della pagina (raccolta `animazioni`,
+  formato 2: le scelte per nome, con la legenda dentro) e sul dispositivo. La spinta che tiene le braccia fuori dal
+  busto, in questa pagina, sfuma oltre i bordi del busto (`RS.torso.soft`, style.js): un braccio che entra nella fascia
+  del petto non scatta.
+- `data/animazioni.py`: le animazioni fatte da Claude (14/11/2026, richiesta di Denis: "almeno 50, fatte bene"): 66 in
+  sei gruppi (Colpi, Calci, Combinazioni, Difese, Movimenti, Speciali), ognuna con i suoi tempi e una nota per posa.
+  Scrive `data/animazioni.json` (i documenti come li salva la pagina, id `c-<nome>`), che va nel database della
+  pagina.
 - `mods/body_v1.js`: il primo tentativo, tenuto solo come confronto.
 
 ## Costruire
@@ -60,5 +68,9 @@ L'editor di pose (da pubblicare con il database: `capabilities: {db: {}}`):
                                        # nessuno scatto tra quarti di fotogramma, dove arriva il palmo
     node tests/posa.js pose.html       # pose a tasti su telefono (tocco), con un database finto: ogni tasto,
                                        # pose, riproduci, annulla, tastiera, controller, salvataggio e riapertura;
-                                       # tutte le 11.664 combinazioni (braccia fuori dal petto, piedi sopra il
+                                       # tutte le 46.656 combinazioni (braccia fuori dal petto, piedi sopra il
                                        # pavimento, gambe non tirate) e ogni cambio senza scatti; costo per fotogramma
+    python3 data/animazioni.py         # le animazioni di Claude -> data/animazioni.json
+    node tests/posa_anims.js pose.html # ogni animazione, un quarto di fotogramma alla volta: piedi a terra fermi,
+                                       # niente sotto il pavimento, braccia fuori dal petto e dal viso, gambe
+                                       # d'appoggio non tirate, nessuna articolazione che salta (SLIDE=1: più severo)
