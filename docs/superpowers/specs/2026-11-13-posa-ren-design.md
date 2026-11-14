@@ -78,6 +78,26 @@ faccio successivo e mi parte l'animazione successiva? che cosi è troppo macchin
   Guarda per non confondersi con «Guardia»).
 - L'elenco aperto non si ridisegna più a ogni posa (un tocco poteva cadere su un tasto appena sostituito).
 
+## Sesta tappa (14/11): i calci
+Denis: "noto che i calci sono fatti molto male perche la gamba destra oltrepassa quella sinistra e non va bene".
+Cosa c'era (misurato e guardato da davanti): la guardia di profilo tiene il piede destro un po' a sinistra del
+sinistro; nei calci col destro il piede restava lì, a sinistra del corpo, e la gamba destra attraversava la sinistra;
+in più il bacino girava al contrario (l'anca destra indietro invece che avanti: nei pugni il verso era giusto) e il
+piede sinistro d'appoggio girava la punta in dentro, portando il ginocchio sinistro sulla strada del calcio. Scelte di
+Claude:
+- Nei calci con la gamba dietro l'anca destra viene avanti; il piede d'appoggio gira la punta in fuori (il destro
+  verso destra, il sinistro verso sinistra), il ginocchio con lei.
+- Il piede in aria sta sul suo lato: il destro sotto la sua anca nei calci e nella ginocchiata, più in fuori nel
+  calcio basso; il sinistro che calcia dietro passa a sinistra del destro; due calci insieme in volo affiancati. Si
+  sposta di lato solo dal suo lato del bacino (il destro dietro, il sinistro davanti), mai mentre tocca terra.
+- Una gamba che passa sotto il bacino si piega (il calcio si richiama prima di tornare giù); il ginocchio in aria
+  punta un po' in fuori.
+- La rotazione del bacino ha un limite (26°): un calcio e un pugno che girano dalla stessa parte non portano la mano
+  davanti al viso dentro la testa.
+- La guardia resta quella del kit (uguale al gioco): cambia solo dove vanno i piedi in aria.
+- Prova nuova: le linee delle due gambe (coscia, stinco, piede) mai a meno di 12 cm, in ogni fotogramma delle 103
+  animazioni (prima scendevano a 0,4 cm) e in ogni combinazione dei tasti (prima 3 cm nei doppi calci).
+
 ## La prima versione (sostituita)
 
 ### Cosa faceva

@@ -50,6 +50,12 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
   Start: l'editor a tasti, che ha «Anteprima» per tornare). Le animazioni di Claude non si cambiano per sbaglio: la
   prima modifica a una crea una copia tua in «Le tue» («… (mia)»), l'originale resta; una copia rimasta su un
   dispositivo e mai salvata non va mai sopra l'originale del database (si riapre quello).
+  I calci (14/11, Denis: "la gamba destra oltrepassa quella sinistra"): nei calci con la gamba dietro l'anca destra
+  viene avanti (prima girava al contrario), il piede sinistro d'appoggio gira la punta in fuori e il suo ginocchio
+  resta fuori dalla strada; il piede che calcia sta sul suo lato, sotto la sua anca (la guardia di profilo tiene il
+  piede dietro un po' a sinistra di quello davanti: in aria il destro si sposta solo quando è dietro il bacino, il
+  sinistro solo quando è davanti); la gamba si piega mentre passa sotto il bacino (il calcio si richiama prima di
+  tornare giù); il ginocchio in aria punta un po' in fuori. Le due gambe non si attraversano mai.
 - `data/animazioni.py`: le animazioni fatte da Claude (14/11/2026, richieste di Denis: "almeno 50, fatte bene", poi
   "tante combo [...] combo speciali, mosse speciali"): 103 in sei gruppi (Colpi 15, Calci 17, Combinazioni 30,
   Difese 11, Movimenti 12, Speciali 18), ognuna con i suoi tempi e una nota per posa. Le mosse speciali: calcio
@@ -94,4 +100,5 @@ L'editor di pose (da pubblicare con il database: `capabilities: {db: {}}`):
     python3 data/animazioni.py         # le animazioni di Claude -> data/animazioni.json
     node tests/posa_anims.js pose.html # ogni animazione, un quarto di fotogramma alla volta: piedi a terra fermi,
                                        # niente sotto il pavimento, braccia fuori dal petto e dal viso, gambe
-                                       # d'appoggio non tirate, nessuna articolazione che salta (SLIDE=1: più severo)
+                                       # d'appoggio non tirate, nessuna articolazione che salta, le due gambe mai
+                                       # una dentro l'altra (almeno 12 cm tra le loro linee; SLIDE=1: più severo)

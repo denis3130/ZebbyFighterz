@@ -8,7 +8,8 @@
 // it, playing; next and previous by touch, keys and controller, round at the ends; the pause holds the frame; the
 // list opens on it; Modifica and back; a change to one of Claude's goes to Denis's own copy (the original stays); a
 // copy of one of Claude's left on the device does not go over the original. Then every combination of choices solved once (no NaN, no arm inside the chest,
-// no hand in the head, no standing leg past the solver's stretch, no foot under the floor), every change of one row
+// no hand in the head, no standing leg past the solver's stretch, no foot under the floor, the legs never into each
+// other: their bones' lines 12 cm apart or more), every change of one row
 // eased frame by frame (no joint jumping in the middle of it), and the time the pose takes (ms) against the guard's.
 // Prints one JSON object; exits 1 on a page error or a failed check.
 const {open} = require('./lib');
@@ -201,7 +202,14 @@ const FAKE_DB = `(() => {
     const len = {}; for (const s of ['Left', 'Right']) len[s] = P(s + 'UpLeg').distanceTo(P(s + 'Leg')) + P(s + 'Leg').distanceTo(P(s + 'Foot'));
     const row = k => VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]), hands = VW.pz.hands.map(h => h[0]);
     const keys = ['bA', 'mA', 'bD', 'mD', 'gA', 'gD', 'busto', 'alt'], dom = [row('bA'), hands, row('bD'), hands, row('gA'), row('gD'), row('busto'), row('alt')];   // (the place: a translation, left out)
-    const w = {chest: 0, head: 9, ext: 0, floor: 0, nan: 0, n: 0}, idx = keys.map(() => 0);
+    const w = {chest: 0, head: 9, ext: 0, floor: 0, legs: 99, legsAt: '', nan: 0, n: 0}, idx = keys.map(() => 0);
+    const seg = (p1, p2, q1, q2) => {   // (the closest two segments come)
+      const d1 = p2.clone().sub(p1), d2 = q2.clone().sub(q1), r = p1.clone().sub(q1), a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r), c = d1.dot(r), b = d1.dot(d2), den = a * e - b * b;
+      let s = den > 1e-9 ? Math.max(0, Math.min(1, (b * f - c * e) / den)) : 0, t = (b * s + f) / e;
+      if (t < 0) { t = 0; s = Math.max(0, Math.min(1, -c / a)); } else if (t > 1) { t = 1; s = Math.max(0, Math.min(1, (b - c) / a)); }
+      return p1.clone().addScaledVector(d1, s).distanceTo(q1.clone().addScaledVector(d2, t));
+    };
+    const legParts = s => { const h = P(s + 'UpLeg'), k = P(s + 'Leg'), a = P(s + 'Foot'), t = P(s + 'ToeBase'); return [[h.lerp(k, .3), k], [k, a], [a, t]]; };
     for (;;) {
       const c = {note: '', passo: 'qui'}; keys.forEach((k, i) => { c[k] = dom[i][idx[i]]; });
       PZ.poses = [c]; PZ.cur = 0; PZ.D = null; PZ.tr = null; PZ.ver++; F.af++; S.frame++;
@@ -218,6 +226,8 @@ const FAKE_DB = `(() => {
         }
         w.head = Math.min(w.head, H.clone().lerp(tp, .5).distanceTo(P('Head').addScaledVector(new T.Vector3(0, 1, 0), .1)));
       }
+      { const Lp = legParts('Left'), Rp = legParts('Right');
+        for (const l of Lp) for (const q of Rp) { const d = seg(l[0], l[1], q[0], q[1]); if (d < w.legs) { w.legs = d; w.legsAt = JSON.stringify(c); } } }
       for (const [s, g] of [['Left', 'gA'], ['Right', 'gD']]) {
         if (c[g] === 'terra') w.ext = Math.max(w.ext, P(s + 'UpLeg').distanceTo(P(s + 'Foot')) / len[s]);
         w.floor = Math.max(w.floor, -Math.min(P(s + 'ToeBase').y, P(s + 'Foot').y - .06));
@@ -226,10 +236,11 @@ const FAKE_DB = `(() => {
       let i = 0; while (i < keys.length && ++idx[i] >= dom[i].length) { idx[i] = 0; i++; }
       if (i === keys.length) break;
     }
-    for (const k of ['chest', 'head', 'ext', 'floor']) w[k] = +w[k].toFixed(3);
+    for (const k of ['chest', 'head', 'ext', 'floor', 'legs']) w[k] = +w[k].toFixed(3);
     return w;
   });
   ok(!r.all.nan && r.all.chest < .5 && r.all.head > .08 && r.all.ext <= .966 && r.all.floor < .005, 'combinations');
+  ok(r.all.legs >= .12, 'the legs into each other: ' + r.all.legs + ' ' + r.all.legsAt);
   // the guard's ankles and hip joints that a foot swinging under the hips goes round (posa.js PZ_LEG): still the page's
   r.leg = await page.evaluate(() => {
     const X = window.__X, T = X.THREE, it = VW.it, md = X.mdData('ren'), PZ = VW.PZ, P = n => it.bones.find(b => b.name === n).getWorldPosition(new T.Vector3());

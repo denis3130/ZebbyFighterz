@@ -101,36 +101,41 @@ function pzBody(c) {
   else if (c.gA === 'dietro') { b.leanL += 26; b.dip -= .05; b.lx += .04; }   // (a kick behind: the chest goes the other way)
   else if (c.gA === 'ginocchio') { b.leanL -= 4; b.dip -= .06; b.lx -= .03; }
   else if (c.gA === 'basso') { b.leanL -= 8; b.dip -= .03; b.lx -= .04; }
-  if (c.gD === 'calcio') { b.leanL -= 22; b.dip -= .12; b.yaw -= 25; b.chest += 10; b.lx += .1; }   // (the rear hip comes forward)
-  else if (c.gD === 'alto') { b.leanL -= 30; b.dip -= .14; b.yaw -= 28; b.chest += 12; b.lx += .1; }
+  if (c.gD === 'calcio') { b.leanL -= 22; b.dip -= .12; b.yaw += 25; b.chest += 10; b.lx += .1; }   // (the rear hip comes forward: > 0, as the rear arm's punch turns them)
+  else if (c.gD === 'alto') { b.leanL -= 30; b.dip -= .14; b.yaw += 28; b.chest += 12; b.lx += .1; }
   else if (c.gD === 'dietro') { b.leanL += 24; b.dip -= .05; b.lx += .02; }
   else if (c.gD === 'ginocchio') { b.leanL -= 2; b.dip -= .05; b.lx += .03; }
-  else if (c.gD === 'basso') { b.leanL -= 10; b.dip -= .03; b.yaw -= 12; b.lx += .08; }
+  else if (c.gD === 'basso') { b.leanL -= 10; b.dip -= .03; b.yaw += 12; b.lx += .08; }
   if (c.gA !== 'terra' && c.gD !== 'terra') b.jump = .35 + (c.vola || 0);   // both feet off the floor: a jump (higher with vola)
-  b.leanL = pzC(b.leanL, -42, 32);
+  b.leanL = pzC(b.leanL, -42, 32); b.yaw = pzC(b.yaw, -26, 26);   // (a punch and a kick turning the same way: not past where the arms still clear the head)
   b.head = -.5 * b.leanL;   // (the eyes stay on the opponent)
   b.tx = Number.isFinite(c.x) ? c.x : (PZ_PASSO[c.passo] || 0) * PZ_STEP;   // where he stands (m along the line)
   b.giro = c.giro || 0; b.flip = c.capriola || 0; b.glide = c.scatto ? 1 : 0;   // (the turn and flip: graphics, pzRootXf)
   return b;
 }
-// the feet: along the line (m, from the guard's spot), up, the heel (deg), the turn on the tip (deg), the toes' point in
-// the air (deg: > 0 pointed, < 0 flexed, the sole forward: the kit's kick strikes with it) and how much in the air (0..1)
+// the feet: along the line (m, from the guard's spot), up, across it (z, m, > 0 his left), the heel (deg), the turn on
+// the tip (deg), the toes' point in the air (deg: > 0 pointed, < 0 flexed, the sole forward: the kit's kick strikes with
+// it) and how much in the air (0..1). (Across: the guard's rear foot stands a little left of the front one, a bladed
+// stance seen from the side; in the air the right leg goes on its own side, under its hip, and the left one kicking
+// behind passes left of the right: no leg goes through the other.)
 function pzFeet(c, b) {
-  const F = {L: {x: 0, up: 0, heel: 0, yaw: 0, point: 30, air: 0, tx: b.tx}, R: {x: 0, up: 0, heel: 0, yaw: 0, point: 30, air: 0, tx: b.tx}};
+  const F = {L: {x: 0, up: 0, z: 0, heel: 0, yaw: 0, point: 30, air: 0, tx: b.tx}, R: {x: 0, up: 0, z: 0, heel: 0, yaw: 0, point: 30, air: 0, tx: b.tx}};
   if (c.gA === 'ginocchio') Object.assign(F.L, {x: -.12, up: .5, point: 40, air: 1});
   else if (c.gA === 'calcio') Object.assign(F.L, {x: .27, up: 1, point: -5, air: 1});
   else if (c.gA === 'basso') Object.assign(F.L, {x: .2, up: .3, point: 0, air: 1});   // (a low kick: the sole at the shin, the leg not quite straight)
   else if (c.gA === 'alto') Object.assign(F.L, {x: .1, up: 1.24, point: -5, air: 1});   // (at the head)
-  else if (c.gA === 'dietro') Object.assign(F.L, {x: -.85, up: .8, point: 10, air: 1});   // (behind him at the middle, the heel first)
-  if (c.gD === 'ginocchio') Object.assign(F.R, {x: .55, up: .55, point: 40, air: 1});   // (the rear knee comes forward, up in front)
-  else if (c.gD === 'calcio') Object.assign(F.R, {x: 1.15, up: .9, point: -5, air: 1});
-  else if (c.gD === 'basso') Object.assign(F.R, {x: 1, up: .28, point: 0, air: 1});   // (the rear leg reaching forward low, nearly straight)
-  else if (c.gD === 'alto') Object.assign(F.R, {x: .88, up: 1.14, point: -5, air: 1});
-  else if (c.gD === 'dietro') Object.assign(F.R, {x: -.24, up: .7, point: 10, air: 1});
-  // the standing foot turned on its tip (the kit's kick: 30 degrees), up on its ball to turn (a flat foot cannot
-  // turn on the floor without sliding)
+  else if (c.gA === 'dietro') Object.assign(F.L, {x: -.85, up: .8, z: .1, point: 10, air: 1});   // (behind him at the middle, the heel first)
+  if (c.gD === 'ginocchio') Object.assign(F.R, {x: .55, up: .55, z: -.22, point: 40, air: 1});   // (the rear knee comes forward, up in front)
+  else if (c.gD === 'calcio') Object.assign(F.R, {x: 1.15, up: .9, z: -.2, point: -5, air: 1});
+  else if (c.gD === 'basso') Object.assign(F.R, {x: 1, up: .28, z: -.3, point: 0, air: 1});   // (the rear leg reaching forward low, nearly straight, outside the front one)
+  else if (c.gD === 'alto') Object.assign(F.R, {x: .88, up: 1.14, z: -.2, point: -5, air: 1});
+  else if (c.gD === 'dietro') Object.assign(F.R, {x: -.24, up: .7, z: -.15, point: 10, air: 1});
+  if (F.L.air && F.R.air && F.L.x > 0 && F.R.x > .5) { F.L.z += .06; F.R.z -= .04; }   // (both kicking forward: side by side, not into each other)
+  // the standing foot turned out on its tip (the kit's kick: 30 degrees), up on its ball to turn (a flat foot cannot
+  // turn on the floor without sliding): its toes away from the kicking side, the right foot's to his right, the left
+  // foot's to his left (> 0); its knee goes with them, out of the kicking leg's way
   if (c.gD === 'terra') F.R.yaw = c.gA === 'calcio' || c.gA === 'alto' ? -30 : c.gA === 'basso' ? -15 : 0;
-  if (c.gA === 'terra') F.L.yaw = c.gD === 'calcio' || c.gD === 'alto' ? -40 : c.gD === 'basso' ? -20 : 0;
+  if (c.gA === 'terra') F.L.yaw = c.gD === 'calcio' || c.gD === 'alto' ? 40 : c.gD === 'basso' ? 20 : 0;
   for (const s of ['L', 'R']) if (F[s].yaw) F[s].heel = 12;
   if (((c.giro || 0) % 360 + 360) % 360 > 1) for (const s of ['L', 'R']) if (pzDown(F[s])) F[s].heel = 12;   // (turned round: up on the ball it turns on)
   if (b.jump) { F.L.up += b.jump; F.R.up += b.jump; }
@@ -232,6 +237,7 @@ function pzMixT(a, b, raw, e) {
       const kx = off ? rnSm((u - .15) / .85) : rnSm(u / .85);
       ku = off ? rnSm(u / .85) : rnSm((u - .15) / .85);
       for (const k of ['x', 'air', 'point', 'heel', 'yaw']) f[s][k] = fa[k] + (fb[k] - fa[k]) * kx;
+      f[s].z = fa.z + (fb.z - fa.z) * rnSm((u - .1) / .75);   // (across once off the floor and before it travels far; back over its spot before it lands)
     }
     f[s].up = fa.up - ja + (fb.up - jb - fa.up + ja) * ku + B.jump;   // (its own height over the jump's)
   }
@@ -260,8 +266,14 @@ function pzMixT(a, b, raw, e) {
     const A = rel(fa, a.b), Z = rel(fb, b.b);
     if (A.th * Z.th >= 0 || Math.min(Math.abs(A.th), Math.abs(Z.th)) < .14) continue;
     const off = down(fa), on = down(fb), kt = off ? rnSm((u - .15) / .85) : on ? rnSm(u / .85) : u, kr = off ? rnSm(u / .85) : on ? rnSm((u - .15) / .85) : u;
+    // (across: on its own side of the hips only, the right foot's behind them, the left's in front, away from the
+    // other leg: done before it passes under the hip when it starts there, begun after when it ends there)
+    const kt0 = A.th / (A.th - Z.th), own = s === 'R' ? A.th < 0 : A.th > 0;
+    f[s].z = fa.z + (fb.z - fa.z) * (own ? rnSm(kt / kt0) : rnSm((kt - kt0) / (1 - kt0)));
     const th = A.th + (Z.th - A.th) * kt, hx = G0.hx + B.lx + B.tx, hy = G0.hy - B.dip + B.jump, c = Math.cos(th);
-    let r = A.r + (Z.r - A.r) * kr;
+    // (the leg folds as it goes round, the knee chambered: a kick comes back to the hip before the foot goes behind,
+    // not swung through at full length past the other leg)
+    let r = (A.r + (Z.r - A.r) * kr) * (1 - .4 * Math.sin(Math.PI * kt));
     if (c > .05) r = Math.min(r, (hy - G0.ay - .12 * Math.sin(Math.PI * kt)) / c);
     const wp = rnSm(kt / .3) * rnSm((1 - kt) / .3);
     f[s].x += (hx + r * Math.sin(th) - G0.ax - f[s].tx - f[s].x) * wp;
@@ -333,6 +345,7 @@ RB.styleFor.posa = (y, F) => {
 RB.feetFor.posa = (s, c, st, L, F) => {
   const f = pzDrawn(F).f[s];
   rkFoot(s, c, st, L, f.heel * (1 - f.air), f.yaw, f.x + f.tx, f.up, 0);   // (in the air the leg sets the foot: pzKickLeg below)
+  if (f.z) c.G.addScaledVector(RB_SIDE, f.z);
   c.knee = 1 - rnSm((f.up - .02) / .13);   // (the knee over the toes near the floor only: higher up, the toes' way says nothing)
 };
 // A leg off the floor, as kit.js's rkKickLeg sets it, with two weights: the leg turned about its hip-ankle line until
@@ -343,7 +356,8 @@ RB.feetFor.posa = (s, c, st, L, F) => {
 // degrees by a share would flip its way as the angle passes 180).
 function pzKickLeg(md, p, s, point, wk, wf, wo) {
   const T = THREE, L = RB.leg[s], W = rbFK(md, p, RB.W), A = W.p[L.iu].clone(), K = W.p[L.il].clone(), E = W.p[L.ia].clone();
-  const dir = E.sub(A).normalize(), off = K.sub(A), pole = new T.Vector3().crossVectors(dir, RB_SIDE);
+  const dir = E.sub(A).normalize(), off = K.sub(A), pole = new T.Vector3().crossVectors(dir, RB_SIDE).normalize();
+  pole.addScaledVector(RB_SIDE, s === 'L' ? .3 : -.3); pole.addScaledVector(dir, -pole.dot(dir));   // (a little out to its own side, as a fighter's knee: away from the other leg)
   off.addScaledVector(dir, -off.dot(dir));
   if (wo > 0 && off.lengthSq() > 1e-6 && pole.lengthSq() > 1e-6) {
     const bend = rnSm((off.length() - .02) / .05);
