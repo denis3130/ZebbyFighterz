@@ -44,6 +44,12 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
   a dietro, e un piede che passa da davanti a dietro il bacino gira sotto di esso ad arco; il tallone d'appoggio
   vicino alla gamba tesa sale piano (`RB.softHeel`, body.js); un braccio quasi teso ci arriva morbido; la fascia
   segue il corpo girato e capovolto.
+  La pagina si apre sull'Anteprima (14/11, Denis: "faccio successivo e mi parte l'animazione successiva"): Ren in
+  grande e a destra il gruppo, il nome e la descrizione dell'animazione, «Successiva» e «Precedente» (frecce sinistra
+  e destra; croce o dorsali del controller), Pausa (ferma il fotogramma: spazio, A), Elenco (L, X), Modifica (M, Y o
+  Start: l'editor a tasti, che ha «Anteprima» per tornare). Le animazioni di Claude non si cambiano per sbaglio: la
+  prima modifica a una crea una copia tua in «Le tue» («… (mia)»), l'originale resta; una copia rimasta su un
+  dispositivo e mai salvata non va mai sopra l'originale del database (si riapre quello).
 - `data/animazioni.py`: le animazioni fatte da Claude (14/11/2026, richieste di Denis: "almeno 50, fatte bene", poi
   "tante combo [...] combo speciali, mosse speciali"): 103 in sei gruppi (Colpi 15, Calci 17, Combinazioni 30,
   Difese 11, Movimenti 12, Speciali 18), ognuna con i suoi tempi e una nota per posa. Le mosse speciali: calcio
@@ -80,6 +86,9 @@ L'editor di pose (da pubblicare con il database: `capabilities: {db: {}}`):
                                        # nessuno scatto tra quarti di fotogramma, dove arriva il palmo
     node tests/posa.js pose.html       # pose a tasti su telefono (tocco), con un database finto: ogni tasto,
                                        # pose, riproduci, annulla, tastiera, controller, salvataggio e riapertura;
+                                       # l'Anteprima (successiva e precedente con tocco, tasti, controller; pausa;
+                                       # elenco; la copia quando si modifica un'animazione di Claude; l'originale
+                                       # che si riapre sopra una copia rimasta sul dispositivo);
                                        # tutte le 46.656 combinazioni (braccia fuori dal petto, piedi sopra il
                                        # pavimento, gambe non tirate) e ogni cambio senza scatti; costo per fotogramma
     python3 data/animazioni.py         # le animazioni di Claude -> data/animazioni.json

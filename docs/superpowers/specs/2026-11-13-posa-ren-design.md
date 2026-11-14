@@ -61,6 +61,23 @@ speciali, mosse speciali ecc". Scelte di Claude:
   aggiunti anche alle 65 di prima.
 - Verificate fotogramma per fotogramma (tutte, scivolamento massimo 0,8 mm) e guardate una per una.
 
+## Quinta tappa (14/11): l'Anteprima
+Denis: "scusa ho eliminato per sbaglio due movimenti puoi rimetterli e darmi l'anteprima in modo diverso? che tipo
+faccio successivo e mi parte l'animazione successiva? che cosi è troppo macchinoso". Scelte di Claude:
+- Nel database le 103 animazioni erano tutte intatte (controllate una per una): la cancellazione era rimasta solo
+  nella copia sul telefono. Una copia di un'animazione di Claude rimasta su un dispositivo non va mai sopra
+  l'originale: si riapre quello del database.
+- Le animazioni di Claude non si cambiano per sbaglio: la prima modifica a una crea la copia di Denis in «Le tue»
+  («… (mia)»), che prende quella modifica e le successive; l'originale resta com'era.
+- L'Anteprima è la vista con cui si apre la pagina (l'editor solo se non c'è niente da guardare): Ren in grande, a
+  destra gruppo e posizione («Calci · 3 di 17»), nome, descrizione, «Successiva» (grande, arancione), «Precedente»,
+  Pausa (ferma il fotogramma, effetti compresi), Elenco, Modifica. Nell'Anteprima nessun tasto cambia
+  un'animazione. Ordine: quello dell'elenco, e alla fine si ricomincia. Tasti ≥ 44 px. Tastiera: frecce sinistra e
+  destra, spazio, L, M; controller: croce o dorsali, A, X, Y; Start passa tra Anteprima ed editor.
+- Nell'editor il tasto «Animazioni» diventa «Anteprima» (l'elenco è nell'Anteprima; si chiama Anteprima e non
+  Guarda per non confondersi con «Guardia»).
+- L'elenco aperto non si ridisegna più a ogni posa (un tocco poteva cadere su un tasto appena sostituito).
+
 ## La prima versione (sostituita)
 
 ### Cosa faceva
@@ -89,4 +106,5 @@ speciali, mosse speciali ecc". Scelte di Claude:
 - Linea del tempo con i fotogrammi (approccio B), se le note non bastano.
 - Altre posizioni pronte se servono (es. spazzata), su richiesta di Denis.
 - Mosse speciali come tasti nella pagina (oggi solo nelle animazioni di Claude): giro, capriola, effetti.
+- Anteprima «di fila»: ogni animazione una volta, poi da sola la successiva.
 - Specchiare una posa; eliminare un'animazione salvata.

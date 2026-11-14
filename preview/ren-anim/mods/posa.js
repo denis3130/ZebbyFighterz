@@ -29,6 +29,7 @@ const PZ = {
   poses: [], cur: 0, row: 0, kb: false, play: null, undo: [], D: null, Daf: NaN, ver: 0, lastPush: 0,
   id: null, name: 'Nuova animazione', note: '', db: null, col: null, list: [], loaded: false, edited: false, busy: false,
   dirty: false, retry: 0, timer: 0, pad: {}, padRep: {}, ui: {},
+  watch: true,                           // the preview, Anteprima (the animations one after another), or the editor (Modifica)
 };
 // the rows of choices: the pose's field, its label, its values [name, label]
 const PZ_ARMV = [['guardia', 'Guardia'], ['avanti', 'Avanti'], ['alto', 'Alto'], ['viso', 'Viso'], ['gomito', 'Gomito'], ['basso', 'Basso']];
@@ -275,7 +276,7 @@ function pzDrawn(F) {
   if (!P.length) return pzTarget(PZ_GUARD);
   if (F.af === PZ.Daf && PZ.D && PZ.Dv === PZ.ver) return PZ.D;
   let D;
-  if (PZ.play && P.length > 1) D = pzPlayAt(F.af - PZ.play.f0);
+  if (PZ.play && P.length > 1) D = pzPlayAt(pzPlayT(F.af));
   else {
     const T = pzTarget(P[Math.min(PZ.cur, P.length - 1)]);
     if (PZ.D && PZ.Dv !== PZ.ver) PZ.tr = {from: PZ.D, f0: F.af};   // (a change: it starts here)
@@ -635,6 +636,29 @@ function pzPlay() {
   if (PZ.poses.length < 2) { pzStatus('Fai almeno 2 pose («+ Posa») per riprodurle'); return; }
   PZ.play = {f0: VW.F.af + (RN_D.k || 0), at: {a: 0, b: 1, back: false}}; PZ.ver++; PZ.ui.dirty = true;
 }
+// the play's own time at drawn frame af (held where it is while the preview's pause holds it)
+function pzPlayT(af) { return PZ.play.paused !== undefined ? PZ.play.paused : af - PZ.play.f0; }
+function pzPause() {   // (the preview: the play held on the frame it is at, or going on from there)
+  if (!PZ.play) { pzPlay(); return; }
+  const af = VW.F.af + (RN_D.k || 0);
+  if (PZ.play.paused !== undefined) { PZ.play.f0 = af - PZ.play.paused; delete PZ.play.paused; } else PZ.play.paused = af - PZ.play.f0;
+  PZ.ver++; PZ.ui.dirty = true;
+}
+const pzRun = () => { if (!PZ.play && PZ.poses.length > 1) pzPlay(); };   // (playing, if it is not)
+// the preview (Anteprima): the animations one after another, in the list's order (Denis's own first, then Claude's by kind), round
+// again at either end; Modifica opens the editor on the one playing
+function pzOrder() { return [null].concat(PZ_CATS).flatMap(c => PZ.list.filter(a => a.cat === c)); }
+function pzNext(dir) {
+  const L = pzOrder();
+  if (!L.length) return;
+  const i = L.findIndex(a => a.id === PZ.id);
+  pzOpen(L[i < 0 ? (dir > 0 ? 0 : L.length - 1) : (i + dir + L.length) % L.length]);
+}
+function pzWatch(on) {
+  PZ.watch = on; document.body.classList.toggle('pzWatch', on);
+  if (on) pzRun(); else { pzStop(); pzAnims(false); }
+  pzHint(); pzResize(); PZ.ui.dirty = true;
+}
 function pzView() { const side = Math.abs(VW.yaw - F3_YAW) < .02; VW.yaw = side ? F3_YAW - Math.PI / 4 : F3_YAW; PZ.ui.dirty = true; }   // the game's side view, or three-quarters
 
 // --- Saving: the database (collection "animazioni"), this device, the data for Claude ---
@@ -664,7 +688,15 @@ function pzLoad(id, doc) {
   return true;
 }
 function pzLocal(doc) { try { localStorage.setItem(PZ_KEY, JSON.stringify({id: PZ.id, doc})); } catch (_) { /* (private window: the database alone) */ } }
+// Claude's animations (ids c-...) stay as Claude made them: the first change to one makes Denis's own copy (in "Le
+// tue"), which takes it and the ones after it
+function pzMine() {
+  if (!PZ.id || !/^c-/.test(PZ.id)) return;
+  PZ.id = null; PZ.name = (PZ.name + ' (mia)').slice(0, 60); PZ.cat = null; PZ.ord = undefined;
+  pzStatus('Copia tua: l\'originale di Claude resta com\'è');
+}
 function pzChanged() {
+  pzMine();
   PZ.ver++; PZ.edited = true; PZ.ui.dirty = true;
   clearTimeout(PZ.timer); PZ.timer = setTimeout(pzSave, 700);   // (a burst of taps: one write once they pause)
 }
@@ -698,7 +730,7 @@ async function pzStore() {
   pzStatus('Caricamento…');
   let db = null;
   try { const c = window.claude; db = c && typeof c.use === 'function' ? await c.use('db') : null; } catch (_) { db = null; }
-  if (!db) { PZ.loaded = true; pzStatus('Salvo su questo dispositivo'); return; }
+  if (!db) { PZ.loaded = true; pzStatus('Salvo su questo dispositivo'); pzWatch(false); return; }
   PZ.db = db; PZ.col = db.collection('animazioni');
   const wait = setTimeout(() => { if (!PZ.loaded) pzStatus('Il salvataggio non risponde ancora'); }, 10000);
   PZ.col.orderBy('updated', 'desc').limit(300).onSnapshot(snap => {
@@ -709,17 +741,15 @@ async function pzStore() {
     PZ.ui.list = true;
     if (snap.metadata.fromCache || PZ.loaded) return;
     clearTimeout(wait); PZ.loaded = true;
-    // the first answer: the animation this device had open (unless its own copy is newer); a first visit: the first
-    // of the list, with the list open
+    // the first answer: the animation this device had open (unless its own copy is newer: one of Denis's own changed
+    // here and not saved yet; a copy of one of Claude's never goes over it, the original opens); a first visit: the
+    // first of the list. On the preview, playing; nothing to watch: the editor
     const L = PZ.localDoc, mine = L && PZ.list.find(a => a.id === L.id), open = mine || PZ.list.find(a => a.cat) || PZ.list[0];
-    if (PZ.edited || (L && (!mine || (+L.doc.updated || 0) > mine.updated))) pzSave();
-    else if (open) { pzLoad(open.id, open.doc); pzStatus('Aperta «' + open.name + '»'); }
+    if (PZ.edited || (L && !/^c-/.test(L.id || '') && (!mine || (+L.doc.updated || 0) > mine.updated))) pzSave();
+    else if (open) { pzLoad(open.id, open.doc); pzLocal(open.doc); pzStatus('Aperta «' + open.name + '»'); }
     else pzStatus('Pronto: le pose si salvano da sole');
-    // the first time the list has Claude's animations on this device: it opens by itself, once
-    let seen = true;
-    try { seen = !!localStorage.getItem(PZ_KEY + '-elenco'); } catch (_) { /* (no storage: never by itself) */ }
-    if (!seen && PZ.list.some(a => a.cat)) { pzAnims(true); try { localStorage.setItem(PZ_KEY + '-elenco', '1'); } catch (_) { /* (as above) */ } }
-  }, err => { clearTimeout(wait); PZ.loaded = true; pzStatus(pzErr(err && err.code)); if (err && err.code !== 'unavailable') PZ.col = null; });
+    if (PZ.watch && PZ.list.length) pzRun(); else pzWatch(false);
+  }, err => { clearTimeout(wait); PZ.loaded = true; pzStatus(pzErr(err && err.code)); if (err && err.code !== 'unavailable') PZ.col = null; pzWatch(false); });
 }
 function pzNewAnim() {
   pzStop();
@@ -727,12 +757,11 @@ function pzNewAnim() {
   PZ.poses = [pzNew0()]; PZ.cur = 0; PZ.undo = [];
   pzChanged(); pzSave(); pzAnims(false);
 }
-// an animation of the list: opened and played
+// an animation of the list (or the preview's next): opened on the preview and played from its start
 function pzOpen(a) {
   pzStop();
   if (a.id !== PZ.id && pzLoad(a.id, a.doc)) { pzLocal(pzDoc()); pzStatus('Aperta «' + a.name + '»'); }
-  pzAnims(false);
-  if (PZ.poses.length > 1) pzPlay();
+  pzAnims(false); pzWatch(true);
 }
 function pzCopy() {
   const txt = JSON.stringify(pzDoc());
@@ -770,7 +799,7 @@ function pzStrip() {
 }
 function pzTitle() {
   const sm = document.querySelector('#name small'), at = PZ.play && PZ.play.at;
-  const t = at ? (at.back ? 'Riproduzione · torna alla posa 1' : at.a === at.b ? 'Riproduzione · posa ' + (at.a + 1) : 'Riproduzione · posa ' + (at.a + 1) + ' → ' + (at.b + 1))
+  const t = at ? (PZ.play.paused !== undefined ? 'In pausa · ' : 'Riproduzione · ') + (at.back ? 'torna alla posa 1' : at.a === at.b ? 'posa ' + (at.a + 1) : 'posa ' + (at.a + 1) + ' → ' + (at.b + 1))
     : 'Posa ' + (PZ.cur + 1) + ' di ' + PZ.poses.length + (PZ.name ? ' · ' + PZ.name : '');
   if (sm && sm.textContent !== t) sm.textContent = t;
 }
@@ -791,7 +820,7 @@ function pzNotesUi() {
 function pzAnims(open) {
   const A = document.getElementById('pzA');
   if (open === undefined) open = A.hidden;
-  A.hidden = !open; pzPress(document.getElementById('pzAb'), open);
+  A.hidden = !open; pzPress(document.getElementById('pzList'), open);
   if (open) { pzNotes(false); pzListUi(); }
 }
 function pzListUi() {
@@ -804,14 +833,40 @@ function pzListUi() {
     if (!items.length) continue;
     const h = document.createElement('h3'); h.textContent = title + ' · ' + items.length; box.appendChild(h);
     const row = document.createElement('div'); row.className = 'pzAr';
-    for (const a of items) { const b = pzBtn(a.name, () => pzOpen(a)); pzPress(b, a.id === PZ.id); row.appendChild(b); }
+    for (const a of items) { const b = pzBtn(a.name, () => pzOpen(a)); b.dataset.id = a.id; pzPress(b, a.id === PZ.id); row.appendChild(b); }
     box.appendChild(row);
   }
   if (!box.children.length) { const p = document.createElement('p'); p.className = 'pzMsg'; p.textContent = 'Nessun\'animazione salvata.'; box.appendChild(p); }
 }
+// the preview's panel: the animation's kind and place in it, its name and words, the pause's state
+function pzWatchUi() {
+  if (!PZ.watch) return;
+  const L = pzOrder(), a = L.find(x => x.id === PZ.id), set = (id, t) => { const e = document.getElementById(id); if (e.textContent !== t) e.textContent = t; };
+  const group = a ? L.filter(x => x.cat === a.cat) : [];
+  set('pzWc', a ? (a.cat || 'Le tue') + ' · ' + (group.indexOf(a) + 1) + ' di ' + group.length : PZ.loaded ? 'Non salvata' : 'Caricamento…');
+  set('pzWn', PZ.name || 'Animazione'); set('pzWd', PZ.note || '');
+  const held = !!(PZ.play && PZ.play.paused !== undefined), b = PZ.ui.pause, t = !PZ.play ? 'Riproduci' : held ? 'Riprendi' : 'Pausa';
+  if (b.firstChild.textContent !== t) b.firstChild.textContent = t;
+  pzPress(b, held);
+  for (const id of ['pzNext', 'pzPrev']) document.getElementById(id).disabled = !L.length;
+}
+// the keys and the controller for the page's two halves, under the title (shown with a mouse)
+function pzHint() {
+  const hint = document.getElementById('hint');
+  if (!hint) return;
+  hint.innerHTML = PZ.watch
+    ? '«Successiva» e «Precedente» cambiano animazione; trascina Ren per girarlo, doppio tocco per tornare di lato.'
+      + '<span class=kb> Tastiera: frecce sinistra e destra cambiano animazione, spazio pausa, L elenco, M modifica.'
+      + ' Controller: croce o dorsali cambiano animazione, A pausa, X elenco, Y o Start modifica.</span>'
+    : 'Tocca le scelte a destra; trascina Ren per girarlo, doppio tocco per tornare di lato.'
+      + '<span class=kb> Tastiera: frecce su e giù la riga, sinistra e destra la scelta, N nuova posa, [ ] cambia posa, P riproduci, G guardia, Ctrl+Z annulla, M anteprima.'
+      + ' Controller: croce per righe e scelte, A nuova posa, B annulla, X guardia, Y riproduci, dorsali cambia posa, Start anteprima.</span>';
+}
+// (the one open, marked in place: the list is built again only when its animations change, never under a finger)
+function pzListMark() { for (const b of document.querySelectorAll('#pzAl button[data-id]')) pzPress(b, b.dataset.id === PZ.id); }
 // the camera: Ren in the middle of the space the panel leaves him (left of it, or above it), below the title
 function pzResize() {
-  const w = innerWidth, h = innerHeight, c = VW.camera, P = document.getElementById('pzP').getBoundingClientRect(), top = document.getElementById('name').getBoundingClientRect().bottom + 4;
+  const w = innerWidth, h = innerHeight, c = VW.camera, P = document.getElementById(PZ.watch ? 'pzW' : 'pzP').getBoundingClientRect(), top = document.getElementById('name').getBoundingClientRect().bottom + 4;
   const right = P.left > w * .25, x1 = right ? P.left : w, y1 = right ? h : P.top, y0 = Math.min(top, y1 - 120);
   const fw = Math.max(80, x1), fh = Math.max(80, y1 - y0), cx = x1 / 2, cy = (y0 + y1) / 2;
   const FW = 2 * Math.max(cx, w - cx), FH = 2 * Math.max(cy, h - cy);
@@ -827,6 +882,20 @@ function pzUi() {
   padding:calc(8px + env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) 14px;
   background:rgba(20,18,28,.82);border-left:1px solid var(--line);scrollbar-width:thin}
 #bottom{right:min(500px,57vw)}
+#pzW{position:fixed;z-index:3;top:0;right:0;bottom:0;width:min(300px,40vw);box-sizing:border-box;display:none;flex-direction:column;justify-content:center;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) 16px;
+  background:rgba(20,18,28,.82);border-left:1px solid var(--line)}
+body.pzWatch #pzW{display:flex}body.pzWatch #pzP{display:none}body.pzWatch #bottom{right:min(300px,40vw)}
+#pzWi{display:flex;flex-direction:column;gap:3px;min-height:0;padding:0 2px 2px}
+#pzWc{color:var(--orange);font-size:14px;letter-spacing:.06em}
+#pzWn{font-family:var(--display);font-style:normal;font-weight:400;font-size:30px;line-height:1;letter-spacing:.03em}
+#pzWd{color:var(--dim);font-size:15px;line-height:1.18;font-weight:600;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+#pzW button{width:100%;min-height:44px}
+#pzW #pzNext{font-size:22px;min-height:54px;padding:12px 14px 11px;background:var(--orange);border-color:var(--orange);color:#1a0f05}
+#pzW #pzPrev{font-size:18px;padding:9px 14px 8px}
+#pzNext>span,#pzPrev>span{display:inline-flex;align-items:center;gap:10px}
+#pzWt{display:flex;gap:6px}
+#pzW #pzWt button{flex:1;min-width:0;font-size:15px;padding:7px 4px 6px}
 .pzR{display:flex;align-items:center;gap:5px;flex-wrap:wrap;border-radius:4px;padding:1px 2px}
 .pzR.kb{outline:2px solid var(--cyan);outline-offset:2px}
 .pzL{flex:0 0 64px;color:var(--dim);font-size:13px;line-height:1.02}
@@ -856,9 +925,9 @@ button:disabled{opacity:.4;cursor:default}
 @keyframes pzPop{0%{transform:skewX(-10deg) scale(.55)}60%{transform:skewX(-10deg) scale(1.18)}100%{transform:skewX(-10deg) scale(1)}}
 .pop{animation:pzPop .28s ease-out}
 @media (max-height:430px){#name{font-size:34px}#name small{font-size:14px}#pzP{gap:3px}#pzP button{font-size:13.5px;padding:3px 8px 2px}.pzL{font-size:12px}#pzP .hand{min-width:132px}}
-@media (max-height:370px){#pzP{gap:2px}#pzP button{padding:2px 7px 1px}}
+@media (max-height:370px){#pzP{gap:2px}#pzP button{padding:2px 7px 1px}#pzW{gap:7px}#pzWn{font-size:26px}}
 @media (pointer:coarse){#hint{display:none}}
-@media (orientation:portrait){#pzP{top:auto;left:0;width:auto;max-height:56vh;justify-content:flex-start;border-left:0;border-top:1px solid var(--line)}#bottom{display:none}}
+@media (orientation:portrait){#pzP,#pzW{top:auto;left:0;width:auto;max-height:56vh;justify-content:flex-start;border-left:0;border-top:1px solid var(--line)}#bottom{display:none}}
 @media (prefers-reduced-motion:reduce){.pop{animation:none}}`;
   document.head.appendChild(css);
   const P = document.createElement('div'); P.id = 'pzP';
@@ -880,18 +949,28 @@ button:disabled{opacity:.4;cursor:default}
   // the tools
   const tools = document.createElement('div'); tools.id = 'pzTools';
   PZ.ui.del = pzBtn('Elimina', pzDel, 'pzDel'); PZ.ui.view = pzBtn('Vista: lato', pzView, 'pzView'); PZ.ui.del.setAttribute('aria-label', 'Elimina la posa');
-  tools.append(pzBtn('Annulla', pzUndo, 'pzUndo'), pzBtn('Guardia', pzGuard, 'pzGuard'), PZ.ui.del, pzBtn('Animazioni', () => pzAnims(), 'pzAb'), pzBtn('Note', () => pzNotes(), 'pzNb'), PZ.ui.view);
+  tools.append(pzBtn('Annulla', pzUndo, 'pzUndo'), pzBtn('Guardia', pzGuard, 'pzGuard'), PZ.ui.del, pzBtn('Anteprima', () => pzWatch(true), 'pzWb'), pzBtn('Note', () => pzNotes(), 'pzNb'), PZ.ui.view);
   P.appendChild(tools);
   document.body.appendChild(P);
+  // the preview: the animation playing (its kind and place in it, name, words), the next one, the one before, pause, the
+  // list, the editor on it. (A tap leaves no focus on its button: space is the pause, not that button again.)
+  const W = document.createElement('div'); W.id = 'pzW'; W.setAttribute('role', 'group'); W.setAttribute('aria-label', 'Anteprima delle animazioni');
+  W.innerHTML = '<div id="pzWi"><span id="pzWc"></span><b id="pzWn"></b><span id="pzWd"></span></div>';
+  const chev = d => '<svg viewBox="0 0 12 20" width="11" height="18" aria-hidden="true"><path d="' + (d > 0 ? 'M2.5 2.5l7 7.5-7 7.5' : 'M9.5 2.5l-7 7.5 7 7.5') + '" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const next = pzBtn('Successiva', () => pzNext(1), 'pzNext'), prev = pzBtn('Precedente', () => pzNext(-1), 'pzPrev'), wt = document.createElement('div'); wt.id = 'pzWt';
+  next.firstChild.insertAdjacentHTML('beforeend', chev(1)); prev.firstChild.insertAdjacentHTML('afterbegin', chev(-1));
+  next.setAttribute('aria-label', 'Animazione successiva'); prev.setAttribute('aria-label', 'Animazione precedente');
+  PZ.ui.pause = pzBtn('Pausa', pzPause, 'pzPause');
+  wt.append(PZ.ui.pause, pzBtn('Elenco', () => pzAnims(), 'pzList'), pzBtn('Modifica', () => pzWatch(false), 'pzEdit'));
+  W.append(next, prev, wt);
+  W.addEventListener('click', e => { if (e.detail > 0 && document.activeElement && document.activeElement.blur) document.activeElement.blur(); });
+  document.body.appendChild(W); document.body.classList.toggle('pzWatch', PZ.watch);
   // the saving's state and the frames per second: a line under the title
   const info = document.createElement('small'); info.id = 'pzInfo';
   const st = document.createElement('span'); st.id = 'pzSt'; st.setAttribute('role', 'status'); info.appendChild(st);
   const fps = document.getElementById('fps'); if (fps) info.appendChild(fps);
   document.getElementById('name').appendChild(info);
-  const hint = document.getElementById('hint');
-  if (hint) hint.innerHTML = 'Tocca le scelte a destra; trascina Ren per girarlo, doppio tocco per tornare di lato.'
-    + '<span class=kb> Tastiera: frecce su e giù la riga, sinistra e destra la scelta, N nuova posa, [ ] cambia posa, P riproduci, G guardia, Ctrl+Z annulla.'
-    + ' Controller: croce per righe e scelte, A nuova posa, B annulla, X guardia, Y riproduci, dorsali cambia posa.</span>';
+  pzHint();
   // the notes (for Claude): the animation's name and words, each pose's own, the saved animations, the data
   const N = document.createElement('div'); N.id = 'pzN'; N.hidden = true; N.setAttribute('role', 'dialog'); N.setAttribute('aria-label', 'Note per Claude');
   N.innerHTML = '<label>Nome dell\'animazione<input id="pzName" maxlength="60" autocomplete="off"></label>'
@@ -903,12 +982,12 @@ button:disabled{opacity:.4;cursor:default}
   const bg = document.getElementById('kitBg'); if (bg) N.lastChild.appendChild(bg);   // (the kit's floor or arena)
   N.lastChild.appendChild(pzBtn('Chiudi', () => pzNotes(false), 'pzClose'));
   document.body.appendChild(N);
-  const typed = (id, f) => document.getElementById(id).addEventListener('input', e => { f(e.target.value); PZ.edited = true; PZ.ui.dirty = true; clearTimeout(PZ.timer); PZ.timer = setTimeout(pzSave, 900); });
+  const typed = (id, f) => document.getElementById(id).addEventListener('input', e => { pzMine(); f(e.target.value); PZ.edited = true; PZ.ui.dirty = true; clearTimeout(PZ.timer); PZ.timer = setTimeout(pzSave, 900); });
   typed('pzName', v => { PZ.name = v.slice(0, 60); });
   typed('pzNote', v => { PZ.note = v.slice(0, 2000); });
   typed('pzPnote', v => { if (PZ.poses[PZ.cur]) PZ.poses[PZ.cur].note = v.slice(0, 300); });
   const A = document.createElement('div'); A.id = 'pzA'; A.hidden = true; A.setAttribute('role', 'dialog'); A.setAttribute('aria-label', 'Animazioni');
-  A.innerHTML = '<div id="pzAtop"><span class="pzMsg">Tocca un\'animazione: si apre e parte.</span></div><div id="pzAl"></div>';
+  A.innerHTML = '<div id="pzAtop"><span class="pzMsg">Tocca un\'animazione: parte, poi «Successiva» va avanti.</span></div><div id="pzAl"></div>';
   A.firstChild.append(pzBtn('+ Nuova', pzNewAnim, 'pzNew'), pzBtn('Chiudi', () => pzAnims(false), 'pzAclose'));
   document.body.appendChild(A);
   addEventListener('resize', pzResize); pzResize();
@@ -920,19 +999,23 @@ function pzKeys() {
     const t = e.target, tag = t && t.tagName, typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
     e.stopImmediatePropagation();
     if (typing) { if (e.key === 'Escape') { t.blur(); pzNotes(false); } return; }
-    if (e.key === 'Escape') { pzNotes(false); pzAnims(false); pzStop(); return; }
+    if (e.key === 'Escape') { pzNotes(false); pzAnims(false); if (!PZ.watch) pzStop(); return; }
     const k = e.key, K = k.length === 1 ? k.toLowerCase() : k, onBtn = tag === 'BUTTON';
-    if ((e.ctrlKey || e.metaKey) && K === 'z') { e.preventDefault(); pzUndo(); return; }
+    if ((e.ctrlKey || e.metaKey) && K === 'z') { e.preventDefault(); if (!PZ.watch) pzUndo(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const act = {
+    const act = PZ.watch ? {   // (the preview: nothing here changes an animation)
+      ArrowLeft: () => pzNext(-1), ArrowRight: () => pzNext(1), ' ': () => pzPause(), p: () => pzPause(), l: () => pzAnims(), m: () => pzWatch(false), v: () => pzView(),
+    }[K] : {
       ArrowUp: () => pzRowGo(-1), ArrowDown: () => pzRowGo(1), ArrowLeft: () => { PZ.kb = true; pzStepRow(-1); }, ArrowRight: () => { PZ.kb = true; pzStepRow(1); },
       '[': () => pzGo(PZ.cur - 1), ']': () => pzGo(PZ.cur + 1), n: () => pzAdd(), p: () => pzPlay(), g: () => pzGuard(), z: () => pzUndo(), v: () => pzView(), Delete: () => pzDel(),
+      m: () => pzWatch(true),
     }[K];
     if (act && !(onBtn && (K === 'Enter' || K === ' '))) { e.preventDefault(); if (!e.repeat || /^Arrow/.test(K)) act(); }
   }, true);
 }
-// the controller: the d-pad (or the left stick) rows and choices, A a new pose, B undo, X the guard, Y plays, the
-// shoulders the pose
+// the controller: on the preview the d-pad (or the left stick) and the shoulders the next or previous animation, A the
+// pause, X the list, Y the editor; in the editor the d-pad rows and choices, A a new pose, B undo, X the guard, Y
+// plays, the shoulders the pose; Start goes from one to the other
 function pzPad() {
   const pads = navigator.getGamepads ? navigator.getGamepads() : [], now = performance.now();
   for (const g of pads) {
@@ -941,16 +1024,19 @@ function pzPad() {
     const ax = (i, s) => (g.axes[i] || 0) * s > .6;
     // the d-pad or the stick: once on the press, then again every 250 ms while held
     const dir = {up: b(12) || ax(1, -1), down: b(13) || ax(1, 1), left: b(14) || ax(0, -1), right: b(15) || ax(0, 1)};
+    const watch = PZ.watch;
     for (const [d, on] of Object.entries(dir)) {
       const r = PZ.padRep;
       if (!on) { r[d] = 0; continue; }
       if (r[d] && now < r[d]) continue;
       r[d] = now + (r[d] ? 250 : 420);
+      if (watch) { if (d === 'left' || d === 'right') pzNext(d === 'left' ? -1 : 1); continue; }
       PZ.kb = true;
       if (d === 'up') pzRowGo(-1); else if (d === 'down') pzRowGo(1); else pzStepRow(d === 'left' ? -1 : 1);
     }
-    if (hit(0)) pzAdd(); if (hit(1)) pzUndo(); if (hit(2)) pzGuard(); if (hit(3)) pzPlay();
-    if (hit(4)) pzGo(PZ.cur - 1); if (hit(5)) pzGo(PZ.cur + 1);
+    if (hit(9)) pzWatch(!watch);
+    else if (watch) { if (hit(0)) pzPause(); if (hit(2)) pzAnims(); if (hit(3)) pzWatch(false); if (hit(4)) pzNext(-1); if (hit(5)) pzNext(1); }
+    else { if (hit(0)) pzAdd(); if (hit(1)) pzUndo(); if (hit(2)) pzGuard(); if (hit(3)) pzPlay(); if (hit(4)) pzGo(PZ.cur - 1); if (hit(5)) pzGo(PZ.cur + 1); }
     for (let i = 0; i < 17; i++) was[i] = b(i);
     break;
   }
@@ -978,14 +1064,14 @@ RN.hooks.draw.push((VW, dt, cam) => {
   }
   let sh = {x: 0, y: 0};
   if (PZ.play && PZ_FXC.burst) {
-    const L = pzTimeline(), tt = (RN_D.F ? RN_D.F.af : VW.F.af) - PZ.play.f0;
+    const L = pzTimeline(), tt = pzPlayT(RN_D.F ? RN_D.F.af : VW.F.af);
     PZ.loop = Math.floor(tt / L.len); sh = pzFx(VW, it, ((tt % L.len) + L.len) % L.len, cam);
   } else if (PZ_FXC.burst) { for (const b of PZ_FXC.burst) b.visible = false; PZ_FXC.glow.visible = PZ_FXC.ball.visible = PZ_FXC.ring.visible = PZ_FXC.trail.visible = false; PZ_FXC.flash.style.opacity = '0'; }
   cam.position.set(x + sh.x, .95 + .5 * j + .1 + sh.y, cam.position.z); cam.lookAt(x + sh.x, .95 + .5 * j + sh.y, 0); cam.updateMatrixWorld();
   if (PZ.play) { const a = PZ.play.at, key = a.a + ',' + a.b + ',' + a.back; if (key !== PZ.ui.at) { PZ.ui.at = key; PZ.ui.dirty = true; } }
   const side = Math.abs(VW.yaw - F3_YAW) < .02; if (side !== PZ.ui.side) { PZ.ui.side = side; PZ.ui.dirty = true; }   // (the view's button names it)
-  if (PZ.ui.dirty) { PZ.ui.dirty = false; pzStrip(); pzRowsUi(); pzTitle(); pzNotesUi(); if (!document.getElementById('pzA').hidden) PZ.ui.list = true; }
-  if (PZ.ui.list) { PZ.ui.list = false; pzListUi(); }
+  if (PZ.ui.dirty) { PZ.ui.dirty = false; pzStrip(); pzRowsUi(); pzTitle(); pzNotesUi(); pzWatchUi(); if (!document.getElementById('pzA').hidden) pzListMark(); }
+  if (PZ.ui.list) { PZ.ui.list = false; pzListUi(); pzWatchUi(); }
 });
 // one play: the pose being edited, for as long as the page is open
 VW_PLAYS.length = 0;
