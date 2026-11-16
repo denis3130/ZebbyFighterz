@@ -194,11 +194,11 @@ pittura, la luce e il contorno di Ren sulla pelle delle mani (`busto_k9.glb`; KA
 nella luce"); poi le mani al 90% (scelte da Denis fra 90, 100 e 115%: `HAND_MUL`); poi la base del pollice nel guanto (zone cerchiate,
 `busto_k10.glb`). Pubblicata nell'anteprima di Kael (versione 20, 12/11, Denis: "fammelo provare"). Poi Denis ha cerchiato
 pugni, polsi e gomiti in guardia: pollice di nuovo piegato, guanto a tre toni, lembo del polsino sinistro tolto, gomiti puliti
-(`busto_k11.glb`; KAEL.md, "Zone cerchiate in guardia"); da pubblicare quando Denis lo chiede. Da chiedergli: l'ala della
+(`busto_k11.glb`; KAEL.md, "Zone cerchiate in guardia"); pubblicata nell'anteprima di Kael (versione 21, 16/11, Denis: "fammelo vedere con l'anteprima aggiornata"; 22 test verdi). Da chiedergli: l'ala della
 spalla destra che in guardia sta dietro il pugno.
 
 **Stato al 12/11/2026 (ultima chat, spostata su ZebbyFighterz su richiesta di Denis)**: ramo `tappa2-ren-meshy`, tutto
-salvato e caricato. L'anteprima di Kael pubblicata ora è la **versione 20** (prima la 19). La versione 20 contiene (mani di
+salvato e caricato. L'anteprima di Kael pubblicata ora è la **versione 21** (16/11: pugni, polsi e gomiti in guardia, `busto_k11`). La versione 20 conteneva (mani di
 Kael grandi come nel disegno, dita pulite con le righe tra le dita, contorno nero interno su mani e braccia, muscoli delle
 braccia ricalcati: vedi `docs/meshy/KAEL.md`, "Dita e grandezza delle mani", "Righe nere e ombre delle mani", "Ancora un po',
 e i muscoli delle braccia ricalcati"). Denis l'ha vista in immagini ("bravo ancora un po'"); **si pubblica quando scrive
