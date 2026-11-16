@@ -56,6 +56,14 @@ Pagina di prova per le animazioni di Ren (solo grafica: i tempi del combattiment
   piede dietro un po' a sinistra di quello davanti: in aria il destro si sposta solo quando è dietro il bacino, il
   sinistro solo quando è davanti); la gamba si piega mentre passa sotto il bacino (il calcio si richiama prima di
   tornare giù); il ginocchio in aria punta un po' in fuori. Le due gambe non si attraversano mai.
+  Il corpo (16/11, Denis: "ancora si trapassa il corpo (busto e tutto il resto) quando sferra colpi con le gambe"):
+  quando un ginocchio o un calcio sale davanti, il braccio dal suo lato si apre in fuori e in su (l'altro la metà),
+  il gomito in fuori: comincia presto nel cambio, prima della gamba per quanto veloce, e si richiude tardi, dopo che
+  la gamba è scesa (niente scatti); un braccio basso sale sopra il ginocchio, un pugno o un braccio alzato si spostano
+  interi, un gomito resta. Un calcio alto che torna a terra scende davanti a gamba tesa, girando sull'anca (prima si
+  piegava e il ginocchio saliva nel petto); il busto si piega e si abbassa con il piede che atterra, non prima; con
+  un ginocchio alzato il busto si piega al massimo 2° in avanti, e accovacciato (o alto) il piede in aria scende (o
+  sale) con i fianchi.
 - `data/animazioni.py`: le animazioni fatte da Claude (14/11/2026, richieste di Denis: "almeno 50, fatte bene", poi
   "tante combo [...] combo speciali, mosse speciali"): 103 in sei gruppi (Colpi 15, Calci 17, Combinazioni 30,
   Difese 11, Movimenti 12, Speciali 18), ognuna con i suoi tempi e una nota per posa. Le mosse speciali: calcio
@@ -95,10 +103,14 @@ L'editor di pose (da pubblicare con il database: `capabilities: {db: {}}`):
                                        # l'Anteprima (successiva e precedente con tocco, tasti, controller; pausa;
                                        # elenco; la copia quando si modifica un'animazione di Claude; l'originale
                                        # che si riapre sopra una copia rimasta sul dispositivo);
-                                       # tutte le 46.656 combinazioni (braccia fuori dal petto, piedi sopra il
-                                       # pavimento, gambe non tirate) e ogni cambio senza scatti; costo per fotogramma
+                                       # tutte le 104.976 combinazioni (braccia fuori dal petto, piedi sopra il
+                                       # pavimento, gambe non tirate, le due gambe a 12 cm, un calcio o un ginocchio
+                                       # mai dentro le braccia in guardia né nel busto; con pugni, gomiti e salti
+                                       # mostra il peggio) e ogni cambio senza scatti; costo per fotogramma
     python3 data/animazioni.py         # le animazioni di Claude -> data/animazioni.json
     node tests/posa_anims.js pose.html # ogni animazione, un quarto di fotogramma alla volta: piedi a terra fermi,
                                        # niente sotto il pavimento, braccia fuori dal petto e dal viso, gambe
                                        # d'appoggio non tirate, nessuna articolazione che salta, le due gambe mai
-                                       # una dentro l'altra (almeno 12 cm tra le loro linee; SLIDE=1: più severo)
+                                       # una dentro l'altra (almeno 12 cm tra le loro linee; SLIDE=1: più severo),
+                                       # nessuna gamba dentro le braccia (oltre 6,5 cm: una mano appoggiata alla
+                                       # coscia) o nel busto (8 cm: i pantaloni larghi sul gilet)

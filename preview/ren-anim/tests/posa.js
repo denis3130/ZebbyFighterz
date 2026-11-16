@@ -202,7 +202,7 @@ const FAKE_DB = `(() => {
     const len = {}; for (const s of ['Left', 'Right']) len[s] = P(s + 'UpLeg').distanceTo(P(s + 'Leg')) + P(s + 'Leg').distanceTo(P(s + 'Foot'));
     const row = k => VW.pz.rows.find(x => x.key === k).vals.map(v => v[0]), hands = VW.pz.hands.map(h => h[0]);
     const keys = ['bA', 'mA', 'bD', 'mD', 'gA', 'gD', 'busto', 'alt'], dom = [row('bA'), hands, row('bD'), hands, row('gA'), row('gD'), row('busto'), row('alt')];   // (the place: a translation, left out)
-    const w = {chest: 0, head: 9, ext: 0, floor: 0, legs: 99, legsAt: '', nan: 0, n: 0}, idx = keys.map(() => 0);
+    const w = {chest: 0, head: 9, ext: 0, floor: 0, legs: 99, legsAt: '', arms: -99, armsAt: '', torso: -99, torsoAt: '', any: {arms: -99, armsAt: '', torso: -99, torsoAt: ''}, nan: 0, n: 0}, idx = keys.map(() => 0);
     const seg = (p1, p2, q1, q2) => {   // (the closest two segments come)
       const d1 = p2.clone().sub(p1), d2 = q2.clone().sub(q1), r = p1.clone().sub(q1), a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r), c = d1.dot(r), b = d1.dot(d2), den = a * e - b * b;
       let s = den > 1e-9 ? Math.max(0, Math.min(1, (b * f - c * e) / den)) : 0, t = (b * s + f) / e;
@@ -228,6 +228,16 @@ const FAKE_DB = `(() => {
       }
       { const Lp = legParts('Left'), Rp = legParts('Right');
         for (const l of Lp) for (const q of Rp) { const d = seg(l[0], l[1], q[0], q[1]); if (d < w.legs) { w.legs = d; w.legsAt = JSON.stringify(c); } } }
+      // a leg off the floor into the arms or the torso (as tests/posa_anims.js: capsules, radii from the mesh, cm): a
+      // kick or a knee, the other foot on the floor, the arms guarding (guard, at the face, low), the page opens them
+      // out of its way; with a punch, an elbow or both feet off the floor, the worst is shown, not held to it
+      { const tip = s => new T.Vector3(0, .09, 0).applyMatrix4(B(s + 'Hand').matrixWorld), G = ['guardia', 'viso', 'basso'];
+        const held = (c.gA === 'terra') !== (c.gD === 'terra') && G.includes(c.bA) && G.includes(c.bD), o = held ? w : w.any;
+        const body = [['bacino', P('Hips'), P('Spine02'), .11, 'torso'], ['pancia', P('Spine02'), P('Spine01'), .13, 'torso'], ['petto', P('Spine01'), P('neck'), .11, 'torso'], ['testa', P('Head'), P('Head').add(new T.Vector3(0, .15, 0)), .1, 'torso']]
+          .concat(...['Left', 'Right'].map(s => [['braccio ' + s[0], P(s + 'Arm'), P(s + 'ForeArm'), .06, 'arms'], ['avambraccio ' + s[0], P(s + 'ForeArm'), P(s + 'Hand'), .04, 'arms'], ['mano ' + s[0], P(s + 'Hand'), tip(s), .05, 'arms']]));
+        for (const [s, g] of [['Left', 'gA'], ['Right', 'gD']]) if (c[g] !== 'terra')
+          for (const [ln, a, b, r] of [['coscia', P(s + 'UpLeg').lerp(P(s + 'Leg'), .45), P(s + 'Leg'), .1], ['stinco', P(s + 'Leg'), P(s + 'Foot'), .07], ['piede', P(s + 'Foot'), P(s + 'ToeBase'), .06]])
+            for (const [bn, q1, q2, rr, k] of body) { const pen = (r + rr - seg(a, b, q1, q2)) * 100; if (pen > o[k]) { o[k] = pen; o[k + 'At'] = ln + ' ' + s[0] + '/' + bn + ' ' + JSON.stringify(c); } } }
       for (const [s, g] of [['Left', 'gA'], ['Right', 'gD']]) {
         if (c[g] === 'terra') w.ext = Math.max(w.ext, P(s + 'UpLeg').distanceTo(P(s + 'Foot')) / len[s]);
         w.floor = Math.max(w.floor, -Math.min(P(s + 'ToeBase').y, P(s + 'Foot').y - .06));
@@ -236,11 +246,15 @@ const FAKE_DB = `(() => {
       let i = 0; while (i < keys.length && ++idx[i] >= dom[i].length) { idx[i] = 0; i++; }
       if (i === keys.length) break;
     }
-    for (const k of ['chest', 'head', 'ext', 'floor', 'legs']) w[k] = +w[k].toFixed(3);
+    for (const k of ['chest', 'head', 'ext', 'floor', 'legs', 'arms', 'torso']) w[k] = +w[k].toFixed(3);
+    for (const k of ['arms', 'torso']) w.any[k] = +w.any[k].toFixed(1);
     return w;
   });
   ok(!r.all.nan && r.all.chest < .5 && r.all.head > .08 && r.all.ext <= .966 && r.all.floor < .005, 'combinations');
   ok(r.all.legs >= .12, 'the legs into each other: ' + r.all.legs + ' ' + r.all.legsAt);
+  console.log('combinations: a kick or a knee into the guarding arms ' + r.all.arms.toFixed(1) + ' cm (' + r.all.armsAt + '), the torso ' + r.all.torso.toFixed(1) + ' cm (' + r.all.torsoAt + ')');
+  console.log('  with a punch, an elbow or a jump (shown, not held): the arms ' + r.all.any.arms + ' cm (' + r.all.any.armsAt + '), the torso ' + r.all.any.torso + ' cm (' + r.all.any.torsoAt + ')');
+  ok(r.all.arms <= 6.5 && r.all.torso <= 8, 'a kick or a knee into the guarding arms or the torso');
   // the guard's ankles and hip joints that a foot swinging under the hips goes round (posa.js PZ_LEG): still the page's
   r.leg = await page.evaluate(() => {
     const X = window.__X, T = X.THREE, it = VW.it, md = X.mdData('ren'), PZ = VW.PZ, P = n => it.bones.find(b => b.name === n).getWorldPosition(new T.Vector3());

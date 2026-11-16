@@ -107,6 +107,9 @@ function pzBody(c) {
   else if (c.gD === 'ginocchio') { b.leanL -= 2; b.dip -= .05; b.lx += .03; }
   else if (c.gD === 'basso') { b.leanL -= 10; b.dip -= .03; b.yaw += 12; b.lx += .08; }
   if (c.gA !== 'terra' && c.gD !== 'terra') b.jump = .35 + (c.vola || 0);   // both feet off the floor: a jump (higher with vola)
+  // (a knee up in front: the chest no more than a little over it, the hips driving it; leaning in further, the chest
+  // and the shoulder would come down onto the knee)
+  if (c.gA === 'ginocchio' || c.gD === 'ginocchio') b.leanL = Math.min(b.leanL, 2);
   b.leanL = pzC(b.leanL, -42, 32); b.yaw = pzC(b.yaw, -26, 26);   // (a punch and a kick turning the same way: not past where the arms still clear the head)
   b.head = -.5 * b.leanL;   // (the eyes stay on the opponent)
   b.tx = Number.isFinite(c.x) ? c.x : (PZ_PASSO[c.passo] || 0) * PZ_STEP;   // where he stands (m along the line)
@@ -121,14 +124,14 @@ function pzBody(c) {
 function pzFeet(c, b) {
   const F = {L: {x: 0, up: 0, z: 0, heel: 0, yaw: 0, point: 30, air: 0, tx: b.tx}, R: {x: 0, up: 0, z: 0, heel: 0, yaw: 0, point: 30, air: 0, tx: b.tx}};
   if (c.gA === 'ginocchio') Object.assign(F.L, {x: -.12, up: .5, point: 40, air: 1});
-  else if (c.gA === 'calcio') Object.assign(F.L, {x: .27, up: 1, point: -5, air: 1});
-  else if (c.gA === 'basso') Object.assign(F.L, {x: .2, up: .3, point: 0, air: 1});   // (a low kick: the sole at the shin, the leg not quite straight)
-  else if (c.gA === 'alto') Object.assign(F.L, {x: .1, up: 1.24, point: -5, air: 1});   // (at the head)
+  else if (c.gA === 'calcio') Object.assign(F.L, {x: .33, up: 1, point: -5, air: 1});
+  else if (c.gA === 'basso') Object.assign(F.L, {x: .25, up: .3, point: 0, air: 1});   // (a low kick: the sole at the shin, the leg not quite straight)
+  else if (c.gA === 'alto') Object.assign(F.L, {x: .23, up: 1.24, point: -5, air: 1});   // (at the head)
   else if (c.gA === 'dietro') Object.assign(F.L, {x: -.85, up: .8, z: .1, point: 10, air: 1});   // (behind him at the middle, the heel first)
   if (c.gD === 'ginocchio') Object.assign(F.R, {x: .55, up: .55, z: -.22, point: 40, air: 1});   // (the rear knee comes forward, up in front)
-  else if (c.gD === 'calcio') Object.assign(F.R, {x: 1.15, up: .9, z: -.2, point: -5, air: 1});
-  else if (c.gD === 'basso') Object.assign(F.R, {x: 1, up: .28, z: -.3, point: 0, air: 1});   // (the rear leg reaching forward low, nearly straight, outside the front one)
-  else if (c.gD === 'alto') Object.assign(F.R, {x: .88, up: 1.14, z: -.2, point: -5, air: 1});
+  else if (c.gD === 'calcio') Object.assign(F.R, {x: 1.29, up: .9, z: -.2, point: -5, air: 1});
+  else if (c.gD === 'basso') Object.assign(F.R, {x: 1.11, up: .28, z: -.34, point: 0, air: 1});   // (the rear leg reaching forward low, nearly straight, outside the front one)
+  else if (c.gD === 'alto') Object.assign(F.R, {x: 1.22, up: 1.14, z: -.2, point: -5, air: 1});
   else if (c.gD === 'dietro') Object.assign(F.R, {x: -.24, up: .7, z: -.15, point: 10, air: 1});
   if (F.L.air && F.R.air && F.L.x > 0 && F.R.x > .5) { F.L.z += .06; F.R.z -= .04; }   // (both kicking forward: side by side, not into each other)
   // the standing foot turned out on its tip (the kit's kick: 30 degrees), up on its ball to turn (a flat foot cannot
@@ -138,6 +141,9 @@ function pzFeet(c, b) {
   if (c.gA === 'terra') F.L.yaw = c.gD === 'calcio' || c.gD === 'alto' ? 40 : c.gD === 'basso' ? 20 : 0;
   for (const s of ['L', 'R']) if (F[s].yaw) F[s].heel = 12;
   if (((c.giro || 0) % 360 + 360) % 360 > 1) for (const s of ['L', 'R']) if (pzDown(F[s])) F[s].heel = 12;   // (turned round: up on the ball it turns on)
+  // (crouched or up tall, a foot in the air goes with the hips: its knee stays where it is on him, not up into the chest)
+  const da = c.alt === 'basso' ? .13 : c.alt === 'alto' ? -.07 : 0;
+  if (da) for (const s of ['L', 'R']) if (F[s].air) F[s].up = Math.max(.12, F[s].up - da);
   if (b.jump) { F.L.up += b.jump; F.R.up += b.jump; }
   return F;
 }
@@ -177,10 +183,13 @@ const PZ_ARM = {
     basso: (A, h) => pzLow(A, A.sR, .34, -1, h),
   },
 };
+// how far a leg's choice opens the guard on its side (a knee or a kick in front of him; not one behind, not on the floor)
+const PZ_LIFT = {terra: 0, ginocchio: 1, calcio: 1, alto: 1, basso: 1, dietro: 0};
 // A pose's numbers (body, feet, and per arm the weight of each position|hand), so two poses mix and a pose eases
 // into another: every change is continuous.
 function pzTarget(c) {
   const b = pzBody(c), f = pzFeet(c, b), dL = pzDown(f.L), dR = pzDown(f.R);
+  b.liftL = PZ_LIFT[c.gA] || 0; b.liftR = PZ_LIFT[c.gD] || 0;
   return {b, f, arm: {L: {[c.bA + '|' + c.mA]: 1}, R: {[c.bD + '|' + c.mD]: 1}}, pivot: dL !== dR ? (dL ? 'L' : 'R') : 'H'};
 }
 const pzDown = x => x.up < .005 && x.air < .05;   // (a foot on the floor)
@@ -195,6 +204,12 @@ function pzMixT(a, b, raw, e) {
   const num = (x, y, k) => { const o = {}; for (const j in x) o[j] = x[j] + (y[j] - x[j]) * k; return o; };
   const w = (x, y, k) => { const o = {}; for (const j in x) o[j] = x[j] * (1 - k); for (const j in y) o[j] = (o[j] || 0) + y[j] * k; for (const j in o) if (o[j] < 1e-4) delete o[j]; return o; };
   const B = num(a.b, b.b, ub), f = {L: num(a.f.L, b.f.L, u), R: num(a.f.R, b.f.R, u)};
+  // (a foot that lands, a stomp, an axe kick coming down: the body leans and drops onto it with the foot, as it comes
+  // down last, not ahead of it: a body there first folds the chest and the arms over the knee still up)
+  if (['L', 'R'].some(s => !pzDown(a.f[s]) && pzDown(b.f[s]))) {
+    const kl = rnSm((u - .15) / .85);
+    for (const k of ['leanL', 'dip']) if (b.b[k] > a.b[k]) B[k] = a.b[k] + (b.b[k] - a.b[k]) * kl;
+  }
   // the turn and the flip pivot on the foot that stays on the floor all through the change (none: on the hips); about
   // the hips they wait for the feet to leave the floor and end before they land again (the feet never sweep it)
   const stay = s => pzDown(a.f[s]) && pzDown(b.f[s]) && Math.abs(b.f[s].tx - a.f[s].tx) < 1e-6, sL = stay('L'), sR = stay('R');
@@ -234,7 +249,9 @@ function pzMixT(a, b, raw, e) {
         f[s].heel = fa.heel + (fb.heel - fa.heel) * kh; f[s].yaw = fa.yaw + (fb.yaw - fa.yaw) * ky;
       }
     } else {
-      const kx = off ? rnSm((u - .15) / .85) : rnSm(u / .85);
+      // (a foot leaving the floor for a kick well in front: on its way forward as soon as it is off, not lifted up
+      // along the body first, the knee into the chest)
+      const kx = off ? (fb.x - fa.x > .15 ? rnSm((u - .06) / .79) : rnSm((u - .15) / .85)) : rnSm(u / .85);
       ku = off ? rnSm(u / .85) : rnSm((u - .15) / .85);
       for (const k of ['x', 'air', 'point', 'heel', 'yaw']) f[s][k] = fa[k] + (fb[k] - fa[k]) * kx;
       f[s].z = fa.z + (fb.z - fa.z) * rnSm((u - .1) / .75);   // (across once off the floor and before it travels far; back over its spot before it lands)
@@ -243,6 +260,8 @@ function pzMixT(a, b, raw, e) {
   }
   if (heelT) f[heelT.s].heel = heelT.h;
   B.tx = a.b.tx + (b.b.tx - a.b.tx) * rnSm(raw);   // (the body's way to a new place: even, whatever the strike's ease)
+  // (the guard opens early in the change, ahead of a leg however fast it comes up, and closes late, after it: the post hook)
+  for (const k of ['liftL', 'liftR']) B[k] = a.b[k] + (b.b[k] - a.b[k]) * (b.b[k] > a.b[k] ? rnSm(raw / .5) : rnSm((raw - .5) / .5));
   // to a new place by steps, each foot lifted and travelling inside its lift (it leaves the floor before it moves and
   // stops before it lands: none slides): forward the front (left) foot first, back the rear one; a step at a time
   // (a glide, scatto: steps of up to 60 cm, the feet low and close behind each other: a dash)
@@ -264,7 +283,28 @@ function pzMixT(a, b, raw, e) {
     if (down(fa) && down(fb)) continue;
     const G0 = PZ_LEG[s], rel = (x, bd) => { const h = G0.ax + x.x + x.tx - G0.hx - bd.lx - bd.tx, v = G0.ay + x.up - G0.hy + bd.dip - bd.jump; return {th: Math.atan2(h, -v), r: Math.hypot(h, v)}; };
     const A = rel(fa, a.b), Z = rel(fb, b.b);
-    if (A.th * Z.th >= 0 || Math.min(Math.abs(A.th), Math.abs(Z.th)) < .14) continue;
+    if (A.th * Z.th >= 0 || Math.min(Math.abs(A.th), Math.abs(Z.th)) < .14) {
+      // a leg at length up in front coming down to the floor in front (an axe kick, a kick dropped, not drawn back):
+      // round the hip at its length, its foot dropping in front of him, and it takes its spot's length only on the way
+      // down, above the floor till it lands (carried straight back to its spot first, it would fold, the knee up into
+      // the chest and the guard)
+      if (!down(fa) && down(fb) && A.th > .9 && A.r > .6 && Z.th > .14) {
+        const kt = rnSm(u / .8), kr = rnSm((u - .3) / .6), th = A.th + (Z.th - A.th) * kt, hx = G0.hx + B.lx + B.tx, hy = G0.hy - B.dip + B.jump, c = Math.cos(th);
+        let r = A.r + (Z.r - A.r) * kr;
+        if (c > .05) r = Math.min(r, (hy - G0.ay - .03 * (1 - rnSm((u - .75) / .25))) / c);
+        f[s].x = hx + r * Math.sin(th) - G0.ax - f[s].tx; f[s].up = hy - r * c - G0.ay;
+        continue;
+      }
+      // a foot in the air in front of him both ends (a kick from the chamber, a kick drawn back, from one kick to
+      // another): round the hip too, as a leg moves. Reaching out, the leg straightens first and then swings to where
+      // it goes; drawn back, it swings down first and then folds (the knee never comes up past both ends' into the
+      // chest, the shoulder or the guard, as a foot carried straight in or out would bring it)
+      if (down(fa) || down(fb) || A.th < .14 || Z.th < .14 || Math.abs(Z.r - A.r) < .03) continue;
+      const out = Z.r > A.r, kr = out ? rnSm(u / .65) : rnSm((u - .25) / .75), kt = out ? rnSm((u - .2) / .8) : rnSm(u / .7);
+      const th = A.th + (Z.th - A.th) * kt, r = A.r + (Z.r - A.r) * kr, hx = G0.hx + B.lx + B.tx, hy = G0.hy - B.dip + B.jump;
+      f[s].x = hx + r * Math.sin(th) - G0.ax - f[s].tx; f[s].up = hy - r * Math.cos(th) - G0.ay;
+      continue;
+    }
     const off = down(fa), on = down(fb), kt = off ? rnSm((u - .15) / .85) : on ? rnSm(u / .85) : u, kr = off ? rnSm(u / .85) : on ? rnSm((u - .15) / .85) : u;
     // (across: on its own side of the hips only, the right foot's behind them, the left's in front, away from the
     // other leg: done before it passes under the hip when it starts there, begun after when it ends there)
@@ -399,7 +439,37 @@ function pzElbow(sh, tgt, e, a, b) {
 }
 RB.post.push((md, p, F) => {
   if (F.act !== 'posa' || F.air) return;
-  const D = pzDrawn(F), W = rbFK(md, p, RB.W), ix = md.index, C1 = W.p[ix.Spine01].clone();
+  const D = pzDrawn(F);
+  for (const s of ['L', 'R']) {
+    const f = D.f[s];
+    // a foot off the floor: its knee's way is set here (over the toes low down, the leg's own higher up), not left to
+    // the solver's carried leg, whose knee can turn over as the leg swings far; on the floor, the solver's. (Before
+    // the arms: they keep out of the legs' way.)
+    const wo = rnSm(f.up / .1), wk = Math.max(f.air, rnSm((f.up - .05) / .15));
+    if (wo > 0 || f.air > 0) pzKickLeg(md, p, s, f.point, wk, f.air, wo);
+  }
+  const W = rbFK(md, p, RB.W), ix = md.index, C1 = W.p[ix.Spine01].clone();
+  // the guard out of a knee's way: as a knee comes up in front of him, the arm on its side opens out to its side and a
+  // little up, the other arm half as much: the forearm no longer across the chest where the knee comes up. Early in
+  // the change that raises it, by the poses' choices (pzMixT: smooth, ahead of a leg however fast it comes up), and as
+  // long as the thigh is drawn up (up from hanging, to the front, the foot off the floor: not a crouch's knees), so it
+  // closes with the leg coming down, over most of its way (by the knee's height alone, a fast one would snap the elbow)
+  const lift = {L: 0, R: 0};
+  for (const [s, n] of [['L', 'Left'], ['R', 'Right']]) {
+    const th = W.p[ix[n + 'Leg']].clone().sub(W.p[ix[n + 'UpLeg']]).normalize(), o = s === 'L' ? 'R' : 'L';
+    const r = Math.max(D.b['lift' + s] || 0, rnSm((th.y + .95) / .95) * rnSm((th.dot(RB_LINE) + .1) / .5) * rnSm(D.f[s].up / .15));
+    lift[s] = Math.max(lift[s], r); lift[o] = Math.max(lift[o], .5 * r);
+  }
+  // (a guard's elbow turns out with it, a punch's or a raised arm's doesn't: those go out and up as a whole, their
+  // elbow turned out would bring the forearm across the chest; an elbow strike stays, its hand at the chest. By the
+  // arm's weights, so evenly as it changes. A low arm, reaching down where its knee comes up, goes up over it, the
+  // hand pressing on it from above)
+  const low = {L: 0, R: 0}, flare = {L: 0, R: 0};
+  for (const s of ['L', 'R']) {
+    let g = 0, m = 0;
+    for (const [k, w] of Object.entries(D.arm[s])) { if (/^(guardia|viso|basso)\|/.test(k)) g += w; else if (/^(avanti|alto)\|/.test(k)) m += w; if (/^basso\|/.test(k)) low[s] += w; }
+    flare[s] = lift[s] * g; lift[s] *= g + m;
+  }
   const c = a => rsChest(md, W, a, new THREE.Vector3()), l = a => rsVec(a, new THREE.Vector3());
   const sL = W.p[ix.LeftArm].clone(), sR = W.p[ix.RightArm].clone();
   const armL = sL.distanceTo(W.p[ix.LeftForeArm]) + W.p[ix.LeftForeArm].distanceTo(W.p[ix.LeftHand]);
@@ -446,19 +516,22 @@ RB.post.push((md, p, F) => {
       const th = ws > 1e-6 ? sum / ws : ang(best).a;
       t.e.copy(r0).multiplyScalar(Math.cos(th)).addScaledVector(r1, Math.sin(th));
     }
+    // (the hint across the arm's line as it is here, a unit, before the lift moves the wrist: held or changing it is
+    // then the same way, no jump where a change ends and the mixed angle gives way to the position's own hint; rsArm
+    // takes it across its own line again, so alone it changes nothing)
+    const out = RB_SIDE.clone().multiplyScalar(s === 'L' ? 1 : -1), across = d => { const e = t.e.clone().addScaledVector(d, -t.e.dot(d)); if (e.lengthSq() > 1e-8) t.e.copy(e.normalize()); };
+    across(t.p.clone().sub(sh).normalize());
+    if (lift[s] > 0) t.p.addScaledVector(RB_UP, (.2 + .2 * low[s]) * lift[s]).addScaledVector(out, .3 * lift[s]).addScaledVector(RB_LINE, .1 * low[s] * lift[s]);
     // (a wrist near or past the arm's reach comes in smoothly: the arm never snaps straight as it gets there)
     const dv = t.p.clone().sub(sh), dl = dv.length() / (ua + la);
     if (dl > .9) t.p.copy(sh).addScaledVector(dv, (.9 + .09 * (1 - Math.exp(-(dl - .9) / .09))) / dl);
+    if (lift[s] > 0) {   // (the elbow out with the guard: the hint across the line the arm has now, and out and up)
+      across(t.p.clone().sub(sh).normalize());
+      t.e.addScaledVector(out.clone().addScaledVector(RB_UP, .2), 2 * flare[s]).normalize();
+    }
     rsArm(md, p, rbFK(md, p, RB.W), s, t.p, t.e, t.f, t.n, 1, t.s);
   }
   mdBoneTurn(p, ix.Head, MD_Y, RK.g.headYaw);   // the eyes on the opponent (the nod: the style's)
-  for (const s of ['L', 'R']) {
-    const f = D.f[s];
-    // a foot off the floor: its knee's way is set here (over the toes low down, the leg's own higher up), not left to
-    // the solver's carried leg, whose knee can turn over as the leg swings far; on the floor, the solver's
-    const wo = rnSm(f.up / .1), wk = Math.max(f.air, rnSm((f.up - .05) / .15));
-    if (wo > 0 || f.air > 0) pzKickLeg(md, p, s, f.point, wk, f.air, wo);
-  }
 });
 RN.hooks.applied.push((it, F) => {   // the hands: a fist, half closed, open (fingers together, the thumb along them)
   if (!it.fingers || F.act !== 'posa') return;

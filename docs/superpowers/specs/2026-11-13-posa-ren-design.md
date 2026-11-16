@@ -98,6 +98,34 @@ Claude:
 - Prova nuova: le linee delle due gambe (coscia, stinco, piede) mai a meno di 12 cm, in ogni fotogramma delle 103
   animazioni (prima scendevano a 0,4 cm) e in ogni combinazione dei tasti (prima 3 cm nei doppi calci).
 
+## Settima tappa (16/11): il corpo non si trapassa
+Denis: "noto che ancora si trapassa il corpo (busto e tutto il resto) quando sferra colpi con le gambe".
+Cosa c'era (misurato con delle capsule attorno alle ossa, raggi presi dal modello: coscia 10 cm, stinco 7, piede 6,
+braccio 6, avambraccio 4, mano 5, bacino 11, pancia 13, petto 11, testa 10): in 56 delle 103 animazioni una gamba
+entrava nelle braccia di più di 3 cm, fino a 16 cm (la coscia nel calcio alto attraversava la mano e l'avambraccio
+in guardia); il busto fino a 12 cm (l'ascia che scende: la gamba si piegava e il ginocchio saliva nel petto mentre il
+busto si piegava in avanti); nello stomp e nella ginocchiata il busto si chiudeva sul ginocchio ancora alzato.
+Scelte di Claude:
+- Quando un ginocchio o un calcio sale davanti, il braccio dal suo lato si apre in fuori (30 cm) e in su (20 cm), il
+  gomito in fuori; l'altro braccio la metà. Comincia presto nel cambio (a metà è tutto aperto: prima della gamba, per
+  quanto veloce) e resta finché la coscia è su; si richiude nella seconda metà del cambio dopo, quando la gamba è
+  scesa. Un braccio basso sale sopra il ginocchio (la mano che preme da sopra); un pugno o un braccio alzato si
+  spostano interi senza girare il gomito (girato, l'avambraccio passerebbe nel petto); una gomitata resta dov'è.
+- Provata e tolta: una spinta della mano fuori dalla gamba al momento del contatto. Seguiva la gamba alla sua
+  velocità e faceva scattare la mano; con la guardia che si apre prima non serve.
+- Un calcio a gamba tesa che torna a terra davanti (l'ascia, un calcio lasciato cadere) scende girando sull'anca alla
+  sua lunghezza e prende la lunghezza del suo posto solo scendendo, sopra il pavimento finché atterra.
+- Un piede che atterra: il busto si piega in avanti e si abbassa con lui, non prima.
+- Con un ginocchio alzato il busto si piega al massimo 2° in avanti (sopra, scenderebbe sul ginocchio); accovacciato
+  (o alto) il piede in aria scende (o sale) con i fianchi, il ginocchio resta dov'è sul corpo.
+- Il calcio basso dietro un po' più in fuori (z -0,34): le due gambe restano a 12 cm in ogni combinazione.
+- Misure dopo: braccia al massimo 6 cm (sono mani appoggiate alla coscia nelle parate basse e da accovacciato, come
+  prima), busto 7,7 cm (la coscia alzata che preme la pancia attraverso pantaloni e gilet), nessuno scatto, gambe a
+  12 cm; nelle combinazioni dei tasti con un calcio o un ginocchio e le braccia in guardia: braccia 5,7, busto 7,5
+  (prima 16 e 19). Costo per fotogramma uguale (0,08-0,13 ms), FPS uguali.
+- Prove: tests/posa_anims.js misura le gambe nelle braccia (6,5 cm) e nel busto (8 cm) in ogni quarto di fotogramma;
+  tests/posa.js le misura in tutte le 104.976 combinazioni (tiene quelle con le braccia in guardia, mostra le altre).
+
 ## La prima versione (sostituita)
 
 ### Cosa faceva
@@ -128,3 +156,6 @@ Claude:
 - Mosse speciali come tasti nella pagina (oggi solo nelle animazioni di Claude): giro, capriola, effetti.
 - Anteprima «di fila»: ogni animazione una volta, poi da sola la successiva.
 - Specchiare una posa; eliminare un'animazione salvata.
+- Pugno o gomitata con il calcio dello stesso lato, e salti con due calci diversi: le braccia possono ancora toccare
+  la gamba (fino a 15 cm, prima 16) e il busto (12 cm, prima 19). Servirebbe aprire le braccia anche per i colpi, in
+  base alla posa ferma calcolata prima.
