@@ -670,8 +670,8 @@ function mdPartData(md, key, name) {
     if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
     if (j.line) geo.setAttribute('aLine', new THREE.BufferAttribute(f32(j.line), 1));   // (its outline's width per vertex: Kael's earrings' thin)
     if (j.hv) geo.setAttribute('aHide', new THREE.BufferAttribute(f32(j.hv), 2));   // (the locks hidden when seen from his right, from his left: mdHeadHide)
-    if (j.glove) geo.setAttribute('aGlove', new THREE.BufferAttribute(f32(j.glove), 2));
-    if (j.col) geo.setAttribute('color', new THREE.BufferAttribute(f32(j.col), 3));   // (its colours per vertex: Kael's gloves and rings)   // (Kael's bust: on the hands the signed distance to the glove's edge, m, and 1)
+    if (j.glove) geo.setAttribute('aGlove', new THREE.BufferAttribute(f32(j.glove), 2));   // (Kael's bust and gloves: the signed distance to the glove's edge, m, and 1)
+    if (j.col) geo.setAttribute('color', new THREE.BufferAttribute(f32(j.col), 3));   // (its colours per vertex: Kael's gloves and rings)
     md.parts[name] = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
       noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null};
   }
