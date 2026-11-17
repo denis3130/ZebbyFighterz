@@ -716,6 +716,42 @@ luce lisciata, testa alzata di 12° in guardia, la guardia `a191` che respira di
 `flatFace` (capelli e viso in luce piatta), `paint` (`kael_painted.jpg`, la pittura pulita; il pulsante "Meshy"
 dell'anteprima mostra quella originale).
 
+## Mani e polsi rifatti (17/11, da approvare)
+Denis, sulla versione 21: "non mi piace ancora il modello 3d in generale, la testa ecc va anche bene ma il resto no", "a me
+non piacciono soprattutto le mani", "ora il polso" e, cerchiando 4 zone del polso, "è ancora fatto male". Strada scelta
+da Denis fra tre: "Mano di Ren + guanto vero". Progetto: `docs/superpowers/specs/2026-11-17-kael-mani-polso-design.md`,
+piano: `docs/superpowers/plans/2026-11-17-kael-mani-polso.md`. Gratis, niente Meshy, niente agenti.
+- **Perché erano brutte**: le mani erano quelle di Ren, ma dentro il busto: la sua pittura ricampionata nella mappa del
+  busto (dita marroni: pelle L 45-55 contro 66-74 di Ren), le normali lisciate più volte (dita a blocchi) e il guanto
+  dipinto sulla pelle (un calzino senza forma). Al polso il guanto si stringeva prima del bracciale (collo), dal polsino
+  usciva il lembo di Meshy, l'anello viola era solo pittura.
+- **Mani**: una parte a sé (`wip_assets/kael/kael_hands.*`, `tools/kael_bust_attach.py`): i triangoli delle mani di Ren con
+  le sue coordinate e la sua pittura ritagliata al pixel da `viewer_assets/ren/ren_painted.jpg` (`tools/kael_gear.py`
+  `crop_paint`: le isole delle mani occupano tutto l'atlante, ritaglio 2042x2048, 1,2 MB), le sue normali solo girate con la
+  mano, la sua luce piatta e il suo contorno per vertice; disegnate in `src/e_model.js` col materiale del corpo
+  (`mdFlatLight`). Pugno di Ren com'è (`THUMB_FOLD` 0). Differenza di colore della pelle contro Ren (`tools/handcam.py`,
+  CIE76): mani aperte da 21,8/18,8 a 3,5/3,4, pugni da 5,2/10,7 a 3,4/4,6.
+- **Guanto vero** (`kael_gloves.*`, senza immagine, colori per vertice): la pelle dove c'è il guanto (distanza dal bordo
+  sotto zero) tagliata lungo il bordo (`clip_iso`), spinta 2 mm lungo le normali delle facce (`shell`; lungo le normali
+  della luce, lisciate, il guscio passava a 0,3 mm dalla pelle), fino a 1,5 mm in più sopra le gobbe della pelle vicino al
+  polso; lungo il bordo una striscia di 1,5 mm verso la pelle, nera (lo spessore); luce del gioco, inchiostro sul bordo,
+  pesi della pelle sotto. Verso il polso il guanto entra nell'anello (`skirt`: prima nella fessura si vedeva la pittura
+  color pelle del busto, un filo chiaro).
+- **Anello del polso**: sulla banda viola del polsino (`cuff_band`), alto come nel foglio (il 18,5% del bracciale: 23 px su
+  124 fra i centri delle bande; 2,6-2,7 cm, la banda dipinta era 1,5) dall'orlo verso il gomito della banda in giù verso la
+  mano; raggio per angolo 3 mm sopra quello che copre (95° percentile: non il lembo di Meshy), bombato 2 mm, labbri che
+  rientrano 4 mm ai due capi, riga nera agli orli; quello che sporgeva sotto (il lembo) riportato dentro; guanto, fine del
+  polsino e pelle fra anello e guanto allargati fino all'interno dell'anello in 2,5 cm (`flare`: niente collo). Pesi presi
+  da quello che copre (con pesi fissi avambraccio/mano, col polso piegato la mano usciva: coperto 98,2% → 99,93%).
+- Controlli: `tests/kael_gear_check.py` (ritaglio esatto, mani di Ren, busto senza mani, taglio, guscio, copertura, anello
+  sopra il polso, niente collo, guanto dentro l'anello) e in `tests/viewer_check.py` per Kael (mani, guanti, lampo del
+  colpo, specchiato, guscio che segue la pelle e anello che copre il polso in tutte le mosse). Immagini:
+  `python3 tools/handcam.py OUT` (8 lati, Kael sopra, Ren sotto).
+- Misure (grafica software, 844x390, guardia): triangoli 109.468 → 114.382, disegni 7 → 11, ms per fotogramma circa 92 → 96.
+- Provati e lasciati: lisciare la superficie prima di spingere il guscio (il bordo aperto al polso scivolava, fino a 21 mm);
+  spinta in più senza limite (inseguiva le pieghe, fino a 9 mm).
+- Per dopo: qualche puntino di luce ancora visibile da molto vicino fra la gonnellina del guanto e il guanto.
+
 ## Per dopo
 - Le code della fascia sono attaccate ai pantaloni (le ha fatte così Meshy): seguono le gambe, non oscillano. Se Denis
   le vuole libere come quelle di Ren, si fanno coi nastri (`CFG.looks.ren.sash`).

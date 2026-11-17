@@ -184,6 +184,18 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Per dopo (annotate, non fatte): i fogli del corpo che Denis ha mandato l'8/11 (`docs/ref/personaggi/ren_busto_3viste.png`, `ren_gambe_3viste.png`: destra, fronte, sinistra; `ren_retro.png`: tutto il corpo da dietro; il foglio della testa che ha rimandato è identico a `ren_testa_3viste.png`) per rifare o ridipingere il corpo dai lati e da dietro (fasce con il polsino scuro, stivali, pantaloni, code della fascia arancione), oggi dipinto solo dalla vista di fronte di `ren.png`; l'ombra nera sotto il mento come nel foglio (una V spessa sul collo, sotto la mascella; nel foglio c'è in tutte e tre le viste), da proporre a Denis prima di farla; in guardia la testa alzata di 20° invece di 12° (`headUp` del look: provato in una copia, con 20° si vedono entrambi gli occhi sopra il pugno, a 28° sembra guardare in alto; è una scelta di posa, da decidere con Denis); stesso metodo delle 3 viste per Kael, se Denis fa il suo foglio; se Denis vuole punte dei capelli ancora più lunghe, un'altra prova Meshy (30 crediti; alleggerire il modello non le arrotonda: a 60.000 e a 16.000 triangoli la sagoma è la stessa).
 
 ## Prossimo passo
+**Mani e polsi di Kael rifatti (17/11, da mostrare a Denis e pubblicare solo col suo ok)**: Denis non voleva più le mani
+e il polso della versione 21 ("a me non piacciono soprattutto le mani", "ora il polso", 4 zone cerchiate: "è ancora fatto
+male"); ha scelto "Mano di Ren + guanto vero". Fatto (piano `docs/superpowers/plans/2026-11-17-kael-mani-polso.md`,
+registro in `.superpowers/sdd/2026-11-17-kael-mani-polso/progress.md`, non nel repository; dettagli in
+`docs/meshy/KAEL.md`, "Mani e polsi rifatti"): le mani di Ren come parte a sé con la sua pittura, luce e contorno; il
+mezzo guanto come guscio vero di 2 mm col bordo nero; l'anello viola in rilievo al polso, alto come nel foglio, col
+guanto che ci entra (niente collo, lembo, macchie). Per rifare: `python3 tools/kael_bust_attach.py
+meshy/meshy_output/20261111_kael-busto/busto_k11.glb` (scrive `kael_bust`, `kael_hands`, `kael_gloves`), `bash mk.sh`.
+Prove: `python3 tests/kael_gear_check.py DUMP` (con `KAEL_ATTACH_DUMP=DUMP` all'attach), `python3 tests/viewer_check.py
+--page=viewer_kael.html`, immagini con `python3 tools/handcam.py OUT`. Da chiedere a Denis: l'ala della spalla destra
+dietro il pugno in guardia.
+
 **Pollice di Kael (12/11, dopo "il pollice è ancora fatto male")**: nel pugno il pollice era una lama dritta (la posa del
 pugno di Ren). Ora si chiude sulle dita (`thumb_fist` in `tools/kael_bust_attach.py`) e il guanto lo scopre da un anello
 all'incavo come nel foglio (`busto_k7.glb`); poi ("fallo piu piccolo") lungo il 70% e spesso l'85% dall'incavo; vedi
