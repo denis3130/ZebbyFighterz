@@ -295,7 +295,7 @@ const CFG={
     // the outline's widths (tools/char_look.py), the light's normals smoothed, Ren's clips on his skeleton and Ren's guard
     // (his head held as high); his head and his bust from Meshy (tools/kael_head.py, tools/kael_bust_attach.py: bust:
     // its hands Ren's, with their finger bones).
-    kael:{head:true, bust:true, hands:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
+    kael:{head:true, bust:true, hands:true, gloves:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
       clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
@@ -1962,7 +1962,7 @@ function modelBuild(key) {
     tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
     const bm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
     const bf = !!bust.geo.attributes.aFlat, bg = !!bust.geo.attributes.aGlove;   // (per vertex: the hands in the game's light, their volume reads; their glove)
-    const c3 = c => 'vec3(' + c.map(v => (v / 255).toFixed(4)).join(', ') + ')';
+    const c3 = mdVec3;
     bm.onBeforeCompile = sh => {
       if (bf) sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
       if (bg) sh.vertexShader = 'attribute vec2 aGlove;\nvarying vec2 vGlove;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGlove = aGlove;');
@@ -1994,12 +1994,28 @@ function modelBuild(key) {
     hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
     hands.mesh = hmesh; hands.mat = hm;
   }
+  const gloves = lk.gloves && mdPartData(md, key, 'gloves');
+  if (gloves) {   // Kael's gloves (17/11/2026, tools/kael_bust_attach.py): a real shell over his hands' skin, their colours per vertex (the
+    // sheet's plum, the ink of their edge's strip), the game's toon light, the ink along their edges (aGlove: the distance to the
+    // edge under MD_GLOVE.w); both sides (mirrored on the right too); the outline as the hands'
+    const gm = new THREE.MeshToonMaterial({vertexColors: true, gradientMap: F3.grad, skinning: true, side: THREE.DoubleSide});
+    gm.onBeforeCompile = sh => {
+      sh.vertexShader = 'attribute vec2 aGlove;\nvarying vec2 vGlove;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGlove = aGlove;');
+      sh.fragmentShader = 'varying vec2 vGlove;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n\tif (abs(vGlove.x) < ' + MD_GLOVE.w.toFixed(4) + ') diffuseColor.rgb = ' + mdVec3(MD_GLOVE.ink) + ';');
+    };
+    gm.customProgramCacheKey = () => 'gloves';
+    const gmesh = new THREE.SkinnedMesh(gloves.geo, gm), gline = new THREE.SkinnedMesh(gloves.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per: ' * aLine', back: ol.back}));
+    gmesh.frustumCulled = gline.frustumCulled = false; body.add(gmesh, gline);
+    gmesh.bind(skel, mesh.matrixWorld); gline.bind(skel, mesh.matrixWorld);
+    gloves.mesh = gmesh; gloves.mat = gm;
+  }
   const limbs = {};
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = fdef.map(f => new THREE.Quaternion().fromArray(f.fist)); }
   if (hands) { it.hands = hands.mesh; it.mats.hands = hands.mat; }
+  if (gloves) { it.gloves = gloves.mesh; it.mats.gloves = gloves.mat; }
   if (bust) { it.bust = bust.mesh; it.mats.bust = bust.mat; if (bust.j.fistFrame) it.fistFrame = {Left: new THREE.Quaternion().fromArray(bust.j.fistFrame.Left), Right: new THREE.Quaternion().fromArray(bust.j.fistFrame.Right)}; }   // (fistFrame: each fist's own frame in its hand bone's: Ren's hands, laid as his)
   if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
   if (face) it.face = face;
@@ -2419,6 +2435,9 @@ const MD_BUST_FLAT = 1;
 // Kael's gloves (on his bust's hands, aGlove): their plum, the ink along their edge, its half width (m) (the bust's palette); the hands' two tones
 const MD_GLOVE = {c: [65, 49, 74], ink: [9, 6, 9], w: .0012, shade: [40, 30, 47], skinShade: [.656, .586, .563], cut: .6, two: false};   // (in shadow (the game's light under cut of the colour's own): the glove a darker plum (the sheet's black made holes of its shadow's blocks), the skin times skinShade: its shadow, 164 112 85)
 
+// A colour (0-255 rgb) as a GLSL vec3
+function mdVec3(c) { return 'vec3(' + c.map(v => (v / 255).toFixed(4)).join(', ') + ')'; }
+
 // The look's flat light on a toon material: per vertex (aFlat) the share of the texture's own colour (the face's drawn
 // shading); the body's, and Kael's hands' (Ren's, lit as on him)
 function mdFlatLight(mat) {
@@ -2442,7 +2461,7 @@ function mdJoin(a, b) {
 // bones); null without it.
 function mdPartData(md, key, name) {
   const f = key + '/' + key + '_' + name, j = ASSETS[f + '.json'], b64 = ASSETS[f + '.bin'], img = ASSETS[f + '.png'] || ASSETS[f + '.jpg'];   // (its texture: a PNG where its colours are flat)
-  if (!j || !b64 || !img) return null;
+  if (!j || !b64 || (!img && !j.col)) return null;   // (a part coloured per vertex has no texture: Kael's gloves)
   md.parts = md.parts || {};
   if (!md.parts[name] || md.parts[name].j !== j) {
     const s = atob(b64), u8 = new Uint8Array(s.length);
@@ -2458,7 +2477,8 @@ function mdPartData(md, key, name) {
     if (j.flat) geo.setAttribute('aFlat', new THREE.BufferAttribute(f32(j.flat), 1));   // (its light: flat, but its collar's outside lit as the body)
     if (j.line) geo.setAttribute('aLine', new THREE.BufferAttribute(f32(j.line), 1));   // (its outline's width per vertex: Kael's earrings' thin)
     if (j.hv) geo.setAttribute('aHide', new THREE.BufferAttribute(f32(j.hv), 2));   // (the locks hidden when seen from his right, from his left: mdHeadHide)
-    if (j.glove) geo.setAttribute('aGlove', new THREE.BufferAttribute(f32(j.glove), 2));   // (Kael's bust: on the hands the signed distance to the glove's edge, m, and 1)
+    if (j.glove) geo.setAttribute('aGlove', new THREE.BufferAttribute(f32(j.glove), 2));
+    if (j.col) geo.setAttribute('color', new THREE.BufferAttribute(f32(j.col), 3));   // (its colours per vertex: Kael's gloves and rings)   // (Kael's bust: on the hands the signed distance to the glove's edge, m, and 1)
     md.parts[name] = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
       noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null};
   }

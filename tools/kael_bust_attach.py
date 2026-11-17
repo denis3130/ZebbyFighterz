@@ -46,7 +46,7 @@ from scipy.sparse.csgraph import connected_components
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mesh_prep'))
 import glbio
-from kael_gear import crop_paint, write_part
+from kael_gear import crop_paint, write_part, clip_iso, shell, near_index
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 KAEL_PKG = os.path.join(ROOT, 'wip_assets', 'kael')
@@ -61,6 +61,7 @@ SMOOTH, SEAM, SEAM_SMOOTH = 4, .03, 6
 HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
+GLOVE_T, GLOVE_WALL = .002, .0015   # m: the gloves' shell over the hands' skin, and its edge's strip down toward the skin (tools/kael_gear.py shell)
 ARM_LINE = (float(os.environ.get('KAEL_ARM_PUSH', .3)), .7)   # the arms' outline: its push back (of the body's) and its width
 HAND_LINE, BODY_LINE_BACK = tuple(float(v) for v in os.environ.get('KAEL_HAND_LINE', '1,1').split(',')), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width (Ren's hands: the body's, the silhouette only; tried (.10, .65): lines drawn inside them)
 FINGER_THICK = 1.                        # the fingers' thickness about their bones (tried 1.25: the fingers merged into a lump, the fist a skin blob, the open hand a mitten)
@@ -512,7 +513,7 @@ def main(bust):
     used = np.unique(Ib); mp = -np.ones(len(X), np.int64); mp[used] = np.arange(len(used)); It = mp[Ib]
     usedh = np.unique(Ih); mph = -np.ones(len(X), np.int64); mph[usedh] = np.arange(len(usedh)); rh = rid[usedh]
     if os.environ.get('KAEL_ATTACH_DUMP'): np.savez(os.environ['KAEL_ATTACH_DUMP'], rid=rid[used], side=(X2[used, 0] >= 0), dseam=dseam[used],
-                                                    hands_rid=rh, hands_side=(X2[usedh, 0] >= 0), hands_dseam=dseam[usedh])   # (each part vertex's in Ren's package: tests/kael_gear_check.py, the fists' shape)
+                                                    hands_rid=rh, hands_side=(X2[usedh, 0] >= 0), hands_dseam=dseam[usedh], hands_D=gfield[usedh, 0])   # (each part vertex's in Ren's package: tests/kael_gear_check.py, the fists' shape)
     # (the outline on the hands drawn inside them too, as a drawing's lines: where a finger lies over another, the thumb over the
     # fingers, the fist over the palm. The body's outline is pushed 2 cm back from the camera: only the hand's silhouette was
     # drawn and the fist read as one block. On the hands, by their share, HAND_LINE[0] of that push and HAND_LINE[1] of its width)
@@ -532,6 +533,18 @@ def main(bust):
     write_part(KAEL_PKG, 'kael_hands', {'pos': X2[usedh], 'nor': N2_ren[usedh], 'uv': uvh, 'jnt': top[usedh], 'wgt': tw[usedh], 'idx': mph[Ih],
                                         'flat': Lf('flat')[rh], 'line': Lf('line')[rh]}, None, tex)
     print('written: kael_hands (%d vertices, %d triangles; Ren\'s paint cut %dx%d)' % (len(usedh), len(Ih), *tex.size))
+    # the gloves (17/11, Denis's choice: "Mano di Ren + guanto vero"): a real shell GLOVE_T over the hands' skin where the glove
+    # is (the signed distance to its edge, gfield: under 0), cut along its edge; along the edge a strip down toward the skin, in
+    # ink (its thickness); skinned as the skin under it; the outline as the hand's there
+    Wd = np.zeros((len(usedh), len(allnames))); np.add.at(Wd, (np.repeat(np.arange(len(usedh)), 4), top[usedh].ravel()), tw[usedh].ravel())
+    Pc, Nc, Wc, Dc, Ic = clip_iso(X2[usedh], N2_ren[usedh], Wd, gfield[usedh, 0], mph[Ih])
+    Ps, Ns, Ds, Is, ink, src = shell(Pc, Nc, Dc, Ic, GLOVE_T, GLOVE_WALL, (X2[usedh], mph[Ih]))
+    Ws = Wc[src]; near = near_index(Pc[src], X2[usedh])
+    topg = np.argsort(-Ws, 1)[:, :4]; twg = np.take_along_axis(Ws, topg, 1); twg /= np.maximum(twg.sum(1, keepdims=True), 1e-12)
+    col = np.where(ink[:, None] > 0, np.array(INK_C) / 255., np.array(GLOVE_C) / 255.)
+    write_part(KAEL_PKG, 'kael_gloves', {'pos': Ps, 'nor': Ns, 'uv': np.zeros((len(Ps), 2)), 'jnt': topg, 'wgt': twg, 'idx': Is, 'col': col,
+                                         'glove': np.c_[Ds, np.ones(len(Ds))], 'line': Lf('line')[rh][near], 'near': near})
+    print('written: kael_gloves (%d vertices, %d triangles: the shell %.1f mm over the skin, %d edge vertices)' % (len(Ps), len(Is), 1000 * GLOVE_T, int(ink.sum())))
 
 
 if __name__ == '__main__':

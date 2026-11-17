@@ -70,6 +70,43 @@ async def route(r):
     else: await r.abort()
 
 
+# Kael's gloves (17/11): a shell over Ren's hands, its rings at the wrists. skinP: a part vertex's (or a point near it,
+# with the vertex's skin) place in the world, as the GPU skins it (SkinnedMesh.boneTransform, for any bind point)
+GEAR = """async () => { const it = VW.it, r = {};
+  r.gloves = !!it.gloves && !!it.gloves.geometry.attributes.color && !!it.gloves.geometry.attributes.aGlove;
+  r.flash = !!it.hands && !!it.gloves && [it.hands.material, it.gloves.material].every(m => Object.values(it.mats).includes(m));
+  if (!r.gloves) return r;
+  const M = new THREE.Matrix4(), T = new THREE.Vector3();
+  const skinP = (m, i, p) => { const g = m.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, v = p.clone().applyMatrix4(m.bindMatrix), o = new THREE.Vector3();
+    for (let k = 0; k < 4; k++) { const w = sw.array[i * 4 + k]; if (!w) continue; const b = si.array[i * 4 + k];   /* (r128: no getComponent) */
+      M.multiplyMatrices(m.skeleton.bones[b].matrixWorld, m.skeleton.boneInverses[b]); o.addScaledVector(T.copy(v).applyMatrix4(M), w); }
+    return o.applyMatrix4(m.bindMatrixInverse).applyMatrix4(m.matrixWorld); };
+  const G = it.gloves, H = it.hands, gp = G.geometry.attributes.position, gd = G.geometry.attributes.aGlove, hp = H.geometry.attributes.position;
+  const P = (a, i) => new THREE.Vector3().fromBufferAttribute(a, i);
+  // the shell inside the glove (over 3 mm from its edge), 300 of its vertices, each with its skin's nearest vertex
+  const inner = []; for (let i = 0; i < gp.count; i++) if (gd.getX(i) < -.003) inner.push(i);
+  const pick = inner.filter((_, k) => k % Math.max(1, Math.floor(inner.length / 300)) === 0).map(i => { const q = P(gp, i); let best = 1e9, j = -1;
+    for (let k = 0; k < hp.count; k++) { const d = q.distanceToSquared(P(hp, k)); if (d < best) { best = d; j = k; } } return [i, j]; });
+  VW.speed = 0; let ok = 0, n = 0;
+  for (let b = 0; b < 10; b++) { document.getElementById('play' + b).click();
+    for (let f = 0; f < 60; f += 6) { VW.tick(6); it.root.updateMatrixWorld(true);
+      for (const [i, j] of pick) {   // (the shell moves with the skin under it: its rest offset from that skin, carried by the skin's
+        // own motion, still at least half there; a shell sinking into the skin, or left behind, falls under it)
+        const o0 = P(gp, i).sub(P(hp, j)), Hs = skinP(H, j, P(hp, j)), o1 = skinP(H, j, P(hp, j).add(o0)).sub(Hs), S = skinP(G, i, P(gp, i));
+        n++; if (S.sub(Hs).dot(o1.normalize()) > .5 * o0.length()) ok++; } } }
+  r.shell = ok / n > .99; r.shellShare = ok / n;
+  // mirrored (the fighter on the right): the glove still drawn (pixels it adds round the fist)
+  document.getElementById('play0').click(); VW.tick(40); VW.spin = false; VW.yaw = .55; VW.zoom = .45; it.root.scale.x = -1;
+  const plum = async () => { await new Promise(f => setTimeout(f, 150)); it.root.updateMatrixWorld(true);
+    const c = document.getElementById('view'), bone = n => it.bones.find(o => o.name === n) || it.fingers.find(o => o.name === n);
+    const v = bone('LeftHand').getWorldPosition(new THREE.Vector3()).lerp(bone('LeftHandMiddle1').getWorldPosition(new THREE.Vector3()), .7).project(VW.camera);
+    const x = (v.x + 1) / 2 * c.width, y = (1 - v.y) / 2 * c.height, g = document.createElement('canvas'); g.width = g.height = 80;
+    const ctx = g.getContext('2d'); ctx.drawImage(c, x - 40, y - 40, 80, 80, 0, 0, 80, 80); const d = ctx.getImageData(0, 0, 80, 80).data; let k = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && d[i + 2] > d[i] && d[i] > d[i + 1] && d[i + 2] - d[i + 1] > 12 && d[i + 2] < 160) k++; return k; };
+  const withG = await plum(); G.visible = false; const without = await plum(); G.visible = true;
+  r.mirror = withG - without > 30; r.mirrorPx = withG - without;
+  it.root.scale.x = 1; VW.zoom = 1; VW.speed = 1;
+  return r; }"""
 REN_ONLY = ('spikes', 'head', 'fringe', 'flat', 'ribbons', 'calm', 'swings', 'finite')   # (the look's parts only Ren has)
 KAEL_ONLY = ('hands', 'flash', 'gloves', 'shell', 'ring', 'mirror')   # (Kael's: his hands Ren's as their own part, his gloves and wrists' rings, 17/11)
 
@@ -138,8 +175,9 @@ async def main(out_dir, page='viewer.html'):
               r.finite = sa.ribbons.every(q => q.P.every(p => Number.isFinite(p.x + p.y + p.z)));
               return r; }""")
             look.update(sash)
+            if not ren: look.update(await pg.evaluate(GEAR))
             look = {k: v for k, v in look.items() if k not in (KAEL_ONLY if ren else REN_ONLY)}
-            if not all(look.values()): errs.append('look ' + str(look))
+            if not all(v for k, v in look.items() if not k.endswith(('Share', 'Px'))): errs.append('look ' + str(look))
             if w > h and ren:   # once: the sash out of the body in every play button's moves
                 ins = await pg.evaluate(INSIDE, [list(SASH_OUT), 180, 3]); slf = ins.pop('self')
                 over = {k: v for k, v in ins.items() if v[0] > SASH_OUT[int(k)]}
