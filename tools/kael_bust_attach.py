@@ -46,10 +46,12 @@ from scipy.sparse.csgraph import connected_components
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mesh_prep'))
 import glbio
+from kael_gear import crop_paint, write_part
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 KAEL_PKG = os.path.join(ROOT, 'wip_assets', 'kael')
 REN = os.path.join(ROOT, 'assets', 'ren', 'ren.json'), os.path.join(ROOT, 'viewer_assets', 'ren', 'ren_look.json')
+REN_PAINT = os.path.join(ROOT, 'viewer_assets', 'ren', 'ren_painted.jpg')   # Ren's paint as the game draws him (his hands' part is cut out of it)
 SCALE, SASH_B, SASH_K, CENTRE = .42, -.21, 1.08, (-.005, 0.)
 SHOULDER = (.015, -.010, .022)   # m: the bust's shoulder joints from his: inward, up, forward
 SIDES = (('Left', 1), ('Right', -1))   # (his left: +x)
@@ -70,7 +72,7 @@ HAND_SMOOTH = 0                          # rounds of smoothing of the weights on
 THUMB_BASE = dict(zip(('Right', 'Left'), (float(v) for v in os.environ.get('KAEL_THUMB_BASE', '25,40').split(','))))   # degrees, per hand: the thumb's first bone turned at most so far in the fist (Ren's 55-60 turned it all from its base: the skin between it and the palm stretched into a blade toward the wrist), its middle joint bending instead
 CUFF = (1.15, -.10, .02)   # the cuffs' rims: no vertex further from the forearm's axis than [0] times its 5 mm slice's median, from [1] to [2] m along the forearm from the wrist
 THUMB_IP = float(os.environ.get('KAEL_THUMB_IP', 40.))   # degrees: the thumb's last joint bent at least so far in the fist (left free, the right's came out straight: a skin blade across the fingers)
-THUMB_FOLD = int(os.environ.get('KAEL_THUMB_FOLD', 1))   # the thumbs folded by thumb_fist (1) or Ren's fists as they are (0; Denis, 12/11: "taglia i pugni di ren e attaccali a kael"; then, circling the fists in guard, the wedge his thumb's base made in the glove: folded again)
+THUMB_FOLD = int(os.environ.get('KAEL_THUMB_FOLD', 0))   # the thumbs folded by thumb_fist (1) or Ren's fists as they are (0; Denis, 12/11: "taglia i pugni di ren e attaccali a kael"; then, circling the fists in guard, the wedge his thumb's base made in the glove: folded again; 17/11, the hands remade as Ren's with a real glove over them: as his again)
 THUMB_SCALE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SCALE', '1,1').split(','))   # the thumb past its web: so long, so thick (Ren's as long as the index finger; Denis, 12/11: "fallo più piccolo"; all of it at .7 a pencil beside the fingers)
 THUMB_SIDE = tuple(float(v) for v in os.environ.get('KAEL_THUMB_SIDE', '20,.012').split(','))   # the thumb's tip held within [1] m of the index finger's side, with that push (the left one stood out past it, a hitchhiker's thumb)
 THUMB_FIST = (1., 1., .002, 50., 1.)    # the thumb folded in the fist (thumb_fist): the pulls of its last joint to the index finger's middle bone and of its tip to the middle finger's, its skin so far (m) out of the fingers' with that push, the pull to its first turns
@@ -384,6 +386,7 @@ def main(bust):
             rm = np.median(r[m]); far = m & (r > CUFF[0] * rm)
             X2[far] = j['Hb2'] + np.outer(t[far], ax) + rad[far] * (CUFF[0] * rm / r[far])[:, None]; moved += far.sum()
         print('%s cuff: %d vertices brought in to %.2f of their slice\'s median' % (side, moved, CUFF[0]))
+    N2_ren = N2.copy()   # (the hands' part: Ren's normals, only turned with the hand, as on him)
     if HAND_NSMOOTH:   # (the hands' light's normals smoothed: the game's light on Ren's low hands, scaled up, fell in blotches on the glove)
         hn = isR.copy(); hn[Ib[isR[Ib].any(1)].ravel()] = True
         N2 = smooth(N2, wv, A, deg, HAND_NSMOOTH, hn); N2 /= np.maximum(np.linalg.norm(N2, axis=1, keepdims=True), 1e-9)
@@ -499,20 +502,17 @@ def main(bust):
     near_edge = gl & (ts_.query(tpos)[0] < GLOVE_PAD) | (th & near_c(INK_C))
     bt2 = bt.copy(); bt2[ys[near_edge], xs[near_edge]] = SKIN_C; BT = Image.fromarray(bt2.astype(np.uint8))   # (only by the edge: skin painted under all of the glove bled into the seam's triangles, skin hairlines at the cuff)
     print('glove: its edge drawn by the game on %d vertices (%d in the glove), the texture by the edge skin (%d texels)' % (len(vh), int(in_g.sum()), int(near_edge.sum())))
-    # the part
-    used = np.unique(Ib); mp = -np.ones(len(X), np.int64); mp[used] = np.arange(len(used)); It = mp[Ib]
+    # the parts: the bust without Ren's hands (their triangles, all three corners his) and the hands on their own (17/11, Denis:
+    # "a me non piacciono soprattutto le mani": Ren's as the game draws him, his paint cut out of his texture, not resampled
+    # into the bust's; his normals as on him; his light and outline per vertex). The seam's triangles, part hand part arm,
+    # stay in the bust, under the wrist's ring.
+    whole = isR[Ib].all(1); Ih = Ib[whole]
     hv_all = isR.copy(); hv_all[Ib[isR[Ib].any(1)].ravel()] = True; hv_all = hv_all.astype(float)
-    if os.environ.get('KAEL_ATTACH_DUMP'): np.savez(os.environ['KAEL_ATTACH_DUMP'], rid=rid[used], side=(X2[used, 0] >= 0), dseam=dseam[used])   # (each part vertex's in Ren's package: tests of the fists' shape)
-    pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
-    blob = b''; jo = {'v': 1, 'verts': int(len(used)), 'tris': int(len(It)), 'scale': SCALE}
-    def put(key, arr):
-        nonlocal blob
-        blob = pad(blob); jo[key] = [len(blob), int(arr.size)]; blob += np.ascontiguousarray(arr).tobytes()
-    put('pos', X2[used].astype(np.float32)); put('nor', N2[used].astype(np.float32)); put('uv', UVb[used].astype(np.float32))
-    put('jnt', top[used].astype(np.uint8)); put('wgt', tw[used].astype(np.float32))
-    put('idx', It.astype(np.uint16 if len(used) < 65536 else np.uint32)); put('hide', hide)
-    put('flat', np.where(isR, HAND_FLAT, 1.)[used].astype(np.float32))   # (its light: flat, the hands the game's)
-    put('glove', gfield[used])   # (the hands' glove: the signed distance to its edge, m; 1 a hand's vertex)
+    Ib = Ib[~whole]
+    used = np.unique(Ib); mp = -np.ones(len(X), np.int64); mp[used] = np.arange(len(used)); It = mp[Ib]
+    usedh = np.unique(Ih); mph = -np.ones(len(X), np.int64); mph[usedh] = np.arange(len(usedh)); rh = rid[usedh]
+    if os.environ.get('KAEL_ATTACH_DUMP'): np.savez(os.environ['KAEL_ATTACH_DUMP'], rid=rid[used], side=(X2[used, 0] >= 0), dseam=dseam[used],
+                                                    hands_rid=rh, hands_side=(X2[usedh, 0] >= 0), hands_dseam=dseam[usedh])   # (each part vertex's in Ren's package: tests/kael_gear_check.py, the fists' shape)
     # (the outline on the hands drawn inside them too, as a drawing's lines: where a finger lies over another, the thumb over the
     # fingers, the fist over the palm. The body's outline is pushed 2 cm back from the camera: only the hand's silhouette was
     # drawn and the fist read as one block. On the hands, by their share, HAND_LINE[0] of that push and HAND_LINE[1] of its width)
@@ -521,11 +521,17 @@ def main(bust):
     # their lines drawn as the sheet traces the muscles; Denis, 12/11: "ricalca anche i muscoli delle braccia")
     aw = np.clip(G[:, 1] + G[:, 2], 0, 1) * (1 - hw)
     push = 1 + hw * (HAND_LINE[0] - 1) + aw * (ARM_LINE[0] - 1); width = 1 + hw * (HAND_LINE[1] - 1) + aw * (ARM_LINE[1] - 1)
-    put('lb', ((push - 1) * BODY_LINE_BACK)[used].astype(np.float32)); put('line', width[used].astype(np.float32))
-    jo['bones'] = {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}; jo['fingers'] = fingers; jo['fistFrame'] = frames
-    open(os.path.join(KAEL_PKG, 'kael_bust.bin'), 'wb').write(pad(blob)); json.dump(jo, open(os.path.join(KAEL_PKG, 'kael_bust.json'), 'w'), separators=(',', ':'))
-    BT.save(os.path.join(KAEL_PKG, 'kael_bust.png'), optimize=True)
+    write_part(KAEL_PKG, 'kael_bust', {'pos': X2[used], 'nor': N2[used], 'uv': UVb[used], 'jnt': top[used], 'wgt': tw[used], 'idx': It, 'hide': hide,
+                                       'flat': np.where(isR, HAND_FLAT, 1.)[used],   # (its light: flat, the hands the game's)
+                                       'glove': gfield[used],   # (the hands' glove: the signed distance to its edge, m; 1 a hand's vertex)
+                                       'lb': ((push - 1) * BODY_LINE_BACK)[used], 'line': width[used]},
+               {'scale': SCALE, 'bones': {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}, 'fingers': fingers, 'fistFrame': frames}, BT, 'png')
     print('written: kael_bust (%d vertices, %d triangles)' % (len(used), len(It)))
+    Lb = open(REN[1][:-4] + 'bin', 'rb').read(); Lf = lambda k_: np.frombuffer(Lb, np.float32, RL[k_][1], RL[k_][0])
+    tex, uvh = crop_paint(Image.open(REN_PAINT), R['UV'][rh])
+    write_part(KAEL_PKG, 'kael_hands', {'pos': X2[usedh], 'nor': N2_ren[usedh], 'uv': uvh, 'jnt': top[usedh], 'wgt': tw[usedh], 'idx': mph[Ih],
+                                        'flat': Lf('flat')[rh], 'line': Lf('line')[rh]}, None, tex)
+    print('written: kael_hands (%d vertices, %d triangles; Ren\'s paint cut %dx%d)' % (len(usedh), len(Ih), *tex.size))
 
 
 if __name__ == '__main__':

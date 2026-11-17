@@ -71,6 +71,7 @@ async def route(r):
 
 
 REN_ONLY = ('spikes', 'head', 'fringe', 'flat', 'ribbons', 'calm', 'swings', 'finite')   # (the look's parts only Ren has)
+KAEL_ONLY = ('hands', 'flash', 'gloves', 'shell', 'ring', 'mirror')   # (Kael's: his hands Ren's as their own part, his gloves and wrists' rings, 17/11)
 
 
 async def main(out_dir, page='viewer.html'):
@@ -119,6 +120,9 @@ async def main(out_dir, page='viewer.html'):
               r.head = !!it.head && it.head.isSkinnedMesh && it.head.geometry.index.count > 30000;   // the new head (the viewer turns it on)
               r.fringe = !!it.fringe && it.fringe.isSkinnedMesh && it.fringe.geometry.index.count > 6000 && it.fringe.material.alphaTest > 0;   // its locks from the sheet (over 2000 triangles)
               r.line = !!it.mesh.geometry.attributes.aLine; r.flat = !!it.mesh.geometry.attributes.aFlat;
+              // (Kael: Ren's hands as their own part on the same skeleton (Ren's are 1305 triangles), flashing with the body: f_fx lights every material of it.mats)
+              r.hands = !!it.hands && it.hands.isSkinnedMesh && it.hands.skeleton === it.mesh.skeleton && it.hands.geometry.index.count / 3 > 1000;
+              r.flash = !!it.hands && Object.values(it.mats).includes(it.hands.material);
               return r; }""")
             # the sash: two ribbons on chains of bones; calm in the guard, swinging after a jump, never NaN
             sash = await pg.evaluate("""async () => { const it = VW.it, sa = it.sash, r = {};
@@ -134,7 +138,7 @@ async def main(out_dir, page='viewer.html'):
               r.finite = sa.ribbons.every(q => q.P.every(p => Number.isFinite(p.x + p.y + p.z)));
               return r; }""")
             look.update(sash)
-            if not ren: look = {k: v for k, v in look.items() if k not in REN_ONLY}
+            look = {k: v for k, v in look.items() if k not in (KAEL_ONLY if ren else REN_ONLY)}
             if not all(look.values()): errs.append('look ' + str(look))
             if w > h and ren:   # once: the sash out of the body in every play button's moves
                 ins = await pg.evaluate(INSIDE, [list(SASH_OUT), 180, 3]); slf = ins.pop('self')

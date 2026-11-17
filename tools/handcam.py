@@ -54,6 +54,7 @@ async def shots(b, page):
         else: await pg.evaluate("([b, n]) => { document.getElementById('play' + b).click(); VW.tick(n); }", [2, 7] if pose == 'polso_pugno' else [0, 40])
         for side in ('Left', 'Right'):
             ims = []
+            await pg.evaluate(SHOT, [side, aim, dist, YAWS[0], PITCH]); await pg.screenshot()   # (once unseen: the first shot after a pose showed the frame before it)
             for yaw in YAWS:
                 await pg.evaluate(SHOT, [side, aim, dist, yaw, PITCH])
                 ims.append(np.asarray(Image.open(io.BytesIO(await pg.screenshot())).convert('RGB')))
