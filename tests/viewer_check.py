@@ -81,10 +81,12 @@ GEAR = """async () => { const it = VW.it, r = {};
     for (let k = 0; k < 4; k++) { const w = sw.array[i * 4 + k]; if (!w) continue; const b = si.array[i * 4 + k];   /* (r128: no getComponent) */
       M.multiplyMatrices(m.skeleton.bones[b].matrixWorld, m.skeleton.boneInverses[b]); o.addScaledVector(T.copy(v).applyMatrix4(M), w); }
     return o.applyMatrix4(m.bindMatrixInverse).applyMatrix4(m.matrixWorld); };
-  const G = it.gloves, H = it.hands, gp = G.geometry.attributes.position, gd = G.geometry.attributes.aGlove, hp = H.geometry.attributes.position;
   const P = (a, i) => new THREE.Vector3().fromBufferAttribute(a, i);
+  const G = it.gloves, H = it.hands, gp = G.geometry.attributes.position, gd = G.geometry.attributes.aGlove, hp = H.geometry.attributes.position;
   // the shell inside the glove (over 3 mm from its edge), 300 of its vertices, each with its skin's nearest vertex
-  const inner = []; for (let i = 0; i < gp.count; i++) if (gd.getX(i) < -.003) inner.push(i);
+  const pj0 = G.userData.part || {}, flared = q => (pj0.rings || []).some(g => { const c = new THREE.Vector3(...g.c), ax = new THREE.Vector3(...g.ax), d = q.clone().sub(c), t = d.dot(ax);
+    return t < g.h / 2 + .025 && d.addScaledVector(ax, -t).length() < .1; });   // (by the rings the glove and the skin flare out to them together)
+  const inner = []; for (let i = 0; i < gp.count; i++) if (gd.getX(i) < -.003 && !flared(P(gp, i))) inner.push(i);
   const pick = inner.filter((_, k) => k % Math.max(1, Math.floor(inner.length / 300)) === 0).map(i => { const q = P(gp, i); let best = 1e9, j = -1;
     for (let k = 0; k < hp.count; k++) { const d = q.distanceToSquared(P(hp, k)); if (d < best) { best = d; j = k; } } return [i, j]; });
   VW.speed = 0; let ok = 0, n = 0;
@@ -95,6 +97,20 @@ GEAR = """async () => { const it = VW.it, r = {};
         const o0 = P(gp, i).sub(P(hp, j)), Hs = skinP(H, j, P(hp, j)), o1 = skinP(H, j, P(hp, j).add(o0)).sub(Hs), S = skinP(G, i, P(gp, i));
         n++; if (S.sub(Hs).dot(o1.normalize()) > .5 * o0.length()) ok++; } } }
   r.shell = ok / n > .99; r.shellShare = ok / n;
+  // the wrists' rings cover their joins in every move: what was inside a ring at rest (the cuff's end, the hand's start) stays
+  // on the inner side of the ring's outer wall (its nearest vertex there, along that vertex's normal)
+  const pj = G.userData.part; r.ring = false;
+  if (pj && pj.rings && it.bust) {
+    const Bm = it.bust, bp = Bm.geometry.attributes.position, gn = G.geometry.attributes.normal; let rok = 0, rn = 0;
+    for (let b = 0; b < 10; b++) { document.getElementById('play' + b).click();
+      for (let f = 0; f < 60; f += 6) { VW.tick(6); it.root.updateMatrixWorld(true);
+        for (const g of pj.rings) {
+          const R = []; for (let i = g.outer[0]; i < g.outer[0] + g.outer[1]; i += 3) { const p0 = P(gp, i), q = skinP(G, i, p0); R.push([q, skinP(G, i, p0.clone().addScaledVector(P(gn, i), .001)).sub(q).normalize()]); }
+          const ins = g.inBust.filter((_, k) => k % 4 === 0).map(i => skinP(Bm, i, P(bp, i))).concat(g.inHands.map(i => skinP(H, i, P(hp, i))));
+          for (const V of ins) { let best = 1e9, nr = null; for (const [q, nq] of R) { const d = V.distanceToSquared(q); if (d < best) { best = d; nr = [q, nq]; } }
+            rn++; if (V.clone().sub(nr[0]).dot(nr[1]) < 0) rok++; } } } }
+    r.ring = rok / rn > .995; r.ringShare = rok / rn;
+  }
   // mirrored (the fighter on the right): the glove still drawn (pixels it adds round the fist)
   document.getElementById('play0').click(); VW.tick(40); VW.spin = false; VW.yaw = .55; VW.zoom = .45; it.root.scale.x = -1;
   const plum = async () => { await new Promise(f => setTimeout(f, 150)); it.root.updateMatrixWorld(true);

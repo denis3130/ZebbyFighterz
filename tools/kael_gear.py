@@ -149,3 +149,69 @@ def near_index(P_shell, P_hands):
     """for each point (the shell's surface before its push) the nearest vertex of the hands"""
     from scipy.spatial import cKDTree
     return cKDTree(P_hands).query(P_shell)[1]
+
+
+def ring_frame(P, c, ax, ref, n_th):
+    """P in a ring's frame: along its axis from its middle, the radius, the angle's bin (n_th round)"""
+    d = P - c; t = d @ ax; rad = d - np.outer(t, ax); side = np.cross(ax, ref)
+    th = np.arctan2(rad @ side, rad @ ref)
+    return t, np.linalg.norm(rad, axis=1), np.round(th / (2 * np.pi) * n_th).astype(int) % n_th
+
+
+def cuff_band(X, pur, sel, E, H, step=.005):
+    """The bracer's purple cuff band by the wrist: along the forearm (E elbow, H wrist) the 5 mm slices of sel's vertices
+    over half purple, the run of them nearest the wrist. Returns its middle, the axis (toward the hand) and its height."""
+    ax = (H - E) / np.linalg.norm(H - E); L = np.linalg.norm(H - E); t = (X - E) @ ax
+    r = np.linalg.norm((X - E) - np.outer(t, ax), axis=1); s = sel & (r < .09)
+    ts = np.arange(L - .10, L + .03, step)
+    fr = np.array([pur[s & (t >= a) & (t < a + step)].mean() if (s & (t >= a) & (t < a + step)).sum() > 5 else 0. for a in ts])
+    on = fr > .5
+    if not on.any(): raise ValueError('no cuff band by the wrist')
+    k1 = np.nonzero(on)[0].max(); k0 = k1
+    while k0 > 0 and on[k0 - 1]: k0 -= 1
+    t0, t1 = ts[k0], ts[k1] + step
+    return E + ax * (t0 + t1) / 2, ax, t1 - t0
+
+
+def ring_radius(Pn, c, ax, ref, h, clear=.003, n_th=48, pad=.004):
+    """per angle bin the ring's radius: the points (Pn) within its height (and pad more) at their 95th percentile, empty
+    bins filled round the circle, smoothed over 7 bins, at most 1.2 times the median, plus clear"""
+    t, r, k = ring_frame(Pn, c, ax, ref, n_th); m = np.abs(t) <= h / 2 + pad
+    rb = np.array([np.percentile(r[m & (k == b)], 95) if (m & (k == b)).sum() >= 3 else np.nan for b in range(n_th)])
+    ok = ~np.isnan(rb); idx = np.arange(n_th)
+    rb = np.interp(idx, np.r_[idx[ok] - n_th, idx[ok], idx[ok] + n_th], np.tile(rb[ok], 3))
+    rb = np.convolve(np.r_[rb[-3:], rb, rb[:3]], np.ones(7) / 7, 'valid')
+    return np.minimum(rb, 1.2 * np.median(rb)) + clear
+
+
+def ring(c, ax, ref, r_th, h, bulge=.002, lip=.004, n_h=7):
+    """The ring round the wrist: an outer wall of n_h rows (radius r_th per angle, bulged by bulge at mid height) and at both
+    ends a lip going in by lip (under the cuff's and the glove's surfaces: no gap shows). Returns P, N, I, D (the distance to
+    the nearest rim along the axis, negative; 0 on the lips: their ink) and s (0 at the elbow's end, 1 at the hand's)."""
+    n_th = len(r_th); th = np.arange(n_th) / n_th * 2 * np.pi; side = np.cross(ax, ref)
+    U = np.cos(th)[:, None] * ref + np.sin(th)[:, None] * side   # (the radial directions)
+    rows = []   # (radius per angle, t, normal kind)
+    rows.append((r_th - lip, -h / 2, -1)); rows.append((r_th, -h / 2, -1))
+    for k in range(n_h):
+        a = k / (n_h - 1); rows.append((r_th + bulge * np.sin(np.pi * a), -h / 2 + a * h, 0))
+    rows.append((r_th, h / 2, 1)); rows.append((r_th - lip, h / 2, 1))
+    P, N, Dv, S = [], [], [], []
+    for rr, t, kind in rows:
+        P.append(c + t * ax + rr[:, None] * U); N.append(U if kind == 0 else np.tile(kind * ax, (n_th, 1)))
+        Dv.append(np.full(n_th, 0. if kind else -min(t + h / 2, h / 2 - t))); S.append(np.full(n_th, (t + h / 2) / h))
+    tris = []
+    for a, b in ((0, 1), *((2 + k, 3 + k) for k in range(n_h - 1)), (n_h + 2, n_h + 3)):   # (the strips: bottom lip, wall, top lip)
+        for j in range(n_th):
+            j2 = (j + 1) % n_th; p, q, r_, s_ = a * n_th + j, a * n_th + j2, b * n_th + j2, b * n_th + j
+            tris += [(p, q, r_), (p, r_, s_)]
+    return np.concatenate(P), np.concatenate(N), np.array(tris, np.int64), np.concatenate(Dv), np.concatenate(S)
+
+
+def flare(P, c, ax, ref, r_in, h, span=.025):
+    """the glove's points by the ring on the hand's side brought out to its inside (r_in per angle, less 0.5 mm): fully within
+    its height, fading over span past its edge (no neck between the glove and the ring)"""
+    t, r, k = ring_frame(P, c, ax, ref, len(r_in))
+    w = np.clip(1 - (t - h / 2) / span, 0, 1); w = w * w * (3 - 2 * w); w[t < -h / 2] = 0
+    rr = r + np.maximum(0., r_in[k] - .0005 - r) * w
+    rad = (P - c) - np.outer(t, ax); u = rad / np.maximum(r, 1e-9)[:, None]
+    return c + np.outer(t, ax) + u * rr[:, None]

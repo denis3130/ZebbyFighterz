@@ -91,9 +91,12 @@ def clip_edge_on_iso(D):
 
 
 def shell_offset(D):
-    """the glove's shell: GLOVE_T over the skin it comes from, inside the glove (more than 3 mm from its edge)"""
+    """the glove's shell: GLOVE_T over the skin it comes from, inside the glove (more than 3 mm from its edge), past where it
+    flares out to the wrist's ring (2.5 cm past the ring's edge: flare_no_neck)"""
     j, G = part('gloves'); _, H = part('hands')
     m = (G['glove'][:, 0] < -.003) & (G['near'] >= 0)
+    for g in j.get('rings', []):
+        t, r, k = ring_frame(g, G['pos'].astype(float)); m &= ~((t < g['h'] / 2 + .025) & (r < .1))
     d = np.linalg.norm(G['pos'][m] - H['pos'][G['near'][m]], axis=1)
     assert m.sum() > 200 and d.min() > GLOVE_T - .0002 and d.max() < GLOVE_T + .002, 'shell_offset: %d vertices, %.2f to %.2f mm from their skin' % (m.sum(), 1000 * d.min(), 1000 * d.max())
 
@@ -112,6 +115,8 @@ def shell_clears_skin(D):
     j, G = part('gloves'); _, H = part('hands')
     m = (G['glove'][:, 0] < -.003) & (G['near'] >= 0)
     m[m] = D['hands_dseam'][G['near'][m]] > .02
+    for g in j.get('rings', []):   # (and past where the glove and the skin flare out to the ring together)
+        t, r, k = ring_frame(g, G['pos'].astype(float)); m &= ~((t < g['h'] / 2 + .025) & (r < .1))
     d, _ = cKDTree(surface_points(H['pos'].astype(float), H['idx'].astype(np.int64))).query(G['pos'][m])
     assert d.min() > GLOVE_T - .0005, 'shell_clears_skin: %d shell vertices nearer the skin than %.1f mm (the nearest %.2f mm)' % (
         (d < GLOVE_T - .0005).sum(), 1000 * (GLOVE_T - .0005), 1000 * d.min())
@@ -122,11 +127,42 @@ def glove_covers(D):
     (the shell is GLOVE_T over the skin, up to 1.5 mm more over its bumps)"""
     from scipy.spatial import cKDTree
     j, G = part('gloves'); _, H = part('hands')
-    inside = D['hands_D'] < -.003; d, _ = cKDTree(G['pos']).query(H['pos'][inside])
+    inside = D['hands_D'] < -.003
+    for g in j.get('rings', []):   # (by the ring the glove flares out to it, away from the skin: flare_no_neck, ring_clears_wrist)
+        t, r, k = ring_frame(g, H['pos'].astype(float)); inside &= ~((t < g['h'] / 2 + .025) & (r < .1))
+    d, _ = cKDTree(G['pos']).query(H['pos'][inside])
     assert inside.sum() > 200 and d.max() < GLOVE_T + .002, 'glove_covers: %d skin points, one %.2f mm from the shell' % (inside.sum(), 1000 * d.max())
 
 
-CHECKS = (crop_paint_is_exact, hands_part_is_rens, bust_has_no_hand_triangles, clip_edge_on_iso, shell_offset, shell_clears_skin, glove_covers)
+def ring_frame(g, P):
+    """the points P in a ring's frame: along its axis from its middle (toward the hand), their radius, their angle's bin"""
+    c, ax, ref = (np.array(g[k]) for k in ('c', 'ax', 'ref')); d = P - c; t = d @ ax; rad = d - np.outer(t, ax)
+    th = np.arctan2(rad @ np.cross(ax, ref), rad @ ref); n = len(g['r'])
+    return t, np.linalg.norm(rad, axis=1), np.round(th / (2 * np.pi) * n).astype(int) % n
+
+
+def ring_clears_wrist(D):
+    """each wrist's ring at least 2 mm over everything inside its height (the bust's cuff, the hands, the glove), all round"""
+    j, G = part('gloves'); parts = [part('bust')[1]['pos'], part('hands')[1]['pos'], G['pos'][G['near'] >= 0]]
+    assert len(j.get('rings', [])) == 2, 'ring_clears_wrist: %d rings' % len(j.get('rings', []))
+    for g in j['rings']:
+        for P in parts:
+            t, r, k = ring_frame(g, P.astype(float)); m = (np.abs(t) <= g['h'] / 2) & (r < 2 * np.median(g['r']))   # (round the wrist, not the torso in the same slice)
+            gap = (np.array(g['r'])[k[m]] - r[m]).min() if m.any() else 1.
+            assert gap >= .002, 'ring_clears_wrist: a point %.1f mm under the ring\'s surface' % (1000 * gap)
+
+
+def flare_no_neck(D):
+    """by the ring's edge on the hand's side the glove is as wide as the ring's inside (less 1 mm): no neck between them"""
+    j, G = part('gloves'); S = G['pos'][G['near'] >= 0].astype(float)
+    for g in j['rings']:
+        t, r, k = ring_frame(g, S); m = (t >= g['h'] / 2) & (t <= g['h'] / 2 + .004)
+        assert m.sum() > 5, 'flare_no_neck: no glove by the ring'
+        short = (np.array(g['rin'])[k[m]] - .001 - r[m]).max()
+        assert short <= 0, 'flare_no_neck: the glove %.1f mm inside the ring\'s inside by its edge' % (1000 * short)
+
+
+CHECKS = (crop_paint_is_exact, hands_part_is_rens, bust_has_no_hand_triangles, clip_edge_on_iso, shell_offset, shell_clears_skin, glove_covers, ring_clears_wrist, flare_no_neck)
 
 if __name__ == '__main__':
     dump = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('KAEL_ATTACH_DUMP')

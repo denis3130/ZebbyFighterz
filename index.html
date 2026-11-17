@@ -2007,7 +2007,7 @@ function modelBuild(key) {
     const gmesh = new THREE.SkinnedMesh(gloves.geo, gm), gline = new THREE.SkinnedMesh(gloves.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per: ' * aLine', back: ol.back}));
     gmesh.frustumCulled = gline.frustumCulled = false; body.add(gmesh, gline);
     gmesh.bind(skel, mesh.matrixWorld); gline.bind(skel, mesh.matrixWorld);
-    gloves.mesh = gmesh; gloves.mat = gm;
+    gloves.mesh = gmesh; gloves.mat = gm; gmesh.userData.part = gloves.j;   // (its rings' frames, for tests/viewer_check.py)
   }
   const limbs = {};
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
