@@ -46,7 +46,7 @@ from scipy.sparse.csgraph import connected_components
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mesh_prep'))
 import glbio
-from kael_gear import crop_paint, write_part, clip_iso, shell, near_index, cuff_band, ring_radius, flare, ring_frame, ring as make_ring
+from kael_gear import crop_paint, write_part, clip_iso, shell, near_index, cuff_band, ring_radius, flare, ring_frame, skirt as make_skirt, ring as make_ring
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 KAEL_PKG = os.path.join(ROOT, 'wip_assets', 'kael')
@@ -540,6 +540,10 @@ def main(bust):
             u = ((P_ - c) - np.outer(t, ax)) / np.maximum(r, 1e-9)[:, None]
             P_[m] = c + np.outer(t[m], ax) + u[m] * (r_th[k[m]] - RING['under'])[:, None]
         Ps[ss] = flare(Ps[ss], c, ax, ref, r_in, h)
+        # (and the glove's open end by the wrist, where Ren's hand starts, carried into the ring: in the gap the bust's paint by
+        # the seam showed, a light line)
+        Pt, Nt, It_, v = make_skirt(Ps, Ds, Is, c, ax, ref, r_in, h, ss)
+        Ps, Ns, Is = np.r_[Ps, Pt], np.r_[Ns, Nt], np.r_[Is, It_]; Ds, ink, Ws, col, gline, near = (np.r_[a, a[v]] for a in (Ds, ink, Ws, col, gline, near))
         X2[near_w] = flare(X2[near_w], c, ax, ref, r_in, h)   # (and the cuff's end and the hand's skin between the ring and the glove, with it)
         Pr, Nr, Ir, Dr, sr = make_ring(c, ax, ref, r_th, h, RING['bulge'], RING['lip'])
         tb, rb, _ = ring_frame(X2, c, ax, ref, RING['n_th']); ins = sx & (np.abs(tb) <= h / 2) & (rb < lim)

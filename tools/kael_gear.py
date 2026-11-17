@@ -215,3 +215,21 @@ def flare(P, c, ax, ref, r_in, h, span=.025):
     rr = r + np.maximum(0., r_in[k] - .0005 - r) * w
     rad = (P - c) - np.outer(t, ax); u = rad / np.maximum(r, 1e-9)[:, None]
     return c + np.outer(t, ax) + u * rr[:, None]
+
+
+def skirt(P, D, I, c, ax, ref, r_in, h, sel, keep=.003):
+    """The glove's open end by the wrist carried into its ring: its boundary that is not its edge over the fingers (there
+    D = 0), among the vertices sel, each vertex given a twin inside the ring (keep within its edge along the axis, at its
+    inside less 0.5 mm) and a strip between them. Returns the twins' P and normals (radial), the strip's triangles
+    (indices after len(P)) and each twin's vertex."""
+    key = np.round(P / 1e-6).astype(np.int64); _, grp = np.unique(key, axis=0, return_inverse=True); grp = grp.ravel()
+    E = np.concatenate([I[:, [0, 1]], I[:, [1, 2]], I[:, [2, 0]]]); ks = np.sort(grp[E], 1)
+    _, inv, cnt = np.unique(ks, axis=0, return_inverse=True, return_counts=True)
+    E = E[(cnt[inv.ravel()] == 1) & (np.abs(D[E]) > 1e-9).any(1) & sel[E].all(1)]
+    v = np.unique(E)
+    if not len(v): return np.zeros((0, 3)), np.zeros((0, 3)), np.zeros((0, 3), np.int64), v
+    t, r, k = ring_frame(P[v], c, ax, ref, len(r_in)); u = ((P[v] - c) - np.outer(t, ax)) / np.maximum(r, 1e-9)[:, None]
+    Pt = c + np.outer(np.minimum(t, h / 2 - keep), ax) + u * (r_in[k] - .0005)[:, None]
+    tw = {int(x): len(P) + i for i, x in enumerate(v)}
+    tris = [(a, b, tw[b]) for a, b in E] + [(a, tw[b], tw[a]) for a, b in E]
+    return Pt, u, np.array(tris, np.int64), v

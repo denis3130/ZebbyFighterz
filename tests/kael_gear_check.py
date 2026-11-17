@@ -110,7 +110,7 @@ def surface_points(P, I, k=8):
 def shell_clears_skin(D):
     """the shell clears the hands' skin round it, not only the point it comes from (Ren's skin by the wrist has 1 mm bumps):
     each shell vertex inside the glove at least GLOVE_T - 0.5 mm from the skin's surface (sampled about every mm), past 2 cm
-    from the wrist's seam (there the ring covers the join and the glove flares out to it: ring_clears_wrist, flare_no_neck)"""
+    from the wrist's seam (there the ring covers the join and the glove flares out to it: ring_clears_wrist, flare_no_neck, glove_meets_ring)"""
     from scipy.spatial import cKDTree
     j, G = part('gloves'); _, H = part('hands')
     m = (G['glove'][:, 0] < -.003) & (G['near'] >= 0)
@@ -162,7 +162,22 @@ def flare_no_neck(D):
         assert short <= 0, 'flare_no_neck: the glove %.1f mm inside the ring\'s inside by its edge' % (1000 * short)
 
 
-CHECKS = (crop_paint_is_exact, hands_part_is_rens, bust_has_no_hand_triangles, clip_edge_on_iso, shell_offset, shell_clears_skin, glove_covers, ring_clears_wrist, flare_no_neck)
+def glove_meets_ring(D):
+    """the glove's open end by the wrist (its boundary that is not its edge over the fingers) goes inside its ring: no gap
+    between them (where the bust's paint by the seam showed, a light line)"""
+    j, G = part('gloves'); sh = np.nonzero(G['near'] >= 0)[0]; I = G['idx'].astype(np.int64)
+    I = I[np.isin(I, sh).all(1)]; E = np.concatenate([I[:, [0, 1]], I[:, [1, 2]], I[:, [2, 0]]])
+    key = np.round(G['pos'] / 1e-6).astype(np.int64); _, grp = np.unique(key, axis=0, return_inverse=True); grp = grp.ravel()
+    ks = np.sort(grp[E], 1); _, inv, cnt = np.unique(ks, axis=0, return_inverse=True, return_counts=True)
+    bnd = E[cnt[inv.ravel()] == 1]; bnd = bnd[(np.abs(G['glove'][bnd, 0]) > 1e-6).any(1)]   # (not its edge over the fingers: D = 0 there, nor its strip)
+    v = np.unique(bnd); far = 0.
+    for g in j['rings']:
+        t, r, k = ring_frame(g, G['pos'][v].astype(float)); m = r < .1
+        if m.any(): far = max(far, (t[m] - g['h'] / 2).max())
+    assert len(v) > 10 and far <= 0, 'glove_meets_ring: the glove\'s open end %.1f mm past its ring' % (1000 * far)
+
+
+CHECKS = (crop_paint_is_exact, hands_part_is_rens, bust_has_no_hand_triangles, clip_edge_on_iso, shell_offset, shell_clears_skin, glove_covers, ring_clears_wrist, flare_no_neck, glove_meets_ring)
 
 if __name__ == '__main__':
     dump = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('KAEL_ATTACH_DUMP')
