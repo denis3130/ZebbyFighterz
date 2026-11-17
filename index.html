@@ -295,7 +295,7 @@ const CFG={
     // the outline's widths (tools/char_look.py), the light's normals smoothed, Ren's clips on his skeleton and Ren's guard
     // (his head held as high); his head and his bust from Meshy (tools/kael_head.py, tools/kael_bust_attach.py: bust:
     // its hands Ren's, with their finger bones).
-    kael:{head:true, bust:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
+    kael:{head:true, bust:true, hands:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
       clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
@@ -1887,14 +1887,7 @@ function modelBuild(key) {
   img.src = (lk.paint && (ASSETS[key + '/' + key + '_painted.png'] || ASSETS[key + '/' + key + '_painted.jpg'])) || ASSETS[key + '/' + key + '.jpg'];   // (the look's: the drawing painted on it; a PNG for flat colours, tools/kael_body.py)
   img.decode().then(() => { tex.needsUpdate = true; }, () => {});
   const main = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true});
-  if (flat) {   // the look's flat light: per vertex, the share of the texture's own colour (the face's drawn shading)
-    main.onBeforeCompile = sh => {
-      sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
-      sh.fragmentShader = 'varying float vFlat;\n' + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-        '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, vFlat);');
-    };
-    main.customProgramCacheKey = () => 'flat';
-  }
+  if (flat) mdFlatLight(main);
   // the face decal (look data face, ASSETS '<char>/<char>_face.png'): shown once decoded (an empty texture reads black)
   const face = shape && look.face && !head && ASSETS[key + '/' + key + '_face.png'] ? {tex: new THREE.Texture(new Image()), on: {value: 0}, want: true, ready: false} : null;   // (not under the new head: the old face is hidden)
   if (face) {
@@ -1990,11 +1983,23 @@ function modelBuild(key) {
     bmesh.bind(skel, mesh.matrixWorld); bline.bind(skel, mesh.matrixWorld);
     bust.mesh = bmesh; bust.mat = bm;
   }
+  const hands = lk.hands && mdPartData(md, key, 'hands');
+  if (hands) {   // Kael's hands (17/11/2026, tools/kael_bust_attach.py): Ren's as the game draws him, his paint cut out of his texture, his
+    // light per vertex (mdFlatLight) and his outline (per vertex, pushed back as the body's); on the same skeleton
+    const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = hands.jpg;
+    tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
+    const hm = new THREE.MeshToonMaterial({map: tex, gradientMap: F3.grad, skinning: true}); mdFlatLight(hm);
+    const hmesh = new THREE.SkinnedMesh(hands.geo, hm), hline = new THREE.SkinnedMesh(hands.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), per: ' * aLine', back: ol.back}));
+    hmesh.frustumCulled = hline.frustumCulled = false; body.add(hmesh, hline);
+    hmesh.bind(skel, mesh.matrixWorld); hline.bind(skel, mesh.matrixWorld);
+    hands.mesh = hmesh; hands.mat = hm;
+  }
   const limbs = {};
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = fdef.map(f => new THREE.Quaternion().fromArray(f.fist)); }
+  if (hands) { it.hands = hands.mesh; it.mats.hands = hands.mat; }
   if (bust) { it.bust = bust.mesh; it.mats.bust = bust.mat; if (bust.j.fistFrame) it.fistFrame = {Left: new THREE.Quaternion().fromArray(bust.j.fistFrame.Left), Right: new THREE.Quaternion().fromArray(bust.j.fistFrame.Right)}; }   // (fistFrame: each fist's own frame in its hand bone's: Ren's hands, laid as his)
   if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
   if (face) it.face = face;
@@ -2413,6 +2418,17 @@ const MD_HEAD_FLAT = 1, MD_HEAD_LINE = [.004, .006];
 const MD_BUST_FLAT = 1;
 // Kael's gloves (on his bust's hands, aGlove): their plum, the ink along their edge, its half width (m) (the bust's palette); the hands' two tones
 const MD_GLOVE = {c: [65, 49, 74], ink: [9, 6, 9], w: .0012, shade: [40, 30, 47], skinShade: [.656, .586, .563], cut: .6, two: false};   // (in shadow (the game's light under cut of the colour's own): the glove a darker plum (the sheet's black made holes of its shadow's blocks), the skin times skinShade: its shadow, 164 112 85)
+
+// The look's flat light on a toon material: per vertex (aFlat) the share of the texture's own colour (the face's drawn
+// shading); the body's, and Kael's hands' (Ren's, lit as on him)
+function mdFlatLight(mat) {
+  mat.onBeforeCompile = sh => {
+    sh.vertexShader = 'attribute float aFlat;\nvarying float vFlat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFlat = aFlat;');
+    sh.fragmentShader = 'varying float vFlat;\n' + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+      '$&\n\toutgoingLight = mix(outgoingLight, diffuseColor.rgb + totalEmissiveRadiance, vFlat);');
+  };
+  mat.customProgramCacheKey = () => 'flat';
+}
 
 // The triangles of the parts' hide lists together (each a Uint32Array or null)
 function mdJoin(a, b) {
