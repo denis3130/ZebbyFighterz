@@ -716,7 +716,7 @@ luce lisciata, testa alzata di 12° in guardia, la guardia `a191` che respira di
 `flatFace` (capelli e viso in luce piatta), `paint` (`kael_painted.jpg`, la pittura pulita; il pulsante "Meshy"
 dell'anteprima mostra quella originale).
 
-## Mani e polsi rifatti (17/11, da approvare)
+## Mani e polsi rifatti (17/11, anteprima versione 22)
 Denis, sulla versione 21: "non mi piace ancora il modello 3d in generale, la testa ecc va anche bene ma il resto no", "a me
 non piacciono soprattutto le mani", "ora il polso" e, cerchiando 4 zone del polso, "è ancora fatto male". Strada scelta
 da Denis fra tre: "Mano di Ren + guanto vero". Progetto: `docs/superpowers/specs/2026-11-17-kael-mani-polso-design.md`,
