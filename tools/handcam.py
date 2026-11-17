@@ -37,7 +37,7 @@ SHOT = """async ([side, aim, dist, yaw, pitch]) => {
 
 async def shots(b, page):
     """{(pose, side): [8 RGB arrays]} of the page's character"""
-    pf = os.path.join(tempfile.mkdtemp(), page)
+    pf = os.path.join(tempfile.mkdtemp(), os.path.basename(page))   # (a page given by its full path: never written over)
     open(pf, 'w', encoding='utf-8').write(WRAP % open(os.path.join(ROOT, page), encoding='utf-8').read())
     ctx = await b.new_context(viewport={'width': SIZE, 'height': SIZE}); pg = await ctx.new_page(); errs = []
     pg.on('pageerror', lambda e: errs.append(str(e)))
