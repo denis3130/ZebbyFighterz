@@ -233,3 +233,42 @@ def skirt(P, D, I, c, ax, ref, r_in, h, sel, keep=.003):
     tw = {int(x): len(P) + i for i, x in enumerate(v)}
     tris = [(a, b, tw[b]) for a, b in E] + [(a, tw[b], tw[a]) for a, b in E]
     return Pt, u, np.array(tris, np.int64), v
+
+
+def loop_subdivide(P, I, attrs):
+    """One round of Loop subdivision of the mesh (P, I): every triangle into four, the points moved by Loop's masks over
+    the welded mesh (coincident vertices, split where the paint is, moved together), the open boundary kept where it is
+    (its vertices still, its edges' new points halfway: the seam to the bust stays shut). attrs: per-vertex arrays (n, ...)
+    interpolated halfway on each edge. Returns P, I and attrs for the new mesh."""
+    P = np.asarray(P, float); n = len(P)
+    key = np.round(P / 1e-6).astype(np.int64); _, grp = np.unique(key, axis=0, return_inverse=True); grp = grp.ravel(); ng = grp.max() + 1
+    Pw = np.zeros((ng, 3)); np.add.at(Pw, grp, P); Pw /= np.bincount(grp, minlength=ng)[:, None]
+    Iw = grp[I]; E = np.concatenate([Iw[:, [0, 1]], Iw[:, [1, 2]], Iw[:, [2, 0]]]); opp = np.concatenate([Iw[:, 2], Iw[:, 0], Iw[:, 1]])
+    ks = np.sort(E, 1); uk, inv, cnt = np.unique(ks, axis=0, return_inverse=True, return_counts=True); inv = inv.ravel()
+    osum = np.zeros((len(uk), 3)); np.add.at(osum, inv, Pw[opp]); bnd_e = cnt == 1
+    # (the welded vertices: Loop's mask inside, still on the boundary)
+    bv = np.zeros(ng, bool); bv[uk[bnd_e].ravel()] = True
+    nb = np.zeros((ng, 3)); val = np.zeros(ng); np.add.at(nb, uk[:, 0], Pw[uk[:, 1]]); np.add.at(nb, uk[:, 1], Pw[uk[:, 0]])
+    np.add.at(val, uk.ravel(), 1); val = np.maximum(val, 1)
+    beta = (5 / 8 - (3 / 8 + np.cos(2 * np.pi / val) / 4) ** 2) / val
+    Vn = np.where(bv[:, None], Pw, (1 - val * beta)[:, None] * Pw + beta[:, None] * nb)
+    Em = np.where(bnd_e[:, None], (Pw[uk[:, 0]] + Pw[uk[:, 1]]) / 2, 3 / 8 * (Pw[uk[:, 0]] + Pw[uk[:, 1]]) + osum / 8)
+    # (the new points per original vertex pair: the paint's split vertices keep their own attributes)
+    Ei = np.concatenate([I[:, [0, 1]], I[:, [1, 2]], I[:, [2, 0]]]); eki = np.sort(Ei, 1)
+    ui, inv_i = np.unique(eki, axis=0, return_inverse=True); inv_i = inv_i.ravel()
+    wkey = np.sort(grp[ui], 1)
+    lookup = {tuple(k): j for j, k in enumerate(uk)}; ew = np.array([lookup[tuple(k)] for k in wkey])
+    P2 = np.r_[Vn[grp], Em[ew]]
+    out = {k: np.r_[np.asarray(a), (np.asarray(a)[ui[:, 0]] + np.asarray(a)[ui[:, 1]]) / 2] for k, a in attrs.items()}
+    m = n + inv_i.reshape(3, -1).T   # (the triangle's three edge points: ab, bc, ca)
+    a, b, c = I[:, 0], I[:, 1], I[:, 2]; ab, bc, ca = m[:, 0], m[:, 1], m[:, 2]
+    I2 = np.concatenate([np.c_[a, ab, ca], np.c_[ab, b, bc], np.c_[ca, bc, c], np.c_[ab, bc, ca]])
+    return P2, I2, out
+
+
+def vertex_normals(P, I):
+    """smooth normals: the faces' (area-weighted) over coincident vertices"""
+    key = np.round(P / 1e-6).astype(np.int64); _, grp = np.unique(key, axis=0, return_inverse=True); grp = grp.ravel()
+    fn = np.cross(P[I[:, 1]] - P[I[:, 0]], P[I[:, 2]] - P[I[:, 0]]); N = np.zeros((grp.max() + 1, 3))
+    np.add.at(N, grp[I].ravel(), np.repeat(fn, 3, axis=0)); N = N[grp]
+    return N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)

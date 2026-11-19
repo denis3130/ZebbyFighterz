@@ -46,7 +46,7 @@ from scipy.sparse.csgraph import connected_components
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mesh_prep'))
 import glbio
-from kael_gear import crop_paint, write_part, clip_iso, shell, near_index, cuff_band, ring_radius, flare, ring_frame, skirt as make_skirt, ring as make_ring
+from kael_gear import crop_paint, write_part, clip_iso, shell, near_index, cuff_band, ring_radius, flare, ring_frame, skirt as make_skirt, ring as make_ring, loop_subdivide, vertex_normals
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 KAEL_PKG = os.path.join(ROOT, 'wip_assets', 'kael')
@@ -62,6 +62,8 @@ HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
 GLOVE_T, GLOVE_WALL = .002, .0015   # m: the gloves' shell over the hands' skin, and its edge's strip down toward the skin (tools/kael_gear.py shell)
+HAND_STYLE = os.environ.get('KAEL_HAND_STYLE', 'foglio')   # Kael's hands: 'ren' (Ren's as on him: his paint, light, outline) or 'foglio' (as the sheet draws them: smooth, two flat tones, black lines between the fingers; 19/11, Denis: "mani e polsi ancora brutti")
+FOGLIO = dict(subdiv=1, skin=(250, 191, 151), line_push=.1, line_w=.7, ink_w=.002)   # 'foglio': Loop rounds; the sheet's skin; the outline pushed back so much of the body's (lines between the fingers) and so wide; the glove's edge ink half width, m
 RING = dict(clear=.003, bulge=.002, lip=.004, under=.0025, n_th=48, height=.185)   # m: the wrists' rings over what they cover, their bulge, their lips' depth; what is under them kept so far inside; their height: of the bracer, as the sheet's (its wrist band 23 px, 124 px between the bands' middles)
 ARM_LINE = (float(os.environ.get('KAEL_ARM_PUSH', .3)), .7)   # the arms' outline: its push back (of the body's) and its width
 HAND_LINE, BODY_LINE_BACK = tuple(float(v) for v in os.environ.get('KAEL_HAND_LINE', '1,1').split(',')), .02   # the hands' outline: its push back (of the body's, BODY_LINE_BACK m: CFG.looks.kael.line.back) and its width (Ren's hands: the body's, the silhouette only; tried (.10, .65): lines drawn inside them)
@@ -513,17 +515,22 @@ def main(bust):
     Ib = Ib[~whole]
     used = np.unique(Ib); mp = -np.ones(len(X), np.int64); mp[used] = np.arange(len(used)); It = mp[Ib]
     usedh = np.unique(Ih); mph = -np.ones(len(X), np.int64); mph[usedh] = np.arange(len(usedh)); rh = rid[usedh]
-    if os.environ.get('KAEL_ATTACH_DUMP'): np.savez(os.environ['KAEL_ATTACH_DUMP'], rid=rid[used], side=(X2[used, 0] >= 0), dseam=dseam[used],
-                                                    hands_rid=rh, hands_side=(X2[usedh, 0] >= 0), hands_dseam=dseam[usedh], hands_D=gfield[usedh, 0])   # (each part vertex's in Ren's package: tests/kael_gear_check.py, the fists' shape)
     # the gloves (17/11, Denis's choice: "Mano di Ren + guanto vero"): a real shell GLOVE_T over the hands' skin where the glove
     # is (the signed distance to its edge, gfield: under 0), cut along its edge; along the edge a strip down toward the skin, in
     # ink (its thickness); skinned as the skin under it; the outline as the hand's there
     Lb = open(REN[1][:-4] + 'bin', 'rb').read(); Lf = lambda k_: np.frombuffer(Lb, np.float32, RL[k_][1], RL[k_][0])
     Wd = np.zeros((len(usedh), len(allnames))); np.add.at(Wd, (np.repeat(np.arange(len(usedh)), 4), top[usedh].ravel()), tw[usedh].ravel())
-    Pc, Nc, Wc, Dc, Ic = clip_iso(X2[usedh], N2_ren[usedh], Wd, gfield[usedh, 0], mph[Ih])
-    Ps, Ns, Ds, Is, ink, src = shell(Pc, Nc, Dc, Ic, GLOVE_T, GLOVE_WALL, (X2[usedh], mph[Ih]))
-    Ws = Wc[src]; near = near_index(Pc[src], X2[usedh])
-    col = np.where(ink[:, None] > 0, np.array(INK_C) / 255., np.array(GLOVE_C) / 255.); gline = Lf('line')[rh][near]
+    # (the hands' surface: Ren's as it is, or for 'foglio' rounded by Loop subdivision, its normals the smooth surface's)
+    Hp, HI, HN = X2[usedh].copy(), mph[Ih], N2_ren[usedh]; HA = {'W': Wd, 'D': gfield[usedh, 0], 'line': Lf('line')[rh], 'flat': Lf('flat')[rh], 'dseam': dseam[usedh]}
+    if HAND_STYLE == 'foglio':
+        for _ in range(FOGLIO['subdiv']): Hp, HI, HA = loop_subdivide(Hp, HI, HA)
+        HN = vertex_normals(Hp, HI)
+    if os.environ.get('KAEL_ATTACH_DUMP'): np.savez(os.environ['KAEL_ATTACH_DUMP'], rid=rid[used], side=(X2[used, 0] >= 0), dseam=dseam[used], style=HAND_STYLE,
+                                                    hands_rid=rh if HAND_STYLE == 'ren' else -np.ones(len(Hp), np.int64), hands_side=(Hp[:, 0] >= 0), hands_dseam=HA['dseam'], hands_D=HA['D'])   # (each part vertex's in Ren's package (Ren's style): tests/kael_gear_check.py, the fists' shape)
+    Pc, Nc, Wc, Dc, Ic = clip_iso(Hp, HN, HA['W'], HA['D'], HI)
+    Ps, Ns, Ds, Is, ink, src = shell(Pc, Nc, Dc, Ic, GLOVE_T, GLOVE_WALL, (Hp, HI))
+    Ws = Wc[src]; near = near_index(Pc[src], Hp)
+    col = np.where(ink[:, None] > 0, np.array(INK_C) / 255., np.array(GLOVE_C) / 255.); gline = HA['line'][near]
     # the wrists' rings (Denis, circling the wrist: "è ancora fatto male"): on each bracer's purple cuff band a raised ring, round
     # all of it (the cuff, the seam to Ren's hand, the glove's start), its lips going in under them; what is under it brought in
     # (Meshy's flap of the cuff); the glove flared out to the ring's inside on the hand's side (no neck)
@@ -535,7 +542,8 @@ def main(bust):
         ss = (Ps[:, 0] >= 0) == (sd > 0); near_w = sx & (np.linalg.norm(np.cross(X2 - c, ax), axis=1) < .12)
         r_th = ring_radius(np.r_[X2[near_w], Ps[ss]], c, ax, ref, h, RING['clear'], RING['n_th']); r_in = r_th - RING['lip']
         lim = 2 * np.median(r_th)
-        for P_, m_ in ((X2, near_w), (Ps, ss)):   # (under the ring: kept RING['under'] inside its surface)
+        hs = ((Hp[:, 0] >= 0) == (sd > 0)) & (np.linalg.norm(np.cross(Hp - c, ax), axis=1) < .12)
+        for P_, m_ in ((X2, near_w), (Ps, ss), (Hp, hs)):   # (under the ring: kept RING['under'] inside its surface)
             t, r, k = ring_frame(P_, c, ax, ref, RING['n_th']); m = m_ & (np.abs(t) <= h / 2 + .002) & (r > r_th[k] - RING['under']) & (r < lim)
             u = ((P_ - c) - np.outer(t, ax)) / np.maximum(r, 1e-9)[:, None]
             P_[m] = c + np.outer(t[m], ax) + u[m] * (r_th[k[m]] - RING['under'])[:, None]
@@ -544,7 +552,10 @@ def main(bust):
         # the seam showed, a light line)
         Pt, Nt, It_, v = make_skirt(Ps, Ds, Is, c, ax, ref, r_in, h, ss)
         Ps, Ns, Is = np.r_[Ps, Pt], np.r_[Ns, Nt], np.r_[Is, It_]; Ds, ink, Ws, col, gline, near = (np.r_[a, a[v]] for a in (Ds, ink, Ws, col, gline, near))
-        X2[near_w] = flare(X2[near_w], c, ax, ref, r_in, h)   # (and the cuff's end and the hand's skin between the ring and the glove, with it)
+        # (and the cuff's end and the hand's skin under the glove with it, GLOVE_T and 1 mm less: flared to the same radius the
+        # skin and the glove met, and the skin showed through the glove in patches)
+        X2[near_w] = flare(X2[near_w], c, ax, ref, r_in - GLOVE_T - .001, h)
+        Hp[hs] = flare(Hp[hs], c, ax, ref, r_in - GLOVE_T - .001, h)
         Pr, Nr, Ir, Dr, sr = make_ring(c, ax, ref, r_th, h, RING['bulge'], RING['lip'])
         tb, rb, _ = ring_frame(X2, c, ax, ref, RING['n_th']); ins = sx & (np.abs(tb) <= h / 2) & (rb < lim)
         # (skinned as what it covers: each ring vertex the mean weights of the 8 points under it nearest, then smoothed round
@@ -554,7 +565,7 @@ def main(bust):
         for _ in range(3): Wr = (Wr + np.roll(Wr, 1, 1) + np.roll(Wr, -1, 1)) / 3
         Wr = Wr.reshape(-1, len(allnames)); Wr /= Wr.sum(1, keepdims=True)
         rings.append(dict(side=side, c=c.tolist(), ax=ax.tolist(), ref=ref.tolist(), h=float(h), r=r_th.tolist(), rin=r_in.tolist(),
-                          inBust=mp[ins & (mp >= 0)].tolist(), inHands=mph[ins & (mph >= 0)].tolist()))
+                          inBust=mp[ins & (mp >= 0)].tolist(), inHands=np.nonzero(hs & (np.abs(ring_frame(Hp, c, ax, ref, RING['n_th'])[0]) <= h / 2))[0].tolist()))
         Rg.append((Pr, Nr, Ir, Dr, Wr))
         print('%s ring: from the cuff band (%.1f cm) toward the hand, %.1f cm high, %.1f to %.1f cm round the axis' % (side, 100 * hb, 100 * h, 100 * r_th.min(), 100 * r_th.max()))
     # (the outline on the hands drawn inside them too, as a drawing's lines: where a finger lies over another, the thumb over the
@@ -571,10 +582,16 @@ def main(bust):
                                        'lb': ((push - 1) * BODY_LINE_BACK)[used], 'line': width[used]},
                {'scale': SCALE, 'bones': {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}, 'fingers': fingers, 'fistFrame': frames}, BT, 'png')
     print('written: kael_bust (%d vertices, %d triangles)' % (len(used), len(It)))
-    tex, uvh = crop_paint(Image.open(REN_PAINT), R['UV'][rh])
-    write_part(KAEL_PKG, 'kael_hands', {'pos': X2[usedh], 'nor': N2_ren[usedh], 'uv': uvh, 'jnt': top[usedh], 'wgt': tw[usedh], 'idx': mph[Ih],
-                                        'flat': Lf('flat')[rh], 'line': Lf('line')[rh]}, None, tex)
-    print('written: kael_hands (%d vertices, %d triangles; Ren\'s paint cut %dx%d)' % (len(usedh), len(Ih), *tex.size))
+    topH = np.argsort(-HA['W'], 1)[:, :4]; twH = np.take_along_axis(HA['W'], topH, 1); twH /= np.maximum(twH.sum(1, keepdims=True), 1e-12)
+    if HAND_STYLE == 'foglio':   # (the sheet's: one skin colour, the game's two tones, lines between the fingers)
+        write_part(KAEL_PKG, 'kael_hands', {'pos': Hp, 'nor': HN, 'uv': np.zeros((len(Hp), 2)), 'jnt': topH, 'wgt': twH, 'idx': HI,
+                                            'col': np.tile(np.array(FOGLIO['skin']) / 255., (len(Hp), 1)), 'flat': np.zeros(len(Hp)),
+                                            'line': HA['line'] * FOGLIO['line_w'], 'lb': np.full(len(Hp), (FOGLIO['line_push'] - 1) * BODY_LINE_BACK)}, {'style': 'foglio'})
+        print('written: kael_hands (%d vertices, %d triangles; as the sheet: %d Loop round(s), flat skin)' % (len(Hp), len(HI), FOGLIO['subdiv']))
+    else:
+        tex, uvh = crop_paint(Image.open(REN_PAINT), R['UV'][rh])
+        write_part(KAEL_PKG, 'kael_hands', {'pos': Hp, 'nor': HN, 'uv': uvh, 'jnt': topH, 'wgt': twH, 'idx': HI, 'flat': HA['flat'], 'line': HA['line']}, None, tex)
+        print('written: kael_hands (%d vertices, %d triangles; Ren\'s paint cut %dx%d)' % (len(Hp), len(HI), *tex.size))
     # the gloves' part: the shells, then the rings (their outer wall's vertices for tests/viewer_check.py)
     P_, N_, I_, D_, W_, C_, L_, Nn = [Ps], [Ns], [Is], [Ds], [Ws], [col], [gline], [near]; at = len(Ps)
     for g, (Pr, Nr, Ir, Dr, Wr) in zip(rings, Rg):
@@ -584,7 +601,8 @@ def main(bust):
     Pg, Ng, Ig, Dg, Wg = (np.concatenate(a) for a in (P_, N_, I_, D_, W_))
     topg = np.argsort(-Wg, 1)[:, :4]; twg = np.take_along_axis(Wg, topg, 1); twg /= np.maximum(twg.sum(1, keepdims=True), 1e-12)
     write_part(KAEL_PKG, 'kael_gloves', {'pos': Pg, 'nor': Ng, 'uv': np.zeros((len(Pg), 2)), 'jnt': topg, 'wgt': twg, 'idx': Ig, 'col': np.concatenate(C_),
-                                         'glove': np.c_[Dg, np.ones(len(Dg))], 'line': np.concatenate(L_), 'near': np.concatenate(Nn)}, {'rings': rings})
+                                         'glove': np.c_[Dg, np.ones(len(Dg))], 'line': np.concatenate(L_), 'near': np.concatenate(Nn)},
+               {'rings': rings, **({'style': 'foglio', 'inkW': FOGLIO['ink_w']} if HAND_STYLE == 'foglio' else {})})
     print('written: kael_gloves (%d vertices, %d triangles: the shells %.1f mm over the skin, %d edge vertices; 2 rings)' % (len(Pg), len(Ig), 1000 * GLOVE_T, int(ink.sum())))
 
 

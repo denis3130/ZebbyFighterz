@@ -41,6 +41,7 @@ def sample(img, uv):
 
 def crop_paint_is_exact(D):
     """the hands' paint, cropped out of Ren's: at their new coordinates the same colours as Ren's at his"""
+    if str(D['style']) != 'ren': return   # (the hands as the sheet draws them: not Ren's paint and normals)
     from kael_bust_attach import package
     j, A = part('hands'); R = package(REN_PKG); rid = D['hands_rid']
     k = np.random.default_rng(1).choice(len(rid), min(500, len(rid)), replace=False)
@@ -53,6 +54,7 @@ def crop_paint_is_exact(D):
 def hands_part_is_rens(D):
     """the hands' light and outline per vertex Ren's own; their normals Ren's, only turned with the hand (away from the
     wrist: within 5 cm of the seam the pose blends the hand's turn with the forearm's, positions and normals alike)"""
+    if str(D['style']) != 'ren': return   # (the hands as the sheet draws them: not Ren's paint and normals)
     j, A = part('hands'); rid = D['hands_rid']; side = D['hands_side']; far = D['hands_dseam'] > .05
     for key in ('flat', 'line'):
         err = np.abs(A[key] - ren_look_block(key)[rid]).max()
