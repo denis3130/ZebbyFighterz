@@ -73,6 +73,31 @@ async def route(r):
 # Kael's gloves (17/11): a shell over Ren's hands, its rings at the wrists. skinP: a part vertex's (or a point near it,
 # with the vertex's skin) place in the world, as the GPU skins it (SkinnedMesh.boneTransform, for any bind point)
 GEAR = """async () => { const it = VW.it, r = {};
+  const plum = async (hide) => { await new Promise(f => setTimeout(f, 150)); it.root.updateMatrixWorld(true);   // (plum pixels round the left fist)
+    const c = document.getElementById('view'), bone = n => it.bones.find(o => o.name === n) || it.fingers.find(o => o.name === n);
+    const v = bone('LeftHand').getWorldPosition(new THREE.Vector3()).lerp(bone('LeftHandMiddle1').getWorldPosition(new THREE.Vector3()), .7).project(VW.camera);
+    const x = (v.x + 1) / 2 * c.width, y = (1 - v.y) / 2 * c.height, g = document.createElement('canvas'); g.width = g.height = 80;
+    const ctx = g.getContext('2d'); ctx.drawImage(c, x - 40, y - 40, 80, 80, 0, 0, 80, 80); const d = ctx.getImageData(0, 0, 80, 80).data; let k = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && d[i + 2] > d[i] && d[i] > d[i + 1] && d[i + 2] - d[i + 1] > 12 && d[i + 2] < 160) k++; return k; };
+  if (it.arms) {   // Meshy's forearms (19/11): textured, flashed when hit, the fist or the open hand as the moves ask, the wrists straight
+    // in the fists (the hand's line, wrist to the middle finger's first joint, on the forearm's), drawn mirrored too
+    const W = o => o.getWorldPosition(new THREE.Vector3()), bone = n => it.bones.find(o => o.name === n) || it.fingers.find(o => o.name === n);
+    r.arms = it.arms.every(m => !!m[0].material.map && m[1].isSkinnedMesh);
+    r.flash = [it.mats.armFist, it.mats.armOpen].every(m => !!m && it.arms.some(a => a[0].material === m));
+    VW.speed = 0; let bend = 0;
+    for (const [b, n] of [[0, 40], [2, 7], [2, 12], [3, 30]]) { document.getElementById('play' + b).click(); VW.tick(n); it.root.updateMatrixWorld(true);
+      for (const sd of ['Left', 'Right']) { const E = W(bone(sd + 'ForeArm')), H = W(bone(sd + 'Hand')), M = W(bone(sd + 'HandMiddle1'));
+        bend = Math.max(bend, THREE.MathUtils.radToDeg(H.clone().sub(E).angleTo(M.clone().sub(H)))); } }
+    r.straight = bend < 3; r.straightPx = +bend.toFixed(2);
+    document.getElementById('play0').click(); VW.tick(40); const fist = it.arms[0][0].visible && !it.arms[1][0].visible;
+    document.getElementById('play6').click(); VW.tick(20); const open = !it.arms[0][0].visible && it.arms[1][0].visible;
+    r.swap = fist && open;
+    document.getElementById('play0').click(); VW.tick(40); VW.spin = false; VW.yaw = .55; VW.zoom = .45; it.root.scale.x = -1;
+    const withA = await plum(); it.arms.forEach(m => { m[0].material.visible = false; }); const without = await plum(); it.arms.forEach(m => { m[0].material.visible = true; });
+    r.mirror = withA - without > 30; r.mirrorPx = withA - without;
+    it.root.scale.x = 1; VW.zoom = 1; VW.speed = 1;
+    return r;
+  }
   r.gloves = !!it.gloves && !!it.gloves.geometry.attributes.color && !!it.gloves.geometry.attributes.aGlove;
   r.flash = !!it.hands && !!it.gloves && [it.hands.material, it.gloves.material].every(m => Object.values(it.mats).includes(m));
   if (!r.gloves) return r;
@@ -113,18 +138,12 @@ GEAR = """async () => { const it = VW.it, r = {};
   }
   // mirrored (the fighter on the right): the glove still drawn (pixels it adds round the fist)
   document.getElementById('play0').click(); VW.tick(40); VW.spin = false; VW.yaw = .55; VW.zoom = .45; it.root.scale.x = -1;
-  const plum = async () => { await new Promise(f => setTimeout(f, 150)); it.root.updateMatrixWorld(true);
-    const c = document.getElementById('view'), bone = n => it.bones.find(o => o.name === n) || it.fingers.find(o => o.name === n);
-    const v = bone('LeftHand').getWorldPosition(new THREE.Vector3()).lerp(bone('LeftHandMiddle1').getWorldPosition(new THREE.Vector3()), .7).project(VW.camera);
-    const x = (v.x + 1) / 2 * c.width, y = (1 - v.y) / 2 * c.height, g = document.createElement('canvas'); g.width = g.height = 80;
-    const ctx = g.getContext('2d'); ctx.drawImage(c, x - 40, y - 40, 80, 80, 0, 0, 80, 80); const d = ctx.getImageData(0, 0, 80, 80).data; let k = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && d[i + 2] > d[i] && d[i] > d[i + 1] && d[i + 2] - d[i + 1] > 12 && d[i + 2] < 160) k++; return k; };
   const withG = await plum(); G.visible = false; const without = await plum(); G.visible = true;
   r.mirror = withG - without > 30; r.mirrorPx = withG - without;
   it.root.scale.x = 1; VW.zoom = 1; VW.speed = 1;
   return r; }"""
 REN_ONLY = ('spikes', 'head', 'fringe', 'flat', 'ribbons', 'calm', 'swings', 'finite')   # (the look's parts only Ren has)
-KAEL_ONLY = ('hands', 'flash', 'gloves', 'shell', 'ring', 'mirror')   # (Kael's: his hands Ren's as their own part, his gloves and wrists' rings, 17/11)
+KAEL_ONLY = ('hands', 'flash', 'gloves', 'shell', 'ring', 'mirror', 'arms', 'straight', 'swap')   # (Kael's: his hands Ren's as their own part, his gloves and wrists' rings, 17/11; or Meshy's forearms, 19/11)
 
 
 async def main(out_dir, page='viewer.html'):
@@ -174,7 +193,8 @@ async def main(out_dir, page='viewer.html'):
               r.fringe = !!it.fringe && it.fringe.isSkinnedMesh && it.fringe.geometry.index.count > 6000 && it.fringe.material.alphaTest > 0;   // its locks from the sheet (over 2000 triangles)
               r.line = !!it.mesh.geometry.attributes.aLine; r.flat = !!it.mesh.geometry.attributes.aFlat;
               // (Kael: Ren's hands as their own part on the same skeleton (Ren's are 1305 triangles), flashing with the body: f_fx lights every material of it.mats)
-              r.hands = !!it.hands && it.hands.isSkinnedMesh && it.hands.skeleton === it.mesh.skeleton && it.hands.geometry.index.count / 3 > 1000;
+              r.hands = (!!it.hands && it.hands.isSkinnedMesh && it.hands.skeleton === it.mesh.skeleton && it.hands.geometry.index.count / 3 > 1000)
+                || (!!it.arms && it.arms.length === 2 && it.arms.every(m => m[0].isSkinnedMesh && m[0].skeleton === it.mesh.skeleton && m[0].geometry.index.count / 3 > 1000));   // (or Meshy's forearms, 19/11)
               r.flash = !!it.hands && Object.values(it.mats).includes(it.hands.material);
               return r; }""")
             # the sash: two ribbons on chains of bones; calm in the guard, swinging after a jump, never NaN

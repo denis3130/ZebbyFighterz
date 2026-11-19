@@ -10,7 +10,7 @@ pronto in `wip_assets/kael/`: `mk.sh` lo mette solo nell'anteprima di Kael (`vie
 gioco usa un pacchetto Meshy appena lo trova in `assets/` o `viewer_assets/`: `src/d_render.js`, `modelBuild(c) ||
 fighterBuild(c)`). Per metterlo nel gioco: spostare `wip_assets/kael/` in `viewer_assets/kael/`, test, pubblicare.
 
-## Task Meshy e crediti (saldo prima: 1100, dopo: 970)
+## Task Meshy e crediti (saldo prima: 1100, dopo: 886)
 | Passo | Task | Crediti |
 |---|---|---|
 | Corpo senza capelli né vestiti (`kael_base.png`) — superato | image-to-3d `01a1c4dd-548a-70d1-9dad-05e513084c49` | 30 |
@@ -20,7 +20,9 @@ fighterBuild(c)`). Per metterlo nel gioco: spostare `wip_assets/kael/` in `viewe
 | Animazioni: le 25 di Ren, riportate sul suo scheletro | nessun task | 0 |
 | **Testa e capelli** dalle 4 immagini di Denis (vedi "Testa da Meshy") | multi-image-to-3d `01a1c6e9-6c56-778a-a146-b95efc0bfed6` | 30 |
 | **Busto e braccia** dalle 3 viste del foglio del busto senza le code della fascia (vedi "Busto da Meshy") | multi-image-to-3d `01a1cbc9-6df2-76aa-bd39-86e8ff4ee855` | 30 |
-| **Totale** | | **130** |
+| **Avambraccio e mano** (19/11, vedi "Avambracci da Meshy"): disegni del pugno e della mano aperta dal foglio del busto | image-to-image `01a1f496-4744-7193-b4e5-43012a558e08`, `01a1f496-50d6-714b-a4f0-a08364671a56` | 24 |
+| **Avambraccio col pugno** e **con la mano aperta**, dalle 3 viste di ogni disegno | multi-image-to-3d `01a1f4a3-797e-7637-bd2f-33b6cae22c34`, `01a1f4a3-922b-72a3-b89e-2a72d639b8ac` | 60 |
+| **Totale** | | **214** |
 
 Il primo corpo (senza vestiti, per vestirlo in codice) è stato lasciato: la forma gonfiata per i pantaloni larghi non
 andava (Denis: "perché l'hai ingrossato così tanto?"), i vestiti solo dipinti sul corpo aderente sembravano una tuta e
@@ -776,6 +778,37 @@ come il foglio): "la mano è troppo storta ancora".
 - Misure (grafica software, 844x390, guardia, macchina più lenta di quella del 17/11): versione 21 109 ms per fotogramma,
   109.468 triangoli; ora 126 ms, 125.648 triangoli (le dita lisce: un giro di Loop). Solo l'anteprima: Kael nel gioco
   resta il lottatore provvisorio, gli FPS del gioco non cambiano.
+
+## Avambracci da Meshy (19/11, proposta, non pubblicata)
+Denis, sulla proposta delle mani come il foglio: "rifai ste mani di merda su meshy", poi "anche polso e avambraccio ecc";
+ok sul costo (84 crediti, saldo da 970 a 886) e sui disegni ("si").
+- **Disegni** (Meshy image-to-image, gpt-image-2, 12 crediti l'uno): dal foglio del busto (l'avambraccio destro del disegno
+  di fronte, `meshy/meshy_output/20261119_kael-braccio/ref_avambraccio.png`) un foglio a 3 viste (dorso, lato del pollice,
+  palmo) dell'avambraccio dal gomito alle dita: col pugno chiuso e con la mano aperta (`disegno_pugno.png`,
+  `disegno_aperta.png`), divisi in 3 immagini ciascuno (`vista_*`).
+- **Modelli** (multi-image-to-3d, texture 2K senza PBR, 30 crediti l'uno): `braccio_pugno.glb` (202.574 triangoli) e
+  `braccio_aperta.glb` (96.320), alleggeriti a 8.000 (`tools/mesh_prep/decimate_glb.py IN OUT 8000`). Sono un avambraccio
+  destro (dorso +Z, pollice -X, dita +Y); per il sinistro lo specchio.
+- **Attaccati** (`arm_parts` in `tools/kael_bust_attach.py`, `place_arm` in `tools/kael_gear.py`): dalla cima della banda
+  del gomito al fondo della banda del polso come il bracciale del busto (sul suo asse, dai centri delle fette); spessi
+  come l'avambraccio del busto (niente scalino al gomito; la banda del gomito 2 mm sopra il busto, che resta 1 cm dentro
+  la banda, così il taglio non si vede); la mano lunga come quella scelta da Denis (90%), larga quanto chiede la banda del
+  polso (al massimo 1,2 volte). Pezzi rigidi: l'avambraccio sull'osso dell'avambraccio, la mano sull'osso della mano
+  (girata come l'osso a riposo), un tratto sfumato all'inizio del guanto. Nel busto si nascondono gli avambracci e gli
+  attacchi alle mani vecchie (`armhide`); le mani di Ren e i guanti (`kael_hands`, `kael_gloves`) non si disegnano più
+  (`CFG.looks.kael` `hands:false, gloves:false, arms:true`).
+- **Pugno o mano aperta** (`src/e_model.js`, `mdSync`): si vede il pezzo col pugno quando le dita sono chiuse a metà o
+  più (`it.curl`), altrimenti quello con la mano aperta (colpo energetico, presa). Luce del gioco a due toni
+  (`mdGrad2`), contorno del corpo. Il polso dritto nei pugni resta (`straightWrist`).
+- Per rifare: `python3 tools/kael_bust_attach.py meshy/meshy_output/20261111_kael-busto/busto_k11.glb
+  meshy/meshy_output/20261119_kael-braccio/braccio_pugno_8k.glb meshy/meshy_output/20261119_kael-braccio/braccio_aperta_8k.glb`,
+  poi `bash mk.sh`.
+- Controlli in `tests/viewer_check.py` (Kael): pezzi presenti col loro disegno e nel lampo del colpo, pugno o mano aperta
+  secondo la mossa, polsi dritti nei pugni (sotto 3 gradi in guardia, pugni e calci), disegnati anche specchiati.
+- Misure (grafica software, 844x390, guardia): 133.456 triangoli (prima 125.648), 9 disegni, circa 125 ms per fotogramma
+  come prima (la versione 21 106-110 sulla stessa macchina). Solo l'anteprima.
+- Per dopo: `kael_hands.*` e `kael_gloves.*` non servono più con gli avambracci (toglierli se Denis li approva, l'anteprima
+  pesa meno); da vicinissimo la banda del gomito si vede aperta verso il braccio (un anello largo, come nel foglio).
 
 ## Per dopo
 - Le code della fascia sono attaccate ai pantaloni (le ha fatte così Meshy): seguono le gambe, non oscillano. Se Denis

@@ -295,7 +295,7 @@ const CFG={
     // the outline's widths (tools/char_look.py), the light's normals smoothed, Ren's clips on his skeleton and Ren's guard
     // (his head held as high); his head and his bust from Meshy (tools/kael_head.py, tools/kael_bust_attach.py: bust:
     // its hands Ren's, with their finger bones).
-    kael:{head:true, bust:true, hands:true, gloves:true, straightWrist:1, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
+    kael:{head:true, bust:true, hands:false, gloves:false, arms:true, straightWrist:1, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
       clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
@@ -2015,6 +2015,26 @@ function modelBuild(key) {
     gmesh.bind(skel, mesh.matrixWorld); gline.bind(skel, mesh.matrixWorld);
     gloves.mesh = gmesh; gloves.mat = gm; gmesh.userData.part = gloves.j;   // (its rings' frames, for tests/viewer_check.py)
   }
+  // Kael's forearms from Meshy (19/11/2026, Denis: "rifai ste mani di merda su meshy", "anche polso e avambraccio";
+  // tools/kael_bust_attach.py arm_parts): bracer, wrist band, half glove and hand in one piece, rigid on the forearm and the
+  // hand bones; one with the fist, one with the open hand (mdArms shows the one the hands' curl asks for); the game's two
+  // tones (their volume reads, as the hands'), the body's outline; the bust's forearms and its seams to the old hands hidden
+  const arms = lk.arms ? ['armfist', 'armopen'].map(n => mdPartData(md, key, n)) : [];
+  if (arms.length && arms.every(Boolean)) arms.forEach(a => {
+    const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = a.jpg; tex.anisotropy = 4;
+    tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
+    const am = new THREE.MeshToonMaterial({map: tex, gradientMap: mdGrad2(), skinning: true});
+    const amesh = new THREE.SkinnedMesh(a.geo, am), aline = new THREE.SkinnedMesh(a.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: ol.back}));
+    amesh.frustumCulled = aline.frustumCulled = false; body.add(amesh, aline);
+    amesh.bind(skel, mesh.matrixWorld); aline.bind(skel, mesh.matrixWorld);
+    a.mesh = amesh; a.line = aline; a.mat = am;
+  });
+  else arms.length = 0;
+  if (arms.length && bust && bust.armhide) {   // (the bust without its forearms)
+    const g = bust.mesh.geometry;
+    bust.mesh.geometry = mdTris(g, g.index.array, bust.armhide, [], null);
+    body.children.forEach(o => { if (o !== bust.mesh && o.geometry === g) o.geometry = bust.mesh.geometry; });   // (its outline too)
+  }
   const limbs = {};
   for (const l in md.meta.limbs) { const d = md.meta.limbs[l], o = new THREE.Object3D(); o.position.fromArray(d.p); B(d.b).add(o); limbs[l] = o; }
   const it = {kind: 'model', key, root, body, scale: s, bones, mesh, outline, headEnd: B(md.meta.head), limbs, mats: {main},
@@ -2023,6 +2043,7 @@ function modelBuild(key) {
   if (hands) { it.hands = hands.mesh; it.mats.hands = hands.mat; }
   if (lk.straightWrist && fingers.length) it.straight = {k: lk.straightWrist, w: ['Left', 'Right'].map(s => ({hand: B(s + 'Hand'), line: fingers.find(o => o.name === s + 'HandMiddle1').position.clone()}))};
   if (gloves) { it.gloves = gloves.mesh; it.mats.gloves = gloves.mat; }
+  if (arms.length) { it.arms = arms.map(a => [a.mesh, a.line]); it.mats.armFist = arms[0].mat; it.mats.armOpen = arms[1].mat; }
   if (bust) { it.bust = bust.mesh; it.mats.bust = bust.mat; if (bust.j.fistFrame) it.fistFrame = {Left: new THREE.Quaternion().fromArray(bust.j.fistFrame.Left), Right: new THREE.Quaternion().fromArray(bust.j.fistFrame.Right)}; }   // (fistFrame: each fist's own frame in its hand bone's: Ren's hands, laid as his)
   if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
   if (face) it.face = face;
@@ -2508,7 +2529,8 @@ function mdPartData(md, key, name) {
     if (j.glove) geo.setAttribute('aGlove', new THREE.BufferAttribute(f32(j.glove), 2));   // (Kael's bust and gloves: the signed distance to the glove's edge, m, and 1)
     if (j.col) geo.setAttribute('color', new THREE.BufferAttribute(f32(j.col), 3));   // (its colours per vertex: Kael's gloves and rings)
     md.parts[name] = {j, geo, hide: new Uint32Array(buf, j.hide[0], j.hide[1]), lining: j.lining && j.lining[1] ? new Uint32Array(buf, j.lining[0], j.lining[1]) : null,
-      noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null};
+      noline: j.noline && j.noline[1] ? new Uint32Array(buf, j.noline[0], j.noline[1]) : null,
+      armhide: j.armhide && j.armhide[1] ? new Uint32Array(buf, j.armhide[0], j.armhide[1]) : null};   // (Kael's bust: its triangles under Meshy's forearms)
   }
   return Object.assign({jpg: img}, md.parts[name]);
 }
@@ -2853,6 +2875,7 @@ function mdSync(it, side, S) {
   it.F = F; it.act = F.act; it.pose = p;
   mdApply(it, p);
   if (it.straight) mdStraightWrists(it);
+  if (it.arms) it.arms.forEach((m, i) => { m[0].visible = m[1].visible = (it.curl >= .5) === (i === 0); });   // (Meshy's forearms: the fist, or the open hand)
   if (it.sash) mdSash(it, S);
 }
 

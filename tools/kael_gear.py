@@ -28,7 +28,7 @@ def write_part(folder, name, arrays, extra=None, img=None, fmt='jpg'):
         a = np.asarray(a)
         if k == 'idx': a = a.astype(np.uint16 if n < 65536 else np.uint32)
         elif k == 'jnt': a = a.astype(np.uint8)
-        elif k in ('hide',): a = a.astype(np.uint32)
+        elif k in ('hide', 'armhide'): a = a.astype(np.uint32)
         elif k in ('near',): a = a.astype(np.int32)
         else: a = a.astype(np.float32)
         blob = pad(blob); jo[k] = [len(blob), int(a.size)]; blob += np.ascontiguousarray(a).tobytes()
@@ -163,6 +163,47 @@ def glove_edge(P, H, K, palm, T2, T3, r_thumb, back=.012, palm_m=.004, thumb=.00
     ax = (T3 - T2) / np.linalg.norm(T3 - T2); u = (P - T2) @ ax
     rad = np.linalg.norm((P - T2) - np.outer(u, ax), axis=1)
     return np.maximum(d_hand, np.minimum(u + thumb, r_thumb - rad))
+
+
+def arm_bands(P, col, purple):
+    """A Meshy forearm (its axis +Y, the hand at +Y): its elbow band's far edge and its wrist band's hand edge (y), from
+    the 2 cm slices where over 60% of the vertices are purple (col (n, 3) 0-255, purple(col) -> bool); and the elbow band's
+    near edge."""
+    bins = np.arange(P[:, 1].min(), P[:, 1].max() + .02, .02); pur = purple(col)
+    cnt, tot = np.histogram(P[pur, 1], bins)[0], np.histogram(P[:, 1], bins)[0]
+    on = np.nonzero(cnt / np.maximum(tot, 1) > .6)[0]
+    runs = np.split(on, np.nonzero(np.diff(on) > 1)[0] + 1)
+    lo, hi = runs[0], runs[-1]
+    return float(bins[lo[0]]), float(bins[hi[-1] + 1]), float(bins[lo[-1] + 1])   # (and the elbow band's near edge)
+
+
+def place_arm(P, N, y0, y1, top, cuff, Hb, a_h, n_h, mirror, blend=.08, hand=1., radial=None):
+    """The Meshy forearm (P, N: its axis +Y with the hand at +Y, the back of the hand +Z, its thumb -X: a right one) laid on
+    a bust's arm: its elbow band's far edge y0 on `top`, its wrist band's hand edge y1 on `cuff` (the bust's bracer ends),
+    scaled uniformly; up to y1 in the forearm's frame (along top->cuff, the back of the hand toward n_h), past y1 + blend
+    (its units) turned about the wrist joint Hb into the hand's (along a_h, the back toward n_h), blended between. mirror: a
+    left one (x flipped); hand: the hand (past y1) so much bigger about the wrist band's edge (or (along, across) it); radial = (ys, ks): the forearm
+    ks times as wide round its axis (the middle of its elbow band's vertices) at its heights ys (interpolated; none of it
+    on the hand). Returns the positions, the normals and the hand's share per vertex."""
+    s = np.linalg.norm(cuff - top) / (y1 - y0)
+    Q = P * [-1. if mirror else 1., 1., 1.]; M = N * [-1. if mirror else 1., 1., 1.]
+    def frame(a, n):
+        a = a / np.linalg.norm(a); n = n - (n @ a) * a; n /= np.linalg.norm(n)
+        return np.c_[np.cross(a, n), a, n]   # (columns: x, y, z; x = y cross z, a proper turn either way: the mirror flips the thumb)
+    Rf = frame(cuff - top, n_h); Rr = frame(a_h, n_h) @ Rf.T   # (the hand's frame from the forearm's)
+    w = np.clip((Q[:, 1] - y1) / blend, 0, 1); w = w * w * (3 - 2 * w)
+    if radial:   # (round the elbow band's axis; the normals tilted as the side's slope changes, roughly: renormalised below)
+        ys, ks = radial; c = Q[Q[:, 1] < ys[0] + .2][:, [0, 2]].mean(0)
+        kr = 1 + (np.interp(Q[:, 1], ys, ks) - 1) * (1 - w)
+        Q = Q.copy(); Q[:, [0, 2]] = c + (Q[:, [0, 2]] - c) * kr[:, None]
+        M = M.copy(); M[:, [0, 2]] /= kr[:, None]
+    hl, hw = (hand, hand) if np.isscalar(hand) else hand   # (the hand's length and width scales)
+    L = Q - [0., y1, 0.]; k = np.c_[1 + (hw - 1) * w, 1 + (hl - 1) * w, 1 + (hw - 1) * w]
+    Xf = cuff + s * (L * k) @ Rf.T; Xh = Hb + (Xf - Hb) @ Rr.T
+    X = Xf * (1 - w)[:, None] + Xh * w[:, None]
+    M = M / k[:, [0, 1, 2]] * k[:, [1, 1, 1]]   # (the normals of the hand's surface as it is stretched)
+    Nf = M @ Rf.T; Nn = Nf * (1 - w)[:, None] + (Nf @ Rr.T) * w[:, None]; Nn /= np.maximum(np.linalg.norm(Nn, axis=1, keepdims=True), 1e-9)
+    return X, Nn, w
 
 
 def near_index(P_shell, P_hands):
