@@ -184,13 +184,9 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Per dopo (annotate, non fatte): i fogli del corpo che Denis ha mandato l'8/11 (`docs/ref/personaggi/ren_busto_3viste.png`, `ren_gambe_3viste.png`: destra, fronte, sinistra; `ren_retro.png`: tutto il corpo da dietro; il foglio della testa che ha rimandato è identico a `ren_testa_3viste.png`) per rifare o ridipingere il corpo dai lati e da dietro (fasce con il polsino scuro, stivali, pantaloni, code della fascia arancione), oggi dipinto solo dalla vista di fronte di `ren.png`; l'ombra nera sotto il mento come nel foglio (una V spessa sul collo, sotto la mascella; nel foglio c'è in tutte e tre le viste), da proporre a Denis prima di farla; in guardia la testa alzata di 20° invece di 12° (`headUp` del look: provato in una copia, con 20° si vedono entrambi gli occhi sopra il pugno, a 28° sembra guardare in alto; è una scelta di posa, da decidere con Denis); stesso metodo delle 3 viste per Kael, se Denis fa il suo foglio; se Denis vuole punte dei capelli ancora più lunghe, un'altra prova Meshy (30 crediti; alleggerire il modello non le arrotonda: a 60.000 e a 16.000 triangoli la sagoma è la stessa).
 
 ## Prossimo passo
-**Vestiti di Kael da Meshy (19/11, anteprima versione 27, con i colori di Meshy com'erano nella sua anteprima: Denis "usa quell'immagine così com'è"; aspetta il giudizio di Denis)**: "rifai in meshy i vestiti e
-mettili sopra a quelli vecchi... niente domande utilizza i crediti" (42 crediti, saldo 844). Un pezzo dal colletto agli
-stivali dal disegno a 3 viste, ripassato come il foglio, attaccato alle ossa al posto del busto e del corpo vecchi; dettagli
-e come rifarlo in `docs/meshy/KAEL.md`, "Vestiti da Meshy". Per rifare: `python3 tools/kael_bust_attach.py
-meshy/meshy_output/20261111_kael-busto/busto_k11.glb meshy/meshy_output/20261119_kael-braccio/braccio_pugno_8k.glb
-meshy/meshy_output/20261119_kael-braccio/braccio_aperta_8k.glb meshy/meshy_output/20261119_kael-vestiti/vestiti_40k.glb`,
-`bash mk.sh`.
+**Vestiti di Kael da Meshy provati e tolti (19/11)**: fatti e pubblicati (versione 25, 42 crediti, saldo 844); Denis: "fa
+schifo, torna a quello di prima, elimina sta roba". Tolti; anteprima ripubblicata come la 24 (versione 26). Rimessi coi colori di Meshy ("usa quell'immagine così com'è", versione 27), poi "no niente torna a quello di prima": tolti di nuovo (versione 28, come la 24). Vedi
+`docs/meshy/KAEL.md`, "Vestiti da Meshy: provati e tolti". Aspetta il prossimo passo da Denis.
 
 **Avambracci e mani di Kael da Meshy (19/11, pubblicati nell'anteprima di Kael, versione 23, dopo "fammi vede"; poi "decisamente molto meglio ma migliora i disegni": versione 24, disegni ripassati; aspetta il giudizio di Denis)**: Denis
 ("rifai ste mani di merda su meshy", "anche polso e avambraccio") ha approvato 84 crediti (saldo 886) e i disegni. Fatti
