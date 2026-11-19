@@ -184,11 +184,11 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Per dopo (annotate, non fatte): i fogli del corpo che Denis ha mandato l'8/11 (`docs/ref/personaggi/ren_busto_3viste.png`, `ren_gambe_3viste.png`: destra, fronte, sinistra; `ren_retro.png`: tutto il corpo da dietro; il foglio della testa che ha rimandato è identico a `ren_testa_3viste.png`) per rifare o ridipingere il corpo dai lati e da dietro (fasce con il polsino scuro, stivali, pantaloni, code della fascia arancione), oggi dipinto solo dalla vista di fronte di `ren.png`; l'ombra nera sotto il mento come nel foglio (una V spessa sul collo, sotto la mascella; nel foglio c'è in tutte e tre le viste), da proporre a Denis prima di farla; in guardia la testa alzata di 20° invece di 12° (`headUp` del look: provato in una copia, con 20° si vedono entrambi gli occhi sopra il pugno, a 28° sembra guardare in alto; è una scelta di posa, da decidere con Denis); stesso metodo delle 3 viste per Kael, se Denis fa il suo foglio; se Denis vuole punte dei capelli ancora più lunghe, un'altra prova Meshy (30 crediti; alleggerire il modello non le arrotonda: a 60.000 e a 16.000 triangoli la sagoma è la stessa).
 
 ## Prossimo passo
-**Avambracci e mani di Kael da Meshy (19/11, proposta, NON pubblicata: aspetta l'ok di Denis sulle immagini)**: Denis
+**Avambracci e mani di Kael da Meshy (19/11, pubblicati nell'anteprima di Kael, versione 23, dopo "fammi vede"; aspetta il giudizio di Denis)**: Denis
 ("rifai ste mani di merda su meshy", "anche polso e avambraccio") ha approvato 84 crediti (saldo 886) e i disegni. Fatti
 due avambracci Meshy (pugno e mano aperta) attaccati alle ossa al posto di bracciale, polso e mani; dettagli e come
-rifarli in `docs/meshy/KAEL.md`, "Avambracci da Meshy". Con l'ok: pubblicare `viewer_kael.html` sull'anteprima di Kael
-(versione 23).
+rifarli in `docs/meshy/KAEL.md`, "Avambracci da Meshy"; poi ripassati come un disegno (`tools/kael_arm_paint.py`).
+L'anteprima non porta più `kael_hands` e `kael_gloves` (`mk.sh`, `--drop`): con loro passava i 16 MB delle pagine Claude.
 
 **Mani di Kael come il foglio, polso e bordo del guanto dritti (19/11, proposta, NON pubblicata: aspetta l'ok di Denis
 sulle immagini)**: dopo "mani e polsi ancora brutti" le mani lisce come il foglio (due toni, righe fra le dita); dopo "la
