@@ -24,22 +24,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); sys.path.insert(
 import glbio
 from paint_views import texel_table
 
-UNIT = float(os.environ.get('KAEL_PAINT_UNIT', .19))                       # m per model unit on Kael's hands (about: 0.15-0.17 m per unit, the hand 1.14 times)
-CLEAN, INK_W, CREASE = .0028, float(os.environ.get('KAEL_PAINT_INK_W', .0011)), .0028   # m: the classes' vote's reach; the ink lines' width; the crease ball's diameter
+UNIT = .19                       # m per model unit on Kael's hands (about: 0.15-0.17 m per unit, the hand 1.14 times)
+CLEAN, INK_W, CREASE = .0028, .0011, .0028   # m: the classes' vote's reach; the ink lines' width; the crease ball's diameter
 FACING = .3                      # the creases: the skin in the ball facing the texel's (normals over 107 degrees apart)
 VALLEY = 400.                     # the full model's valleys drawn: deeper than this (1/m: a crease's mean curvature)
-JOINTS, JOINT_W, JOINT_STEP, JOINT_MIN, JOINT_LONG = (.45, .74) if os.environ.get('KAEL_PAINT_JOINTS', '1') == '1' else (), .0011, .0012, .02, .012   # the fingers' joints: at these shares of their length from the glove (along the finger's own axis; from the distance to the glove's edge, tried first, a loop on the thumb), so wide (m); the skin thinned to so far apart (m); a finger at least so much of the skin and so long (m)
-SMOOTH, SMOOTH_SKIN, GRID = float(os.environ.get('KAEL_PAINT_SMOOTH', .0022)), float(os.environ.get('KAEL_PAINT_SMOOTH_SKIN', .0042)), float(os.environ.get('KAEL_PAINT_GRID', .0005))   # m: the classes' edges smoothed over so far (the glove's on the skin over [1]), counted on cells so big
+JOINTS, JOINT_W, JOINT_STEP, JOINT_MIN, JOINT_LONG = (.45, .74), .0011, .0012, .02, .012   # the fingers' joints: at these shares of their length from the glove (along the finger's own axis; from the distance to the glove's edge, tried first, a loop on the thumb), so wide (m); the skin thinned to so far apart (m); a finger at least so much of the skin and so long (m)
+SMOOTH, SMOOTH_SKIN, GRID = .0022, .0042, .0005   # m: the classes' edges smoothed over so far (the glove's on the skin over [1]), counted on cells so big
 JOINT_SIDE = .55                 # the joints' lines only where the finger's surface faces its back or palm (|normal . side| under this)
 LINE_DARK = 22                   # Meshy's lines on the skin: so much darker (0-255) than the skin round them
-SKIN, PLUM, PURPLE, BLACK = 0, 1, 2, 3
-# (the clothes, tools/kael_bust_attach.py outfit_part: KAEL_PAINT_UNIT .778, KAEL_PAINT_SIZE 2048 (painted at the page's size),
-# KAEL_PAINT_BLACK 23 (Meshy's darker cloth, its drawn shadows, the sheet's black; the rest of it plum), KAEL_PAINT_INK skin (the
-# ink only round the skin: the sheet draws the purple slashes and the black shadows without it), KAEL_PAINT_GRID .0015,
-# KAEL_PAINT_SMOOTH .004, KAEL_PAINT_JOINTS 0)
-BLACK_L = float(os.environ.get('KAEL_PAINT_BLACK', 0)); INK_MODE = os.environ.get('KAEL_PAINT_INK', 'all'); PAINT_SIZE = int(os.environ.get('KAEL_PAINT_SIZE', 0))
-NCL = 4 if BLACK_L else 3
-PAL = {SKIN: (250, 191, 151), PLUM: (65, 49, 74), PURPLE: (166, 92, 203), BLACK: (26, 21, 27)}   # the bust's palette (tools/kael_bust_attach.py)
+SKIN, PLUM, PURPLE = 0, 1, 2
+PAL = {SKIN: (250, 191, 151), PLUM: (65, 49, 74), PURPLE: (166, 92, 203)}   # the bust's palette (tools/kael_bust_attach.py)
 INK, CREASE_C = (9, 6, 9), (88, 42, 34)   # the ink; the skin's lines (Ren's: a dark brown, not black, inside the skin)
 
 
@@ -47,7 +41,7 @@ def classes(c):
     """per colour (n, 3) 0-255 its class: skin, purple, else plum"""
     skin = (c[:, 0] > 150) & (c[:, 0] - c[:, 2] > 35)
     pur = ~skin & (c[:, 2] > 120) & (c[:, 2] - c[:, 1] > 50)
-    return np.where(skin, SKIN, np.where(pur, PURPLE, np.where(c.mean(1) < BLACK_L, BLACK, PLUM)))
+    return np.where(skin, SKIN, np.where(pur, PURPLE, PLUM))
 
 
 def valleys(glb):
@@ -100,9 +94,7 @@ def joints(pos, nor, skin, cut, glove, mode, u):
 
 def main(src, out, debug=None, full=None):
     m = glbio.read(src); P, N, UV, I = m['pos'].astype(float), m['nor'].astype(float), m['uv'].astype(float), m['idx'].astype(np.int64)
-    im0 = Image.open(io.BytesIO(m['img'])).convert('RGB')
-    if PAINT_SIZE and im0.size[0] != PAINT_SIZE: im0 = im0.resize((PAINT_SIZE, PAINT_SIZE), Image.LANCZOS)
-    T = np.asarray(im0).astype(int); S = T.shape[0]
+    T = np.asarray(Image.open(io.BytesIO(m['img'])).convert('RGB')).astype(int); S = T.shape[0]
     ys, xs, ks, bary, pos, nor = texel_table(P, N, UV, I, S)
     col = T[ys, xs]; cl = classes(col); tree = cKDTree(pos); u = 1 / UNIT
     def near(k, f):   # (per texel f of its k nearest texels on the model (their indices, distances), in blocks: the memory)
@@ -114,13 +106,13 @@ def main(src, out, debug=None, full=None):
     # few texels go)
     cl2 = cl.copy()
     for _ in range(3):
-        def vote(q, d, c_=cl2): v = np.stack([((c_[q] == c) & (d < CLEAN * u)).sum(1) for c in range(NCL)], 1); return v.argmax(1)
+        def vote(q, d, c_=cl2): v = np.stack([((c_[q] == c) & (d < CLEAN * u)).sum(1) for c in range(3)], 1); return v.argmax(1)
         cl2 = near(48, vote)
     # (and their edges smooth curves: per class its share within SMOOTH on the model (counted on a grid of GRID cells), each
     # texel the class with the largest share: the edges follow no triangle's or texel's steps)
     g = GRID * u; key = np.floor(pos / g).astype(np.int64); cells, ci = np.unique(key, axis=0, return_inverse=True); ci = ci.ravel()
-    cnt = np.zeros((len(cells), NCL)); np.add.at(cnt, (ci, cl2), 1); cc = np.zeros((len(cells), 3)); np.add.at(cc, ci, pos); cc /= cnt.sum(1, keepdims=True)
-    ct = cKDTree(cc); sh = np.zeros((len(cells), NCL))
+    cnt = np.zeros((len(cells), 3)); np.add.at(cnt, (ci, cl2), 1); cc = np.zeros((len(cells), 3)); np.add.at(cc, ci, pos); cc /= cnt.sum(1, keepdims=True)
+    ct = cKDTree(cc); sh = np.zeros((len(cells), 3))
     for a in range(0, len(cells), 50000):
         for i, q in enumerate(ct.query_ball_point(cc[a:a + 50000], SMOOTH * u, workers=-1)): sh[a + i] = cnt[q].sum(0)
     sh /= np.maximum(sh.sum(1, keepdims=True), 1)
@@ -130,16 +122,15 @@ def main(src, out, debug=None, full=None):
     # purple bands and stripe keep the finer smoothing, their corners)
     sh2 = np.zeros((len(cells), 2))
     for a in range(0, len(cells), 50000):
-        for i, q in enumerate(ct.query_ball_point(cc[a:a + 50000], SMOOTH_SKIN * u, workers=-1)): c_ = cnt[q]; sh2[a + i] = c_[:, SKIN].sum(), c_[:, PLUM].sum() + (c_[:, BLACK].sum() if NCL > 3 else 0)
+        for i, q in enumerate(ct.query_ball_point(cc[a:a + 50000], SMOOTH_SKIN * u, workers=-1)): sh2[a + i] = cnt[q][:, [SKIN, PLUM]].sum(0)
     sp_ = (sh2[iq][..., 0] * wq).sum(1) / np.maximum(((sh2[iq][..., 0] + sh2[iq][..., 1]) * wq).sum(1), 1e-9)
-    sg = (cl3 == SKIN) | (cl3 == PLUM) | (cl3 == BLACK); cl3 = np.where(sg, np.where(sp_ > .5, SKIN, np.where(cl3 == SKIN, PLUM, cl3)), cl3)
+    sg = (cl3 == SKIN) | (cl3 == PLUM); cl3 = np.where(sg, np.where(sp_ > .5, SKIN, PLUM), cl3)
     print('edges smoothed over %.1f mm (%d cells of %.1f mm; the glove on the skin over %.1f): %d texels changed' % (1000 * SMOOTH, len(cells), 1000 * GRID, 1000 * SMOOTH_SKIN, int((cl3 != cl2).sum())))
     cl2 = cl3
-    print('classes cleaned: %d of %d texels changed (skin, plum, purple, black: %s)' % (int((cl2 != cl).sum()), len(cl), np.bincount(cl2, minlength=NCL).tolist()))
+    print('classes cleaned: %d of %d texels changed (skin %d, plum %d, purple %d)' % (int((cl2 != cl).sum()), len(cl), *np.bincount(cl2, minlength=3)))
     out_c = np.array([PAL[c] for c in cl2], float)
     # (the ink along the edges between the classes: a texel of another class within INK_W/2)
-    edge = (lambda q: (cl2[q] == SKIN) != (cl2[q[:, :1]] == SKIN)) if INK_MODE == 'skin' else (lambda q: cl2[q] != cl2[q[:, :1]])
-    ink = near(16, lambda q, d: (edge(q) & (d < INK_W / 2 * u)).any(1))
+    ink = near(16, lambda q, d: ((cl2[q] != cl2[q[:, :1]]) & (d < INK_W / 2 * u)).any(1))
     # (the skin's creases: a ball of CREASE diameter resting on the skin at the texel holds skin facing it (finger against
     # finger, a finger's bones folded on each other), not merely the skin of a hollow)
     sk = np.nonzero(cl2 == SKIN)[0]; r = CREASE / 2 * u; crease = np.zeros(len(pos), bool); skin_ = cl2 == SKIN
