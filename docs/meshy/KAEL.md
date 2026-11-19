@@ -752,6 +752,31 @@ piano: `docs/superpowers/plans/2026-11-17-kael-mani-polso.md`. Gratis, niente Me
   spinta in più senza limite (inseguiva le pieghe, fino a 9 mm).
 - Per dopo: qualche puntino di luce ancora visibile da molto vicino fra la gonnellina del guanto e il guanto.
 
+## Mani come il foglio, polso e bordo del guanto dritti (19/11, proposta, non pubblicata)
+Denis, sulla versione 22: "minchia bro ma ce la fai", poi "mani e polsi ancora brutti"; sulla prima proposta (mani lisce
+come il foglio): "la mano è troppo storta ancora".
+- **Mani come il foglio** (`HAND_STYLE` 'foglio' in `tools/kael_bust_attach.py`, il vecchio stile con
+  `KAEL_HAND_STYLE=ren`): dita lisce (un giro di suddivisione di Loop, normali della superficie liscia), un solo colore
+  di pelle coi due toni del gioco (`mdGrad2` in `src/e_model.js`), righe nere fra le dita (contorno spinto indietro meno
+  di quello del corpo), guanto liscio con l'inchiostro sul bordo.
+- **Polso dritto nel pugno** (`CFG.looks.kael.straightWrist`, `mdStraightWrists` in `src/e_model.js`): le animazioni di
+  Ren piegano la mano al polso (in guardia 20 gradi su Ren; sulle ossa di Kael 29 la sinistra, 11 la destra). Col pugno
+  chiuso la mano gira nel riferimento dell'avambraccio finché la sua linea (polso → prima falange del medio) sta sulla
+  linea dell'avambraccio: piega in guardia e nel pugno 0 gradi. Le mani aperte (colpo energetico, presa) restano come
+  nell'animazione: lì sono già dritte come quelle di Ren. Solo grafica.
+- **Bordo del guanto dritto** (`glove_edge` in `tools/kael_gear.py`, `GLOVE_EDGE`): prima veniva dalla pittura e nel
+  pugno, piegato sulle nocche, era a zig-zag. Ora è una linea attraverso la mano 12 mm prima delle nocche sul dorso e 4 sul
+  palmo, e un anello sul pollice 8 mm dopo la sua seconda articolazione (a 4 mm prima, proprio sulla piega, nel pugno
+  uscivano schegge nere e un filo di pelle). In media sta dove stava quello dipinto (0,6 mm, ±6). Con
+  `KAEL_GLOVE_EDGE=paint` torna quello dipinto.
+- **Niente righe della mano sotto il guanto**: lì il contorno della mano, più largo del guscio, usciva dal guanto in
+  schegge nere vicino al pollice; il guanto ha il suo.
+- Immagini: `python3 tools/handcam.py OUT`; ravvicinate (20 cm) dai lati del pollice: restano solo, da vicinissimo, una
+  piccola tacca dove la punta del pollice tocca il bordo del guanto (sinistra) e l'ombra nera sotto il pollice (destra).
+- Misure (grafica software, 844x390, guardia, macchina più lenta di quella del 17/11): versione 21 109 ms per fotogramma,
+  109.468 triangoli; ora 126 ms, 125.648 triangoli (le dita lisce: un giro di Loop). Solo l'anteprima: Kael nel gioco
+  resta il lottatore provvisorio, gli FPS del gioco non cambiano.
+
 ## Per dopo
 - Le code della fascia sono attaccate ai pantaloni (le ha fatte così Meshy): seguono le gambe, non oscillano. Se Denis
   le vuole libere come quelle di Ren, si fanno coi nastri (`CFG.looks.ren.sash`).

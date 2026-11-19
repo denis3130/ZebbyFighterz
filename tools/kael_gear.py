@@ -145,6 +145,26 @@ def shell(P, N, D, I, t=.002, wall=.0015, skin=None, most=.0015):
     return P_, N_, D_, I_, ink, np.r_[np.arange(len(P)), ev]
 
 
+def glove_edge(P, H, K, palm, T2, T3, r_thumb, back=.012, palm_m=.004, thumb=.004, soft=.006):
+    """The half glove's edge drawn as the sheet draws it (19/11/2026, Denis: "la mano è troppo storta ancora"): the edge the
+    texture painted, folded over the knuckles in the fist, came out in teeth. Per point of a hand P (n, 3), in its rest pose,
+    the signed distance (m; the glove under 0, the skin over it) to:
+    - a line across the hand before its knuckles: along the hand's axis (the wrist H to the knuckles' mean, K (4, 3): the
+      index, middle, ring and little fingers' first joints, in that order) `back` m before the knuckles' line on its back,
+      `palm_m` on its palm (`palm`: the unit vector to the palm), blended over `soft` m across the hand's middle;
+    - and the thumb free from `thumb` m before its second joint T2 (toward T3), within r_thumb m of its axis."""
+    a = K.mean(0) - H; a /= np.linalg.norm(a)
+    b = (K[0] - K[3]) - ((K[0] - K[3]) @ a) * a; b /= np.linalg.norm(b)
+    pm = palm - (palm @ a) * a - (palm @ b) * b; pm /= np.linalg.norm(pm)
+    R = P - H; t, s, h = R @ a, R @ b, R @ pm
+    tk, sk = (K - H) @ a, (K - H) @ b; o = np.argsort(sk)
+    w = np.clip((h / soft + 1) / 2, 0, 1); w = w * w * (3 - 2 * w)   # (0 on the back, 1 on the palm)
+    d_hand = t - (np.interp(s, sk[o], tk[o]) - (back + (palm_m - back) * w))
+    ax = (T3 - T2) / np.linalg.norm(T3 - T2); u = (P - T2) @ ax
+    rad = np.linalg.norm((P - T2) - np.outer(u, ax), axis=1)
+    return np.maximum(d_hand, np.minimum(u + thumb, r_thumb - rad))
+
+
 def near_index(P_shell, P_hands):
     """for each point (the shell's surface before its push) the nearest vertex of the hands"""
     from scipy.spatial import cKDTree

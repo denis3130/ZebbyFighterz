@@ -184,6 +184,14 @@ Cose notate nelle revisioni; non costruirle finché Denis non lo chiede.
 - Per dopo (annotate, non fatte): i fogli del corpo che Denis ha mandato l'8/11 (`docs/ref/personaggi/ren_busto_3viste.png`, `ren_gambe_3viste.png`: destra, fronte, sinistra; `ren_retro.png`: tutto il corpo da dietro; il foglio della testa che ha rimandato è identico a `ren_testa_3viste.png`) per rifare o ridipingere il corpo dai lati e da dietro (fasce con il polsino scuro, stivali, pantaloni, code della fascia arancione), oggi dipinto solo dalla vista di fronte di `ren.png`; l'ombra nera sotto il mento come nel foglio (una V spessa sul collo, sotto la mascella; nel foglio c'è in tutte e tre le viste), da proporre a Denis prima di farla; in guardia la testa alzata di 20° invece di 12° (`headUp` del look: provato in una copia, con 20° si vedono entrambi gli occhi sopra il pugno, a 28° sembra guardare in alto; è una scelta di posa, da decidere con Denis); stesso metodo delle 3 viste per Kael, se Denis fa il suo foglio; se Denis vuole punte dei capelli ancora più lunghe, un'altra prova Meshy (30 crediti; alleggerire il modello non le arrotonda: a 60.000 e a 16.000 triangoli la sagoma è la stessa).
 
 ## Prossimo passo
+**Mani di Kael come il foglio, polso e bordo del guanto dritti (19/11, proposta, NON pubblicata: aspetta l'ok di Denis
+sulle immagini)**: dopo "mani e polsi ancora brutti" le mani lisce come il foglio (due toni, righe fra le dita); dopo "la
+mano è troppo storta ancora" il polso dritto nei pugni (`CFG.looks.kael.straightWrist`) e il bordo del guanto come linea
+prima delle nocche e anello sul pollice (`glove_edge`), al posto di quello dipinto (zig-zag nel pugno). Dettagli in
+`docs/meshy/KAEL.md`, "Mani come il foglio". Con l'ok: `bash mk.sh`, test, pubblicare `viewer_kael.html` sull'anteprima di
+Kael (versione 23). Per dopo: `wip_assets/kael/kael_hands.jpg` non serve più nello stile 'foglio' (toglierlo se Denis lo
+approva).
+
 **Mani e polsi di Kael rifatti (17/11, pubblicati nell'anteprima di Kael, versione 22, dopo le immagini prima/dopo; Denis: "fa vede"; aspetta il suo giudizio)**: Denis non voleva più le mani
 e il polso della versione 21 ("a me non piacciono soprattutto le mani", "ora il polso", 4 zone cerchiate: "è ancora fatto
 male"); ha scelto "Mano di Ren + guanto vero". Fatto (piano `docs/superpowers/plans/2026-11-17-kael-mani-polso.md`,

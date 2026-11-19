@@ -303,7 +303,7 @@ const CFG={
     // the outline's widths (tools/char_look.py), the light's normals smoothed, Ren's clips on his skeleton and Ren's guard
     // (his head held as high); his head and his bust from Meshy (tools/kael_head.py, tools/kael_bust_attach.py: bust:
     // its hands Ren's, with their finger bones).
-    kael:{head:true, bust:true, hands:true, gloves:true, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
+    kael:{head:true, bust:true, hands:true, gloves:true, straightWrist:1, fists:true, openHands:['spec','thr','thrWhiff'], headUp:12, faceLine:true, line:{w:.007, back:.02}, smoothNormals:true, faceShape:true, flatFace:true, paint:true,
       clips:{idle:{c:'a191', at:0, breathe:1}, intro:{c:'a191', at:0, breathe:1}, crouch:{low:{c:'a54', at:.67}, up:{c:'a191', at:0, breathe:1}}}}},
   // Game feel (graphics only, metres and milliseconds; on=false skips every effect): flashMs/squashMs = white flash and
   // squash of the fighter hit, squash = [x and z, y] scale at its peak, shakeHeavy/shakeKO = [camera shake amplitude m,
@@ -2029,6 +2029,7 @@ function modelBuild(key) {
     joints: {pelvis: B('Hips'), chest: B('Spine'), neck: B('neck'), head: B('Head')}};
   if (fingers.length) { it.fingers = fingers; it.fist = fdef.map(f => new THREE.Quaternion().fromArray(f.fist)); }
   if (hands) { it.hands = hands.mesh; it.mats.hands = hands.mat; }
+  if (lk.straightWrist && fingers.length) it.straight = {k: lk.straightWrist, w: ['Left', 'Right'].map(s => ({hand: B(s + 'Hand'), line: fingers.find(o => o.name === s + 'HandMiddle1').position.clone()}))};
   if (gloves) { it.gloves = gloves.mesh; it.mats.gloves = gloves.mat; }
   if (bust) { it.bust = bust.mesh; it.mats.bust = bust.mat; if (bust.j.fistFrame) it.fistFrame = {Left: new THREE.Quaternion().fromArray(bust.j.fistFrame.Left), Right: new THREE.Quaternion().fromArray(bust.j.fistFrame.Right)}; }   // (fistFrame: each fist's own frame in its hand bone's: Ren's hands, laid as his)
   if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
@@ -2460,6 +2461,19 @@ function mdGrad2() {
 // A colour (0-255 rgb) as a GLSL vec3
 function mdVec3(c) { return 'vec3(' + c.map(v => (v / 255).toFixed(4)).join(', ') + ')'; }
 
+// Kael's wrists straight in his fists (19/11/2026, Denis: "la mano è troppo storta ancora"): Ren's clips bend the hand at
+// the wrist (20 degrees in his guard; on Kael's bones 29 on the left, 11 on the right); with the fist closed (it.curl) each
+// hand turned in its forearm's frame so the hand's line (wrist to the middle finger's first joint) lies on the forearm's
+// line (elbow to wrist), by it.straight of the way; the open hands (the palm push) keep the clip's bend. Graphics only.
+const MD_SW = {v: new THREE.Vector3(), u: new THREE.Vector3(), q: new THREE.Quaternion()};
+function mdStraightWrists(it) {
+  for (const w of it.straight.w) {
+    MD_SW.v.copy(w.line).applyQuaternion(w.hand.quaternion).normalize(); MD_SW.u.copy(w.hand.position).normalize();
+    MD_SW.q.setFromUnitVectors(MD_SW.v, MD_SW.u); MD_Q1.set(0, 0, 0, 1);
+    w.hand.quaternion.premultiply(MD_SW.q.slerp(MD_Q1, 1 - it.straight.k * it.curl));
+  }
+}
+
 // The look's flat light on a toon material: per vertex (aFlat) the share of the texture's own colour (the face's drawn
 // shading); the body's, and Kael's hands' (Ren's, lit as on him)
 function mdFlatLight(mat) {
@@ -2846,6 +2860,7 @@ function mdSync(it, side, S) {
   if (it.from && F.af < n) p = mdMix(it.from, p, Math.max(0, F.af) / n);
   it.F = F; it.act = F.act; it.pose = p;
   mdApply(it, p);
+  if (it.straight) mdStraightWrists(it);
   if (it.sash) mdSash(it, S);
 }
 

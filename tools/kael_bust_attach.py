@@ -46,7 +46,7 @@ from scipy.sparse.csgraph import connected_components
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mesh_prep'))
 import glbio
-from kael_gear import crop_paint, write_part, clip_iso, shell, near_index, cuff_band, ring_radius, flare, ring_frame, skirt as make_skirt, ring as make_ring, loop_subdivide, vertex_normals
+from kael_gear import crop_paint, write_part, clip_iso, shell, glove_edge, near_index, cuff_band, ring_radius, flare, ring_frame, skirt as make_skirt, ring as make_ring, loop_subdivide, vertex_normals
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 KAEL_PKG = os.path.join(ROOT, 'wip_assets', 'kael')
@@ -61,6 +61,7 @@ SMOOTH, SEAM, SEAM_SMOOTH = 4, .03, 6
 HIDE_W = .5
 GLOVE_PAD = .007                         # bust units (3 mm): the texture's glove painted skin so far from its edge
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
+GLOVE_EDGE = None if os.environ.get('KAEL_GLOVE_EDGE') == 'paint' else dict(back=.012, palm=.004, thumb=-.008, thumb_r=.003, soft=.006)   # m: the glove's edge (tools/kael_gear.py glove_edge): so far before the knuckles on the back and on the palm, the thumb free so far before its second joint, so much wider than it, the blend; None: the texture's painted edge (in the fist, teeth)
 GLOVE_T, GLOVE_WALL = .002, .0015   # m: the gloves' shell over the hands' skin, and its edge's strip down toward the skin (tools/kael_gear.py shell)
 HAND_STYLE = os.environ.get('KAEL_HAND_STYLE', 'foglio')   # Kael's hands: 'ren' (Ren's as on him: his paint, light, outline) or 'foglio' (as the sheet draws them: smooth, two flat tones, black lines between the fingers; 19/11, Denis: "mani e polsi ancora brutti")
 FOGLIO = dict(subdiv=1, skin=(250, 191, 151), line_push=.1, line_w=.7, ink_w=.002)   # 'foglio': Loop rounds; the sheet's skin; the outline pushed back so much of the body's (lines between the fingers) and so wide; the glove's edge ink half width, m
@@ -502,6 +503,36 @@ def main(bust):
     tg, ts_ = cKDTree(tpos[gl]), cKDTree(tpos[sk]); vh = np.nonzero(hv)[0]
     in_g = tg.query(Pb[vh])[0] < ts_.query(Pb[vh])[0]
     d = np.where(in_g, -ts_.query(Pb[vh])[0], tg.query(Pb[vh])[0]) * SCALE
+    if GLOVE_EDGE:   # (the edge as the sheet draws it, a line before the knuckles and a ring round the thumb: tools/kael_gear.py glove_edge)
+        from scipy.spatial.transform import Rotation
+        d_paint = d.copy()
+        for side, sd in SIDES:
+            Rk = Wm[names.index(side + 'Hand')][:3, :3]; fd = {f['n']: f for f in fingers}
+            pos = lambda n: J[sd]['Hb2'] + Rk @ np.array(fd[n]['t']) if fd[n]['p'] == side + 'Hand' else pos(fd[n]['p']) + Rk @ np.array(fd[n]['t'])
+            Kn = np.array([pos(side + 'Hand%s1' % f) for f in ('Index', 'Middle', 'Ring', 'Pinky')])
+            v = np.array(fd[side + 'HandMiddle2']['t']); palm = Rk @ (Rotation.from_quat(fd[side + 'HandMiddle1']['fist']).apply(v) - v)
+            T2, T3 = pos(side + 'HandThumb2'), pos(side + 'HandThumb3'); ax = (T3 - T2) / np.linalg.norm(T3 - T2)
+            ith = [allnames.index(side + 'HandThumb%d' % k) for k in (2, 3)]; wth = (tw * np.isin(top, ith)).sum(1)
+            th_v = (wth > .5) & ((X2[:, 0] >= 0) == (sd > 0)); Q = X2[th_v] - T2
+            r_th = float(np.percentile(np.linalg.norm(Q - np.outer(Q @ ax, ax), axis=1), 95)) + GLOVE_EDGE['thumb_r']
+            m = (X2[vh, 0] >= 0) == (sd > 0)
+            d[m] = glove_edge(X2[vh[m]], J[sd]['Hb2'], Kn, palm, T2, T3, r_th, GLOVE_EDGE['back'], GLOVE_EDGE['palm'], GLOVE_EDGE['thumb'], GLOVE_EDGE['soft'])
+            e = m & (np.abs(d_paint) < .0015)
+            print('%s glove edge: a line %.1f mm before the knuckles (back), %.1f (palm), the thumb free %.1f mm before its joint within %.1f mm; '
+                  'the painted edge on it at %.1f mm (+-%.1f), %d of %d vertices on the other side' % (
+                      side, 1000 * GLOVE_EDGE['back'], 1000 * GLOVE_EDGE['palm'], 1000 * GLOVE_EDGE['thumb'], 1000 * r_th,
+                      1000 * d[e].mean(), 1000 * d[e].std(), int((m & ((d < 0) != (d_paint < 0))).sum()), int(m.sum())))
+        # (skin only on the fingers and the thumb: islands of it inside the glove, where the thumb's free round met the palm
+        # by its base, were holes in the glove, its ink round them shards in the fist; welded, Meshy's seams split the mesh)
+        loc = -np.ones(len(X), np.int64); loc[vh] = np.arange(len(vh)); sk_ = d > 0
+        T_ = loc[Ib[(loc[Ib] >= 0).all(1)]]; ew = wv[vh]
+        E_ = np.r_[T_[:, [0, 1]], T_[:, [1, 2]], T_[:, [2, 0]]]; E_ = E_[sk_[E_].all(1)]
+        nw = wv.max() + 1; _, lab = connected_components(coo_matrix((np.ones(len(E_)), (ew[E_[:, 0]], ew[E_[:, 1]])), shape=(nw, nw)), directed=False)
+        lv = lab[ew]
+        for side, sd in SIDES:
+            m = sk_ & ((X2[vh, 0] >= 0) == (sd > 0)); ids, cnt = np.unique(lv[m], return_counts=True)
+            isl = ids[cnt < .1 * cnt.max()]; fl = m & np.isin(lv, isl); d[fl] = -d[fl]
+            print('%s glove: the skin in %d pieces (%s vertices), %d islands closed (%d vertices)' % (side, len(ids), sorted(cnt.tolist(), reverse=True)[:6], len(isl), int(fl.sum())))
     gfield = np.zeros((len(X), 2), np.float32); gfield[:, 0] = 1.; gfield[vh, 0] = d; gfield[vh, 1] = 1.
     near_edge = gl & (ts_.query(tpos)[0] < GLOVE_PAD) | (th & near_c(INK_C))
     bt2 = bt.copy(); bt2[ys[near_edge], xs[near_edge]] = SKIN_C; BT = Image.fromarray(bt2.astype(np.uint8))   # (only by the edge: skin painted under all of the glove bled into the seam's triangles, skin hairlines at the cuff)
@@ -584,9 +615,10 @@ def main(bust):
     print('written: kael_bust (%d vertices, %d triangles)' % (len(used), len(It)))
     topH = np.argsort(-HA['W'], 1)[:, :4]; twH = np.take_along_axis(HA['W'], topH, 1); twH /= np.maximum(twH.sum(1, keepdims=True), 1e-12)
     if HAND_STYLE == 'foglio':   # (the sheet's: one skin colour, the game's two tones, lines between the fingers)
+        # (no line inside the glove: there the hand's, wider than the shell, came out through it in black shards by the thumb; the glove draws its own)
         write_part(KAEL_PKG, 'kael_hands', {'pos': Hp, 'nor': HN, 'uv': np.zeros((len(Hp), 2)), 'jnt': topH, 'wgt': twH, 'idx': HI,
                                             'col': np.tile(np.array(FOGLIO['skin']) / 255., (len(Hp), 1)), 'flat': np.zeros(len(Hp)),
-                                            'line': HA['line'] * FOGLIO['line_w'], 'lb': np.full(len(Hp), (FOGLIO['line_push'] - 1) * BODY_LINE_BACK)}, {'style': 'foglio'})
+                                            'line': HA['line'] * FOGLIO['line_w'] * np.clip((HA['D'] + .002) / .004, 0, 1), 'lb': np.full(len(Hp), (FOGLIO['line_push'] - 1) * BODY_LINE_BACK)}, {'style': 'foglio'})
         print('written: kael_hands (%d vertices, %d triangles; as the sheet: %d Loop round(s), flat skin)' % (len(Hp), len(HI), FOGLIO['subdiv']))
     else:
         tex, uvh = crop_paint(Image.open(REN_PAINT), R['UV'][rh])
