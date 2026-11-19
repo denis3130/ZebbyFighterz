@@ -28,7 +28,9 @@ UNIT = .19                       # m per model unit on Kael's hands (about: 0.15
 CLEAN, INK_W, CREASE = .0028, .0011, .0028   # m: the classes' vote's reach; the ink lines' width; the crease ball's diameter
 FACING = .3                      # the creases: the skin in the ball facing the texel's (normals over 107 degrees apart)
 VALLEY = 400.                     # the full model's valleys drawn: deeper than this (1/m: a crease's mean curvature)
-JOINTS, JOINT_W, JOINT_STEP, JOINT_MIN, JOINT_THUMB = (), .0013, .0012, .02, .028   # the fingers' joints (off: tried (.42, .72), the distance from the glove's edge drew a loop on the thumb, none on the fingers): at these shares of their length from the glove, so wide (m); the texels thinned to so far apart (m); a finger at least so much of the skin; under so long (m) a thumb (one joint)
+JOINTS, JOINT_W, JOINT_STEP, JOINT_MIN, JOINT_LONG = (.45, .74), .0011, .0012, .02, .012   # the fingers' joints: at these shares of their length from the glove (along the finger's own axis; from the distance to the glove's edge, tried first, a loop on the thumb), so wide (m); the skin thinned to so far apart (m); a finger at least so much of the skin and so long (m)
+SMOOTH, SMOOTH_SKIN, GRID = .0022, .0042, .0005   # m: the classes' edges smoothed over so far (the glove's on the skin over [1]), counted on cells so big
+JOINT_SIDE = .55                 # the joints' lines only where the finger's surface faces its back or palm (|normal . side| under this)
 LINE_DARK = 22                   # Meshy's lines on the skin: so much darker (0-255) than the skin round them
 SKIN, PLUM, PURPLE = 0, 1, 2
 PAL = {SKIN: (250, 191, 151), PLUM: (65, 49, 74), PURPLE: (166, 92, 203)}   # the bust's palette (tools/kael_bust_attach.py)
@@ -60,38 +62,33 @@ def valleys(glb):
 
 def joints(pos, nor, skin, cut, glove, mode, u):
     """the fingers' joints drawn as Ren's (19/11): per finger (a piece of skin on its own once the lines between the
-    fingers cut it, JOINT_MIN of the skin's texels at least) the distance along it from the glove's edge (Dijkstra over
-    the texels thinned to JOINT_STEP m, their neighbours within 2.5 steps); across it a line JOINT_W wide at JOINTS of its
-    length (its last for the thumb, the shortest), all round it. Returns the texels on them."""
+    fingers and the glove's ink cut it, JOINT_MIN of the skin at least, JOINT_LONG m long at least) its own axis (the piece's
+    longest direction), from its end by the glove; across it a line JOINT_W wide at JOINTS of its length (its last only for
+    the shortest, the thumb). Returns the texels on them; none where the fingers are not apart (the fist)."""
     from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import connected_components, dijkstra
+    from scipy.sparse.csgraph import connected_components
     on = np.nonzero(skin & ~cut)[0]; step = JOINT_STEP * u
-    key = np.floor(pos[on] / step).astype(np.int64); _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
-    sp = on[first]; tr = cKDTree(pos[sp]); pairs = tr.query_pairs(2.5 * step, output_type='ndarray')
-    w = np.linalg.norm(pos[sp[pairs[:, 0]]] - pos[sp[pairs[:, 1]]], axis=1)
-    G = coo_matrix((w, (pairs[:, 0], pairs[:, 1])), shape=(len(sp), len(sp))).tocsr()
-    nc, lab = connected_components(G, directed=False)
-    gd, _ = cKDTree(pos[glove]).query(pos[sp]); src = np.nonzero(gd < 2 * step)[0]
-    out = np.zeros(len(pos), bool); n_f = 0; c0 = pos[skin].mean(0)
-    sizes = np.bincount(lab, minlength=nc)
-    if (sizes > JOINT_MIN * len(sp)).sum() < 4:   # (the fingers not apart: no joints rather than wrong ones)
-        print('joints: the fingers are not apart (%d pieces): none drawn' % int((sizes > JOINT_MIN * len(sp)).sum())); return out
-    for c in np.nonzero(sizes > JOINT_MIN * len(sp))[0]:
-        mem = lab == c; s_ = src[mem[src]]
-        if not len(s_): continue
-        d = dijkstra(G, directed=False, indices=s_, min_only=True); d = np.where(mem, d, np.inf); L = d[mem].max()
-        if not np.isfinite(L) or L < 3 * step: continue
-        n_f += 1
-        # (the texels of this finger: their thinned point's distance)
-        # (each texel's distance smooth: the mean of its 6 nearest thinned points', by their nearness; the nearest alone
-        # made the lines dashes a step long)
-        mi = np.nonzero(mem & np.isfinite(d))[0]; tt = on[mem[lab[inv]] & np.isfinite(d[inv])]
-        dq, iq = cKDTree(pos[sp[mi]]).query(pos[tt], 6); wq = 1 / np.maximum(dq, .2 * step) ** 2; dd = (d[mi][iq] * wq).sum(1) / wq.sum(1)
-        back = np.ones(len(tt), bool)   # (both sides: the joints' creases go round the finger, as Ren's)
-        fr = JOINTS if L > JOINT_THUMB * u else JOINTS[-1:]
-        for f in fr:
-            out[tt[back & (np.abs(dd - f * L) < JOINT_W / 2 * u)]] = True
-    print('joints: %d fingers, %d texels' % (n_f, int(out.sum())))
+    key = np.floor(pos[on] / step).astype(np.int64); _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True); inv = inv.ravel()
+    sp = on[first]; pairs = cKDTree(pos[sp]).query_pairs(1.8 * step, output_type='ndarray')
+    nc, lab = connected_components(coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])), shape=(len(sp), len(sp))), directed=False)
+    sizes = np.bincount(lab, minlength=nc); big = np.nonzero(sizes > JOINT_MIN * len(sp))[0]
+    gt = cKDTree(pos[glove]); out = np.zeros(len(pos), bool); fing = []
+    for c in big:
+        X = pos[sp[lab == c]]; m0 = X.mean(0); ax = np.linalg.svd(X - m0, full_matrices=False)[2][0]; t = (X - m0) @ ax
+        lo, hi = t.min(), t.max()
+        if (hi - lo) < JOINT_LONG * u: continue
+        if gt.query(m0 + ax * hi)[0] < gt.query(m0 + ax * lo)[0]: ax, t, lo, hi = -ax, -t, -hi, -lo   # (from the end by the glove)
+        fing.append((c, m0, ax, lo, hi))
+    if len(fing) < 4:
+        print('joints: the fingers are not apart (%d long pieces): none drawn' % len(fing)); return out
+    shortest = min(f[4] - f[3] for f in fing)
+    for c, m0, ax, lo, hi in fing:
+        tt = on[lab[inv] == c]; t = (pos[tt] - m0) @ ax; L = hi - lo
+        lat = np.cross(ax, [0., 0., 1.]); lat /= max(np.linalg.norm(lat), 1e-9)   # (the finger's sides: across it, in the hand's plane)
+        front = np.abs(nor[tt] @ lat) < JOINT_SIDE   # (the creases on its back and its palm side, not round its sides: Ren's)
+        for f in (JOINTS[-1:] if L < 1.05 * shortest else JOINTS):
+            out[tt[front & (np.abs(t - (lo + f * L)) < JOINT_W / 2 * u)]] = True
+    print('joints: %d fingers (%s mm long), %d texels' % (len(fing), [round(1000 * (f[4] - f[3]) / u) for f in fing], int(out.sum())))
     return out
 
 
@@ -111,6 +108,25 @@ def main(src, out, debug=None, full=None):
     for _ in range(3):
         def vote(q, d, c_=cl2): v = np.stack([((c_[q] == c) & (d < CLEAN * u)).sum(1) for c in range(3)], 1); return v.argmax(1)
         cl2 = near(48, vote)
+    # (and their edges smooth curves: per class its share within SMOOTH on the model (counted on a grid of GRID cells), each
+    # texel the class with the largest share: the edges follow no triangle's or texel's steps)
+    g = GRID * u; key = np.floor(pos / g).astype(np.int64); cells, ci = np.unique(key, axis=0, return_inverse=True); ci = ci.ravel()
+    cnt = np.zeros((len(cells), 3)); np.add.at(cnt, (ci, cl2), 1); cc = np.zeros((len(cells), 3)); np.add.at(cc, ci, pos); cc /= cnt.sum(1, keepdims=True)
+    ct = cKDTree(cc); sh = np.zeros((len(cells), 3))
+    for a in range(0, len(cells), 50000):
+        for i, q in enumerate(ct.query_ball_point(cc[a:a + 50000], SMOOTH * u, workers=-1)): sh[a + i] = cnt[q].sum(0)
+    sh /= np.maximum(sh.sum(1, keepdims=True), 1)
+    dq, iq = ct.query(pos, 4, workers=-1); wq = 1 / np.maximum(dq, .1 * g) ** 2
+    cl3 = (sh[iq] * wq[..., None]).sum(1).argmax(1)
+    # (the glove's edge on the skin smoother still, over SMOOTH_SKIN: there Meshy's paint had teeth several mm long; the
+    # purple bands and stripe keep the finer smoothing, their corners)
+    sh2 = np.zeros((len(cells), 2))
+    for a in range(0, len(cells), 50000):
+        for i, q in enumerate(ct.query_ball_point(cc[a:a + 50000], SMOOTH_SKIN * u, workers=-1)): sh2[a + i] = cnt[q][:, [SKIN, PLUM]].sum(0)
+    sp_ = (sh2[iq][..., 0] * wq).sum(1) / np.maximum(((sh2[iq][..., 0] + sh2[iq][..., 1]) * wq).sum(1), 1e-9)
+    sg = (cl3 == SKIN) | (cl3 == PLUM); cl3 = np.where(sg, np.where(sp_ > .5, SKIN, PLUM), cl3)
+    print('edges smoothed over %.1f mm (%d cells of %.1f mm; the glove on the skin over %.1f): %d texels changed' % (1000 * SMOOTH, len(cells), 1000 * GRID, 1000 * SMOOTH_SKIN, int((cl3 != cl2).sum())))
+    cl2 = cl3
     print('classes cleaned: %d of %d texels changed (skin %d, plum %d, purple %d)' % (int((cl2 != cl).sum()), len(cl), *np.bincount(cl2, minlength=3)))
     out_c = np.array([PAL[c] for c in cl2], float)
     # (the ink along the edges between the classes: a texel of another class within INK_W/2)

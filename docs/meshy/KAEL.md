@@ -816,6 +816,12 @@ ok sul costo (84 crediti, saldo da 970 a 886) e sui disegni ("si").
   del modello intero di Meshy (pieghe delle nocche) e le sue righe leggere (unghie). `arm_parts` prende
   `<glb>_painted.png` se c'è. Provate e lasciate: le righe delle articolazioni dalla distanza dal bordo del guanto (sul
   pollice un rombo, sulle dita niente).
+- **Ancora meglio** (Denis, su v23: "decisamente molto meglio ma migliora i disegni"; anteprima versione 24): i bordi fra i
+  colori come curve lisce (per colore la sua quota entro 2,2 mm sul modello, contata su celle di 0,5 mm; fra pelle e
+  guanto entro 4,2 mm: sulle nocche i denti di Meshy erano lunghi qualche mm); sulla mano aperta le pieghe delle
+  articolazioni come Ren, corte, sul dorso e sul palmo (non sui fianchi): ogni dito (pezzo di pelle a sé, lungo almeno
+  12 mm) lungo il suo asse, dal bordo del guanto, al 45% e al 74% della sua lunghezza (il pollice, il più corto, solo
+  l'ultima). Nel pugno le dita sono un pezzo solo: niente righe delle articolazioni, restano quelle fra le dita.
 - Per dopo: `kael_hands.*` e `kael_gloves.*` non servono più con gli avambracci (toglierli se Denis li approva, l'anteprima
   pesa meno); da vicinissimo la banda del gomito si vede aperta verso il braccio (un anello largo, come nel foglio).
 
