@@ -38,16 +38,17 @@ function modelBuild(key) {
   const root = new THREE.Group(), body = new THREE.Group(), s = CFG.body.h / 1000 / md.meta.height;
   body.scale.setScalar(s); root.add(body);
   const lk = CFG.looks[key] || {}, head = lk.head && mdHeadData(md, key);   // the new head (its old one, neck and collar's top hidden)
-  const bust = lk.bust && mdPartData(md, key, 'bust'), bplace = (bust && bust.j.bones) || {};   // Kael's bust (his torso, arms and hands hidden; his arm bones as long as its arms)
+  const outfit = lk.outfit && mdPartData(md, key, 'outfit');   // Kael's clothes from Meshy (19/11/2026, tools/kael_bust_attach.py outfit_part): all of his own body hidden, the bust not drawn
+  const bust = lk.bust && mdPartData(md, key, 'bust'), frame = outfit || bust, bplace = (frame && frame.j.bones) || {};   // Kael's bust (his torso, arms and hands hidden; his arm bones as long as its arms); the clothes carry the bust's bones
   const bones = md.bones.map(b => { const o = new THREE.Bone(); o.name = b.n; o.position.fromArray(bplace[b.n] || b.t); o.quaternion.fromArray(b.q); return o; });
   md.bones.forEach((b, i) => (b.p < 0 ? body : bones[b.p]).add(bones[i]));
   const B = n => bones[md.index[n]], look = (lk.fists || lk.spikes || lk.faceLine || lk.flatFace || lk.sash || lk.faceShape || lk.smoothNormals) && mdLookData(md, key);
   // fists: the fingers' bones under the hands (after the package's in the skeleton, as the look's skin counts them; the
   // bust's own where it has them: its hands are Ren's, in the same order)
-  const fdef = look && lk.fists ? (bust && bust.j.fingers) || look.fingers : [];
+  const fdef = look && lk.fists ? (frame && frame.j.fingers) || look.fingers : [];
   const fingers = fdef.map(f => { const o = new THREE.Bone(); o.name = f.n; o.position.fromArray(f.t); return o; });
   fingers.forEach((o, k) => (B(fdef[k].p) || fingers.find(g => g.name === fdef[k].p)).add(o));
-  const hidden = head || bust ? mdJoin(head && head.hide, bust && bust.hide) : null;   // (the package's triangles the parts replace)
+  const hidden = head || frame ? mdJoin(head && head.hide, frame && frame.hide) : null;   // (the package's triangles the parts replace)
   // sash: a chain of bones under the Hips for each ribbon (after the fingers in the skeleton)
   const sash = look && lk.sash && look.sash ? look.sash.ribbons.map(r => r.j.slice(0, -1).map((p, k) => {
     const o = new THREE.Bone(); o.name = 'Sash' + k; o.position.fromArray(k ? p.map((v, i) => v - r.j[k - 1][i]) : p); return o; })) : [];
@@ -149,7 +150,17 @@ function modelBuild(key) {
       head.fringeMesh = fmesh; head.fringeMat = fm;
     }
   }
-  if (bust) {   // the bust: its own toon mesh and outline on the same skeleton; both sides (its skirt is open below); in flat light
+  if (outfit) {   // the clothes: a toon mesh in the game's two tones (as the forearms), the body's outline, both sides (the collar and
+    // the cuts at the elbows are open)
+    const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = outfit.jpg; tex.anisotropy = 4;
+    tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
+    const om = new THREE.MeshToonMaterial({map: tex, gradientMap: mdGrad2(), skinning: true, side: THREE.DoubleSide});
+    const omesh = new THREE.SkinnedMesh(outfit.geo, om), oline = new THREE.SkinnedMesh(outfit.geo, mdLineMat({skinning: true, w: (ol.w / s).toFixed(5), back: ol.back}));
+    omesh.frustumCulled = oline.frustumCulled = false; body.add(omesh, oline);
+    omesh.bind(skel, mesh.matrixWorld); oline.bind(skel, mesh.matrixWorld);
+    outfit.mesh = omesh; outfit.mat = om;
+  }
+  if (bust && !outfit) {   // the bust: its own toon mesh and outline on the same skeleton; both sides (its skirt is open below); in flat light
     // (its texture has the sheet's shadows, as the images of it) but where its part says not (aFlat: the hands); the body's outline
     const tex = new THREE.Texture(new Image()); tex.flipY = false; tex.image.src = bust.jpg; tex.anisotropy = 4;
     tex.image.decode().then(() => { tex.needsUpdate = true; }, () => {});
@@ -223,7 +234,7 @@ function modelBuild(key) {
     a.mesh = amesh; a.line = aline; a.mat = am;
   });
   else arms.length = 0;
-  if (arms.length && bust && bust.armhide) {   // (the bust without its forearms)
+  if (arms.length && bust && !outfit && bust.armhide) {   // (the bust without its forearms)
     const g = bust.mesh.geometry;
     bust.mesh.geometry = mdTris(g, g.index.array, bust.armhide, [], null);
     body.children.forEach(o => { if (o !== bust.mesh && o.geometry === g) o.geometry = bust.mesh.geometry; });   // (its outline too)
@@ -237,7 +248,7 @@ function modelBuild(key) {
   if (lk.straightWrist && fingers.length) it.straight = {k: lk.straightWrist, w: ['Left', 'Right'].map(s => ({hand: B(s + 'Hand'), line: fingers.find(o => o.name === s + 'HandMiddle1').position.clone()}))};
   if (gloves) { it.gloves = gloves.mesh; it.mats.gloves = gloves.mat; }
   if (arms.length) { it.arms = arms.map(a => [a.mesh, a.line]); it.mats.armFist = arms[0].mat; it.mats.armOpen = arms[1].mat; }
-  if (bust) { it.bust = bust.mesh; it.mats.bust = bust.mat; if (bust.j.fistFrame) it.fistFrame = {Left: new THREE.Quaternion().fromArray(bust.j.fistFrame.Left), Right: new THREE.Quaternion().fromArray(bust.j.fistFrame.Right)}; }   // (fistFrame: each fist's own frame in its hand bone's: Ren's hands, laid as his)
+  if (frame) { it.bust = frame.mesh; it.mats.bust = frame.mat; if (frame.j.fistFrame) it.fistFrame = {Left: new THREE.Quaternion().fromArray(frame.j.fistFrame.Left), Right: new THREE.Quaternion().fromArray(frame.j.fistFrame.Right)}; }   // (fistFrame: each fist's own frame in its hand bone's: Ren's hands, laid as his)
   if (head) { it.head = head.mesh; it.mats.head = head.mat; if (head.fringeMat) { it.fringe = head.fringeMesh; it.mats.fringe = head.fringeMat; } }
   if (face) it.face = face;
   if (sash.length) {   // the ribbons: skinned to their chains, the chains moved by mdSash

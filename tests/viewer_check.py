@@ -143,7 +143,7 @@ GEAR = """async () => { const it = VW.it, r = {};
   it.root.scale.x = 1; VW.zoom = 1; VW.speed = 1;
   return r; }"""
 REN_ONLY = ('spikes', 'head', 'fringe', 'flat', 'ribbons', 'calm', 'swings', 'finite')   # (the look's parts only Ren has)
-KAEL_ONLY = ('hands', 'flash', 'gloves', 'shell', 'ring', 'mirror', 'arms', 'straight', 'swap')   # (Kael's: his hands Ren's as their own part, his gloves and wrists' rings, 17/11; or Meshy's forearms, 19/11)
+KAEL_ONLY = ('hands', 'flash', 'gloves', 'shell', 'ring', 'mirror', 'arms', 'straight', 'swap', 'outfit')   # (Kael's: his hands Ren's as their own part, his gloves and wrists' rings, 17/11; or Meshy's forearms, 19/11)
 
 
 async def main(out_dir, page='viewer.html'):
@@ -195,6 +195,8 @@ async def main(out_dir, page='viewer.html'):
               // (Kael: Ren's hands as their own part on the same skeleton (Ren's are 1305 triangles), flashing with the body: f_fx lights every material of it.mats)
               r.hands = (!!it.hands && it.hands.isSkinnedMesh && it.hands.skeleton === it.mesh.skeleton && it.hands.geometry.index.count / 3 > 1000)
                 || (!!it.arms && it.arms.length === 2 && it.arms.every(m => m[0].isSkinnedMesh && m[0].skeleton === it.mesh.skeleton && m[0].geometry.index.count / 3 > 1000));   // (or Meshy's forearms, 19/11)
+              // (Kael's clothes from Meshy, 19/11: their own skinned mesh on his skeleton, all of his own body's triangles hidden)
+              r.outfit = !!it.bust && it.bust.isSkinnedMesh && it.bust.skeleton === it.mesh.skeleton && it.bust.geometry.index.count / 3 > 10000 && it.mesh.geometry.index.count === 0;
               r.flash = !!it.hands && Object.values(it.mats).includes(it.hands.material);
               return r; }""")
             # the sash: two ribbons on chains of bones; calm in the guard, swinging after a jump, never NaN

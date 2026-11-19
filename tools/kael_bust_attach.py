@@ -34,7 +34,7 @@ his legs below.
   where his baggy trousers stood out of it (1-2 cm at the sides), pushed out SKIRT_OUT over them, smoothed. His old sash's
   tails stay (they hang from under its knot) until the ribbons.
 
-usage: python3 tools/kael_bust_attach.py BUST.glb [FIST.glb OPEN.glb]   (with Meshy's forearms, fist and open: arm_parts; writes wip_assets/kael/kael_bust.json, .bin, .png; Kael's look needs
+usage: python3 tools/kael_bust_attach.py BUST.glb [FIST.glb OPEN.glb [OUTFIT.glb]]   (with Meshy's forearms, fist and open: arm_parts; with Meshy's clothes: outfit_part; writes wip_assets/kael/kael_bust.json, .bin, .png; Kael's look needs
 bust:true in CFG.looks.kael)"""
 import io, json, os, sys
 import numpy as np
@@ -63,6 +63,7 @@ GLOVE_PAD = .007                         # bust units (3 mm): the texture's glov
 GLOVE_C, BLACK_C, INK_C, SKIN_C = (65, 49, 74), (26, 21, 27), (9, 6, 9), (250, 191, 151)   # the bust's palette (tools/kael_bust.py PAL)
 GLOVE_EDGE = None if os.environ.get('KAEL_GLOVE_EDGE') == 'paint' else dict(back=.012, palm=.004, thumb=-.008, thumb_r=.003, soft=.006)   # m: the glove's edge (tools/kael_gear.py glove_edge): so far before the knuckles on the back and on the palm, the thumb free so far before its second joint, so much wider than it, the blend; None: the texture's painted edge (in the fist, teeth)
 ARM_CUT, ARM_CLEAR, ARM_WRIST, ARM_WIDE = .010, .002, 1.08, 1.2   # Meshy's forearms (arm_parts): the bust kept so far (m) into their elbow band, the band so far (m) over it; as thick as the bust's forearm all along, the hand ARM_WRIST less wide than its wrist band asks (its length Denis's), at most ARM_WIDE times as wide as long
+OUTFIT_TAT, OUTFIT_LEG, OUTFIT_SMOOTH, OUTFIT_TEX, OUTFIT_ARM_Y, OUTFIT_BITS, OUTFIT_FORE, OUTFIT_ELBOW = .12, 1., 3, 2048, 1.0, .01, .5, .07   # Meshy's clothes (outfit_part): their elbow band looked for so far (m) past the shoulder (its tattoo before); the legs turned so much of the way onto his; rounds of smoothing of their skin; their texture's size on the page; the arms looked for over this height (m: the trousers below); pieces left loose by the cuts under this share of its triangles cut; its vertices over this share on the forearms and hands cut, further than [7] m from the bands' tops
 GLOVE_T, GLOVE_WALL = .002, .0015   # m: the gloves' shell over the hands' skin, and its edge's strip down toward the skin (tools/kael_gear.py shell)
 HAND_STYLE = os.environ.get('KAEL_HAND_STYLE', 'foglio')   # Kael's hands: 'ren' (Ren's as on him: his paint, light, outline) or 'foglio' (as the sheet draws them: smooth, two flat tones, black lines between the fingers; 19/11, Denis: "mani e polsi ancora brutti")
 FOGLIO = dict(subdiv=1, skin=(250, 191, 151), line_push=.1, line_w=.7, ink_w=.002)   # 'foglio': Loop rounds; the sheet's skin; the outline pushed back so much of the body's (lines between the fingers) and so wide; the glove's edge ink half width, m
@@ -258,7 +259,7 @@ def forearm(X, pur, sel, E0, H0):
     return band(top), band(cuff)
 
 
-def main(bust, arms=None):
+def main(bust, arms=None, outfit=None):
     K = package(os.path.join(KAEL_PKG, 'kael.json')); names = K['names']; nb = len(names); Wm = K['Wm']
     KL, _, _ = look(os.path.join(KAEL_PKG, 'kael_look.json'), len(K['P']))
     KT = np.asarray(Image.open(os.path.join(KAEL_PKG, 'kael_painted.png')).convert('RGB')).astype(float); S = KT.shape[0]
@@ -609,9 +610,14 @@ def main(bust, arms=None):
     # their lines drawn as the sheet traces the muscles; Denis, 12/11: "ricalca anche i muscoli delle braccia")
     aw = np.clip(G[:, 1] + G[:, 2], 0, 1) * (1 - hw)
     push = 1 + hw * (HAND_LINE[0] - 1) + aw * (ARM_LINE[0] - 1); width = 1 + hw * (HAND_LINE[1] - 1) + aw * (ARM_LINE[1] - 1)
+    if outfit:   # (19/11, Denis: "rifai in meshy i vestiti"): Meshy's clothes in place of the bust and his own body
+        Wbu = np.zeros((len(used), len(allnames))); np.add.at(Wbu, (np.repeat(np.arange(len(used)), 4), top[used].ravel()), tw[used].ravel())
+        under = outfit_part(outfit, J, K, X2[used], N2[used], Wbu, names, allnames,
+                    {'scale': SCALE, 'bones': {k_: [round(float(v), 5) for v in t_] for k_, t_ in bones.items()}, 'fingers': fingers, 'fistFrame': frames})
+    else: under = None
     armhide = np.zeros(0, np.uint32)
     if arms:   # (19/11, Denis: "rifai ste mani di merda su meshy", "anche polso e avambraccio"): Meshy's forearms, fist and open
-        armhide = arm_parts(arms, J, fingers, Wm, names, allnames, X2[used], It, isR[used])
+        armhide = arm_parts(arms, J, fingers, Wm, names, allnames, X2[used], It, isR[used], under)
     write_part(KAEL_PKG, 'kael_bust', {'pos': X2[used], 'nor': N2[used], 'uv': UVb[used], 'jnt': top[used], 'wgt': tw[used], 'idx': It, 'hide': hide, 'armhide': armhide,
                                        'flat': np.where(isR, HAND_FLAT, 1.)[used],   # (its light: flat, the hands the game's)
                                        'glove': gfield[used],   # (the hands' glove: the signed distance to its edge, m; 1 a hand's vertex)
@@ -643,7 +649,121 @@ def main(bust, arms=None):
     print('written: kael_gloves (%d vertices, %d triangles: the shells %.1f mm over the skin, %d edge vertices; 2 rings)' % (len(Pg), len(Ig), 1000 * GLOVE_T, int(ink.sum())))
 
 
-def arm_parts(glbs, J, fingers, Wm, names, allnames, Xb, Ib, rb):
+def bracer_axis(j, Xb, sd):
+    """the bust's bracer's ends (its top band's top, its cuff's bottom) on its forearm's axis, in the pose (as arm_parts)"""
+    top2 = (j['top_full'] - j['Eb']) @ j['Rf'].T + j['Eb2']; cuff2 = (j['cuff_full'] - j['Eb']) @ j['Rf'].T + j['Eb2']
+    sx = (Xb[:, 0] >= 0) == (sd > 0)
+    for _ in range(3):
+        af = (cuff2 - top2) / np.linalg.norm(cuff2 - top2); L_ = np.linalg.norm(cuff2 - top2); D = Xb - top2; t = D @ af
+        r = np.linalg.norm(D - np.outer(t, af), axis=1); C = []
+        for a in np.linspace(.15, .85, 8) * L_:
+            m_ = sx & (np.abs(t - a) < .006) & (r < .07)
+            if m_.sum() > 8: C.append(Xb[m_].mean(0))
+        C = np.array(C); c0 = C.mean(0); d0 = np.linalg.svd(C - c0)[2][0]; d0 = d0 if d0 @ af > 0 else -d0
+        top2, cuff2 = c0 + ((top2 - c0) @ d0) * d0, c0 + ((cuff2 - c0) @ d0) * d0
+    return top2, cuff2
+
+
+def outfit_part(glb, J, K, Xb, Nb, Wb, names, allnames, extra):
+    """Kael's clothes from Meshy (19/11/2026, Denis: "rifai in meshy i vestiti e mettili sopra a quelli vecchi, cioè toglili e
+    sostituiscili con quelli nuovi"; docs/meshy/KAEL.md "Vestiti da Meshy"): one piece from the collar's top to the soles
+    (top, collar, shoulder wing, sash, skirt, trousers, boots, the upper arms), laid on him: its soles on his, its collar's
+    top on the bust's, centred on the bust's chest; each upper arm turned about the bust's shoulder joint onto the bust's
+    upper arm (to its bracer's top, where Meshy's forearms start), each leg about its hip onto his leg; skinned as the
+    bust (its nearest vertex facing the same way) above, as his own legs below; cut under the head's collar and past the
+    forearms' elbow bands. Writes kael_outfit: its 'hide' all of his own triangles (the bust is not drawn with it); extra
+    (the bust's bones, fingers, fists' frames) in its json, as the bust's."""
+    m = glbio.read(glb); P, N, UV, I = m['pos'].astype(float), m['nor'].astype(float), m['uv'].astype(float), m['idx'].astype(np.int64)
+    painted = glb[:-4] + '_painted.png'
+    img = Image.open(painted if os.path.exists(painted) else io.BytesIO(m['img'])).convert('RGB')
+    if img.size[0] > OUTFIT_TEX: img = img.resize((OUTFIT_TEX, OUTFIT_TEX), Image.LANCZOS)   # (the page's size)
+    T = np.asarray(Image.open(io.BytesIO(m['img'])).convert('RGB')).astype(int); S = T.shape[0]
+    col = T[np.clip((UV[:, 1] * S).astype(int), 0, S - 1), np.clip((UV[:, 0] * S).astype(int), 0, S - 1)]
+    pur = (col[:, 2] > 140) & (col[:, 2] - col[:, 1] > 60)
+    sole = K['P'][:, 1].min(); top = Xb[:, 1].max()
+    s = (top - sole) / (P[:, 1].max() - P[:, 1].min()); X = (P - [0., P[:, 1].min(), 0.]) * s + [0., sole, 0.]
+    chest = lambda Y: Y[(Y[:, 1] > 1.22) & (Y[:, 1] < 1.34) & (np.abs(Y[:, 0]) < .16)][:, [0, 2]].mean(0)
+    d = chest(Xb) - chest(X); X[:, [0, 2]] += d
+    print('outfit: %.3f m per unit, its chest moved %s m onto the bust\'s' % (s, np.round(d, 3)))
+    Nn = N.copy()
+    sm = lambda v: (lambda t: t * t * (3 - 2 * t))(np.clip(v, 0, 1))
+    def turn_about(X, Nn, piv, a, b, w):   # (the points turned about piv taking a onto b and stretched along it to its length (not
+        # thinner: only along it), by w)
+        R = turn(a, b); k = np.linalg.norm(b) / np.linalg.norm(a); ub = b / np.linalg.norm(b)
+        Q = (X - piv) @ R.T; Xr = piv + Q + np.outer((Q @ ub) * (k - 1), ub)
+        return X + (Xr - X) * w[:, None], Nn + ((Nn @ R.T) - Nn) * w[:, None]
+    cut = np.zeros(len(I), bool); cutv = np.zeros(len(X), bool)
+    for side, sd in SIDES:
+        j = J[sd]; Ab = j['Ab']; top2, cuff2 = bracer_axis(j, Xb, sd)
+        # (its upper arm: the arm's line (its points well out of the shoulder), from the shoulder joint; its elbow band's top:
+        # the first purple slices along it past OUTFIT_TAT (the shoulder's tattoo before))
+        arm = (sd * X[:, 0] > sd * Ab[0] + .05) & (X[:, 1] < Ab[1]) & (X[:, 1] > OUTFIT_ARM_Y)   # (not the trousers)
+        c = X[arm].mean(0); u = np.linalg.svd(X[arm] - c, full_matrices=False)[2][0]; u = u if u[1] < 0 else -u
+        tau = (X - c) @ u; rad = np.linalg.norm((X - c) - np.outer(tau, u), axis=1); near = rad < .07
+        t0 = (Ab - c) @ u; ts = np.arange(t0 + OUTFIT_TAT, tau[arm].max(), .005)
+        fr = np.array([pur[near & (np.abs(tau - a) < .005)].mean() if (near & (np.abs(tau - a) < .005)).sum() > 5 else 0 for a in ts])
+        tb = ts[np.argmax(fr > .35)]; eo = c + u * tb
+        if os.environ.get('KAEL_OUTFIT_DEBUG'): print('   Ab', np.round(Ab, 3), 'arm line c', np.round(c, 3), 'u', np.round(u, 2), 't0 %.3f' % t0, 'profile', [(round(float(a - t0), 3), round(float(f), 2)) for a, f in zip(ts, fr)][::2])
+        fore = ((X[:, 0] >= 0) == (sd > 0)) & (tau > tb - .01) & (rad < .12) & (X[:, 1] > OUTFIT_ARM_Y - .35)   # (its forearm, from its band)
+        wfo = sm((tau - tb + .01) / .03) * fore
+        ua = (eo - Ab) / np.linalg.norm(eo - Ab); ta = (X - Ab) @ ua
+        da = np.linalg.norm((X - Ab) - np.outer(np.clip(ta, 0, None), ua), axis=1)
+        w = sm(ta / .08) * sm((.085 - da) / .03)
+        ang = np.degrees(np.arccos(np.clip(ua @ ((top2 - Ab) / np.linalg.norm(top2 - Ab)), -1, 1)))
+        X, Nn = turn_about(X, Nn, Ab, eo - Ab, top2 - Ab, w)
+        # (its forearm bent at the elbow band onto the bust's forearm (Meshy's forearms lie there): its line from the band's top)
+        af = (cuff2 - top2) / np.linalg.norm(cuff2 - top2); fm = fore & (tau > tb + .03) & (rad < .07)
+        Fc = X[fm].mean(0); df = np.linalg.svd(X[fm] - Fc, full_matrices=False)[2][0]; df = df if df @ af > 0 else -df
+        X, Nn = turn_about(X, Nn, top2, df, af, wfo)
+        # (past the band's top along it, round it: under Meshy's forearms, cut)
+        Dv = X - top2; tv = Dv @ af
+        cutv |= ((X[:, 0] >= 0) == (sd > 0)) & (tv > ARM_CUT) & (np.linalg.norm(Dv - np.outer(tv, af), axis=1) < .10)
+        print('outfit %s arm: its elbow band %.3f m from the shoulder, turned %.1f deg onto the bust\'s (%.3f m)' % (side, np.linalg.norm(eo - Ab), ang, np.linalg.norm(top2 - Ab)))
+        # (its leg: the line of its trousers' slices' middles onto his leg's (hip joint to ankle))
+        hip = K['Wm'][names.index(side + 'UpLeg')][:3, 3]; ank = K['Wm'][names.index(side + 'Foot')][:3, 3]
+        lg = ((X[:, 0] >= 0) == (sd > 0)) & (X[:, 1] < hip[1] - .12) & (X[:, 1] > ank[1] + .08) & (np.abs(X[:, 0]) > .02)
+        C = np.array([X[lg & (np.abs(X[:, 1] - y) < .02)].mean(0) for y in np.linspace(ank[1] + .12, hip[1] - .16, 8)])
+        c0 = C.mean(0); dl = np.linalg.svd(C - c0)[2][0]; dl = dl if dl[1] < 0 else -dl
+        a_ = c0 + dl * ((ank - c0) @ dl) - hip; b_ = ank - hip
+        wl = ((X[:, 0] >= 0) == (sd > 0)) * sm((hip[1] - .04 - X[:, 1]) / .14)
+        X, Nn = turn_about(X, Nn, hip, a_, b_, wl * OUTFIT_LEG)
+        print('outfit %s leg: turned %.1f deg onto his' % (side, np.degrees(np.arccos(np.clip(a_ @ b_ / np.linalg.norm(a_) / np.linalg.norm(b_), -1, 1)))))
+    Nn /= np.maximum(np.linalg.norm(Nn, axis=1, keepdims=True), 1e-9)
+    cen = X[I].mean(1); cut |= cutv[I].any(1)
+    cut |= (cen[:, 1] > COLLAR_CUT[0]) & (np.hypot(cen[:, 0] - COLLAR_CUT[1][0], cen[:, 2] - COLLAR_CUT[1][1]) < COLLAR_CUT[2])
+    # (the skin: the bust's above, his own legs' below)
+    up = np.isin(K['JN'], [names.index(n) for n in UPPER]); wu = (K['WG'] * up).sum(1)
+    lv = (wu < .5) & (K['P'][:, 1] < .95)
+    Wk = np.zeros((int(lv.sum()), len(allnames))); np.add.at(Wk, (np.repeat(np.arange(int(lv.sum())), 4), K['JN'][lv].ravel()), K['WG'][lv].ravel())
+    DP = np.r_[Xb, K['P'][lv]]; DN = np.r_[Nb, K['N'][lv]]; DW = np.r_[Wb, Wk]
+    W = DW[nearest_facing(DP, DN, X, Nn)]
+    wv, A, deg = weld_graph(X, I); W = smooth(W, wv, A, deg, OUTFIT_SMOOTH)
+    topo = np.argsort(-W, 1)[:, :4]; tw = np.take_along_axis(W, topo, 1); tw /= np.maximum(tw.sum(1, keepdims=True), 1e-12)
+    # (and all that moves mostly with the forearms and the hands: Meshy's forearms are there; its thumbs, out of the arm's line
+    # in its pose, were left floating by the fists)
+    fh = np.array([n.endswith(('ForeArm', 'Hand')) or 'Hand' in n for n in allnames])
+    wf = (W * fh).sum(1) / np.maximum(W.sum(1), 1e-12)
+    tops = np.array([bracer_axis(J[sd], Xb, sd)[0] for _, sd in SIDES]); far = cKDTree(tops).query(X)[0] > OUTFIT_ELBOW   # (not the elbows': into the bands)
+    cut |= ((wf > OUTFIT_FORE) & far)[I].any(1)
+    print('outfit: %d vertices mostly on the forearms and hands (over %.2f), away from the elbows, cut' % (int(((wf > OUTFIT_FORE) & far).sum()), OUTFIT_FORE))
+    # (and what the cuts left loose: pieces of the hands (fingers past the cut), small, apart from the rest; welded, Meshy's
+    # seams split it)
+    from scipy.sparse import coo_matrix as _coo
+    from scipy.sparse.csgraph import connected_components as _cc
+    wv2 = np.unique(np.round(X / 1e-6).astype(np.int64), axis=0, return_inverse=True)[1].ravel(); Ik = I[~cut]; tk = np.nonzero(~cut)[0]
+    e_ = wv2[np.r_[Ik[:, [0, 1]], Ik[:, [1, 2]]]]; nw = wv2.max() + 1
+    _, lab = _cc(_coo((np.ones(len(e_)), (e_[:, 0], e_[:, 1])), shape=(nw, nw)), directed=False)
+    tl = lab[wv2[Ik[:, 0]]]; cnt = np.bincount(tl); small = cnt[tl] < OUTFIT_BITS * len(Ik)
+    cut[tk[small]] = True
+    print('outfit: %d loose pieces cut (%d triangles; the pieces kept: %s triangles)' % (len(np.unique(tl[small])), int(small.sum()), sorted(np.unique(cnt[tl[~small]]).tolist(), reverse=True)))
+    keep = ~cut; It = I[keep]
+    write_part(KAEL_PKG, 'kael_outfit', {'pos': X, 'nor': Nn, 'uv': UV, 'jnt': topo, 'wgt': tw, 'idx': It, 'hide': np.arange(len(K['I']), dtype=np.uint32)},
+               dict(extra, meshy=os.path.basename(glb)), img, 'png' if os.path.exists(painted) else 'jpg')   # (Meshy's own paint, as it is (Denis, 19/11: "usa quell'immagine così com'è"): a JPEG, the page's size)
+    print('written: kael_outfit (%d vertices, %d triangles, %d cut: under the head\'s collar and the forearms; all of his own %d hidden)' % (len(X), len(It), int(cut.sum()), len(K['I'])))
+    return X[np.unique(It)]
+
+
+def arm_parts(glbs, J, fingers, Wm, names, allnames, Xb, Ib, rb, under=None):
     """Meshy's forearms (19/11/2026, docs/meshy/KAEL.md "Avambracci da Meshy"): glbs = (the fist's GLB, the open hand's), each
     a right forearm from below the elbow to the fingertips (tools/kael_gear.py place_arm). Laid on each arm of the bust (Xb,
     Ib: its part's vertices and triangles; rb: Ren's hands' vertices among them) from its bracer's top band to its cuff,
@@ -684,8 +804,12 @@ def arm_parts(glbs, J, fingers, Wm, names, allnames, Xb, Ib, rb):
             D = Xb - top2; t = D @ af; r = np.linalg.norm(D - np.outer(t, af), axis=1)
             kept = np.zeros(len(Xb), bool); kept[Ib[~(sx & (t > ARM_CUT))[Ib].any(1)].ravel()] = True   # (the bust's vertices still drawn)
             near = sx & kept & (t > -.002) & (t < sc * (ye - y0)) & (r < .09)
+            if under is not None:   # (with Meshy's clothes the arm under the band is theirs: its drawn vertices)
+                Xu = under[under[:, 0] >= 0] if sd > 0 else under[under[:, 0] < 0]; Du = Xu - top2; tu = Du @ af; ru = np.linalg.norm(Du - np.outer(tu, af), axis=1)
+                nu = (tu > -.02) & (tu < sc * (ye - y0)) & (ru < .055)   # (the arm's, not the flank's by the elbow)
             band = P[:, 1] < ye; cb = P[band][:, [0, 2]].mean(0); rp = sc * np.median(np.linalg.norm(P[band][:, [0, 2]] - cb, axis=1))
-            rb_ = float(np.percentile(r[near], 98)) if near.any() else 0.; k0 = max(1., (rb_ + ARM_CLEAR) / rp)
+            rn = ru[nu] if under is not None else r[near]
+            rb_ = float(np.percentile(rn, 98)) if len(rn) else 0.; k0 = max(1., (rb_ + ARM_CLEAR) / rp)
             # (as thick as the bust's forearm round its elbow (no step there; its band ARM_CLEAR over the bust kept under it),
             # thinning toward the wrist to its band ARM_WRIST of the hand's own (Denis's 90%: no neck at the glove))
             L_ = np.linalg.norm(cuff2 - top2); band = P[:, 1] < ye; cb = P[band][:, [0, 2]].mean(0); rr = np.linalg.norm(P[:, [0, 2]] - cb, axis=1)
@@ -719,5 +843,5 @@ def arm_parts(glbs, J, fingers, Wm, names, allnames, Xb, Ib, rb):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) not in (2, 4): sys.exit(__doc__)
-    main(sys.argv[1], sys.argv[2:4] if len(sys.argv) == 4 else None)
+    if len(sys.argv) not in (2, 4, 5): sys.exit(__doc__)
+    main(sys.argv[1], sys.argv[2:4] if len(sys.argv) >= 4 else None, sys.argv[4] if len(sys.argv) == 5 else None)

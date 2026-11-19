@@ -10,7 +10,7 @@ pronto in `wip_assets/kael/`: `mk.sh` lo mette solo nell'anteprima di Kael (`vie
 gioco usa un pacchetto Meshy appena lo trova in `assets/` o `viewer_assets/`: `src/d_render.js`, `modelBuild(c) ||
 fighterBuild(c)`). Per metterlo nel gioco: spostare `wip_assets/kael/` in `viewer_assets/kael/`, test, pubblicare.
 
-## Task Meshy e crediti (saldo prima: 1100, dopo: 844; 42 dei vestiti tolti, sotto)
+## Task Meshy e crediti (saldo prima: 1100, dopo: 844)
 | Passo | Task | Crediti |
 |---|---|---|
 | Corpo senza capelli né vestiti (`kael_base.png`) — superato | image-to-3d `01a1c4dd-548a-70d1-9dad-05e513084c49` | 30 |
@@ -22,7 +22,9 @@ fighterBuild(c)`). Per metterlo nel gioco: spostare `wip_assets/kael/` in `viewe
 | **Busto e braccia** dalle 3 viste del foglio del busto senza le code della fascia (vedi "Busto da Meshy") | multi-image-to-3d `01a1cbc9-6df2-76aa-bd39-86e8ff4ee855` | 30 |
 | **Avambraccio e mano** (19/11, vedi "Avambracci da Meshy"): disegni del pugno e della mano aperta dal foglio del busto | image-to-image `01a1f496-4744-7193-b4e5-43012a558e08`, `01a1f496-50d6-714b-a4f0-a08364671a56` | 24 |
 | **Avambraccio col pugno** e **con la mano aperta**, dalle 3 viste di ogni disegno | multi-image-to-3d `01a1f4a3-797e-7637-bd2f-33b6cae22c34`, `01a1f4a3-922b-72a3-b89e-2a72d639b8ac` | 60 |
-| **Totale** | | **214** |
+| **Vestiti** (19/11, vedi "Vestiti da Meshy"): disegno a 3 viste dal collo agli stivali, senza testa | image-to-image `01a1f57a-1870-71a7-b5b8-1182698a5a83` | 12 |
+| **Vestiti** dal disegno, texture 4K | multi-image-to-3d `01a1f57b-21b5-76aa-af9f-8af25a425614` | 30 |
+| **Totale** | | **256** |
 
 Il primo corpo (senza vestiti, per vestirlo in codice) è stato lasciato: la forma gonfiata per i pantaloni larghi non
 andava (Denis: "perché l'hai ingrossato così tanto?"), i vestiti solo dipinti sul corpo aderente sembravano una tuta e
@@ -825,11 +827,38 @@ ok sul costo (84 crediti, saldo da 970 a 886) e sui disegni ("si").
 - Per dopo: `kael_hands.*` e `kael_gloves.*` non servono più con gli avambracci (toglierli se Denis li approva, l'anteprima
   pesa meno); da vicinissimo la banda del gomito si vede aperta verso il braccio (un anello largo, come nel foglio).
 
-## Vestiti da Meshy: provati e tolti (19/11)
-Denis: "rifai in meshy i vestiti e mettili sopra a quelli vecchi" (42 crediti, saldo 844: disegno a 3 viste dal colletto
-agli stivali, image-to-image `01a1f57a-1870-71a7-b5b8-1182698a5a83`, 12; multi-image-to-3d `01a1f57b-21b5-76aa-af9f-8af25a425614`,
-30), attaccati al posto del busto e del corpo vecchi e pubblicati (versione 25). Denis: "fa schifo, torna a quello di prima,
-elimina sta roba": tolti tutti (codice, pezzo e file di Meshy), anteprima tornata come la versione 24.
+## Vestiti da Meshy (19/11, anteprima versione 25; colori di Meshy dalla versione 27)
+Storia: pubblicati ripassati come il foglio (versione 25); Denis: "fa schifo, torna a quello di prima, elimina sta roba"
+(tolti, versione 26); poi, mostrando l'anteprima di Meshy del modello: "dov'è finito?", "usa quell'immagine così com'è":
+riscaricato gratis da Meshy (stesso task) e rimesso con la sua pittura com'è (`kael_outfit.jpg`, senza
+`vestiti_40k_painted.png`), versione 27. Gli avambracci restano quelli ripassati (versione 24).
+Denis: "ora rifai in meshy i vestiti e mettili sopra a quelli vecchi, cioè toglili e sostituiscili con quelli nuovi, niente
+domande, utilizza i crediti" (42 crediti, saldo da 886 a 844).
+- **Disegno** (image-to-image, gpt-image-2): dai disegni di Kael (davanti `kael_nero.png`, dietro `kael_retro.png`) e dai fogli
+  di busto e gambe, un foglio a 3 viste (davanti, fianco destro, dietro) di tutto il vestito dal colletto agli stivali,
+  senza testa, nella stessa posa a A, senza le code lunghe della fascia (solo il nodo: le code si faranno coi nastri):
+  `meshy/meshy_output/20261119_kael-vestiti/disegno_vestiti.png`, viste `vista_0-2.png`.
+- **Modello** (multi-image-to-3d, texture 4K, 30 crediti): `vestiti.glb` (625.444 triangoli), alleggerito a 40.000
+  (`vestiti_40k.glb`). Davanti +Z, l'ala sulla spalla destra (-X), come il disegno.
+- **Pittura come il foglio** (`tools/kael_arm_paint.py` con `KAEL_PAINT_UNIT=.778 KAEL_PAINT_SIZE=2048 KAEL_PAINT_BLACK=23
+  KAEL_PAINT_INK=skin KAEL_PAINT_INK_W=.0035 KAEL_PAINT_GRID=.0015 KAEL_PAINT_SMOOTH=.004 KAEL_PAINT_SMOOTH_SKIN=.005
+  KAEL_PAINT_JOINTS=0`): il nero di Meshy diventa il prugna del foglio, le sue zone più scure le ombre nere a punte, viola e
+  pelle piatti, l'inchiostro solo attorno alla pelle (il foglio disegna le strisce viola e le ombre senza).
+- **Attaccato** (`outfit_part` in `tools/kael_bust_attach.py`, quarto argomento): suole sulle sue, cima del colletto su
+  quella del busto, centrato sul petto del busto; ogni braccio girato sulla spalla del busto fino all'inizio degli
+  avambracci Meshy (12-13 gradi, allungato solo lungo il braccio), l'avambraccio piegato sulla banda e tagliato sotto;
+  ogni gamba girata sull'anca sulla sua (3-5 gradi). Pelle: quella del busto sopra (il vertice più vicino che guarda dalla
+  stessa parte), quella delle sue gambe sotto, lisciata. Tagliati: sotto il colletto della testa, sotto le bande dei gomiti,
+  e tutto quello che si muove con avambracci e mani (i suoi pollici restavano a galleggiare vicino ai pugni). Le bande dei
+  gomiti degli avambracci Meshy ora misurate sul braccio dei vestiti.
+- **Nel gioco** (`src/e_model.js`, `CFG.looks.kael.outfit`): il pezzo nuovo nella luce a due toni, contorno del corpo; tutto
+  il corpo vecchio nascosto, il busto non disegnato (le sue ossa, dita e pugni restano: li porta il json dei vestiti).
+  L'anteprima non porta più `kael_bust` (`mk.sh`).
+- Controllo in `tests/viewer_check.py` (Kael): i vestiti sulle sue ossa, più di 10.000 triangoli, nessun triangolo del corpo
+  vecchio.
+- Misure (grafica software, 844x390, guardia): 125.868 triangoli, 7 disegni, circa 114 ms per fotogramma (prima 125).
+- Per dopo: da vicinissimo al gomito il bordo tagliato del braccio si vede un po' sotto la banda; dietro ci sono strisce
+  viola che il disegno della schiena non ha; le code della fascia coi nastri.
 
 ## Per dopo
 - Le code della fascia sono attaccate ai pantaloni (le ha fatte così Meshy): seguono le gambe, non oscillano. Se Denis
