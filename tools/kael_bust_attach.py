@@ -656,6 +656,7 @@ def arm_parts(glbs, J, fingers, Wm, names, allnames, Xb, Ib, rb):
     for name, g in zip(('armopen', 'armfist'), glbs[::-1]):   # (the open hand first: its length sets both hands' size)
         m = glbio.read(g); P, N, UV, I = m['pos'].astype(float), m['nor'].astype(float), m['uv'].astype(float), m['idx'].astype(np.int64)
         img = Image.open(io.BytesIO(m['img'])).convert('RGB'); T = np.asarray(img).astype(int); S = T.shape[0]
+        painted = g[:-4] + '_painted.png'   # (its paint as the sheet draws it, tools/kael_arm_paint.py; Meshy's own if there is none)
         col = T[np.clip((UV[:, 1] * S).astype(int), 0, S - 1), np.clip((UV[:, 0] * S).astype(int), 0, S - 1)]
         y0, y1, ye = arm_bands(P, col, lambda c: (c[:, 2] > 140) & (c[:, 2] - c[:, 1] > 60))
         if name == 'armopen':   # (the hands as big as Denis chose (HAND_RATIO, HAND_MUL: cuff to fingertip of the bracer), the open one's measured; the fist's the same)
@@ -710,7 +711,8 @@ def arm_parts(glbs, J, fingers, Wm, names, allnames, Xb, Ib, rb):
         for o in out: Is_.append(o[5] + at); at += len(o[0])
         write_part(KAEL_PKG, 'kael_' + name, {'pos': np.concatenate([o[0] for o in out]), 'nor': np.concatenate([o[1] for o in out]),
                                               'uv': np.concatenate([o[2] for o in out]), 'jnt': np.concatenate([o[3] for o in out]),
-                                              'wgt': np.concatenate([o[4] for o in out]), 'idx': np.concatenate(Is_)}, {'meshy': os.path.basename(g)}, img, 'jpg')
+                                              'wgt': np.concatenate([o[4] for o in out]), 'idx': np.concatenate(Is_)}, {'meshy': os.path.basename(g)},
+                   Image.open(painted).convert('RGB') if os.path.exists(painted) else img, 'png' if os.path.exists(painted) else 'jpg')
     hide |= rb[Ib].any(1)
     print('arms: the bust\'s triangles under them hidden with them: %d' % int(hide.sum()))
     return np.nonzero(hide)[0].astype(np.uint32)

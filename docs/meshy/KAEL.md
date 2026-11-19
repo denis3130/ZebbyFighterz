@@ -807,6 +807,15 @@ ok sul costo (84 crediti, saldo da 970 a 886) e sui disegni ("si").
   secondo la mossa, polsi dritti nei pugni (sotto 3 gradi in guardia, pugni e calci), disegnati anche specchiati.
 - Misure (grafica software, 844x390, guardia): 133.456 triangoli (prima 125.648), 9 disegni, circa 125 ms per fotogramma
   come prima (la versione 21 106-110 sulla stessa macchina). Solo l'anteprima.
+- **Ripassati col disegno** (19/11, Denis: "passaci col disegno rendila più simile a quella di Ren, intendo le dita ecc, e
+  fixa dove è fatta male"; `tools/kael_arm_paint.py IN_8k.glb OUT_8k_painted.png [DEBUG.png FULL.glb]`, gratis): la
+  pittura di Meshy (colori sfumati, bordi frastagliati fra pelle, guanto e bande) rifatta per texel nei colori piatti del
+  busto (ogni texel il colore che ha la maggior parte dei suoi vicini sul modello entro 2,8 mm, tre giri: via isole e
+  dentini), una riga d'inchiostro di 1,1 mm su ogni bordo fra i colori, e sulla pelle le righe di Ren (marrone scuro):
+  dove la pelle tocca altra pelle che la guarda (fra le dita, nel pugno le dita sul palmo e il pollice sopra), le valli
+  del modello intero di Meshy (pieghe delle nocche) e le sue righe leggere (unghie). `arm_parts` prende
+  `<glb>_painted.png` se c'è. Provate e lasciate: le righe delle articolazioni dalla distanza dal bordo del guanto (sul
+  pollice un rombo, sulle dita niente).
 - Per dopo: `kael_hands.*` e `kael_gloves.*` non servono più con gli avambracci (toglierli se Denis li approva, l'anteprima
   pesa meno); da vicinissimo la banda del gomito si vede aperta verso il braccio (un anello largo, come nel foglio).
 
